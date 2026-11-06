@@ -2,6 +2,9 @@
 
 All numbers below are **simulated data** produced by the deterministic engine (`@mitsinjo/engine`).
 Raw report: [`engine.json`](engine.json). Re-run with `make bench` (writes `engine.json`; Node 24, 200 runs per measure).
+Hourly dataset (8 scenarios × 3 strategies × 24 h + copilot evals, CC-BY-4.0):
+[`Tokiarivelo/mitsinjo-grid-dispatch-benchmark`](https://huggingface.co/datasets/Tokiarivelo/mitsinjo-grid-dispatch-benchmark)
+on Hugging Face — rebuild with `make hf-dataset`, upload with `make hf-publish`.
 The same run is a Vitest test (`packages/engine/src/__tests__/benchmark.test.ts`): it fails if essential-first
 ever serves the health clinic worse than proportional shedding, or if any strategy breaks an energy invariant.
 

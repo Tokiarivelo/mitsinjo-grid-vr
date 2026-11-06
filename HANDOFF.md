@@ -1,42 +1,39 @@
 # HANDOFF — read first, overwrite at end of session (≤40 lines)
 
-**Updated:** 2026-11-04 · **By:** Claude Code · **Branch:** feat/pt-10-close (stacked chain, all pushed, no PRs yet)
+**Updated:** 2026-11-06 · **By:** Muse Code · **Branch:** feat/hf-dataset-benchmark (from origin/main, uncommitted)
 
 ## Current state
 
-- Plan `docs/tasks/PT-studio-look.md` done except **PT-7** (open, see Known limits).
-- One branch per task, each stacked on the previous one (merge in this order, each into `main`):
-  `feat/pt-1b-chamfered-lathe` (1b, 1d, 1c) → `feat/pt-3-clearcoat` → `feat/pt-2-softbox-studio` →
-  `feat/pt-4-ink-effect` → `feat/pt-5-editor-ink` (+ 1e) → `feat/pt-7-shader-warmup` → `feat/pt-6-village-ink` →
-  `feat/pt-8-size-ranges` → `feat/pt-9-render-checklist` → `feat/pt-10-close`.
-- `make check` green (2097 tests); shape report unchanged (IoU 0.98, edge F1 0.91, ΔE 3.4) at every step.
-- GPU audit (GTX 960M): draw calls 192 / 209 high, 143 / 148 low, unchanged; fps unchanged.
+- HF dataset export done, uncommitted: `make hf-dataset` builds
+  `mitsinjo-grid-dispatch-benchmark/` (8 scenarios.jsonl, 576 results.jsonl rows,
+  12 copilot_evals.jsonl, README card CC-BY-4.0 + SIMULATED DATA). Deterministic (md5 stable).
+- `make hf-publish` uploads via `hf` / `uvx hf` / `huggingface-cli` (auto-detect, repo auto-created).
+- `make test-integration` green (16 tests, incl. 6 new hf-dataset checks incl. hourly sums ≈
+  benchmarks/engine.json); tests typecheck green; changed files Prettier-clean
+  (14 pre-existing video/ format warnings untouched).
+- Real upload NOT tested (no HF token in this session).
 
 ## Next
 
-1. Open PRs for the chain (or one PR from `feat/pt-10-close`), review, merge.
-2. PT-7: profile the ~1.2 s long task when the village canvas mounts (forest / geometry build?), then tick.
+1. User: HF account + token (write) → root `.env` (`HF_TOKEN`, `HF_DATASET_REPO`, see .env.example).
+2. Verify the HF namespace is really `Tokiarivelo` (assumed from GitHub); else update
+   .env.example + README.md + benchmarks/README.md + export default.
+3. Commit on feat/hf-dataset-benchmark, open PR, then `make hf-publish`.
 
 ## Files touched
 
-- `vision-insert/utils/object-geometry.ts` (roundProfile, unitBevel, inset `unitExtrude`, prism, silhouette bevel)
-- `vision-insert/utils/surface-look.ts` (clearcoat, `surfaceMaterial`), `utils/studio-env.ts` (new)
-- `vision-insert/ui/object-editor-3d.tsx` (studio, composer + ink, warm-up fade)
-- `microgrid-3d/utils/ink-effect.ts`, `ui/ink.tsx`, `hooks/use-shader-warmup.ts` (new); `ui/post-effects.tsx`,
-  `ui/village-canvas.tsx`; `app/globals.css` (`--theme-scene-ink`)
-- `lib/object-kit.ts` (`ARCHETYPE_SIZE_MM`, `clampEstimatedDepth`), `server/perception/shape.ts`
-- `scripts/object-viewer-shot.mjs` (`SHOT_WIDTH`, `SHOT_LOG`), Makefile help
-- Docs: task file + Loop log, `performance.md` § 5, `design/3d-scene.md`, `design/tokens.md`,
-  `design/screens/village.md`, `.claude/skills/designer-3d/SKILL.md`. Scenarios V172–V180, T32 (local).
+- `scripts/export-hf-dataset.ts` (new), `scripts/hf-publish.sh` (new, +x)
+- `tests/integration/hf-dataset.test.ts` (new)
+- `Makefile` (§ Data: hf-dataset, hf-publish, .PHONY), `.env.example` (§ HF), `.gitignore` (dataset dir)
+- `README.md` + `benchmarks/README.md` (HF dataset links)
+- `.claude/rules/maintenance.md` (§ HF dataset: republish on change)
 
 ## Decisions
 
-- Village ink: dark `scene-ink` token, silhouettes only, fade 22–45 units (text-primary + creases = white snow).
-- Editor ink: `text-primary` (light in dark theme), crease weight 1; tone mapping moved into the composer.
-- Prism bevel is an inset `unitExtrude` (bounds exact); no-bevel parts keep the old geometry.
-- PT-8 clamps only Spark's depth (parseKit / critic patch), as ratios to height and width.
+- Export script at repo root (spans engine + web evals), run via engine's jiti like gen-scenarios.ts.
+- results.jsonl = hourly rows only (day metrics derivable); evals keep source keys (id/prompt/expectTool/expectEvidence).
+- Publish depends on hf-dataset (rebuilds before upload); token via env, never CLI arg.
 
 ## Known limits
 
-- PT-7: warm-up doesn't remove the first-mount long task (1.18–1.22 s without vs 1.22–1.32 s with).
-- Light-theme editor ink is subtle on dark surfaces (dark on dark red); fine on the pale backdrop.
+- PT-studio-look chain (previous HANDOFF) untouched on its own branches; this branch is separate.

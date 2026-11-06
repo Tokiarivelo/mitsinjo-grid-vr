@@ -249,6 +249,15 @@ db-migrate: ## Apply pending Neon migrations now (the app also does it on its fi
 	$(need_ws)
 	$(PNPM) --filter $(WEB) exec jiti scripts/db-migrate.ts
 
+##@ Data
+HF_DIR ?= mitsinjo-grid-dispatch-benchmark
+hf-dataset: ## Build the Hugging Face dataset folder (no token): scenarios + hourly results + copilot evals
+	$(need_ws)
+	$(PNPM) --filter $(ENGINE) exec jiti ../../scripts/export-hf-dataset.ts --out $(abspath $(HF_DIR))
+
+hf-publish: hf-dataset ## Upload the dataset folder to Hugging Face (needs HF_TOKEN + HF_DATASET_REPO)
+	@if [ -f .env ]; then eval "$$(make -s env-export)"; fi; HF_DATASET_DIR=$(abspath $(HF_DIR)) bash scripts/hf-publish.sh
+
 ##@ Deploy
 # Only `main` is deployed: pushes to main auto-deploy (Vercel Git integration); other branches are skipped.
 deploy-link: ## Link this clone to the Vercel project (once per machine)
@@ -304,4 +313,4 @@ clean-all: clean ## Also remove node_modules
 	rm -rf node_modules apps/*/node_modules packages/*/node_modules
 
 .PHONY: help install env setup-claude browsers dev port dev-mock build start test test-engine test-web test-shape shape-capture facade-e2e photo-audit eval-stages shape-report shape-shots improve-shot test-watch coverage e2e \
-        typecheck lint bridge bridge-sim test-bridge format format-check format-changed git-hooks check ci shots mockups scenarios-publish analyze scene-audit scene-audit-gpu lighthouse claude env-export mcp status todo deploy-link deploy clean clean-all video-tts-setup video-voice video-sfx video-capture video-canvas video-build video-thumbnail
+        typecheck lint bridge bridge-sim test-bridge format format-check format-changed git-hooks check ci shots mockups scenarios-publish analyze scene-audit scene-audit-gpu lighthouse claude env-export mcp status todo deploy-link deploy clean clean-all video-tts-setup video-voice video-sfx video-capture video-canvas video-build video-thumbnail hf-dataset hf-publish

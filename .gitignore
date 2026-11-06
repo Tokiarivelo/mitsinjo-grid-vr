@@ -60,6 +60,9 @@ design/shots/
 # ── Manual test scenarios (local only) ───────
 /test-scenarios/
 
+# ── Hugging Face dataset export (make hf-dataset; published on HF, not in git) ──
+/mitsinjo-grid-dispatch-benchmark/
+
 # ── Editors / OS ──────────────────────────────
 .vscode/*
 !.vscode/extensions.json
