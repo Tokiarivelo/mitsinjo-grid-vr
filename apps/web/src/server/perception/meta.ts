@@ -27,6 +27,7 @@ import {
 } from './free-recipe';
 import { maskToOutline } from './mask-outline';
 import { timeoutSignal } from './abort';
+import { inlineImageUrl } from './inline-image';
 import { VIEWS_CHECK_JSON_SCHEMA, VIEWS_CHECK_SYSTEM_PROMPT, parseViewsCheck } from './views-check';
 import { REGION_SYSTEM_PROMPT, regionQuestion } from './region-prompt';
 import { defaultArchetype, kitToRecipe } from '@/lib/object-kit';
@@ -234,6 +235,9 @@ export class MetaPerceptionBackend implements PerceptionBackend {
       console.info(`[vision] 3D ${log.kind} system: ${system}`);
       console.info(`[vision] 3D ${log.kind} question: ${question}`);
     }
+    const [mainImage, ...references] = await Promise.all(
+      [imageUrl, ...extraImages].map((url) => inlineImageUrl(url))
+    );
     const body = (model: string) => ({
       model,
       // High reasoning on detection + 3D kits: better perception for the operator.
@@ -244,8 +248,8 @@ export class MetaPerceptionBackend implements PerceptionBackend {
           role: 'user',
           content: [
             { type: 'text', text: question },
-            { type: 'image_url', image_url: { url: imageUrl } },
-            ...extraImages.map((url) => ({ type: 'image_url', image_url: { url } })),
+            { type: 'image_url', image_url: { url: mainImage } },
+            ...references.map((url) => ({ type: 'image_url', image_url: { url } })),
           ],
         },
       ],
@@ -494,6 +498,7 @@ export class MetaPerceptionBackend implements PerceptionBackend {
     signal?: AbortSignal
   ): Promise<PerceptionCall<SegmentResult>> {
     const model = env.META_SEGMENT_MODEL;
+    const image = await inlineImageUrl(imageUrl);
     const body = {
       model,
       input: [
@@ -502,7 +507,7 @@ export class MetaPerceptionBackend implements PerceptionBackend {
           role: 'user',
           content: [
             { type: 'input_text', text: concept },
-            { type: 'input_image', image_url: imageUrl },
+            { type: 'input_image', image_url: image },
           ],
         },
       ],

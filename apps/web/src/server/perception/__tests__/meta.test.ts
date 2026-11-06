@@ -3,6 +3,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { kitToRecipe, type ObjectKit } from '@/lib/object-kit';
 import { MetaPerceptionBackend } from '../meta';
 
+// Hosted images are inlined before Meta sees them (inline-image.test.ts); here a link stays a link
+// tagged `inlined:` so request shapes stay readable and the fetch mock only sees API calls.
+vi.mock('../inline-image', () => ({
+  inlineImageUrl: async (url: string) => (/^https?:/.test(url) ? `inlined:${url}` : url),
+}));
+
 const BASE = 'https://api.meta.ai/v1';
 const originalFetch = global.fetch;
 
@@ -222,7 +228,8 @@ describe('MetaPerceptionBackend (shapes recorded from real calls, 2026-10-30)', 
       'image_url',
     ]);
     expect(content[1].image_url.url).toBe('data:image/jpeg;base64,AA');
-    expect(content[2].image_url.url).toBe('https://r2.example/facade.png');
+    // Regression (2026-11-06): Meta refused the R2 link (media_url_not_fetchable); it now goes inline.
+    expect(content[2].image_url.url).toBe('inlined:https://r2.example/facade.png');
     expect(content[0].text).toContain('second image is the validated front elevation');
 
     const plainMock = respond({ choices: [{ message: { content: JSON.stringify(kit) } }] });
@@ -342,7 +349,7 @@ describe('MetaPerceptionBackend (shapes recorded from real calls, 2026-10-30)', 
     expect(body.model).toBe('sam-3.1');
     expect(body.input[0].content).toEqual([
       { type: 'input_text', text: 'solar panel' },
-      { type: 'input_image', image_url: 'https://x/p.png' },
+      { type: 'input_image', image_url: 'inlined:https://x/p.png' },
     ]);
     expect(out.result.count).toBe(1);
     expect(out.result.boxCoverage).toBeCloseTo(0.5);

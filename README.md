@@ -1,6 +1,6 @@
-# Mitsinjo Grid: Rural Solar Microgrid Simulation & AI Decision Support
+# Mitsinjo Grid VR: Rural Solar Microgrid Simulation, AI Dispatch & Immersive VR Control
 
-[![CI Status](https://github.com/Tokiarivelo/mitsinjo-grid/actions/workflows/ci.yml/badge.svg)](https://github.com/Tokiarivelo/mitsinjo-grid/actions/workflows/ci.yml)
+[![CI Status](https://github.com/Tokiarivelo/mitsinjo-grid-vr/actions/workflows/ci.yml/badge.svg)](https://github.com/Tokiarivelo/mitsinjo-grid-vr/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Next.js](https://img.shields.io/badge/Next.js-15_App_Router-black)](https://nextjs.org/)
 [![React](https://img.shields.io/badge/React-19-blue)](https://react.dev/)
@@ -9,6 +9,8 @@
 [![Vitest](https://img.shields.io/badge/Vitest-242_Tests_Passing-green)](https://vitest.dev/)
 [![Playwright](https://img.shields.io/badge/Playwright-E2E_Green-darkgreen)](https://playwright.dev/)
 
+> **VR CONTROL (this fork):** this repository extends Mitsinjo Grid with immersive control of the whole microgrid in VR — walk the 3D village twin on Meta Quest, operate the EMS dispatch shelter and feeder breakers by hand, approve the AI dispatcher's proposals in place, and compare shedding strategies without leaving VR. Base project: [Tokiarivelo/mitsinjo-grid](https://github.com/Tokiarivelo/mitsinjo-grid). Status: in progress — the desktop demo path (solar drop → strategy comparison → AI explanation → computed evidence) keeps working unchanged.
+>
 > **⚠️ SIMULATED DATA NOTICE**: All energy metrics, solar generation curves, battery state-of-charge figures, and load balances presented in this system are synthetic and generated for simulation, educational, and decision-support purposes. They do not represent real-time measurements from physical microgrid hardware.
 
 **Public Production Deployment**: [https://mitsinjo-grid.vercel.app](https://mitsinjo-grid.vercel.app)  
@@ -188,8 +190,8 @@ and switch to the **live Meta models** with one variable plus your own key.
 ### Option A: Docker (no Node or pnpm needed)
 
 ```bash
-git clone https://github.com/Tokiarivelo/mitsinjo-grid.git
-cd mitsinjo-grid
+git clone https://github.com/Tokiarivelo/mitsinjo-grid-vr.git
+cd mitsinjo-grid-vr
 docker compose up -d --build        # or: make docker-up
 ```
 
@@ -202,8 +204,8 @@ Requires **Node.js ≥ 20.12** (22 LTS recommended) and **pnpm 10** (`corepack e
 version, 10.29.3).
 
 ```bash
-git clone https://github.com/Tokiarivelo/mitsinjo-grid.git
-cd mitsinjo-grid
+git clone https://github.com/Tokiarivelo/mitsinjo-grid-vr.git
+cd mitsinjo-grid-vr
 corepack enable                     # provides pnpm 10.29.3
 pnpm install                        # or: make install
 cp .env.example .env                # offline mock by default
@@ -474,6 +476,7 @@ make deploy        # Manual production deployment from clean origin/main
 
 ### Future Roadmap
 
+- **VR control room (this fork)**: browser-delivered VR (WebXR) targeting Meta Quest — walkable village twin, hand-operated EMS dispatch shelter and feeder breakers, in-place copilot proposal approvals, and strategy comparison inside VR. Same deterministic engine, same simulated-data guarantees.
 - **Hardware Gateway (SCADA/IoT)**: MQTT / Modbus TCP ingestion adapters for physical microgrid telemetry in Madagascar.
 
 ---
