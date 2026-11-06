@@ -8,6 +8,7 @@ import { isR2Configured, uploadBufferToR2 } from '@/server/storage/r2';
 import { DEFAULT_META_BASE_URL } from '@/server/copilot/providers/meta';
 import type { PhotoForRegions } from './region';
 import { cropForShape } from './shape-crop';
+import { inlineImageUrl } from './inline-image';
 
 /**
  * Sent with the photo crop as reference (user 2026-11-05): without it Muse Image drew a generic
@@ -153,6 +154,7 @@ export async function museImage(
   signal?: AbortSignal
 ): Promise<Buffer> {
   const baseUrl = (env.META_BASE_URL || DEFAULT_META_BASE_URL).replace(/\/$/, '');
+  const inlined = await Promise.all(references.map((url) => inlineImageUrl(url)));
   const input =
     references.length === 0
       ? prompt
@@ -162,7 +164,7 @@ export async function museImage(
             role: 'user',
             content: [
               { type: 'input_text', text: prompt },
-              ...references.map((url) => ({ type: 'input_image', image_url: url })),
+              ...inlined.map((url) => ({ type: 'input_image', image_url: url })),
             ],
           },
         ];
