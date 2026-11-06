@@ -40,6 +40,12 @@ export const CAMERA_PRESETS: Record<CameraPreset, { position: Vec3; target: Vec3
   },
 };
 
+/** VR entry viewpoint: a standing-scale overlook of the whole diorama. */
+export const XR_VIEWPOINT: { position: Vec3; target: Vec3 } = {
+  position: [0, 20, 30],
+  target: [0, 1, -4],
+};
+
 const UP = new THREE.Vector3(0, 1, 0);
 
 export interface CameraControllerProps {
@@ -60,6 +66,8 @@ export interface CameraControllerProps {
    * it decays, which at very low fps (weak GPU, software GL) means minutes of rendering.
    */
   damping?: boolean;
+  /** An XR session is presenting: orbit input off, camera on `XR_VIEWPOINT`. */
+  xrActive?: boolean;
 }
 
 export function CameraController({
@@ -71,6 +79,7 @@ export function CameraController({
   autoRotate = true,
   reducedMotion = false,
   damping = true,
+  xrActive = false,
 }: CameraControllerProps) {
   const camera = useThree((s) => s.camera);
   const invalidate = useThree((s) => s.invalidate);
@@ -111,7 +120,8 @@ export function CameraController({
       orbitAfterTween.current = orbit && !reducedMotion;
 
       // First placement is instant (nothing to animate from); later moves tween.
-      if (reducedMotion || !hasMounted.current) {
+      // XR entry snaps too: the headset drives the camera from the viewpoint on.
+      if (reducedMotion || xrActive || !hasMounted.current) {
         snapToTarget();
       } else {
         isTransitioning.current = true;
@@ -121,7 +131,7 @@ export function CameraController({
       // frameloop="demand": render the jump, or start the tween loop.
       invalidate();
     },
-    [reducedMotion, invalidate, snapToTarget]
+    [reducedMotion, xrActive, invalidate, snapToTarget]
   );
 
   useEffect(() => {
@@ -135,21 +145,40 @@ export function CameraController({
     : focusSector
       ? `s:${focusSector}`
       : null;
+  const moveToFocusTarget = useCallback(
+    (key: string | null) => {
+      if (key?.startsWith('p:')) {
+        const p = key.slice(2).split(',').map(Number) as Vec3;
+        moveTo(focusCameraFor(p, APPLIANCE_FOCUS_SCALE), autoRotate);
+      } else if (key) {
+        moveTo(focusCameraFor(SECTOR_POSITIONS[key.slice(2) as SectorId]), autoRotate);
+      } else {
+        moveTo(CAMERA_PRESETS[presetRef.current] ?? CAMERA_PRESETS.village, false);
+      }
+    },
+    [autoRotate, moveTo]
+  );
   useEffect(() => {
     const previous = prevFocus.current;
     prevFocus.current = focusKey;
-    if (focusKey?.startsWith('p:')) {
-      const p = focusKey.slice(2).split(',').map(Number) as Vec3;
-      moveTo(focusCameraFor(p, APPLIANCE_FOCUS_SCALE), autoRotate);
-    } else if (focusKey) {
-      moveTo(focusCameraFor(SECTOR_POSITIONS[focusKey.slice(2) as SectorId]), autoRotate);
-    } else if (previous) {
-      moveTo(CAMERA_PRESETS[presetRef.current] ?? CAMERA_PRESETS.village, false);
+    if (focusKey || previous) moveToFocusTarget(focusKey);
+  }, [focusKey, moveToFocusTarget]);
+
+  // XR session: snap to the diorama viewpoint on entry, restore the 2D target on exit.
+  // Declared last so it wins over the preset/focus effects re-run by the `moveTo` change.
+  const wasXrActive = useRef(false);
+  useEffect(() => {
+    if (xrActive) {
+      wasXrActive.current = true;
+      moveTo(XR_VIEWPOINT, false);
+    } else if (wasXrActive.current) {
+      wasXrActive.current = false;
+      moveToFocusTarget(focusKey);
     }
-  }, [focusKey, autoRotate, moveTo]);
+  }, [xrActive, focusKey, moveTo, moveToFocusTarget]);
 
   useFrame((state, delta) => {
-    if (reducedMotion) return;
+    if (reducedMotion || xrActive) return;
 
     if (isTransitioning.current) {
       state.invalidate();
@@ -191,6 +220,7 @@ export function CameraController({
   return (
     <OrbitControls
       ref={controlsRef}
+      enabled={!xrActive}
       enableDamping={damping}
       dampingFactor={0.05}
       maxPolarAngle={Math.PI / 2.15}

@@ -223,6 +223,8 @@
       "qualityAutoLowered": "Réduite automatiquement pour cet appareil",
       "fullscreenEnter": "Plein écran",
       "fullscreenExit": "Quitter le plein écran",
+      "vrEnter": "Voir en VR",
+      "vrExit": "Quitter la VR",
       "villageDemand": "Demande du village",
       "tabMetrics": "Métriques",
       "tabControls": "Contrôles",
