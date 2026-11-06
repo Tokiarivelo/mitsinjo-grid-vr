@@ -305,6 +305,11 @@ Results and how to read them: [benchmarks/README.md](benchmarks/README.md). A fu
 0.5 ms and a three-strategy comparison stays under 4 ms p95. Under Severe Weather Stress, essential-first
 serves the health clinic 75.5 % of its demand, against 71.9 % with proportional shedding.
 
+The hourly results (8 scenarios × 3 strategies × 24 h) plus the copilot evals are published as a
+Hugging Face dataset (CC-BY-4.0, simulated data):
+[mitsinjo-grid-dispatch-benchmark](https://huggingface.co/datasets/Tokiarivelo/mitsinjo-grid-dispatch-benchmark)
+— rebuild with `make hf-dataset`, upload with `make hf-publish`.
+
 ### For developers
 
 `make help` lists every command.

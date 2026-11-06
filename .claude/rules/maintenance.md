@@ -31,6 +31,16 @@
   one, run `make db-migrate` (applies to the Neon DB in `.env`) and report the result.
 - Engine-only Zod schemas (not stored) need no migration; say so when unsure.
 
+## Hugging Face dataset (republish on change)
+
+- The published copy of the benchmark lives on the Hub
+  ([dataset](https://huggingface.co/datasets/Tokiarivelo/mitsinjo-grid-dispatch-benchmark)), not in git
+  (`mitsinjo-grid-dispatch-benchmark/` is gitignored): whenever `make bench` or `make gen-evals` output
+  changes (engine results, scenarios, copilot evals), rebuild and republish in the same session:
+  `make hf-dataset && make hf-publish`.
+- Publishing needs `HF_TOKEN` + `HF_DATASET_REPO` (root `.env`, see `.env.example`): if the token is
+  missing, report the publish as pending instead of silently skipping it.
+
 ## Documentation (same commit as the code, update only what changed, keep it terse)
 
 | You changed…                                                       | Update                                                                            |
@@ -45,6 +55,7 @@
 | New command or env var                                             | `Makefile`, `.env.example`, `README.md` (run section)                             |
 | Stored (Neon) shape                                                | new migration in `server/db/migrations.ts` + `docs/copilot.md` (persistence)      |
 | New user-visible feature or limit                                  | `README.md` (features / limits), `docs/tasks/Pn-*.md` (tick or add task)          |
+| Engine results, scenario or copilot eval (dataset content)         | `make hf-dataset && make hf-publish` (Hub holds the published copy)               |
 | New skill or rule                                                  | `CLAUDE.md` skills & rules list                                                   |
 | Any of the above at session end                                    | `HANDOFF.md` "Files touched" + "Decisions"                                        |
 
