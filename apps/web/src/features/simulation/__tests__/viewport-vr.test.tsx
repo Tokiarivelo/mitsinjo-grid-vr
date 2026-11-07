@@ -52,25 +52,23 @@ describe('VillageViewport VR button (VR-T3)', () => {
     expect(seen.xrActive).toBe(false);
   });
 
-  it('automatically triggers fullscreen when entering VR if supported', async () => {
-    const requestFullscreen = vi.fn(async () => {});
-    document.documentElement.requestFullscreen = requestFullscreen;
-    HTMLElement.prototype.requestFullscreen = requestFullscreen;
+  it('requests immersive-vr session and gives full viewport to immersion when entering VR', async () => {
+    const requestSession = vi.fn(async () => {
+      return {
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        end: vi.fn(async () => {}),
+      };
+    });
 
     vi.stubGlobal('navigator', {
       xr: {
         isSessionSupported: async () => true,
-        requestSession: vi.fn(async () => {
-          return {
-            addEventListener: vi.fn(),
-            removeEventListener: vi.fn(),
-            end: vi.fn(async () => {}),
-          };
-        }),
+        requestSession,
       },
     });
 
-    renderViewport();
+    const { container } = renderViewport();
     const button = await screen.findByRole('button', { name: 'View in VR' });
     // Mount mock renderer so xr.enter proceeds
     if (seen.rendererRef && typeof seen.rendererRef === 'object' && 'current' in seen.rendererRef) {
@@ -83,6 +81,12 @@ describe('VillageViewport VR button (VR-T3)', () => {
       fireEvent.click(button);
     });
 
-    expect(requestFullscreen).toHaveBeenCalled();
+    expect(requestSession).toHaveBeenCalledWith(
+      'immersive-vr',
+      expect.objectContaining({ optionalFeatures: expect.arrayContaining(['local-floor']) })
+    );
+    // Viewport card expands to full screen fixed position
+    const card = container.firstChild as HTMLElement;
+    expect(card.className).toContain('fixed inset-0 z-50 w-screen h-screen');
   });
 });

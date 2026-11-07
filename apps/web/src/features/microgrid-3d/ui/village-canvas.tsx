@@ -321,7 +321,7 @@ export function VillageCanvas({
             powerPreference: softwareGl ? 'default' : 'high-performance',
             failIfMajorPerformanceCaveat: false,
           }}
-          style={{ background: palette.horizon }}
+          style={{ width: '100%', height: '100%', background: palette.horizon }}
         >
           <fog
             attach="fog"
