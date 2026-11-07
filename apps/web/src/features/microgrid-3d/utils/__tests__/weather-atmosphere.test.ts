@@ -45,6 +45,14 @@ describe('weather atmosphere', () => {
     const maxRadius = Math.max(...radii);
     expect(minRadius).toBeLessThan(140);
     expect(maxRadius).toBeGreaterThan(160);
+
+    // Verify rich size variety across cloud banks (tiny wisps to grand cumulus towers)
+    const puffScales = fullPuffs.map((p) => p.scale[0]);
+    const minScale = Math.min(...puffScales);
+    const maxScale = Math.max(...puffScales);
+    expect(minScale).toBeLessThan(6); // Delicate tiny cotton puffs
+    expect(maxScale).toBeGreaterThan(16); // Grand billowing cumulus formations
+    expect(maxScale / minScale).toBeGreaterThan(3); // Significant scale contrast (>= 3x range)
   });
 
   it('sizes rain by density and quality tier', () => {
