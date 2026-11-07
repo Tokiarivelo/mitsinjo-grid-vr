@@ -1,15 +1,16 @@
 # HANDOFF — read first, overwrite at end of session (≤40 lines)
 
-**Updated:** 2026-11-06 · **By:** Muse Code · **Branch:** feat/vr-village-view (rebased onto origin/main ebdf49b)
+**Updated:** 2026-11-07 · **By:** Antigravity · **Branch:** feat/vr-village-view (on origin/main ebdf49b)
 
 ## Current state
 
-- VR minimal DONE: « Voir en VR » button in /simulation 3D HUD →
-  `immersive-vr` session on the village scene (three.js WebXR, no new runtime dep).
-- No headset needed in dev: Meta IWER 2.8.0 + DevUI auto-install (dev-only chunk).
-- `make check` GREEN: typecheck + lint 0 err + 2135/2135 tests + i18n 3/3.
-- Fixed a suite hang: drei catch-all Proxy mock = unsettled thenable (see task file).
-- Guide `docs/vr-testing-guide.md` (chemins A/B/C, S119–S123, dépannage, tests auto).
+- VR immersion UX DONE: « Voir en VR » direct WebXR activation without gesture collision.
+- Full viewport dedicated in XR (`fixed inset-0 z-50 w-screen h-screen min-h-screen`).
+- Side drawers (Controls/Copilot) & docks hidden during VR immersion to eliminate visual obstruction.
+- Canvas buffer auto-resizes to 100% width/height on fullscreen/XR without freeze.
+- Guide `docs/vr-immersion-guide.md` rewritten with complete navigation & immersion controls.
+- Dev XR emulation: Meta IWER 2.8.0 + DevUI auto-install (dev-only chunk).
+- `make check` / typecheck clean + simulation & 3d test suites passing.
 
 ## Next (operator machine, sandbox blocks loopback/fonts/build)
 
