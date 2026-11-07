@@ -24,6 +24,8 @@ export interface WeatherEffectsProps {
   palette?: SkyPalette;
   sunDirection?: [number, number, number];
   timeIndex?: number;
+  /** Optional external ref to smoothly update cloud sun direction in useFrame. */
+  cloudUniformsRef?: React.MutableRefObject<{ uSunDir: THREE.IUniform<THREE.Vector3> } | null>;
 }
 
 /** Clouds, rain and storm lightning for the day's weather. Visual only, never data. */
@@ -35,6 +37,7 @@ export function WeatherEffects({
   palette,
   sunDirection,
   timeIndex,
+  cloudUniformsRef,
 }: WeatherEffectsProps) {
   const atmo = WEATHER_ATMOSPHERE[weather];
   return (
@@ -49,6 +52,7 @@ export function WeatherEffects({
         isDaytime={isDaytime}
         hasLightning={atmo.lightning}
         timeIndex={timeIndex}
+        cloudUniformsRef={cloudUniformsRef}
       />
       {atmo.rain > 0 && (
         <Rain
@@ -79,9 +83,10 @@ void main() {
   #ifdef USE_INSTANCING
     vec4 worldPos = modelMatrix * instanceMatrix * vec4(position, 1.0);
     mat3 m = mat3(instanceMatrix);
-    // Correct for non-uniform instance scaling
-    vec3 transformedNormal = normal / vec3(dot(m[0], m[0]), dot(m[1], m[1]), dot(m[2], m[2]));
-    transformedNormal = m * transformedNormal;
+    // Smooth instance normal: normalize column lengths of scale matrix
+    vec3 scaleSq = vec3(dot(m[0], m[0]), dot(m[1], m[1]), dot(m[2], m[2]));
+    vec3 invScaleNormal = normal / sqrt(max(scaleSq, vec3(0.0001)));
+    vec3 transformedNormal = m * invScaleNormal;
     vWorldNormal = normalize((modelMatrix * vec4(transformedNormal, 0.0)).xyz);
   #else
     vec4 worldPos = modelMatrix * vec4(position, 1.0);
@@ -122,7 +127,7 @@ void main() {
   // Soft wrapped diffuse: wraps sunlight around the curved cloud surface,
   // eliminating harsh black terminator lines
   float NdotL = dot(N, L);
-  float wrap = 0.45;
+  float wrap = 0.55;
   float diff = clamp((NdotL + wrap) / (1.0 + wrap), 0.0, 1.0);
   diff = smoothstep(0.02, 0.98, diff);
 
@@ -130,13 +135,13 @@ void main() {
   float up = clamp(N.y * 0.5 + 0.5, 0.0, 1.0);
   vec3 ambientLight = mix(uGroundColor, uSkyColor, up);
 
-  // Vertical fluffiness gradient: tops are pure bright white, bottoms catch soft volume tint
-  float heightT = clamp((vLocalPosition.y + 0.85) / 1.7, 0.0, 1.0);
-  vec3 baseShade = mix(uCloudShadow, uCloudBase, heightT * 0.4 + 0.6);
+  // Vertical fluffiness gradient: tops are pure bright white, bottoms catch rich sky ambient tint
+  float heightT = clamp((vLocalPosition.y + 0.9) / 1.8, 0.0, 1.0);
+  vec3 baseShade = mix(uCloudShadow, uCloudBase, heightT * 0.45 + 0.55);
 
   // Direct sun vs ambient shade
-  vec3 litColor = uCloudBase * (uSunColor * 1.15 + vec3(0.12));
-  vec3 shadeColor = mix(baseShade, ambientLight, 0.42);
+  vec3 litColor = uCloudBase * (uSunColor * 1.1 + vec3(0.12));
+  vec3 shadeColor = mix(baseShade, ambientLight, 0.38);
   vec3 color = mix(shadeColor, litColor, diff);
 
   // Silver lining / rim lighting when backlit by the sun
@@ -191,6 +196,7 @@ function CloudLayer({
   isDaytime,
   hasLightning,
   timeIndex,
+  cloudUniformsRef,
 }: {
   cover: number;
   darkness: number;
@@ -201,6 +207,7 @@ function CloudLayer({
   isDaytime: boolean;
   hasLightning: boolean;
   timeIndex?: number;
+  cloudUniformsRef?: React.MutableRefObject<{ uSunDir: THREE.IUniform<THREE.Vector3> } | null>;
 }) {
   const groupRef = useRef<THREE.Group>(null);
   const meshRef = useRef<THREE.InstancedMesh>(null);
@@ -224,6 +231,10 @@ function CloudLayer({
     }),
     []
   );
+
+  if (cloudUniformsRef) {
+    cloudUniformsRef.current = uniforms;
+  }
 
   useLayoutEffect(() => {
     if (sunDirection) {
@@ -297,7 +308,7 @@ function CloudLayer({
       >
         <sphereGeometry
           key={quality}
-          args={[1, quality === 'high' ? 16 : 12, quality === 'high' ? 12 : 8]}
+          args={[1, quality === 'high' ? 28 : 18, quality === 'high' ? 20 : 14]}
         />
         <shaderMaterial
           fog

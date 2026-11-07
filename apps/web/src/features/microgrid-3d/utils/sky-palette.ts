@@ -88,6 +88,20 @@ const AFTERNOON: Key = {
   lampGlow: 0.3,
 };
 
+const MIDDAY: Key = {
+  zenith: '#2377d6',
+  horizon: '#9ed0ff',
+  sunGlow: '#fff3d1',
+  sun: '#fffdf5',
+  fog: '#a6d1f7',
+  hemiSky: '#72b3f5',
+  hemiGround: '#4d3d28',
+  keyIntensity: 3.8,
+  hemiIntensity: 0.75,
+  envIntensity: 0.65,
+  lampGlow: 0,
+};
+
 const c1 = new THREE.Color();
 const c2 = new THREE.Color();
 function mix(a: string, b: string, t: number): string {
@@ -129,8 +143,15 @@ export function skyPalette(sunElevation: number, isDaytime: boolean): SkyPalette
     };
   }
   const e = Math.min(1, Math.max(0, sunElevation));
-  // Golden until ~0.35 elevation, then warm afternoon; never a flat noon look.
-  const key = blend(GOLDEN, AFTERNOON, Math.min(1, Math.max(0, (e - 0.15) / 0.75)));
+  // Smooth progression: Golden sunrise/sunset -> warm afternoon -> vibrant blue midday (Image 2 parity)
+  let key: Key;
+  if (e < 0.35) {
+    const t = Math.max(0, e / 0.35);
+    key = blend(GOLDEN, AFTERNOON, t);
+  } else {
+    const t = Math.min(1, (e - 0.35) / 0.65);
+    key = blend(AFTERNOON, MIDDAY, t);
+  }
   // Capped at ~36°: long, readable shadows even at noon (art direction, not astronomy).
   const sunAltitudeDeg = 6 + e * 30;
   return {

@@ -1,10 +1,11 @@
 'use client';
 
 import { Suspense, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
-import { Canvas } from '@react-three/fiber';
+import { Canvas, useFrame } from '@react-three/fiber';
 import { Environment } from '@react-three/drei';
+import * as THREE from 'three';
 import type { WebGLRenderer } from 'three';
-import { SECTOR_IDS, type Priority, type SectorId } from '@mitsinjo/engine';
+import { SECTOR_IDS, type Priority, type SectorId, type WeatherId } from '@mitsinjo/engine';
 import { useTranslations } from '@/lib/i18n';
 import { useSimulationStore } from '@/stores';
 import { fmtKw } from '@/lib/format';
@@ -27,9 +28,15 @@ import { useFeederLabels } from '../hooks/use-feeder-labels';
 import { useSceneQuality, type SceneQuality } from '../hooks/use-scene-quality';
 import { isSoftwareRenderer } from '../utils/webgl';
 import { createSceneStats, sampleSceneStats, type SceneStatsSample } from '../utils/scene-stats';
-import { applyOvercast, skyPalette } from '../utils/sky-palette';
+import { applyOvercast, skyPalette, type SkyPalette } from '../utils/sky-palette';
 import { WEATHER_ATMOSPHERE } from '../utils/weather-atmosphere';
-import { moonCoordinates, nightFactor, sunCoordinates } from '../utils/celestial';
+import {
+  moonCoordinates,
+  nightFactor,
+  shortestHourDelta,
+  sunCoordinates,
+} from '../utils/celestial';
+import { useAmbientFrame } from '../hooks/use-ambient-frame';
 import type { SectorStateOverride } from '../utils/placed-models-geometry';
 import { usePlacedClearings } from '../hooks/use-site-zones';
 import { accessPathClearings, accessPaths } from '../utils/access-paths';
@@ -44,7 +51,7 @@ import { ApplianceMarkers, MarkerDragGhost } from './appliance-markers';
 import { DistributionLines } from './distribution-lines';
 import { VillageBuildings } from './buildings';
 import { CameraController } from './camera-controller';
-import { SkyBackdrop } from './sky-backdrop';
+import { SKY_RADIUS, SkyBackdrop } from './sky-backdrop';
 import { Vegetation } from './vegetation';
 import { Vehicles } from './vehicles';
 import { PostEffects } from './post-effects';
@@ -107,6 +114,159 @@ function DraggableApplianceMarkers({
 }
 
 const KEY_LIGHT_DISTANCE = 70;
+
+interface CelestialLightingProps {
+  timeIndex: number;
+  isDaytime: boolean;
+  weather: WeatherId;
+  palette: SkyPalette;
+  quality: 'high' | 'low';
+  weatherMotion: boolean;
+  nightProgress: number;
+}
+
+/**
+ * Physical celestial lighting and sky orchestrator (06:00 to 18:00 day arc, 18:00 to 06:00 night arc):
+ * - Sun sweeps from side (+X) at 06:00 -> overhead above camera (+Y, +Z) at 12:00 -> behind camera (+Z) at 18:00.
+ * - Key light follows the exact same unit vector so shadows physically reflect the sun's trajectory.
+ * - In useFrame, smoothly glides the sun and shadows at 60 FPS without React re-renders or allocations.
+ */
+function CelestialLighting({
+  timeIndex,
+  isDaytime,
+  weather,
+  palette,
+  quality,
+  weatherMotion,
+  nightProgress,
+}: CelestialLightingProps) {
+  const keyLightRef = useRef<THREE.DirectionalLight>(null);
+  const sunGroupRef = useRef<THREE.Group>(null);
+  const moonGroupRef = useRef<THREE.Group>(null);
+  const skyUniformsRef = useRef<{ uSunDir: THREE.IUniform<THREE.Vector3> } | null>(null);
+  const cloudUniformsRef = useRef<{ uSunDir: THREE.IUniform<THREE.Vector3> } | null>(null);
+  const currentHourRef = useRef(timeIndex);
+  const requestFrame = useAmbientFrame();
+
+  const sun = useMemo(() => sunCoordinates(timeIndex), [timeIndex]);
+  const moon = useMemo(() => moonCoordinates(timeIndex), [timeIndex]);
+  const activeDirection = isDaytime ? sun.keyDirection : moon.keyDirection;
+  const initialKeyLightPos = useMemo<[number, number, number]>(
+    () => [
+      activeDirection[0] * KEY_LIGHT_DISTANCE,
+      activeDirection[1] * KEY_LIGHT_DISTANCE,
+      activeDirection[2] * KEY_LIGHT_DISTANCE,
+    ],
+    [activeDirection]
+  );
+
+  useFrame((state, delta) => {
+    if (!weatherMotion) return;
+    const diff = shortestHourDelta(currentHourRef.current, timeIndex);
+    if (Math.abs(diff) > 0.0005) {
+      // Fluid smooth exponential glide towards the target hour
+      const step = diff * (1 - Math.exp(-delta * 8.0));
+      currentHourRef.current = (((currentHourRef.current + step) % 24) + 24) % 24;
+
+      const curHour = currentHourRef.current;
+      const isDay = curHour >= 6 && curHour <= 18;
+      const celestial = isDay ? sunCoordinates(curHour) : moonCoordinates(curHour);
+      const [dx, dy, dz] = celestial.direction;
+
+      // Update light position matching physical trajectory
+      if (keyLightRef.current) {
+        keyLightRef.current.position.set(
+          dx * KEY_LIGHT_DISTANCE,
+          dy * KEY_LIGHT_DISTANCE,
+          dz * KEY_LIGHT_DISTANCE
+        );
+      }
+
+      // Update sun disc position
+      if (isDay && sunGroupRef.current) {
+        sunGroupRef.current.position.set(
+          dx * SKY_RADIUS * 0.9,
+          dy * SKY_RADIUS * 0.9,
+          dz * SKY_RADIUS * 0.9
+        );
+      }
+
+      // Update moon disc position
+      if (!isDay && moonGroupRef.current) {
+        moonGroupRef.current.position.set(
+          dx * SKY_RADIUS * 0.88,
+          dy * SKY_RADIUS * 0.88,
+          dz * SKY_RADIUS * 0.88
+        );
+      }
+
+      // Update shader uniforms
+      if (skyUniformsRef.current) {
+        skyUniformsRef.current.uSunDir.value.set(dx, dy, dz);
+      }
+      if (cloudUniformsRef.current) {
+        cloudUniformsRef.current.uSunDir.value.set(dx, dy, dz);
+      }
+
+      // Request next frame & update shadows in real-time
+      state.gl.shadowMap.needsUpdate = true;
+      requestFrame();
+    } else {
+      currentHourRef.current = timeIndex;
+    }
+  });
+
+  return (
+    <>
+      <directionalLight
+        ref={keyLightRef}
+        position={initialKeyLightPos}
+        color={palette.sun}
+        intensity={palette.keyIntensity}
+        castShadow={quality === 'high'}
+        shadow-mapSize={[2048, 2048]}
+        shadow-bias={-0.0004}
+        shadow-normalBias={0.09}
+        shadow-camera-left={-34}
+        shadow-camera-right={34}
+        shadow-camera-top={34}
+        shadow-camera-bottom={-34}
+        shadow-camera-near={10}
+        shadow-camera-far={160}
+      />
+      {/* Cool sky fill from the opposite side keeps shadows readable. */}
+      <directionalLight
+        position={[-40, 30, 40]}
+        color="#8fa3d9"
+        intensity={palette.hemiIntensity * 0.45}
+      />
+
+      <SkyBackdrop
+        palette={palette}
+        sunDirection={sun.displayDirection}
+        moonDirection={moon.displayDirection}
+        isDaytime={isDaytime}
+        nightProgress={nightProgress}
+        detail={quality}
+        animate={weatherMotion}
+        sunGroupRef={sunGroupRef}
+        moonGroupRef={moonGroupRef}
+        skyUniformsRef={skyUniformsRef}
+      />
+      <WeatherEffects
+        weather={weather}
+        isDaytime={isDaytime}
+        quality={quality}
+        animate={weatherMotion}
+        palette={palette}
+        sunDirection={isDaytime ? sun.displayDirection : moon.displayDirection}
+        timeIndex={timeIndex}
+        cloudUniformsRef={cloudUniformsRef}
+      />
+    </>
+  );
+}
+
 /** Trees are cleared a bit past the yard so their canopies don't hang over it. */
 const TREE_CANOPY_MARGIN = 0.8;
 /** Smallest drawn yard (scene units): the red ground must show around a small object. */
@@ -320,45 +480,14 @@ export function VillageCanvas({
           />
 
           <hemisphereLight args={[palette.hemiSky, palette.hemiGround, palette.hemiIntensity]} />
-          <directionalLight
-            position={keyLightPos}
-            color={palette.sun}
-            intensity={palette.keyIntensity}
-            castShadow={high}
-            shadow-mapSize={[2048, 2048]}
-            shadow-bias={-0.0004}
-            shadow-normalBias={0.09}
-            shadow-camera-left={-34}
-            shadow-camera-right={34}
-            shadow-camera-top={34}
-            shadow-camera-bottom={-34}
-            shadow-camera-near={10}
-            shadow-camera-far={160}
-          />
-          {/* Cool sky fill from the opposite side keeps shadows readable. */}
-          <directionalLight
-            position={[-40, 30, 40]}
-            color="#8fa3d9"
-            intensity={palette.hemiIntensity * 0.45}
-          />
-
-          <SkyBackdrop
-            palette={palette}
-            sunDirection={sun.displayDirection}
-            moonDirection={moon.displayDirection}
-            isDaytime={model.isDaytime}
-            nightProgress={nightProgress}
-            detail={quality}
-            animate={weatherMotion}
-          />
-          <WeatherEffects
-            weather={model.weather}
-            isDaytime={model.isDaytime}
-            quality={quality}
-            animate={weatherMotion}
-            palette={palette}
-            sunDirection={model.isDaytime ? sun.displayDirection : moon.displayDirection}
+          <CelestialLighting
             timeIndex={model.timeIndex}
+            isDaytime={model.isDaytime}
+            weather={model.weather}
+            palette={palette}
+            quality={quality}
+            weatherMotion={weatherMotion}
+            nightProgress={nightProgress}
           />
           <FireEffects buildings={model.buildings} quality={quality} animate={weatherMotion} />
 

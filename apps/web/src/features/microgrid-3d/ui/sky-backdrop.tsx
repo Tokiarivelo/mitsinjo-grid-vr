@@ -7,7 +7,7 @@ import { fbm2d, mulberry32 } from '../utils/noise';
 import { useAmbientFrame } from '../hooks/use-ambient-frame';
 import type { SkyPalette } from '../utils/sky-palette';
 
-const SKY_RADIUS = 420;
+export const SKY_RADIUS = 420;
 const STAR_COUNT = 720;
 
 const SKY_VERTEX = /* glsl */ `
@@ -84,6 +84,12 @@ export interface SkyBackdropProps {
   detail?: 'high' | 'low';
   /** Animate star twinkling. */
   animate?: boolean;
+  /** Optional external ref to animate sun group position smoothly in useFrame. */
+  sunGroupRef?: React.RefObject<THREE.Group | null>;
+  /** Optional external ref to animate moon group position smoothly in useFrame. */
+  moonGroupRef?: React.RefObject<THREE.Group | null>;
+  /** Optional external ref to update sky uniforms in useFrame. */
+  skyUniformsRef?: React.MutableRefObject<{ uSunDir: THREE.IUniform<THREE.Vector3> } | null>;
 }
 
 interface RidgeSpec {
@@ -229,6 +235,9 @@ export function SkyBackdrop({
   nightProgress,
   detail = 'high',
   animate = true,
+  sunGroupRef,
+  moonGroupRef,
+  skyUniformsRef,
 }: SkyBackdropProps) {
   const uniforms = useMemo(
     () => ({
@@ -239,6 +248,10 @@ export function SkyBackdrop({
     }),
     []
   );
+
+  if (skyUniformsRef) {
+    skyUniformsRef.current = uniforms;
+  }
 
   const activeCelestialDir = isDaytime ? sunDirection : (moonDirection ?? sunDirection);
   uniforms.uZenith.value.set(palette.zenith);
@@ -297,7 +310,7 @@ export function SkyBackdrop({
 
       {/* Sun disc + halo (daytime, arcing 0° to 180°) */}
       {isDaytime && sunDirection[1] > -0.02 && palette.sunDisc > 0.02 && (
-        <group position={sunPos}>
+        <group ref={sunGroupRef} position={sunPos}>
           <mesh>
             <sphereGeometry args={[9, 24, 12]} />
             <meshBasicMaterial
@@ -324,7 +337,7 @@ export function SkyBackdrop({
 
       {/* Moon disc + halo (nighttime, arcing 0° to 180°) */}
       {!isDaytime && effectiveMoonDir[1] > -0.02 && moonOpacity > 0.02 && (
-        <group position={moonPos}>
+        <group ref={moonGroupRef} position={moonPos}>
           {/* Silvery-pearl luminous moon body */}
           <mesh>
             <sphereGeometry args={[7.5, 24, 16]} />

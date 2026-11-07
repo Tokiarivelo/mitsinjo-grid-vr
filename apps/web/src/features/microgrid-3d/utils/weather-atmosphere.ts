@@ -19,23 +19,23 @@ export interface WeatherAtmosphere {
 }
 
 export const WEATHER_ATMOSPHERE: Record<WeatherId, WeatherAtmosphere> = {
-  sunny: { cloudCover: 0.25, overcast: 0, rain: 0, lightning: false, cloudDarkness: 0 },
+  sunny: { cloudCover: 0.42, overcast: 0, rain: 0, lightning: false, cloudDarkness: 0 },
   partly_cloudy: {
-    cloudCover: 0.55,
+    cloudCover: 0.65,
     overcast: 0.22,
     rain: 0,
     lightning: false,
     cloudDarkness: 0.08,
   },
-  cloudy: { cloudCover: 0.85, overcast: 0.6, rain: 0, lightning: false, cloudDarkness: 0.35 },
+  cloudy: { cloudCover: 0.88, overcast: 0.6, rain: 0, lightning: false, cloudDarkness: 0.35 },
   rainy: { cloudCover: 1, overcast: 0.8, rain: 0.6, lightning: false, cloudDarkness: 0.55 },
   storm: { cloudCover: 1, overcast: 0.95, rain: 1, lightning: true, cloudDarkness: 0.78 },
 };
 
 /** Most cloud banks drawn across all depth layers (full cover). */
-export const MAX_CLOUD_BANKS = 36;
+export const MAX_CLOUD_BANKS = 48;
 /** Puffs per cloud bank forming a billowing cumulus formation. */
-export const PUFFS_PER_BANK = 11;
+export const PUFFS_PER_BANK = 14;
 
 export interface CloudPuff {
   position: [number, number, number];
@@ -44,9 +44,13 @@ export interface CloudPuff {
 
 /**
  * Deterministic multi-layered cumulus cloud layout for a given cover: same cover → same sky.
- * Banks are distributed across 3 depth layers: inner village sky, mountain horizon,
- * and high canopy. Each bank is composed of structured overlapping rounded lobes
- * with a flat base, cascading side lobes, and billowing cauliflower domes.
+ * Banks are distributed across 3 depth layers:
+ * - Horizon & mountain ridge framing (visible over distant ridges in default camera view)
+ * - Mid-sky valley clouds
+ * - High atmospheric canopy
+ *
+ * Each bank is composed of 14 overlapping rounded lobes with flat condensation bases,
+ * towering central cauliflower domes, and cascading fluffy side billows.
  */
 export function cloudPuffs(cloudCover: number, seed = 7): CloudPuff[] {
   const banks = Math.round(Math.min(1, Math.max(0, cloudCover)) * MAX_CLOUD_BANKS);
@@ -55,30 +59,29 @@ export function cloudPuffs(cloudCover: number, seed = 7): CloudPuff[] {
   const puffs: CloudPuff[] = [];
 
   for (let b = 0; b < banks; b++) {
-    // Distribute banks into 3 rings: inner/mid village sky, outer mountain ridge horizon, and high canopy
     const ring = b % 3;
     let radius: number;
     let baseAlt: number;
     let baseSize: number;
 
     if (ring === 0) {
-      // Inner / Mid sky: cruising right above the village and surrounding hills
-      radius = 50 + rand() * 85; // 50 - 135
-      baseAlt = 38 + rand() * 12; // 38 - 50
-      baseSize = 7.5 + rand() * 4.5; // 7.5 - 12
+      // Horizon & mountain ridge framing: crowns distant ridges across 360° (visible from village view)
+      radius = 130 + rand() * 100; // 130 - 230
+      baseAlt = 22 + rand() * 14; // 22 - 36 (sits gracefully above mountain silhouettes)
+      baseSize = 13 + rand() * 6; // 13 - 19
     } else if (ring === 1) {
-      // Horizon / Mountain tops: dramatic distant cumulus framing the ridges
-      radius = 150 + rand() * 130; // 150 - 280
-      baseAlt = 46 + rand() * 18; // 46 - 64
-      baseSize = 13 + rand() * 7; // 13 - 20
+      // Mid-sky valley clouds: floating across the landscape and surrounding hills
+      radius = 65 + rand() * 70; // 65 - 135
+      baseAlt = 36 + rand() * 14; // 36 - 50
+      baseSize = 9 + rand() * 4.5; // 9 - 13.5
     } else {
-      // High Atmosphere / Canopy: overhead cloud cover
-      radius = 35 + rand() * 150; // 35 - 185
-      baseAlt = 64 + rand() * 16; // 64 - 80
-      baseSize = 9 + rand() * 6; // 9 - 15
+      // High overhead canopy: fair-weather cumulus drifting across the sky
+      radius = 25 + rand() * 85; // 25 - 110
+      baseAlt = 52 + rand() * 18; // 52 - 70
+      baseSize = 8 + rand() * 4; // 8 - 12
     }
 
-    // Distribute angles around the circle with jitter
+    // Distribute angles around the circle with jitter for organic non-uniform spacing
     const angle = (b / MAX_CLOUD_BANKS) * Math.PI * 2 + (rand() - 0.5) * 0.35;
     const cx = Math.cos(angle) * radius;
     const cz = Math.sin(angle) * radius;
@@ -95,43 +98,41 @@ export function cloudPuffs(cloudCover: number, seed = 7): CloudPuff[] {
     // [forwardOffset, crossOffset, verticalOffset, scaleX, scaleY, scaleZ]
     const bankPuffLayout: [number, number, number, number, number, number][] = [
       // 0: Center main towering dome
-      [0, 0, 0.35 * baseSize, 1.35, 1.25, 1.35],
+      [0, 0, 0.4 * baseSize, 1.35, 1.25, 1.35],
       // 1: Forward crest dome
-      [0.72 * baseSize, 0.15 * baseSize, 0.2 * baseSize, 1.15, 1.05, 1.15],
+      [0.65 * baseSize, 0.15 * baseSize, 0.25 * baseSize, 1.15, 1.05, 1.15],
       // 2: Backward crest dome
-      [-0.75 * baseSize, -0.12 * baseSize, 0.15 * baseSize, 1.1, 1.0, 1.1],
+      [-0.7 * baseSize, -0.12 * baseSize, 0.2 * baseSize, 1.1, 1.0, 1.1],
       // 3: Right flank billowing lobe
-      [0.2 * baseSize, 0.8 * baseSize, -0.05 * baseSize, 1.0, 0.85, 1.0],
+      [0.15 * baseSize, 0.75 * baseSize, -0.05 * baseSize, 1.05, 0.9, 1.05],
       // 4: Left flank billowing lobe
-      [-0.22 * baseSize, -0.8 * baseSize, -0.05 * baseSize, 0.95, 0.85, 0.95],
-      // 5: Forward nose lobe
-      [1.45 * baseSize, 0.1 * baseSize, -0.15 * baseSize, 0.85, 0.72, 0.85],
+      [-0.18 * baseSize, -0.75 * baseSize, -0.05 * baseSize, 1.0, 0.9, 1.0],
+      // 5: Forward snout lobe
+      [1.35 * baseSize, 0.1 * baseSize, -0.15 * baseSize, 0.9, 0.75, 0.9],
       // 6: Tail lobe
-      [-1.48 * baseSize, -0.1 * baseSize, -0.15 * baseSize, 0.82, 0.7, 0.82],
-      // 7: Central base lobe (flat bottom)
-      [0, 0, -0.4 * baseSize, 1.45, 0.55, 1.35],
-      // 8: Forward base lobe (flat bottom)
-      [0.8 * baseSize, 0.05 * baseSize, -0.4 * baseSize, 1.2, 0.5, 1.1],
-      // 9: Backward base lobe (flat bottom)
-      [-0.8 * baseSize, -0.05 * baseSize, -0.4 * baseSize, 1.15, 0.5, 1.05],
-      // 10: Fluffy accent / side whisp
-      [
-        (rand() - 0.5) * 0.8 * baseSize,
-        (rand() - 0.5) * 0.8 * baseSize,
-        0.45 * baseSize,
-        0.7,
-        0.65,
-        0.7,
-      ],
+      [-1.4 * baseSize, -0.1 * baseSize, -0.15 * baseSize, 0.85, 0.72, 0.85],
+      // 7: Central base lobe (flat condensation bottom)
+      [0, 0, -0.38 * baseSize, 1.45, 0.52, 1.35],
+      // 8: Forward base lobe (flat condensation bottom)
+      [0.75 * baseSize, 0.05 * baseSize, -0.38 * baseSize, 1.2, 0.48, 1.1],
+      // 9: Backward base lobe (flat condensation bottom)
+      [-0.75 * baseSize, -0.05 * baseSize, -0.38 * baseSize, 1.15, 0.48, 1.05],
+      // 10: High whisp accent
+      [0.2 * baseSize, -0.2 * baseSize, 0.65 * baseSize, 0.75, 0.7, 0.75],
+      // 11: Side whisp accent right
+      [0.45 * baseSize, 0.65 * baseSize, 0.2 * baseSize, 0.8, 0.75, 0.8],
+      // 12: Side whisp accent left
+      [-0.45 * baseSize, -0.65 * baseSize, 0.2 * baseSize, 0.8, 0.75, 0.8],
+      // 13: Under-crest volume filler
+      [0.1 * baseSize, 0.1 * baseSize, -0.1 * baseSize, 1.1, 0.85, 1.1],
     ];
 
     for (let p = 0; p < PUFFS_PER_BANK; p++) {
       const [f, c, v, sx, sy, sz] = bankPuffLayout[p]!;
-      // Small random jitter per puff for natural variety
-      const jx = (rand() - 0.5) * 0.2 * baseSize;
-      const jz = (rand() - 0.5) * 0.2 * baseSize;
-      const jy = (rand() - 0.5) * 0.1 * baseSize;
-      const sJitter = 0.92 + rand() * 0.16;
+      const jx = (rand() - 0.5) * 0.15 * baseSize;
+      const jz = (rand() - 0.5) * 0.15 * baseSize;
+      const jy = (rand() - 0.5) * 0.08 * baseSize;
+      const sJitter = 0.94 + rand() * 0.12;
 
       const posX = cx + (f + jx) * fx + (c + jz) * px;
       const posZ = cz + (f + jx) * fz + (c + jz) * pz;
@@ -174,8 +175,8 @@ export function lightningFlash(elapsedS: number): number {
 export const WEATHER_HEX = {
   cloudLight: '#ffffff',
   cloudDark: '#505a6e',
-  cloudShadow: '#c5d8ed',
-  cloudRim: '#fff8eb',
+  cloudShadow: '#82b7eb', // Radiant sky-blue cumulus shadow (matches Image 2 reference)
+  cloudRim: '#fffdf0',
   rainDay: '#c9d3de',
   rainNight: '#6f7c93',
   lightning: '#d6deff',
