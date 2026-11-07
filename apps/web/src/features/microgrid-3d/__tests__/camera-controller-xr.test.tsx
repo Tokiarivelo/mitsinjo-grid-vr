@@ -11,9 +11,13 @@ const three = vi.hoisted(() => ({
   controlsProps: null as unknown as Record<string, unknown>,
 }));
 
+let frameCallback: ((state: unknown, delta: number) => void) | null = null;
+
 vi.mock('@react-three/fiber', () => ({
   useThree: (selector: (s: typeof three.state) => unknown) => selector(three.state),
-  useFrame: vi.fn(),
+  useFrame: (cb: (state: unknown, delta: number) => void) => {
+    frameCallback = cb;
+  },
 }));
 
 vi.mock('@react-three/drei', () => ({
@@ -86,5 +90,22 @@ describe('CameraController XR (VR-T2)', () => {
     expect(camera.parent).toBe(three.state.scene);
     expect(three.state.scene.children).not.toContain(rig);
     expect(camera.position.toArray()).toEqual(focused);
+  });
+
+  it('walks with keyboard input in XR and sticks to ground relief', () => {
+    render(<CameraController preset="village" reducedMotion xrActive />);
+    const rig = camera.parent as THREE.Group;
+    expect(rig).toBeInstanceOf(THREE.Group);
+    const startZ = rig.position.z;
+
+    // Simulate pressing KeyW (forward)
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyW' }));
+    frameCallback?.({ invalidate: vi.fn(), gl: { xr: { getSession: () => null } } }, 0.1);
+    // Camera is facing -Z horizontally, so moving forward decreases Z (moves toward village center):
+    expect(rig.position.z).toBeLessThan(startZ);
+    // Height follows terrain at village plateau (ground level y = 0)
+    expect(rig.position.y).toBe(0);
+
+    window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyW' }));
   });
 });

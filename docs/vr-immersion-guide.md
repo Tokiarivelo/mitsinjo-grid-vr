@@ -25,71 +25,67 @@ En mode développement desktop, Mitsinjo Grid charge automatiquement l'émulateu
 
 ### Dans un vrai casque VR (Meta Quest 2 / 3 / Pro)
 
-Dans le casque via Meta Quest Browser, **il n'y a aucun modal ni encadrement** : dès que vous cliquez sur le bouton « Voir en VR », le navigateur cède la place à un environnement virtuel **à 360° stéréoscopique à l'échelle 1:1**, vous plaçant directement en surplomb du village.
+Dans le casque via Meta Quest Browser, **il n'y a aucun modal ni encadrement** : dès que vous cliquez sur le bouton « Voir en VR », le navigateur cède la place à un environnement virtuel **à 360° stéréoscopique à l'échelle 1:1**, vous plaçant directement au niveau du sol au cœur du village.
 
 ---
 
-## 2. Comment contrôler l'immersion (Avancer, Reculer, Regarder, Interagir)
+## 2. Échelle humaine 1:1, Point de spawn et Confort vestibulaire
 
-### Option A : Sur PC sans casque (Émulateur IWER DevUI)
+### Échelle 1:1 vs Vue Diorama
 
-Deux façons de piloter le casque simulé :
+Dans Three.js et l'API WebXR :
 
-#### 1. Le mode FPS / Déplacement libre (« Play Mode ») — _Le plus intuitif_
+- **1 unité 3D = 1 mètre physique réel.**
+- Les cases traditionnelles mesurent environ **3 à 4 mètres** de haut.
+- Les étals du marché mesurent **2,5 mètres**.
+- Les acacias et ravenalas mesurent **6 à 10 mètres**.
+- Le conteneur de batterie BESS et le shelter du contrôleur mesurent **2,8 mètres**.
 
-C'est le mode le plus simple pour vous déplacer comme dans un jeu vidéo :
+Lorsqu'un casque WebXR initialise l'espace `'local-floor'`, la hauteur du sol physique de l'utilisateur correspond au niveau de référence du rig. Vos yeux sont automatiquement placés à votre hauteur naturelle debout (généralement **1,65 m à 1,75 m** au-dessus du sol).
 
-1. Dans l'overlay DevUI qui s'affiche à l'écran, cliquez sur le bouton ou l'icône **« Play Mode »** (souvent symbolisé par une manette ou un clavier).
-2. Cliquez sur la vue 3D : votre curseur de souris est capturé (**Pointer Lock**).
-3. **Commandes de déplacement clavier :**
-   - **Avancer :** Touche **`W`** (sur clavier QWERTY) ou **`Z`** (sur clavier AZERTY selon mapping).
-   - **Reculer :** Touche **`S`**.
-   - **Pas latéral gauche (Strafe) :** Touche **`A`** (QWERTY) ou **`Q`** (AZERTY).
-   - **Pas latéral droite :** Touche **`D`**.
-   - **Prendre de la hauteur (monter) :** Touche **`Espace`**.
-   - **Descendre (altitude basse) :** Touche **`C`** ou **`Shift`**.
-   - **Accélérer le déplacement :** Maintenir **`Shift`**.
-4. **Orientation de la tête (Regard) :**
-   - Bougez simplement la souris pour tourner la tête à 360°, lever les yeux vers le soleil ou regarder le sol.
-5. **Libérer la souris / Quitter le Play Mode :**
-   - Appuyez sur la touche **`Échap` (Esc)** pour récupérer votre curseur de souris.
+> [!NOTE]
+> **Pourquoi le point de vue initial semblait-il gigantesque ?**  
+> Initialement, le point d'entrée VR était positionné à $Y = 20\text{ m}$ (vue diorama aérienne), plaçant la tête à plus de 21 mètres d'altitude, soit la hauteur d'un immeuble de 7 étages !  
+> Désormais, le point de spawn immersif vous place **au niveau du sol du village ($Y = 0$) sur l'allée centrale**, avec les cases, les étals et les équipements à taille humaine 1:1 tout autour de vous.
 
-> [!TIP]
-> Si vos touches AZERTY ne répondent pas comme prévu, ouvrez le panneau de configuration des raccourcis (**Keyboard Mapping**) dans l'overlay DevUI pour réassigner Z/Q/S/D en quelques clics.
+### Horizon plat et prévention du vertige (Règle d'or VR)
 
-#### 2. Les curseurs précis des panneaux latéraux DevUI
-
-Si vous voulez positionner la caméra à des coordonnées exactes :
-
-- **Panneau Headset :** Déplacez manuellement les curseurs **Position (X, Y, Z)** (en mètres) et **Rotation (Yaw, Pitch, Roll)**.
-- **Panneaux Controllers (Manette Gauche / Droite) :**
-  - Ajustez la position des mains virtuelles.
-  - Testez les boutons physiques simulés : _Trigger_ (gâchette), _Grip/Squeeze_ (prise en main), _Thumbstick_ (joystick directionnel), _Boutons A / B_ (droite) et _X / Y_ (gauche).
-  - Poses de mains préenregistrées : _Point_ (pointer du doigt), _Fist_ (poing), _Relaxed_ (main ouverte), _Pinch_ (pincer).
-
-#### 3. Pilotage automatique via l'Agent IA (MCP Bridge iwer)
-
-Si le pont MCP `@iwer/extension-bridge` est activé, vous pouvez simplement demander à l'agent conversationnel :
-
-- _« Place le casque à 5 mètres au-dessus du conteneur de batterie BESS »_
-- _« Oriente la caméra vers les panneaux solaires à l'ouest »_
+- L'axe vertical du rig de la caméra est **strictement aligné sur le vecteur de gravité $(0, 1, 0)$** avec un roulis (_roll_) et un tangage (_pitch_) verrouillés à $0^\circ$.
+- Lorsque vous tournez la souris ou la tête à 360°, **l'horizon et le sol restent 100 % plats**. Il n'y a plus aucun basculement latéral (_Dutch tilt_), éliminant tout conflit visuo-vestibulaire et prévenant les vertiges et nausées.
 
 ---
 
-### Option B : Sur Casque Réel (Meta Quest 2 / 3 / Pro)
+## 3. Comment contrôler l'immersion (Marcher, Regarder, Utiliser les mains et manettes)
 
-1. **Suivi physique réel (6DoF Roomscale) :**
-   - Vous marchez physiquement dans votre pièce : la caméra se déplace exactement à votre rythme dans le village (1 unité 3D = 1 mètre réel).
-   - Baissez-vous pour observer les câbles au sol, levez la tête pour inspecter les lignes aériennes.
-2. **Joysticks des manettes Touch :**
-   - Joystick gauche : translation (avancer, reculer, strafe).
-   - Joystick droit : rotation angulaire par paliers (snap turn) ou fluide.
-3. **Quitter la VR :**
-   - Appuyez sur le bouton physique **Oculus / Meta** de la manette droite pour ouvrir le menu système Quest et quitter l'onglet WebXR, ou cliquez sur le bouton virtuel « Quitter la VR ».
+### Comprendre l'émulateur Meta IWER DevUI (sur PC)
+
+Lorsque vous lancez l'immersion sur PC sans casque physique, l'émulateur **Meta IWER DevUI** affiche plusieurs éléments interactifs :
+
+1. **Les fenêtres `Hand [L]` et `Hand [R]` / `Controller [L]` et `Controller [R]` :**
+   - Ces panneaux permettent de simuler les mains ou les manettes physiques Meta Quest.
+   - Les repères 3D au centre de votre vision (axes rouge = $X$, vert = $Y$, bleu = $Z$ et cubes transparents) représentent les positions des mains dans l'espace virtuel.
+   - Vous pouvez basculer entre le mode Mains nues (_Hand Tracking_) et le mode Manettes (_Touch Controllers_) via les icônes de la barre d'outils supérieure de l'émulateur.
+
+2. **Marcher dans le village (Système de Locomotion) :**
+   Vous pouvez vous déplacer librement à pied sur les chemins de terre rouge du village :
+   - **Au clavier (PC) :**
+     - **Avancer :** Touche **`Z`** (clavier français AZERTY) ou **`W`** (clavier QWERTY) ou **`Flèche Haut`**.
+     - **Reculer :** Touche **`S`** ou **`Flèche Bas`**.
+     - **Pas latéral gauche (Strafe) :** Touche **`Q`** (AZERTY) ou **`A`** (QWERTY) ou **`Flèche Gauche`**.
+     - **Pas latéral droite :** Touche **`D`** ou **`Flèche Droite`**.
+     - **Courir / Vitesse accélérée :** Maintenir la touche **`Shift`**.
+   - **Aux manettes VR / Joysticks de l'émulateur :**
+     - **Joystick Gauche (Stick [L]) :** Pousser vers le haut pour avancer, vers le bas pour reculer, vers les côtés pour le pas latéral.
+     - **Joystick Droit (Stick [R]) :** Rotation horizontale fluide ou par paliers.
+   - **Suivi automatique du relief :** Pendant votre marche, vos pieds restent automatiquement collés au relief du sol (`terrainHeight`), que vous marchiez sur la place plate ou montiez vers les collines boisées.
+
+3. **Orienter le regard (Tourner la tête) :**
+   - **Sur PC :** Cliquez dans la vue 3D avec le bouton gauche de la souris et glissez pour orienter la tête à 360°.
+   - **Dans un casque VR :** Tournez simplement la tête dans la vraie vie.
 
 ---
 
-## 3. Ce que vous pouvez tester et observer dans l'immersion 3D
+## 4. Ce que vous pouvez tester et observer dans l'immersion 3D
 
 La scène 3D de Mitsinjo Grid n'est pas un simple décor statique : elle est reliée directement aux calculs physiques du moteur `@mitsinjo/engine`. Voici tout ce que vous pouvez explorer :
 
@@ -159,22 +155,21 @@ Baladez-vous dans les différents quartiers du village pour comparer leur statut
 
 ---
 
-## 4. Tableau récapitulatif des commandes
+## 5. Tableau récapitulatif des commandes
 
-| Action souhaitée                   | Sur PC (DevUI / Play Mode)                                         | Sur Casque VR (Meta Quest)                 |
-| :--------------------------------- | :----------------------------------------------------------------- | :----------------------------------------- |
-| **Passer en vrai plein écran**     | Bouton « Plein écran » HUD + touche `F11`                          | Automatique à 360° dans le casque          |
-| **Lancer la session VR**           | Clic sur le bouton « Voir en VR » (lunettes)                       | Clic sur « Voir en VR » dans Quest Browser |
-| **Avancer / Reculer**              | Touches **`W` / `S`** (ou `Z`/`S`) en Play Mode                    | Pousser / tirer le joystick gauche         |
-| **Pas latéraux (gauche/droite)**   | Touches **`A` / `D`** (ou `Q`/`D`) en Play Mode                    | Déplacer le joystick gauche latéralement   |
-| **Monter / Descendre en altitude** | Touches **`Espace`** (monter) / **`Shift`** ou **`C`** (descendre) | Se baisser / se lever physiquement         |
-| **Tourner le regard**              | Déplacer la souris (pointeur capturé)                              | Tourner la tête librement à 360°           |
-| **Sortir du déplacement souris**   | Touche **`Échap` (Esc)**                                           | Geste système ou bouton Oculus             |
-| **Quitter l'immersion VR**         | Clic sur **« Quitter la VR »**                                     | Bouton Oculus/Meta ou bouton Quitter       |
+| Action souhaitée                 | Sur PC (Clavier / DevUI)                                           | Sur Casque VR (Meta Quest)                 |
+| :------------------------------- | :----------------------------------------------------------------- | :----------------------------------------- |
+| **Passer en vrai plein écran**   | Bouton « Plein écran » HUD + touche `F11`                          | Automatique à 360° dans le casque          |
+| **Lancer la session VR**         | Clic sur le bouton « Voir en VR » (lunettes)                       | Clic sur « Voir en VR » dans Quest Browser |
+| **Marcher / Avancer / Reculer**  | Touches **`Z` / `S`** (AZERTY) ou **`W` / `S`** (QWERTY) / Flèches | Pousser / tirer le joystick gauche         |
+| **Pas latéraux (gauche/droite)** | Touches **`Q` / `D`** (AZERTY) ou **`A` / `D`** (QWERTY)           | Déplacer le joystick gauche latéralement   |
+| **Courir / Accélérer**           | Maintenir **`Shift`**                                              | Pousser le joystick à fond                 |
+| **Tourner le regard**            | Déplacer la souris (clic gauche maintenu)                          | Tourner la tête librement à 360°           |
+| **Quitter l'immersion VR**       | Clic sur **« Quitter la VR »**                                     | Bouton Oculus/Meta ou bouton Quitter       |
 
 ---
 
-## 5. Dépannage rapide (FAQ)
+## 6. Dépannage rapide (FAQ)
 
 | Problème rencontré                                          | Explication                                                                                           | Action corrective                                                                                                                                        |
 | :---------------------------------------------------------- | :---------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------- |

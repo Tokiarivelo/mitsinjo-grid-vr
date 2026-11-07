@@ -12,6 +12,7 @@ import {
   type Vec3,
 } from '../utils/camera-focus';
 import { SECTOR_POSITIONS } from '../utils/to-scene-model';
+import { terrainHeight } from '../utils/landscape';
 import * as THREE from 'three';
 import type { CameraPreset } from '../types';
 
@@ -40,10 +41,10 @@ export const CAMERA_PRESETS: Record<CameraPreset, { position: Vec3; target: Vec3
   },
 };
 
-/** VR entry viewpoint: a standing-scale overlook of the whole diorama. */
+/** VR entry viewpoint: standing on the central village path at 1:1 human scale. */
 export const XR_VIEWPOINT: { position: Vec3; target: Vec3 } = {
-  position: [0, 20, 30],
-  target: [0, 1, -4],
+  position: [0, 0, 8],
+  target: [0, 1.6, 1],
 };
 
 const UP = new THREE.Vector3(0, 1, 0);
@@ -97,6 +98,38 @@ export function CameraController({
   const presetRef = useRef(preset);
   const prevFocus = useRef<string | null>(null);
   const orbitOffset = useRef(new THREE.Vector3());
+
+  // XR locomotion vectors & keyboard input
+  const xrMoveDir = useRef(new THREE.Vector3());
+  const xrCamFwd = useRef(new THREE.Vector3());
+  const xrCamRight = useRef(new THREE.Vector3());
+  const xrKeysDown = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!xrActive) {
+      xrKeysDown.current.clear();
+      return;
+    }
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      xrKeysDown.current.add(e.code);
+    };
+    const onKeyUp = (e: KeyboardEvent) => {
+      xrKeysDown.current.delete(e.code);
+    };
+    const onBlur = () => {
+      xrKeysDown.current.clear();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+    window.addEventListener('blur', onBlur);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
+      window.removeEventListener('blur', onBlur);
+      xrKeysDown.current.clear();
+    };
+  }, [xrActive]);
 
   const startOrbit = useCallback(() => {
     isOrbiting.current = orbitAfterTween.current;
@@ -207,7 +240,97 @@ export function CameraController({
   }, [xrActive, focusKey, moveTo, moveToFocusTarget, camera, scene, invalidate]);
 
   useFrame((state, delta) => {
-    if (reducedMotion || xrActive) return;
+    if (xrActive) {
+      const rig = xrRig.current;
+      if (!rig) return;
+
+      let moveX = 0;
+      let moveZ = 0;
+      let turnYaw = 0;
+      let isRunning = false;
+
+      // 1. Keyboard controls (WASD / ZQSD / Arrows)
+      const keys = xrKeysDown.current;
+      if (keys.has('KeyW') || keys.has('KeyZ') || keys.has('ArrowUp')) moveZ -= 1;
+      if (keys.has('KeyS') || keys.has('ArrowDown')) moveZ += 1;
+      if (keys.has('KeyA') || keys.has('KeyQ') || keys.has('ArrowLeft')) moveX -= 1;
+      if (keys.has('KeyD') || keys.has('ArrowRight')) moveX += 1;
+      if (keys.has('ShiftLeft') || keys.has('ShiftRight')) isRunning = true;
+
+      // 2. WebXR Gamepad / Thumbsticks (Oculus Touch & IWER DevUI)
+      const session = state.gl.xr?.getSession?.();
+      if (session) {
+        for (const source of session.inputSources) {
+          const gp = source.gamepad;
+          if (!gp) continue;
+
+          let stickX = 0;
+          let stickY = 0;
+          if (gp.axes.length >= 4) {
+            const ax = gp.axes[2] ?? 0;
+            const ay = gp.axes[3] ?? 0;
+            stickX = Math.abs(ax) > 0.15 ? ax : 0;
+            stickY = Math.abs(ay) > 0.15 ? ay : 0;
+          } else if (gp.axes.length >= 2) {
+            const ax = gp.axes[0] ?? 0;
+            const ay = gp.axes[1] ?? 0;
+            stickX = Math.abs(ax) > 0.15 ? ax : 0;
+            stickY = Math.abs(ay) > 0.15 ? ay : 0;
+          }
+
+          if (source.handedness === 'left') {
+            if (stickX !== 0) moveX += stickX;
+            if (stickY !== 0) moveZ += stickY;
+          } else if (source.handedness === 'right') {
+            if (stickX !== 0) turnYaw -= stickX;
+          } else {
+            if (stickX !== 0) moveX += stickX;
+            if (stickY !== 0) moveZ += stickY;
+          }
+        }
+      }
+
+      // 3. Smooth turn (right stick) - maintains pure yaw (pitch/roll remain 0)
+      if (turnYaw !== 0) {
+        state.invalidate();
+        const turnSpeed = 1.8; // rad/s
+        rig.rotation.y += turnYaw * turnSpeed * Math.min(delta, 0.1);
+      }
+
+      // 4. Locomotion along horizontal camera direction
+      if (moveX !== 0 || moveZ !== 0) {
+        state.invalidate();
+        camera.getWorldDirection(xrCamFwd.current);
+        xrCamFwd.current.y = 0;
+        xrCamFwd.current.normalize();
+
+        xrCamRight.current.crossVectors(xrCamFwd.current, UP).normalize();
+
+        xrMoveDir.current.set(0, 0, 0);
+        if (moveZ !== 0) xrMoveDir.current.addScaledVector(xrCamFwd.current, -moveZ);
+        if (moveX !== 0) xrMoveDir.current.addScaledVector(xrCamRight.current, moveX);
+        if (xrMoveDir.current.lengthSq() > 0) {
+          xrMoveDir.current.normalize();
+        }
+
+        const baseSpeed = isRunning ? 6.0 : 3.0; // m/s
+        const step = baseSpeed * Math.min(delta, 0.1);
+        rig.position.addScaledVector(xrMoveDir.current, step);
+
+        // Clamp inside village terrain bounds
+        const dist = Math.hypot(rig.position.x, rig.position.z);
+        if (dist > 65) {
+          rig.position.x *= 65 / dist;
+          rig.position.z *= 65 / dist;
+        }
+
+        // Stick feet to ground relief
+        rig.position.y = terrainHeight(rig.position.x, rig.position.z);
+      }
+      return;
+    }
+
+    if (reducedMotion) return;
 
     if (isTransitioning.current) {
       state.invalidate();
