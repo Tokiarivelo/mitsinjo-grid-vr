@@ -27,7 +27,12 @@ vi.mock('@react-three/drei', () => ({
   },
 }));
 
-import { CAMERA_PRESETS, CameraController, XR_VIEWPOINT } from '../ui/camera-controller';
+import {
+  CAMERA_PRESETS,
+  CameraController,
+  EYE_HEIGHT,
+  XR_VIEWPOINT,
+} from '../ui/camera-controller';
 
 const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 1500);
 three.state.camera = camera;
@@ -103,8 +108,8 @@ describe('CameraController XR (VR-T2)', () => {
     frameCallback?.({ invalidate: vi.fn(), gl: { xr: { getSession: () => null } } }, 0.1);
     // Camera is facing -Z horizontally, so moving forward decreases Z (moves toward village center):
     expect(rig.position.z).toBeLessThan(startZ);
-    // Height follows terrain at village plateau (ground level y = 0)
-    expect(rig.position.y).toBe(0);
+    // Height follows terrain at village plateau + eye height (1.8m)
+    expect(rig.position.y).toBe(EYE_HEIGHT);
 
     window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyW' }));
   });

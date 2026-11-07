@@ -41,10 +41,13 @@ export const CAMERA_PRESETS: Record<CameraPreset, { position: Vec3; target: Vec3
   },
 };
 
-/** VR entry viewpoint: standing on the central village path at 1:1 human scale. */
+/** Human eye level above ground (1.8m). */
+export const EYE_HEIGHT = 1.8;
+
+/** VR entry viewpoint: standing on the entrance path facing the village at 1:1 human scale. */
 export const XR_VIEWPOINT: { position: Vec3; target: Vec3 } = {
-  position: [0, 0, 8],
-  target: [0, 1.6, 1],
+  position: [0, EYE_HEIGHT, 14],
+  target: [0, EYE_HEIGHT, 0],
 };
 
 const UP = new THREE.Vector3(0, 1, 0);
@@ -323,10 +326,12 @@ export function CameraController({
           rig.position.x *= 65 / dist;
           rig.position.z *= 65 / dist;
         }
-
-        // Stick feet to ground relief
-        rig.position.y = terrainHeight(rig.position.x, rig.position.z);
       }
+
+      // Always maintain standing eye height above terrain relief
+      // Auto-detects if a real headset runtime already provides physical floor height (camera.position.y > 0.5)
+      const eyeOffset = camera.position.y > 0.5 ? 0 : EYE_HEIGHT;
+      rig.position.y = terrainHeight(rig.position.x, rig.position.z) + eyeOffset;
       return;
     }
 
