@@ -190,14 +190,13 @@ export function CameraController({
     if (xrRig.current) return; // StrictMode double-invoke / focus change mid-session.
     const rig = new THREE.Group();
     rig.position.set(...XR_VIEWPOINT.position);
-    // Camera-convention orientation: Matrix4.lookAt aims -Z at the target.
-    rig.quaternion.setFromRotationMatrix(
-      new THREE.Matrix4().lookAt(
-        new THREE.Vector3(...XR_VIEWPOINT.position),
-        new THREE.Vector3(...XR_VIEWPOINT.target),
-        UP
-      )
-    );
+    // Align rig yaw only with target on the horizontal plane (XZ).
+    // NEVER pitch or roll the XR rig: tilting the rig's Y-axis causes
+    // headset yaw to induce artificial visual roll, triggering severe motion sickness.
+    const dx = XR_VIEWPOINT.target[0] - XR_VIEWPOINT.position[0];
+    const dz = XR_VIEWPOINT.target[2] - XR_VIEWPOINT.position[2];
+    const yaw = Math.atan2(-dx, -dz);
+    rig.quaternion.setFromAxisAngle(UP, yaw);
     scene.add(rig);
     xrPrevParent.current = camera.parent;
     rig.attach(camera); // keep the 2D world transform, then hand over to the headset

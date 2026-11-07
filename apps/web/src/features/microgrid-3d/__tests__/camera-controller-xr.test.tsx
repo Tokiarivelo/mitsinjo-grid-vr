@@ -37,14 +37,21 @@ function expectRiggedAtViewpoint() {
   // Headset drives the camera relative to the rig: local transform is identity …
   expect(camera.position.toArray()).toEqual([0, 0, 0]);
   expect(camera.quaternion.toArray()).toEqual([0, 0, 0, 1]);
-  // … world viewpoint sits on XR_VIEWPOINT, aimed at its target.
+  // … world viewpoint sits on XR_VIEWPOINT, aimed horizontally at its target (yaw only, no pitch/roll).
   const world = new THREE.Vector3();
   camera.getWorldPosition(world);
   expect(world.distanceTo(new THREE.Vector3(...XR_VIEWPOINT.position))).toBeLessThan(1e-6);
-  const aimed = new THREE.Vector3(...XR_VIEWPOINT.target)
-    .sub(new THREE.Vector3(...XR_VIEWPOINT.position))
-    .normalize();
-  expect(camera.getWorldDirection(new THREE.Vector3()).distanceTo(aimed)).toBeLessThan(1e-6);
+  const aimedHorizontal = new THREE.Vector3(
+    XR_VIEWPOINT.target[0] - XR_VIEWPOINT.position[0],
+    0,
+    XR_VIEWPOINT.target[2] - XR_VIEWPOINT.position[2]
+  ).normalize();
+  expect(camera.getWorldDirection(new THREE.Vector3()).distanceTo(aimedHorizontal)).toBeLessThan(
+    1e-6
+  );
+  // Verify that the camera UP vector is strictly vertical (no pitch/roll on the rig).
+  const up = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
+  expect(up.y).toBeCloseTo(1, 5);
   return rig as THREE.Group;
 }
 
