@@ -50,12 +50,16 @@ export const CHANGE_HISTORY_MAX = 20;
 export type DeviceRun = Pick<BridgeState, 'scenarioId' | 'patch' | 'strategy' | 'simHour'> &
   Partial<Pick<BridgeState, 'scale'>>;
 
+export const PLAYBACK_SPEEDS = [0.25, 0.5, 1, 2, 4] as const;
+export type PlaybackSpeed = (typeof PLAYBACK_SPEEDS)[number];
+
 export interface SimulationState {
   scenarioId: ScenarioId;
   input: SimulationInput;
   status: SimStatus;
   isPlaying: boolean;
   playbackStatus: PlaybackStatus;
+  playbackSpeed: PlaybackSpeed;
   /** Comparison of the day under the cursor (`dayIndex`) of the weather workflow. */
   results: Partial<Comparison>;
   /** Weather of each simulated day, in order. One sunny day = the plain 24 h simulation. */
@@ -128,6 +132,7 @@ export interface SimulationState {
   stop: () => void;
   restart: () => void;
   togglePlay: () => void;
+  setPlaybackSpeed: (speed: PlaybackSpeed) => void;
 }
 
 export function cloneInput(input: SimulationInput): SimulationInput {
@@ -166,6 +171,7 @@ export const initialSimulationData = {
   status: 'ready' as SimStatus,
   isPlaying: false,
   playbackStatus: 'idle' as PlaybackStatus,
+  playbackSpeed: 1 as PlaybackSpeed,
   results: {} as Partial<Comparison>,
   workflow: DEFAULT_WORKFLOW,
   workflowResults: {} as WorkflowComparison,
@@ -644,5 +650,9 @@ export const useSimulationStore = create<SimulationState>((set, get) => ({
     } else {
       get().play();
     }
+  },
+
+  setPlaybackSpeed: (playbackSpeed: PlaybackSpeed) => {
+    set({ playbackSpeed });
   },
 }));

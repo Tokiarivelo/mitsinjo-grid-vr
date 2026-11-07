@@ -137,6 +137,17 @@ describe('useSimulationStore & selectors (P4-T1)', () => {
     expect(selectTimeIndex(useSimulationStore.getState())).toBe(15);
   });
 
+  it('updates playbackSpeed via setPlaybackSpeed', () => {
+    const store = useSimulationStore.getState();
+    expect(store.playbackSpeed).toBe(1);
+
+    store.setPlaybackSpeed(0.5);
+    expect(useSimulationStore.getState().playbackSpeed).toBe(0.5);
+
+    store.setPlaybackSpeed(0.25);
+    expect(useSimulationStore.getState().playbackSpeed).toBe(0.25);
+  });
+
   it('selects active strategy and sector', () => {
     const store = useSimulationStore.getState();
     store.selectStrategy('essential_first');

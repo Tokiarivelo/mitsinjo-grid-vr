@@ -15,8 +15,9 @@ import type { StepResult } from '@mitsinjo/engine';
 import { cn } from '@/lib/utils';
 import { fmtHour, fmtKw, fmtPct } from '@/lib/format';
 import { useTranslations } from '@/lib/i18n';
+import { PLAYBACK_SPEEDS, type PlaybackSpeed } from '@/stores/simulation.store';
 import { useSmoothScrub } from '../hooks/use-smooth-scrub';
-import { PLAYBACK_TICK_MS } from '../hooks/use-playback-ticker';
+import { playbackTickMs } from '../hooks/use-playback-ticker';
 
 const LAST_HOUR = 23;
 
@@ -42,6 +43,10 @@ export interface TimelineScrubberProps {
   onPause: () => void;
   onStop: () => void;
   onRestart: () => void;
+  /** Playback speed multiplier (0.25x, 0.5x, 1x, 2x, 4x). */
+  playbackSpeed?: PlaybackSpeed;
+  /** Select callback to adjust the day's running speed. */
+  onPlaybackSpeedChange?: (speed: PlaybackSpeed) => void;
   /** Scale model drives the hour: transport buttons hidden, thumb runs as a live clock. */
   followsDevice?: boolean;
   /** Real length of one model hour (ms) while following; drives the live-clock thumb. */
@@ -63,6 +68,8 @@ export function TimelineScrubber({
   onPause,
   onStop,
   onRestart,
+  playbackSpeed = 1,
+  onPlaybackSpeedChange,
   followsDevice = false,
   deviceHourMs = null,
   compact = false,
@@ -84,7 +91,7 @@ export function TimelineScrubber({
     max: LAST_HOUR,
     value: timeIndex,
     onSeek: seek,
-    playingGlideMs: isPlaying ? PLAYBACK_TICK_MS : undefined,
+    playingGlideMs: isPlaying ? playbackTickMs(playbackSpeed) : undefined,
     leadMs: followsDevice && deviceHourMs ? deviceHourMs : undefined,
   });
   const fillPct = (scrub.pos / LAST_HOUR) * 100;
@@ -167,6 +174,31 @@ export function TimelineScrubber({
             <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
           </button>
         </>
+      )}
+
+      {/* Playback Speed Selector */}
+      {!followsDevice && onPlaybackSpeedChange && (
+        <div className="relative inline-flex items-center ml-1">
+          <select
+            value={playbackSpeed}
+            onChange={(e) => onPlaybackSpeedChange(parseFloat(e.target.value) as PlaybackSpeed)}
+            aria-label={tSim('playbackSpeed')}
+            title={tSim('playbackSpeed')}
+            className="appearance-none bg-surface-elevated text-text-secondary hover:text-text-primary border border-border hover:border-border-strong rounded-control font-mono cursor-pointer transition-colors text-xs h-7 pl-2 pr-5 py-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-energy-cyan"
+          >
+            {PLAYBACK_SPEEDS.map((spd) => (
+              <option key={spd} value={spd} className="bg-surface text-text-primary">
+                {spd}x
+              </option>
+            ))}
+          </select>
+          <span
+            className="absolute right-1.5 text-text-muted pointer-events-none text-[8px] select-none"
+            aria-hidden="true"
+          >
+            ▼
+          </span>
+        </div>
       )}
 
       {/* Current Hour Pill */}

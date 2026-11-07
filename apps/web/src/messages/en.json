@@ -140,6 +140,7 @@
       "timelineScrubberLabel": "Hour of day scrubber",
       "timelineMinimize": "Minimize the timeline",
       "timelineExpand": "Expand the timeline",
+      "playbackSpeed": "Playback speed",
       "stepBackward": "Step backward 1 hour",
       "stepForward": "Step forward 1 hour",
       "startPlayback": "Start timeline playback",

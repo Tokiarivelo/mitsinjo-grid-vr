@@ -140,6 +140,7 @@
       "timelineScrubberLabel": "Curseur de l heure du jour",
       "timelineMinimize": "Réduire le curseur temporel",
       "timelineExpand": "Agrandir le curseur temporel",
+      "playbackSpeed": "Vitesse de lecture",
       "stepBackward": "Reculer d une heure",
       "stepForward": "Avancer d une heure",
       "startPlayback": "Démarrer la lecture",

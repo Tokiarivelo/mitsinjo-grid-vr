@@ -15,12 +15,13 @@ import type {
   DispatchMode,
   DispatchLogEntry,
 } from '@mitsinjo/engine';
-import type { SimStatus, PlaybackStatus, SimulationState } from './simulation.store';
+import type { SimStatus, PlaybackStatus, PlaybackSpeed, SimulationState } from './simulation.store';
 
 export const selectScenarioId = (s: SimulationState): ScenarioId => s.scenarioId;
 export const selectInput = (s: SimulationState): SimulationInput => s.input;
 export const selectStatus = (s: SimulationState): SimStatus => s.status;
 export const selectIsPlaying = (s: SimulationState): boolean => s.isPlaying;
+export const selectPlaybackSpeed = (s: SimulationState): PlaybackSpeed => s.playbackSpeed;
 /** The scale model drives input and hour: app playback controls are hidden. */
 export const selectFollowsDevice = (s: SimulationState): boolean => s.source === 'device';
 /** Hour length on the scale model while following it, else null. */

@@ -31,6 +31,7 @@ import {
   selectComparison,
   selectInput,
   selectIsPlaying,
+  selectPlaybackSpeed,
   selectFollowsDevice,
   selectDeviceHourMs,
   selectIsRunning,
@@ -129,6 +130,8 @@ export function SimulationPage() {
   const stopSimulation = useSimulationStore((s) => s.stop);
   const restartSimulation = useSimulationStore((s) => s.restart);
   const togglePlaySimulation = useSimulationStore((s) => s.togglePlay);
+  const playbackSpeed = useSimulationStore(selectPlaybackSpeed);
+  const setPlaybackSpeed = useSimulationStore((s) => s.setPlaybackSpeed);
   const addWorkflowDay = useSimulationStore((s) => s.addWorkflowDay);
   const removeWorkflowDay = useSimulationStore((s) => s.removeWorkflowDay);
   const setDayWeather = useSimulationStore((s) => s.setDayWeather);
@@ -199,6 +202,8 @@ export function SimulationPage() {
     onRestart: restartSimulation,
     followsDevice: followsDevice,
     deviceHourMs: deviceHourMs,
+    playbackSpeed: playbackSpeed,
+    onPlaybackSpeedChange: setPlaybackSpeed,
   } satisfies TimelineScrubberProps;
   const timeline = <TimelineScrubber {...timelineProps} />;
   const controlsPanel = (

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { renderHook } from '@testing-library/react';
+import { act, renderHook } from '@testing-library/react';
 import { initialSimulationData, useSimulationStore } from '@/stores/simulation.store';
 import { PLAYBACK_TICK_MS, usePlaybackTicker } from '../hooks/use-playback-ticker';
 
@@ -42,5 +42,36 @@ describe('usePlaybackTicker', () => {
     unmount();
     vi.advanceTimersByTime(PLAYBACK_TICK_MS * 3);
     expect(useSimulationStore.getState().timeIndex).toBe(22);
+  });
+
+  it('adjusts tick interval dynamically when playbackSpeed changes', () => {
+    act(() => {
+      useSimulationStore.setState({ playbackSpeed: 0.5, timeIndex: 22 });
+    });
+    renderHook(() => usePlaybackTicker(true));
+
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
+    expect(useSimulationStore.getState().timeIndex).toBe(22);
+
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
+    expect(useSimulationStore.getState().timeIndex).toBe(23);
+
+    act(() => {
+      useSimulationStore.getState().setPlaybackSpeed(0.25);
+    });
+
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+    expect(useSimulationStore.getState().timeIndex).toBe(23);
+
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+    expect(useSimulationStore.getState().timeIndex).toBe(0);
   });
 });
