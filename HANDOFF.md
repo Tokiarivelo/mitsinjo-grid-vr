@@ -9,10 +9,11 @@
 - No headset needed in dev: Meta IWER 2.8.0 + DevUI auto-install (dev-only chunk).
 - `make check` GREEN: typecheck + lint 0 err + 2135/2135 tests + i18n 3/3.
 - Fixed a suite hang: drei catch-all Proxy mock = unsettled thenable (see task file).
+- Guide `docs/vr-testing-guide.md` (chemins A/B/C, S119–S123, dépannage, tests auto).
 
-## Next (operator machine, sandbox blocks loopback/fonts/build/push)
+## Next (operator machine, sandbox blocks loopback/fonts/build)
 
-1. Push + PR (rebased; sandbox has HTTPS-fetch only, no push credentials).
+1. Relire + merger la PR VR (poussée via `gh`, branche rebasée sur ebdf49b).
 2. `make dev-mock` → S119–S123 (`test-scenarios/02-simulation.md`), incl. gate-out shots.
 3. Quest Browser HTTPS when a headset is available (S122).
 4. Still pending from HF session: HF_TOKEN → `make hf-publish`; verify namespace `Tokiarivelo`.

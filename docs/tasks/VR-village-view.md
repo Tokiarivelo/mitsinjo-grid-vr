@@ -62,6 +62,7 @@ contrôleur dans ce lot (lot suivant).
         sortie geste → retour caméra multi-trames → re-enter → exit bouton (moteur réel)
   - [x] **Done when** : `make check` vert (typecheck + lint 0 erreur + 2135 tests +
         i18n 3/3) ; gate-out static + note « live pending » (stitch-map).
+  - [x] Guide complet `docs/vr-testing-guide.md` (chemins A/B/C, S119–S123, dépannage).
 
 ## Notes de vérification (2026-11-06)
 
