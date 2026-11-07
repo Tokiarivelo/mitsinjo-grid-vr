@@ -146,6 +146,36 @@ function WaterBody({ glow }: BodyProps) {
       }
     }
     parts.push({ shape: { kind: 'box', size: [2.1, 0.1, 2.1] }, position: [0, TOWER_H, 0] });
+    // Platform safety railings
+    for (const side of [1, -1]) {
+      parts.push({
+        shape: { kind: 'box', size: [2.1, 0.04, 0.04] },
+        position: [0, TOWER_H + 0.5, side * 1.0],
+      });
+      parts.push({
+        shape: { kind: 'box', size: [0.04, 0.04, 2.1] },
+        position: [side * 1.0, TOWER_H + 0.5, 0],
+      });
+      for (const ox of [-0.95, 0, 0.95]) {
+        parts.push({
+          shape: { kind: 'box', size: [0.035, 0.5, 0.035] },
+          position: [ox, TOWER_H + 0.25, side * 1.0],
+        });
+      }
+    }
+    // Vertical maintenance ladder along one support leg
+    for (let h = 0.3; h < TOWER_H; h += 0.28) {
+      parts.push({
+        shape: { kind: 'box', size: [0.32, 0.025, 0.025] },
+        position: [-LEG, h, -LEG - 0.06],
+      });
+    }
+    for (const lx of [-LEG - 0.15, -LEG + 0.15]) {
+      parts.push({
+        shape: { kind: 'box', size: [0.025, TOWER_H, 0.025] },
+        position: [lx, TOWER_H / 2, -LEG - 0.06],
+      });
+    }
     return mergeParts(parts);
   }, []);
   const pipes = useMemo(

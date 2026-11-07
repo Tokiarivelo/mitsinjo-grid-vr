@@ -13,6 +13,7 @@ import {
 } from '../utils/camera-focus';
 import { SECTOR_POSITIONS } from '../utils/to-scene-model';
 import { terrainHeight } from '../utils/landscape';
+import { setupXRHandsAndControllers } from '../utils/xr-hands';
 import * as THREE from 'three';
 import type { CameraPreset } from '../types';
 
@@ -87,6 +88,7 @@ export function CameraController({
 }: CameraControllerProps) {
   const camera = useThree((s) => s.camera);
   const scene = useThree((s) => s.scene);
+  const gl = useThree((s) => s.gl);
   const invalidate = useThree((s) => s.invalidate);
   const controlsRef = useRef<ComponentRef<typeof OrbitControls>>(null);
 
@@ -208,10 +210,15 @@ export function CameraController({
   const wasXrActive = useRef(false);
   const xrRig = useRef<THREE.Group | null>(null);
   const xrPrevParent = useRef<THREE.Object3D | null>(null);
+  const xrHandsCleanup = useRef<(() => void) | null>(null);
+  const hasFloorTracking = useRef(false);
   useEffect(() => {
     if (!xrActive) {
       if (wasXrActive.current) {
         wasXrActive.current = false;
+        hasFloorTracking.current = false;
+        xrHandsCleanup.current?.();
+        xrHandsCleanup.current = null;
         const rig = xrRig.current;
         xrRig.current = null;
         if (rig) {
@@ -239,8 +246,12 @@ export function CameraController({
     camera.position.set(0, 0, 0);
     camera.quaternion.identity();
     xrRig.current = rig;
+
+    // Attach articulated hands and controller pointers inside the rig
+    xrHandsCleanup.current = setupXRHandsAndControllers(rig, gl);
+
     invalidate();
-  }, [xrActive, focusKey, moveTo, moveToFocusTarget, camera, scene, invalidate]);
+  }, [xrActive, focusKey, moveTo, moveToFocusTarget, camera, scene, gl, invalidate]);
 
   useFrame((state, delta) => {
     if (xrActive) {
@@ -329,9 +340,19 @@ export function CameraController({
       }
 
       // Always maintain standing eye height above terrain relief
-      // Auto-detects if a real headset runtime already provides physical floor height (camera.position.y > 0.5)
-      const eyeOffset = camera.position.y > 0.5 ? 0 : EYE_HEIGHT;
-      rig.position.y = terrainHeight(rig.position.x, rig.position.z) + eyeOffset;
+      // Auto-detects if a real headset runtime provides physical floor height (camera.position.y > 0.5)
+      if (camera.position.y > 0.5) {
+        hasFloorTracking.current = true;
+      }
+      const groundY = terrainHeight(rig.position.x, rig.position.z);
+      const eyeOffset = hasFloorTracking.current ? 0 : EYE_HEIGHT;
+      rig.position.y = groundY + eyeOffset;
+
+      // Absolute safety floor clamp: eye height can NEVER sink beneath ground level + 0.35m
+      const eyeWorldY = rig.position.y + camera.position.y;
+      if (eyeWorldY < groundY + 0.35) {
+        rig.position.y = groundY + 0.35 - camera.position.y;
+      }
       return;
     }
 

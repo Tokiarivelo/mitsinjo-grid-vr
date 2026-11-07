@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
+import * as THREE from 'three';
 import { useGLTF } from '@react-three/drei';
 import { SECTOR_POSITIONS } from '../utils/to-scene-model';
 import { mergeObjectMeshes } from '../utils/float-geometry';
@@ -37,7 +38,15 @@ const PLACEMENTS: { id: VehicleId; position: [number, number, number]; rotationY
 function Vehicle({ id, position, rotationY }: (typeof PLACEMENTS)[number]) {
   const { scene } = useGLTF(VEHICLES[id]);
   // Body, wheels and doors share one texture atlas → bake into one mesh (1 draw call).
-  const merged = useMemo(() => mergeObjectMeshes(scene), [scene]);
+  const merged = useMemo(() => {
+    const res = mergeObjectMeshes(scene);
+    if (res.material && 'roughness' in res.material) {
+      (res.material as THREE.MeshStandardMaterial).roughness = 0.38;
+      (res.material as THREE.MeshStandardMaterial).metalness = 0.28;
+      (res.material as THREE.MeshStandardMaterial).envMapIntensity = 1.4;
+    }
+    return res;
+  }, [scene]);
   if (!merged.material) return null;
   return (
     <mesh

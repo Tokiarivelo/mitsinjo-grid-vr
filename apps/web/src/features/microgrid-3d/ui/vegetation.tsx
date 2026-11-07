@@ -13,6 +13,16 @@ import {
 } from '../utils/scatter';
 import type { SceneQuality } from '../hooks/use-scene-quality';
 import { CANOPY_VARIANTS, createCanopyTree, type CanopyVariant } from '../utils/canopy-tree';
+import {
+  PROCEDURAL_PALM_VARIANTS,
+  createProceduralPalm,
+  type ProceduralPalmVariant,
+} from '../utils/procedural-palm';
+import {
+  PROCEDURAL_SHRUB_VARIANTS,
+  createProceduralShrub,
+  type ProceduralShrubVariant,
+} from '../utils/procedural-shrub';
 import { toFloatGeometry } from '../utils/float-geometry';
 import type { KeepOutZone } from '../utils/landscape';
 
@@ -98,6 +108,34 @@ function canopyParts(variant: CanopyVariant, detail: number): ModelPart[] {
     { geometry: trunk, role: 'bark' },
   ];
   canopyCache.set(key, parts);
+  return parts;
+}
+
+const palmCache = new Map<string, ModelPart[]>();
+function palmParts(variant: ProceduralPalmVariant, detail: number): ModelPart[] {
+  const key = `${variant}:${detail}`;
+  const hit = palmCache.get(key);
+  if (hit) return hit;
+  const { foliage, trunk } = createProceduralPalm(variant, detail);
+  const parts: ModelPart[] = [
+    { geometry: foliage, role: 'leaf' },
+    { geometry: trunk, role: 'bark' },
+  ];
+  palmCache.set(key, parts);
+  return parts;
+}
+
+const shrubCache = new Map<string, ModelPart[]>();
+function shrubParts(variant: ProceduralShrubVariant, detail: number): ModelPart[] {
+  const key = `${variant}:${detail}`;
+  const hit = shrubCache.get(key);
+  if (hit) return hit;
+  const { foliage, stem } = createProceduralShrub(variant, detail);
+  const parts: ModelPart[] = [
+    { geometry: foliage, role: 'leaf' },
+    { geometry: stem, role: 'bark' },
+  ];
+  shrubCache.set(key, parts);
   return parts;
 }
 
@@ -210,7 +248,11 @@ export function Vegetation({ quality = 'high', clearings }: VegetationProps) {
       const detail = quality === 'high' && near ? 2 : 1;
       const parts = (CANOPY_VARIANTS as readonly string[]).includes(model)
         ? canopyParts(model as CanopyVariant, detail)
-        : extractParts(scene, model, kind);
+        : (PROCEDURAL_PALM_VARIANTS as readonly string[]).includes(model)
+          ? palmParts(model as ProceduralPalmVariant, detail)
+          : (PROCEDURAL_SHRUB_VARIANTS as readonly string[]).includes(model)
+            ? shrubParts(model as ProceduralShrubVariant, detail)
+            : extractParts(scene, model, kind);
       return { key, kind, items: list, parts, castShadow: quality === 'high' && near };
     });
   }, [scene, quality]);

@@ -155,3 +155,29 @@ export function paddyTexture(): THREE.Texture {
     }
   });
 }
+
+/** Leaf vein pattern for natural foliage relief. */
+export function leafVeinTexture(): THREE.Texture {
+  return make('leaf-vein', 64, 64, (g) => {
+    g.fillStyle = '#808080';
+    g.fillRect(0, 0, 64, 64);
+    // Central midrib
+    g.strokeStyle = '#a0a0a0';
+    g.lineWidth = 2;
+    g.beginPath();
+    g.moveTo(32, 0);
+    g.lineTo(32, 64);
+    g.stroke();
+    // Angled lateral veins
+    g.strokeStyle = '#909090';
+    g.lineWidth = 1;
+    for (let y = 4; y < 64; y += 8) {
+      g.beginPath();
+      g.moveTo(32, y);
+      g.lineTo(0, y + 12);
+      g.moveTo(32, y);
+      g.lineTo(64, y + 12);
+      g.stroke();
+    }
+  });
+}

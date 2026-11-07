@@ -113,4 +113,16 @@ describe('CameraController XR (VR-T2)', () => {
 
     window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyW' }));
   });
+
+  it('enforces floor safety clamp so world eye height never sinks beneath terrain', () => {
+    render(<CameraController preset="village" reducedMotion xrActive />);
+    const rig = camera.parent as THREE.Group;
+
+    // Simulate an extreme downward translation in emulator (camera.position.y = -2.0)
+    camera.position.set(0, -2.0, 0);
+    frameCallback?.({ invalidate: vi.fn(), gl: { xr: { getSession: () => null } } }, 0.1);
+
+    const worldEyeY = rig.position.y + camera.position.y;
+    expect(worldEyeY).toBeGreaterThanOrEqual(0.35);
+  });
 });
