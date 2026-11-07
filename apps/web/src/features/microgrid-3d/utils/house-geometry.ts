@@ -67,18 +67,21 @@ function windowParts(h: HouseSpec): Part[] {
   const xs = Array.from({ length: n }, (_, i) =>
     n === 1 ? 0 : -usable / 2 + (usable / (n - 1)) * i
   );
+  const doorW = 0.36;
+  const doorX = n > 1 ? 0 : h.width * 0.28;
   const parts: Part[] = [];
   for (const side of [1, -1]) {
     for (const x of xs) {
+      if (side === 1 && Math.abs(x - doorX) < (winW + doorW) / 2) continue;
       parts.push({
         shape: { kind: 'plane', size: [winW, winH] },
-        position: [x, winY, side * (h.depth / 2 + 0.012)],
+        position: [x, winY, side * (h.depth / 2 + 0.014)],
         rotation: [0, side === 1 ? 0 : Math.PI, 0],
       });
     }
     parts.push({
       shape: { kind: 'plane', size: [winW, winH] },
-      position: [side * (h.width / 2 + 0.012), winY, 0],
+      position: [side * (h.width / 2 + 0.014), winY, 0],
       rotation: [0, (side * Math.PI) / 2, 0],
     });
   }
@@ -87,16 +90,125 @@ function windowParts(h: HouseSpec): Part[] {
 
 function trimParts(h: HouseSpec): Part[] {
   const n = h.windowsPerSide ?? 2;
-  return [
+  const doorW = 0.36;
+  const doorH = h.wallHeight * 0.62;
+  const doorX = n > 1 ? 0 : h.width * 0.28;
+  const doorZ = h.depth / 2 + 0.014;
+  const doorY = 0.12 + doorH / 2;
+
+  const parts: Part[] = [
+    // Foundation plinth band
     {
       shape: { kind: 'box', size: [h.width + 0.16, 0.12, h.depth + 0.16] },
       position: [0, 0.06, 0],
     },
+    // Door leaf
     {
-      shape: { kind: 'plane', size: [0.34, h.wallHeight * 0.62] },
-      position: [n > 1 ? 0 : h.width * 0.28, 0.12 + h.wallHeight * 0.33, h.depth / 2 + 0.014],
+      shape: { kind: 'plane', size: [doorW, doorH] },
+      position: [doorX, doorY, doorZ],
+    },
+    // Door frame: top lintel
+    {
+      shape: { kind: 'box', size: [doorW + 0.07, 0.035, 0.03] },
+      position: [doorX, doorY + doorH / 2 + 0.015, doorZ + 0.008],
+    },
+    // Door frame: left post
+    {
+      shape: { kind: 'box', size: [0.035, doorH, 0.03] },
+      position: [doorX - doorW / 2 - 0.015, doorY, doorZ + 0.008],
+    },
+    // Door frame: right post
+    {
+      shape: { kind: 'box', size: [0.035, doorH, 0.03] },
+      position: [doorX + doorW / 2 + 0.015, doorY, doorZ + 0.008],
+    },
+    // Door handle
+    {
+      shape: { kind: 'box', size: [0.02, 0.07, 0.025] },
+      position: [doorX + doorW * 0.32, doorY, doorZ + 0.02],
     },
   ];
+
+  // Architectural window frames, mullions, and projecting sills
+  const winW = Math.min(0.42, (h.width * 0.6) / n);
+  const winH = h.wallHeight * 0.38;
+  const winY = h.wallHeight * 0.58 + 0.12;
+  const usable = h.width * 0.72;
+  const xs = Array.from({ length: n }, (_, i) =>
+    n === 1 ? 0 : -usable / 2 + (usable / (n - 1)) * i
+  );
+
+  for (const side of [1, -1]) {
+    // Front & back windows
+    for (const x of xs) {
+      if (side === 1 && Math.abs(x - doorX) < (winW + doorW) / 2) continue;
+      const z = side * (h.depth / 2 + 0.018);
+      // Top frame header
+      parts.push({
+        shape: { kind: 'box', size: [winW + 0.05, 0.03, 0.028] },
+        position: [x, winY + winH / 2 + 0.014, z],
+      });
+      // Bottom frame sill support
+      parts.push({
+        shape: { kind: 'box', size: [winW + 0.05, 0.03, 0.028] },
+        position: [x, winY - winH / 2 - 0.014, z],
+      });
+      // Left vertical jamb
+      parts.push({
+        shape: { kind: 'box', size: [0.028, winH, 0.028] },
+        position: [x - winW / 2 - 0.014, winY, z],
+      });
+      // Right vertical jamb
+      parts.push({
+        shape: { kind: 'box', size: [0.028, winH, 0.028] },
+        position: [x + winW / 2 + 0.014, winY, z],
+      });
+      // Center vertical mullion bar
+      parts.push({
+        shape: { kind: 'box', size: [0.02, winH, 0.024] },
+        position: [x, winY, z],
+      });
+      // Protruding window sill (appui de fenêtre)
+      parts.push({
+        shape: { kind: 'box', size: [winW + 0.09, 0.03, 0.05] },
+        position: [x, winY - winH / 2 - 0.028, z + side * 0.012],
+      });
+    }
+
+    // Side windows (left & right facades)
+    const sideX = side * (h.width / 2 + 0.018);
+    // Top frame header
+    parts.push({
+      shape: { kind: 'box', size: [0.028, 0.03, winW + 0.05] },
+      position: [sideX, winY + winH / 2 + 0.014, 0],
+    });
+    // Bottom frame
+    parts.push({
+      shape: { kind: 'box', size: [0.028, 0.03, winW + 0.05] },
+      position: [sideX, winY - winH / 2 - 0.014, 0],
+    });
+    // Side jambs
+    parts.push({
+      shape: { kind: 'box', size: [0.028, winH, 0.028] },
+      position: [sideX, winY, -winW / 2 - 0.014],
+    });
+    parts.push({
+      shape: { kind: 'box', size: [0.028, winH, 0.028] },
+      position: [sideX, winY, winW / 2 + 0.014],
+    });
+    // Center mullion
+    parts.push({
+      shape: { kind: 'box', size: [0.024, winH, 0.02] },
+      position: [sideX, winY, 0],
+    });
+    // Protruding side sill
+    parts.push({
+      shape: { kind: 'box', size: [0.05, 0.03, winW + 0.09] },
+      position: [sideX + side * 0.012, winY - winH / 2 - 0.028, 0],
+    });
+  }
+
+  return parts;
 }
 
 function verandaParts(h: HouseSpec): Part[] {

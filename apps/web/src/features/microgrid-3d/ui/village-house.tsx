@@ -10,10 +10,18 @@ const DARK_GLASS = '#1c2129';
 /** Warm interior light (sRGB). Multiplied above 1 so bloom catches it. */
 const WARM_LIGHT = '#ffb25e';
 
-const TRIM_MAT = new THREE.MeshStandardMaterial({ color: '#6e5a48', roughness: 0.9 });
-const VERANDA_MAT = new THREE.MeshStandardMaterial({ color: '#d9cfbf', roughness: 0.85 });
+const TRIM_MAT = new THREE.MeshStandardMaterial({
+  color: '#2b343d',
+  roughness: 0.58,
+  metalness: 0.18,
+});
+const VERANDA_MAT = new THREE.MeshStandardMaterial({ color: '#c4ad8f', roughness: 0.72 });
 /** Wall color comes from the per-house `color` vertex attribute. */
-const WALL_MAT = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.88 });
+const WALL_MAT = new THREE.MeshStandardMaterial({
+  vertexColors: true,
+  roughness: 0.74,
+  metalness: 0.04,
+});
 
 export type RoofFinish = 'corrugated' | 'tile';
 
@@ -31,9 +39,9 @@ function roofMaterial(finish: RoofFinish): THREE.MeshStandardMaterial {
       vertexColors: true,
       map: tex,
       bumpMap: tex,
-      bumpScale: 0.6,
-      roughness: finish === 'corrugated' ? 0.55 : 0.8,
-      metalness: finish === 'corrugated' ? 0.35 : 0.05,
+      bumpScale: 0.45,
+      roughness: finish === 'corrugated' ? 0.42 : 0.65,
+      metalness: finish === 'corrugated' ? 0.42 : 0.08,
     });
     roofMats.set(finish, mat);
   }
@@ -86,9 +94,16 @@ export function HouseCluster({
       <mesh geometry={geo.trim} material={TRIM_MAT} receiveShadow castShadow />
       <mesh geometry={geo.walls} material={WALL_MAT} castShadow receiveShadow />
       <mesh geometry={geo.roofs} material={roofMaterial(roofFinish)} castShadow receiveShadow />
-      {/* Windows (data-driven glow) */}
+      {/* Windows (reflective architectural glass + interior light glow) */}
       <mesh geometry={geo.windows}>
-        <meshBasicMaterial color={glassColor} toneMapped={false} />
+        <meshStandardMaterial
+          color={glassColor}
+          emissive={windowGlow > 0 ? glassColor : '#0c1a2e'}
+          emissiveIntensity={windowGlow > 0 ? 1.5 : 0.25}
+          roughness={0.12}
+          metalness={0.28}
+          envMapIntensity={2.0}
+        />
       </mesh>
       {geo.verandas && (
         <mesh geometry={geo.verandas} material={VERANDA_MAT} castShadow receiveShadow />

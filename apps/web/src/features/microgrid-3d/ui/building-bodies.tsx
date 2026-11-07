@@ -49,7 +49,25 @@ function crossGeometry(len: number, bar: number, at: [number, number, number]) {
   }
   return g;
 }
+let sharedPvMat: THREE.MeshStandardMaterial | null = null;
+function getPvMaterial(): THREE.MeshStandardMaterial {
+  if (!sharedPvMat) {
+    const tex = solarCellTexture().clone();
+    tex.needsUpdate = true;
+    tex.repeat.set(2, 1);
+    sharedPvMat = new THREE.MeshStandardMaterial({
+      map: tex,
+      color: '#ffffff',
+      metalness: 0.65,
+      roughness: 0.22,
+      envMapIntensity: 1.5,
+    });
+  }
+  return sharedPvMat;
+}
+
 function ClinicBody({ glow }: BodyProps) {
+  const pvMat = useMemo(() => getPvMaterial(), []);
   return (
     <group name="health-clinic-mesh">
       <VillageHouse
@@ -57,13 +75,22 @@ function ClinicBody({ glow }: BodyProps) {
         depth={2.6}
         wallHeight={1.7}
         roofHeight={1.05}
-        wallColor="#f1f0ea"
-        roofColor="#6f8394"
+        wallColor="#f4f3ed"
+        roofColor="#4a5d6e"
         windowGlow={glow}
         windowsPerSide={3}
         veranda
         position={[0, 0, -0.4]}
       />
+      {/* Rooftop solar backup on Clinic (essential-first facility) */}
+      <mesh
+        position={[0, 1.7 + 0.1 + 1.05 / 2 + 0.05, -0.4 + 0.45 + (2.6 + 0.64 + 0.9) / 4]}
+        rotation={[Math.atan2(1.05, (2.6 + 0.64 + 0.9) / 2), 0, 0]}
+        material={pvMat}
+        castShadow
+      >
+        <boxGeometry args={[2.5, 0.04, 0.95]} />
+      </mesh>
       {/* Red-cross sign on two posts, angled to the camera */}
       <group position={[-2.6, 0, 1.6]} rotation={[0, 0.5, 0]}>
         <mesh geometry={SIGN_BOARD} castShadow>
@@ -197,12 +224,7 @@ function WaterBody({ glow }: BodyProps) {
 const SCHOOL = { width: 6.6, depth: 2.6, wall: 1.6, roof: 1.2, overhang: 0.32 };
 
 function SchoolBody({ glow }: BodyProps) {
-  const pv = useMemo(() => {
-    const tex = solarCellTexture().clone();
-    tex.needsUpdate = true;
-    tex.repeat.set(3, 1);
-    return tex;
-  }, []);
+  const pvMat = useMemo(() => getPvMaterial(), []);
   // Panel lies mid-way up the front roof slope.
   const roofD = SCHOOL.depth + SCHOOL.overhang * 2 + 0.9;
   const slope = Math.atan2(SCHOOL.roof, roofD / 2);
@@ -218,20 +240,13 @@ function SchoolBody({ glow }: BodyProps) {
         roofHeight={SCHOOL.roof}
         overhang={SCHOOL.overhang}
         wallColor="#ead9b8"
-        roofColor="#b04a2e"
+        roofColor="#8f3a22"
         windowGlow={glow}
         windowsPerSide={5}
         veranda
       />
-      <mesh position={[0, yMid, zMid]} rotation={[slope, 0, 0]} castShadow>
+      <mesh position={[0, yMid, zMid]} rotation={[slope, 0, 0]} material={pvMat} castShadow>
         <boxGeometry args={[3.4, 0.05, 1.15]} />
-        <meshStandardMaterial
-          map={pv}
-          color="#ffffff"
-          metalness={0.6}
-          roughness={0.22}
-          envMapIntensity={1.4}
-        />
       </mesh>
       {/* Blue name board above the entrance */}
       <mesh position={[0, SCHOOL.wall * 0.86 + 0.12, SCHOOL.depth / 2 + 0.02]}>
@@ -254,13 +269,30 @@ const HOMES: {
   d: number;
   wall: string;
   roof: string;
+  solar?: boolean;
 }[] = [
-  { pos: [-2.3, 0, -1.5], rot: 0.25, w: 2.0, d: 1.6, wall: '#d8c3a0', roof: '#5f6f7d' },
-  { pos: [0.6, 0, -2.4], rot: -0.1, w: 1.8, d: 1.5, wall: '#e3d2b2', roof: '#6b7a86' },
-  { pos: [2.8, 0, -0.2], rot: -0.35, w: 1.9, d: 1.5, wall: '#cfae84', roof: '#4f5d6b' },
-  { pos: [-2.5, 0, 1.7], rot: 0.15, w: 1.9, d: 1.6, wall: '#c79f74', roof: '#7a6a5a' },
-  { pos: [0.2, 0, 0.6], rot: 0.05, w: 2.1, d: 1.6, wall: '#d9b994', roof: '#5a6878' },
-  { pos: [2.0, 0, 2.7], rot: -0.2, w: 1.7, d: 1.4, wall: '#e0caa6', roof: '#8a5a3c' },
+  {
+    pos: [-2.3, 0, -1.5],
+    rot: 0.25,
+    w: 2.1,
+    d: 1.6,
+    wall: '#dfceb6',
+    roof: '#333e4a',
+    solar: true,
+  },
+  { pos: [0.6, 0, -2.4], rot: -0.1, w: 1.9, d: 1.5, wall: '#e8dcbe', roof: '#475463' },
+  {
+    pos: [2.8, 0, -0.2],
+    rot: -0.35,
+    w: 2.0,
+    d: 1.6,
+    wall: '#cdb18a',
+    roof: '#2e3843',
+    solar: true,
+  },
+  { pos: [-2.5, 0, 1.7], rot: 0.15, w: 1.9, d: 1.6, wall: '#c8a478', roof: '#804b32' },
+  { pos: [0.2, 0, 0.6], rot: 0.05, w: 2.2, d: 1.6, wall: '#dec4a2', roof: '#3a4755', solar: true },
+  { pos: [2.0, 0, 2.7], rot: -0.2, w: 1.8, d: 1.4, wall: '#e3d0ab', roof: '#7a422a' },
 ];
 
 /** All homes merged: 5 draw calls instead of one set of meshes per home. */
@@ -278,7 +310,32 @@ const HOME_SPECS: HouseSpec[] = HOMES.map((h, i) => ({
 }));
 
 function HouseholdsBody({ glow }: BodyProps) {
-  return <HouseCluster name="houses-cluster-mesh" houses={HOME_SPECS} windowGlow={glow} />;
+  const pvMat = useMemo(() => getPvMaterial(), []);
+  return (
+    <group name="households-group">
+      <HouseCluster name="houses-cluster-mesh" houses={HOME_SPECS} windowGlow={glow} />
+      {/* Rooftop solar panels on modern eco-homes */}
+      {HOMES.map((h, i) => {
+        if (!h.solar) return null;
+        const roofD = h.d + 0.64 + (i % 3 === 0 ? 0.9 : 0);
+        const slope = Math.atan2(0.75, roofD / 2);
+        const localZ = (i % 3 === 0 ? 0.45 : 0) + roofD / 4;
+        const localY = 1.15 + 0.1 + 0.75 / 2 + 0.04;
+        return (
+          <group key={i} position={h.pos} rotation={[0, h.rot, 0]}>
+            <mesh
+              position={[0, localY, localZ]}
+              rotation={[slope, 0, 0]}
+              material={pvMat}
+              castShadow
+            >
+              <boxGeometry args={[h.w * 0.65, 0.03, roofD * 0.32]} />
+            </mesh>
+          </group>
+        );
+      })}
+    </group>
+  );
 }
 
 // ---------------- Market ----------------
