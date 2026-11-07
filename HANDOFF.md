@@ -1,31 +1,29 @@
 # HANDOFF — read first, overwrite at end of session (≤40 lines)
 
-**Updated:** 2026-11-07 · **By:** Antigravity · **Branch:** feat/realistic-clouds (on feat/vr-village-view 9b0b339)
+**Updated:** 2026-11-07 · **By:** Antigravity · **Branch:** feat/realistic-clouds
 
 ## Current state
 
-- Volumetric realistic cumulus clouds: multi-lobed smooth spheres replacing low-poly icosahedrons.
-- Cloud shader: soft wrapped diffuse, atmospheric dual-tone ambient bounce (sky/ground), silver rim backlighting.
-- Abundant cloud banks (36 banks, 396 puffs) spread across 3 depth rings (village sky, ridge horizon, high canopy).
-- Extreme optimization: exactly 1 InstancedMesh draw call, smooth LOD tiering, zero per-frame allocs.
-- Fixed Three.js `fogColor` runtime uniform crash by cloning `UniformsLib.fog` into custom ShaderMaterial.
-- Added playback speed selector (`0.25x`, `0.5x`, `1x`, `2x`, `4x`) in 24h timeline scrubber to adjust day speed.
-- Dynamic interval ticker + smooth cursor glide adapt instantly to speed changes. Full i18n (EN/FR/MG).
-- `make check-i18n`, `make test-engine`, `pnpm --filter web typecheck`, and all test suites passing 100%.
+- Celestial 0° to 180° cycle: pure celestial mechanics for Sun (06h->18h) and Moon (18h->06h) with smooth arc progression.
+- Night sky: 720 twinkling stars on upper dome (1 draw call, circular points shader, dusk/dawn smooth fade).
+- Moon orb & halo: luminous silver disc with ethereal cyan glow arcing 0° (dusk) -> 90° (midnight) -> 180° (dawn).
+- Dynamic lighting: directional key light tracks sun by day, moon by night for physically-grounded shadows.
+- Cloud drift: enhanced peaceful continuous drift, organic floating breeze, and simulated time-of-day progression.
+- Realistic cumulus: multi-lobed smooth spheres with wrapped diffuse, ambient bounce, rim backlight (1 InstancedMesh).
+- Speed selector: timeline scrubber playback speed (0.25x to 4x) with full i18n (EN/FR/MG).
+- All 47 3D test files (327 tests), 27 engine tests (353 tests), typecheck, and i18n parity check pass 100%.
 
 ## Next
 
-1. Check simulation playback visually in browser at `http://localhost:3001/simulation`.
-2. Commit on `feat/realistic-clouds` and prepare PR/merge.
+1. Verify live visual experience at `http://localhost:3001/simulation`.
+2. Ready to merge to main or create PR.
 
 ## Files touched
 
-- Edit: `microgrid-3d/{ui/weather-effects.tsx,ui/village-canvas.tsx,utils/weather-atmosphere.ts}`,
-  `simulation/{ui/timeline-scrubber.tsx,ui/simulation-page.tsx,hooks/use-playback-ticker.ts}`,
-  `stores/{simulation.store.ts,selectors.ts}`, `messages/{en,fr,mg}.json`.
-- Tests: `timeline-scrubber.test.tsx`, `use-playback-ticker.test.ts`, `simulation-store.test.ts`.
+- Add: `microgrid-3d/utils/celestial.ts`, `microgrid-3d/utils/__tests__/celestial.test.ts`.
+- Edit: `microgrid-3d/ui/sky-backdrop.tsx`, `microgrid-3d/ui/village-canvas.tsx`, `microgrid-3d/ui/weather-effects.tsx`, `HANDOFF.md`.
 
 ## Decisions
 
-- Playback speed multiplier (0.25x=2s/h up to 4x=125ms/h): allows slow detailed observation of hourly microgrid flow.
-- Seamless re-tick on speed change: user can switch speed on the fly without interrupting playback.
+- Display altitude vs Key altitude: display altitude keeps celestial bodies nicely framed above mountains (2.5° to 7.5° in view), while key light altitude (6° to 42°) preserves crisp, readable shadows on ground.
+- Night illumination: key light uses Moon position at night with silvery-blue tone, casting soft nocturnal village shadows.

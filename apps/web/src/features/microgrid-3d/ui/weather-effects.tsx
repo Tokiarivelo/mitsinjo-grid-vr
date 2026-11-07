@@ -23,6 +23,7 @@ export interface WeatherEffectsProps {
   animate: boolean;
   palette?: SkyPalette;
   sunDirection?: [number, number, number];
+  timeIndex?: number;
 }
 
 /** Clouds, rain and storm lightning for the day's weather. Visual only, never data. */
@@ -33,6 +34,7 @@ export function WeatherEffects({
   animate,
   palette,
   sunDirection,
+  timeIndex,
 }: WeatherEffectsProps) {
   const atmo = WEATHER_ATMOSPHERE[weather];
   return (
@@ -46,6 +48,7 @@ export function WeatherEffects({
         quality={quality}
         isDaytime={isDaytime}
         hasLightning={atmo.lightning}
+        timeIndex={timeIndex}
       />
       {atmo.rain > 0 && (
         <Rain
@@ -187,6 +190,7 @@ function CloudLayer({
   quality,
   isDaytime,
   hasLightning,
+  timeIndex,
 }: {
   cover: number;
   darkness: number;
@@ -196,9 +200,11 @@ function CloudLayer({
   quality: 'high' | 'low';
   isDaytime: boolean;
   hasLightning: boolean;
+  timeIndex?: number;
 }) {
   const groupRef = useRef<THREE.Group>(null);
   const meshRef = useRef<THREE.InstancedMesh>(null);
+  const driftRef = useRef(0);
   const invalidate = useThree((s) => s.invalidate);
   const requestFrame = useAmbientFrame();
   const puffs = useMemo(() => cloudPuffs(cover), [cover]);
@@ -260,11 +266,17 @@ function CloudLayer({
     if (animate) invalidate();
   }, [animate, invalidate]);
 
+  const baseRotation = (timeIndex ?? 12) * 0.05;
+
   useFrame((state, delta) => {
     if (!animate) return;
+    driftRef.current += delta * 0.015;
     if (groupRef.current) {
-      // Slow, peaceful drift across the sky.
-      groupRef.current.rotation.y += delta * 0.005;
+      // Peaceful continuous drift across the sky, augmented by simulated time progression
+      groupRef.current.rotation.y = baseRotation + driftRef.current;
+      // Gentle subtle breeze floating
+      groupRef.current.position.y = Math.sin(state.clock.elapsedTime * 0.3) * 0.6;
+      groupRef.current.position.x = Math.sin(state.clock.elapsedTime * 0.18) * 1.2;
     }
     if (hasLightning) {
       uniforms.uLightning.value = lightningFlash(state.clock.elapsedTime);

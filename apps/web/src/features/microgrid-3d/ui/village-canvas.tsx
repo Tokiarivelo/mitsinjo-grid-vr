@@ -29,7 +29,7 @@ import { isSoftwareRenderer } from '../utils/webgl';
 import { createSceneStats, sampleSceneStats, type SceneStatsSample } from '../utils/scene-stats';
 import { applyOvercast, skyPalette } from '../utils/sky-palette';
 import { WEATHER_ATMOSPHERE } from '../utils/weather-atmosphere';
-import { SUN_AZIMUTH_RAD } from '../utils/landscape';
+import { moonCoordinates, nightFactor, sunCoordinates } from '../utils/celestial';
 import type { SectorStateOverride } from '../utils/placed-models-geometry';
 import { usePlacedClearings } from '../hooks/use-site-zones';
 import { accessPathClearings, accessPaths } from '../utils/access-paths';
@@ -255,30 +255,21 @@ export function VillageCanvas({
   );
   // Clouds drift and rain falls whenever motion is allowed (even on a modified run).
   const weatherMotion = !reducedMotion && !softwareGl;
-  const sunDirection = useMemo<[number, number, number]>(() => {
-    const alt = (palette.sunAltitudeDeg * Math.PI) / 180;
-    return [
-      Math.cos(alt) * Math.sin(SUN_AZIMUTH_RAD),
-      Math.sin(alt),
-      -Math.cos(alt) * Math.cos(SUN_AZIMUTH_RAD),
-    ];
-  }, [palette.sunAltitudeDeg]);
-  // Visible sun / sky glow: low on the horizon so the sunset reads in frame.
-  const skySunDirection = useMemo<[number, number, number]>(() => {
-    const alt = (palette.sunDisplayAltitudeDeg * Math.PI) / 180;
-    return [
-      Math.cos(alt) * Math.sin(SUN_AZIMUTH_RAD),
-      Math.sin(alt),
-      -Math.cos(alt) * Math.cos(SUN_AZIMUTH_RAD),
-    ];
-  }, [palette.sunDisplayAltitudeDeg]);
+
+  // Celestial trajectory: Sun arcs 0° to 180° by day, Moon arcs 0° to 180° by night.
+  const sun = useMemo(() => sunCoordinates(model.timeIndex), [model.timeIndex]);
+  const moon = useMemo(() => moonCoordinates(model.timeIndex), [model.timeIndex]);
+  const nightProgress = useMemo(() => nightFactor(model.timeIndex), [model.timeIndex]);
+
+  // Active key light: sun by day, moon by night (matches shadow casting to visible orb).
+  const activeKeyDirection = model.isDaytime ? sun.keyDirection : moon.keyDirection;
   const keyLightPos = useMemo<[number, number, number]>(
     () => [
-      sunDirection[0] * KEY_LIGHT_DISTANCE,
-      sunDirection[1] * KEY_LIGHT_DISTANCE,
-      sunDirection[2] * KEY_LIGHT_DISTANCE,
+      activeKeyDirection[0] * KEY_LIGHT_DISTANCE,
+      activeKeyDirection[1] * KEY_LIGHT_DISTANCE,
+      activeKeyDirection[2] * KEY_LIGHT_DISTANCE,
     ],
-    [sunDirection]
+    [activeKeyDirection]
   );
   // Shadow casters are static: re-bake the sun shadow map only when light or data change.
   const shadowBakeKey = useMemo(() => [keyLightPos, model] as const, [keyLightPos, model]);
@@ -351,14 +342,23 @@ export function VillageCanvas({
             intensity={palette.hemiIntensity * 0.45}
           />
 
-          <SkyBackdrop palette={palette} sunDirection={skySunDirection} detail={quality} />
+          <SkyBackdrop
+            palette={palette}
+            sunDirection={sun.displayDirection}
+            moonDirection={moon.displayDirection}
+            isDaytime={model.isDaytime}
+            nightProgress={nightProgress}
+            detail={quality}
+            animate={weatherMotion}
+          />
           <WeatherEffects
             weather={model.weather}
             isDaytime={model.isDaytime}
             quality={quality}
             animate={weatherMotion}
             palette={palette}
-            sunDirection={skySunDirection}
+            sunDirection={model.isDaytime ? sun.displayDirection : moon.displayDirection}
+            timeIndex={model.timeIndex}
           />
           <FireEffects buildings={model.buildings} quality={quality} animate={weatherMotion} />
 
