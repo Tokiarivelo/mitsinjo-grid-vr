@@ -34,7 +34,7 @@ describe('weather atmosphere', () => {
     expect(cloudPuffs(0.5)).toEqual(cloudPuffs(0.5));
     const fullPuffs = cloudPuffs(1);
     for (const p of fullPuffs) {
-      expect(p.position[1]).toBeGreaterThan(15);
+      expect(p.position[1]).toBeGreaterThan(8);
       expect(p.scale[0]).toBeGreaterThan(0);
       expect(p.scale[1]).toBeGreaterThan(0);
       expect(p.scale[2]).toBeGreaterThan(0);

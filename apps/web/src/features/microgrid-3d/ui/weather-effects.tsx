@@ -24,8 +24,14 @@ export interface WeatherEffectsProps {
   palette?: SkyPalette;
   sunDirection?: [number, number, number];
   timeIndex?: number;
-  /** Optional external ref to smoothly update cloud sun direction in useFrame. */
-  cloudUniformsRef?: React.MutableRefObject<{ uSunDir: THREE.IUniform<THREE.Vector3> } | null>;
+  /** Optional external ref to smoothly update cloud sun direction & lighting in useFrame. */
+  cloudUniformsRef?: React.MutableRefObject<{
+    uSunDir: THREE.IUniform<THREE.Vector3>;
+    uSunColor: THREE.IUniform<THREE.Color>;
+    uSkyColor: THREE.IUniform<THREE.Color>;
+    uGroundColor: THREE.IUniform<THREE.Color>;
+    uSunGlow: THREE.IUniform<THREE.Color>;
+  } | null>;
 }
 
 /** Clouds, rain and storm lightning for the day's weather. Visual only, never data. */
@@ -78,19 +84,33 @@ varying vec3 vLocalPosition;
 #include <fog_pars_vertex>
 
 void main() {
-  vLocalPosition = position;
+  // Procedural organic cumulus billow deformation:
+  // Displaces spherical vertices with 3D harmonic sine/cosine lobes,
+  // creating soft, billowing cauliflower-like cumulus bumps (zero facets, completely organic)
+  vec3 p = position * 2.3;
+  float bump = sin(p.x * 2.1 + p.y * 1.8) * cos(p.z * 2.2 + p.y * 1.4) * 0.085;
+  bump += sin(p.x * 4.2 + p.z * 3.8) * 0.038;
+  vec3 displacedPos = position + normal * bump;
+
+  vec3 displacedNormal = normalize(normal + vec3(
+    cos(p.x * 2.1) * 0.08,
+    sin(p.y * 1.8) * 0.08,
+    -sin(p.z * 2.2) * 0.08
+  ));
+
+  vLocalPosition = displacedPos;
 
   #ifdef USE_INSTANCING
-    vec4 worldPos = modelMatrix * instanceMatrix * vec4(position, 1.0);
+    vec4 worldPos = modelMatrix * instanceMatrix * vec4(displacedPos, 1.0);
     mat3 m = mat3(instanceMatrix);
     // Smooth instance normal: normalize column lengths of scale matrix
     vec3 scaleSq = vec3(dot(m[0], m[0]), dot(m[1], m[1]), dot(m[2], m[2]));
-    vec3 invScaleNormal = normal / sqrt(max(scaleSq, vec3(0.0001)));
+    vec3 invScaleNormal = displacedNormal / sqrt(max(scaleSq, vec3(0.0001)));
     vec3 transformedNormal = m * invScaleNormal;
     vWorldNormal = normalize((modelMatrix * vec4(transformedNormal, 0.0)).xyz);
   #else
-    vec4 worldPos = modelMatrix * vec4(position, 1.0);
-    vWorldNormal = normalize((modelMatrix * vec4(normal, 0.0)).xyz);
+    vec4 worldPos = modelMatrix * vec4(displacedPos, 1.0);
+    vWorldNormal = normalize((modelMatrix * vec4(displacedNormal, 0.0)).xyz);
   #endif
 
   vWorldPosition = worldPos.xyz;
@@ -124,35 +144,49 @@ void main() {
   vec3 V = normalize(cameraPosition - vWorldPosition);
   vec3 L = normalize(uSunDir);
 
-  // Soft wrapped diffuse: wraps sunlight around the curved cloud surface,
-  // eliminating harsh black terminator lines
+  // Soft wrapped diffuse: wraps sunlight smoothly around the curved billowing surface,
+  // preventing any harsh black shadow cutoffs
   float NdotL = dot(N, L);
-  float wrap = 0.55;
+  float wrap = 0.65;
   float diff = clamp((NdotL + wrap) / (1.0 + wrap), 0.0, 1.0);
-  diff = smoothstep(0.02, 0.98, diff);
+  diff = smoothstep(0.03, 0.97, diff);
 
-  // Atmospheric ambient bounce: sky from top, ground bounce from bottom
+  // Atmospheric ambient bounce: in the sky, ambient light is vibrant sky blue from above
+  // and soft haze/horizon bounce from below
   float up = clamp(N.y * 0.5 + 0.5, 0.0, 1.0);
-  vec3 ambientLight = mix(uGroundColor, uSkyColor, up);
+  vec3 ambientSky = mix(vec3(0.55, 0.78, 1.0), uSkyColor, 0.45);
+  vec3 ambientGround = mix(vec3(0.75, 0.88, 1.0), uGroundColor, 0.12);
+  vec3 ambientLight = mix(ambientGround, ambientSky, up);
 
-  // Vertical fluffiness gradient: tops are pure bright white, bottoms catch rich sky ambient tint
-  float heightT = clamp((vLocalPosition.y + 0.9) / 1.8, 0.0, 1.0);
-  vec3 baseShade = mix(uCloudShadow, uCloudBase, heightT * 0.45 + 0.55);
+  // Vertical fluffiness & crevice gradient: tops are pure bright white, undersides
+  // catch rich luminous sky-blue ambient shadow (matches Image 2 reference)
+  float heightT = clamp((vLocalPosition.y + 0.95) / 1.9, 0.0, 1.0);
+  vec3 baseShade = mix(uCloudShadow, uCloudBase, heightT * 0.55 + 0.45);
 
   // Direct sun vs ambient shade
-  vec3 litColor = uCloudBase * (uSunColor * 1.1 + vec3(0.12));
-  vec3 shadeColor = mix(baseShade, ambientLight, 0.38);
+  vec3 litColor = uCloudBase * (uSunColor * 1.1 + vec3(0.18));
+  vec3 shadeColor = baseShade * ambientLight;
   vec3 color = mix(shadeColor, litColor, diff);
 
-  // Silver lining / rim lighting when backlit by the sun
+  // Subsurface scattering / forward translucent glow when backlit by the sun
+  float forward = clamp(dot(V, -L), 0.0, 1.0);
+  vec3 sss = uSunColor * pow(forward, 2.5) * 0.65;
+  color += sss;
+
+  // Silver lining / rim halo along silhouettes
   float sunFacing = max(0.0, dot(L, -V));
-  float fresnel = pow(1.0 - max(0.0, dot(N, V)), 2.2);
-  float rim = fresnel * (0.35 + 0.65 * pow(sunFacing, 2.0));
-  color += uSunGlow * rim * (1.0 - uDarkness * 0.6);
+  float fresnel = pow(1.0 - max(0.0, dot(N, V)), 2.6);
+  float rim = fresnel * (0.4 + 0.6 * pow(sunFacing, 2.0));
+  color += mix(uSunGlow, vec3(1.0), 0.5) * rim * (1.0 - uDarkness * 0.6);
+
+  // Luminous sky floor guarantee: clouds are never murky dark rocks in daytime
+  float dayFactor = clamp(uSunDir.y * 3.0 + 0.2, 0.0, 1.0);
+  vec3 minSkyFloor = vec3(0.48, 0.72, 0.98) * dayFactor * (1.0 - uDarkness * 0.75);
+  color = max(color, minSkyFloor);
 
   // Weather darkness (storm / rainy)
   if (uDarkness > 0.0) {
-    vec3 stormTone = mix(vec3(0.25, 0.27, 0.33), vec3(0.45, 0.48, 0.55), diff);
+    vec3 stormTone = mix(vec3(0.28, 0.31, 0.38), vec3(0.50, 0.54, 0.62), diff);
     color = mix(color, stormTone, uDarkness * 0.85);
   }
 
@@ -195,7 +229,6 @@ function CloudLayer({
   quality,
   isDaytime,
   hasLightning,
-  timeIndex,
   cloudUniformsRef,
 }: {
   cover: number;
@@ -207,7 +240,13 @@ function CloudLayer({
   isDaytime: boolean;
   hasLightning: boolean;
   timeIndex?: number;
-  cloudUniformsRef?: React.MutableRefObject<{ uSunDir: THREE.IUniform<THREE.Vector3> } | null>;
+  cloudUniformsRef?: React.MutableRefObject<{
+    uSunDir: THREE.IUniform<THREE.Vector3>;
+    uSunColor: THREE.IUniform<THREE.Color>;
+    uSkyColor: THREE.IUniform<THREE.Color>;
+    uGroundColor: THREE.IUniform<THREE.Color>;
+    uSunGlow: THREE.IUniform<THREE.Color>;
+  } | null>;
 }) {
   const groupRef = useRef<THREE.Group>(null);
   const meshRef = useRef<THREE.InstancedMesh>(null);
@@ -277,14 +316,12 @@ function CloudLayer({
     if (animate) invalidate();
   }, [animate, invalidate]);
 
-  const baseRotation = (timeIndex ?? 12) * 0.05;
-
   useFrame((state, delta) => {
     if (!animate) return;
-    driftRef.current += delta * 0.015;
+    driftRef.current += delta * 0.018;
     if (groupRef.current) {
-      // Peaceful continuous drift across the sky, augmented by simulated time progression
-      groupRef.current.rotation.y = baseRotation + driftRef.current;
+      // Peaceful continuous 360° cloud drift across the sky dome
+      groupRef.current.rotation.y = driftRef.current;
       // Gentle subtle breeze floating
       groupRef.current.position.y = Math.sin(state.clock.elapsedTime * 0.3) * 0.6;
       groupRef.current.position.x = Math.sin(state.clock.elapsedTime * 0.18) * 1.2;
@@ -308,7 +345,7 @@ function CloudLayer({
       >
         <sphereGeometry
           key={quality}
-          args={[1, quality === 'high' ? 28 : 18, quality === 'high' ? 20 : 14]}
+          args={[1, quality === 'high' ? 32 : 20, quality === 'high' ? 24 : 14]}
         />
         <shaderMaterial
           fog

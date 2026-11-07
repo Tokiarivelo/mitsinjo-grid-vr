@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useLayoutEffect, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { fbm2d, mulberry32 } from '../utils/noise';
@@ -89,7 +89,12 @@ export interface SkyBackdropProps {
   /** Optional external ref to animate moon group position smoothly in useFrame. */
   moonGroupRef?: React.RefObject<THREE.Group | null>;
   /** Optional external ref to update sky uniforms in useFrame. */
-  skyUniformsRef?: React.MutableRefObject<{ uSunDir: THREE.IUniform<THREE.Vector3> } | null>;
+  skyUniformsRef?: React.MutableRefObject<{
+    uZenith: THREE.IUniform<THREE.Color>;
+    uHorizon: THREE.IUniform<THREE.Color>;
+    uGlow: THREE.IUniform<THREE.Color>;
+    uSunDir: THREE.IUniform<THREE.Vector3>;
+  } | null>;
 }
 
 interface RidgeSpec {
@@ -291,6 +296,15 @@ export function SkyBackdrop({
   const starOpacity = effectiveNightFactor * Math.max(0, palette.fogScale - 0.1);
   const moonOpacity = !isDaytime ? Math.min(1, palette.sunDisc * effectiveNightFactor * 1.2) : 0;
 
+  useLayoutEffect(() => {
+    if (sunGroupRef?.current && sunGroupRef.current.position.lengthSq() < 1) {
+      sunGroupRef.current.position.copy(sunPos);
+    }
+    if (moonGroupRef?.current && moonGroupRef.current.position.lengthSq() < 1) {
+      moonGroupRef.current.position.copy(moonPos);
+    }
+  }, [sunGroupRef, moonGroupRef, sunPos, moonPos]);
+
   return (
     <group name="sky-backdrop">
       <mesh renderOrder={-10}>
@@ -310,7 +324,7 @@ export function SkyBackdrop({
 
       {/* Sun disc + halo (daytime, arcing 0° to 180°) */}
       {isDaytime && sunDirection[1] > -0.02 && palette.sunDisc > 0.02 && (
-        <group ref={sunGroupRef} position={sunPos}>
+        <group ref={sunGroupRef} position={sunGroupRef ? undefined : sunPos}>
           <mesh>
             <sphereGeometry args={[9, 24, 12]} />
             <meshBasicMaterial
@@ -337,7 +351,7 @@ export function SkyBackdrop({
 
       {/* Moon disc + halo (nighttime, arcing 0° to 180°) */}
       {!isDaytime && effectiveMoonDir[1] > -0.02 && moonOpacity > 0.02 && (
-        <group ref={moonGroupRef} position={moonPos}>
+        <group ref={moonGroupRef} position={moonGroupRef ? undefined : moonPos}>
           {/* Silvery-pearl luminous moon body */}
           <mesh>
             <sphereGeometry args={[7.5, 24, 16]} />

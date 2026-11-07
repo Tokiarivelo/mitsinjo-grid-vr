@@ -1,6 +1,14 @@
 'use client';
 
-import { Suspense, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
+import {
+  Suspense,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type RefObject,
+} from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { Environment } from '@react-three/drei';
 import * as THREE from 'three';
@@ -36,7 +44,6 @@ import {
   shortestHourDelta,
   sunCoordinates,
 } from '../utils/celestial';
-import { useAmbientFrame } from '../hooks/use-ambient-frame';
 import type { SectorStateOverride } from '../utils/placed-models-geometry';
 import { usePlacedClearings } from '../hooks/use-site-zones';
 import { accessPathClearings, accessPaths } from '../utils/access-paths';
@@ -141,12 +148,27 @@ function CelestialLighting({
   nightProgress,
 }: CelestialLightingProps) {
   const keyLightRef = useRef<THREE.DirectionalLight>(null);
+  const fillLightRef = useRef<THREE.DirectionalLight>(null);
+  const hemiLightRef = useRef<THREE.HemisphereLight>(null);
   const sunGroupRef = useRef<THREE.Group>(null);
   const moonGroupRef = useRef<THREE.Group>(null);
-  const skyUniformsRef = useRef<{ uSunDir: THREE.IUniform<THREE.Vector3> } | null>(null);
-  const cloudUniformsRef = useRef<{ uSunDir: THREE.IUniform<THREE.Vector3> } | null>(null);
+  const skyUniformsRef = useRef<{
+    uZenith: THREE.IUniform<THREE.Color>;
+    uHorizon: THREE.IUniform<THREE.Color>;
+    uGlow: THREE.IUniform<THREE.Color>;
+    uSunDir: THREE.IUniform<THREE.Vector3>;
+  } | null>(null);
+  const cloudUniformsRef = useRef<{
+    uSunDir: THREE.IUniform<THREE.Vector3>;
+    uSunColor: THREE.IUniform<THREE.Color>;
+    uSkyColor: THREE.IUniform<THREE.Color>;
+    uGroundColor: THREE.IUniform<THREE.Color>;
+    uSunGlow: THREE.IUniform<THREE.Color>;
+  } | null>(null);
   const currentHourRef = useRef(timeIndex);
-  const requestFrame = useAmbientFrame();
+
+  const isPlaying = useSimulationStore((s) => s.isPlaying);
+  const playbackSpeed = useSimulationStore((s) => s.playbackSpeed);
 
   const sun = useMemo(() => sunCoordinates(timeIndex), [timeIndex]);
   const moon = useMemo(() => moonCoordinates(timeIndex), [timeIndex]);
@@ -160,67 +182,125 @@ function CelestialLighting({
     [activeDirection]
   );
 
+  useLayoutEffect(() => {
+    if (keyLightRef.current) {
+      keyLightRef.current.position.set(...initialKeyLightPos);
+    }
+  }, [initialKeyLightPos]);
+
   useFrame((state, delta) => {
     if (!weatherMotion) return;
-    const diff = shortestHourDelta(currentHourRef.current, timeIndex);
-    if (Math.abs(diff) > 0.0005) {
-      // Fluid smooth exponential glide towards the target hour
-      const step = diff * (1 - Math.exp(-delta * 8.0));
-      currentHourRef.current = (((currentHourRef.current + step) % 24) + 24) % 24;
+    const dt = Math.min(delta, 0.1);
 
-      const curHour = currentHourRef.current;
-      const isDay = curHour >= 6 && curHour <= 18;
-      const celestial = isDay ? sunCoordinates(curHour) : moonCoordinates(curHour);
-      const [dx, dy, dz] = celestial.direction;
+    if (isPlaying) {
+      // Continuous constant-speed rotation matching playback speed (2.0 hrs/sec at 1x)
+      const speedMult = typeof playbackSpeed === 'number' && playbackSpeed > 0 ? playbackSpeed : 1;
+      const hoursPerSec = speedMult * 2.0; // 500ms base tick = 2.0 hrs/sec
+      currentHourRef.current = (((currentHourRef.current + dt * hoursPerSec) % 24) + 24) % 24;
 
-      // Update light position matching physical trajectory
-      if (keyLightRef.current) {
-        keyLightRef.current.position.set(
-          dx * KEY_LIGHT_DISTANCE,
-          dy * KEY_LIGHT_DISTANCE,
-          dz * KEY_LIGHT_DISTANCE
-        );
+      // Soft sync against store timeIndex to avoid accumulated drift
+      const drift = shortestHourDelta(currentHourRef.current, timeIndex);
+      if (Math.abs(drift) > 1.5) {
+        currentHourRef.current = timeIndex;
+      } else if (Math.abs(drift) > 0.05) {
+        currentHourRef.current += drift * dt * 2.0;
       }
-
-      // Update sun disc position
-      if (isDay && sunGroupRef.current) {
-        sunGroupRef.current.position.set(
-          dx * SKY_RADIUS * 0.9,
-          dy * SKY_RADIUS * 0.9,
-          dz * SKY_RADIUS * 0.9
-        );
-      }
-
-      // Update moon disc position
-      if (!isDay && moonGroupRef.current) {
-        moonGroupRef.current.position.set(
-          dx * SKY_RADIUS * 0.88,
-          dy * SKY_RADIUS * 0.88,
-          dz * SKY_RADIUS * 0.88
-        );
-      }
-
-      // Update shader uniforms
-      if (skyUniformsRef.current) {
-        skyUniformsRef.current.uSunDir.value.set(dx, dy, dz);
-      }
-      if (cloudUniformsRef.current) {
-        cloudUniformsRef.current.uSunDir.value.set(dx, dy, dz);
-      }
-
-      // Request next frame & update shadows in real-time
-      state.gl.shadowMap.needsUpdate = true;
-      requestFrame();
     } else {
-      currentHourRef.current = timeIndex;
+      // Manual scrub or pause: silky smooth exponential ease-out to target hour
+      const diff = shortestHourDelta(currentHourRef.current, timeIndex);
+      if (Math.abs(diff) > 0.0005) {
+        const step = diff * (1 - Math.exp(-dt * 12.0));
+        currentHourRef.current = (((currentHourRef.current + step) % 24) + 24) % 24;
+      } else {
+        currentHourRef.current = timeIndex;
+      }
+    }
+
+    const curHour = currentHourRef.current;
+    const curIsDay = curHour >= 6 && curHour <= 18;
+    const celestial = curIsDay ? sunCoordinates(curHour) : moonCoordinates(curHour);
+    const [dx, dy, dz] = celestial.direction;
+
+    // Update light position matching physical trajectory
+    if (keyLightRef.current) {
+      keyLightRef.current.position.set(
+        dx * KEY_LIGHT_DISTANCE,
+        dy * KEY_LIGHT_DISTANCE,
+        dz * KEY_LIGHT_DISTANCE
+      );
+    }
+
+    // Update sun disc position smoothly
+    if (curIsDay && sunGroupRef.current) {
+      sunGroupRef.current.position.set(
+        dx * SKY_RADIUS * 0.9,
+        dy * SKY_RADIUS * 0.9,
+        dz * SKY_RADIUS * 0.9
+      );
+    }
+
+    // Update moon disc position smoothly
+    if (!curIsDay && moonGroupRef.current) {
+      moonGroupRef.current.position.set(
+        dx * SKY_RADIUS * 0.88,
+        dy * SKY_RADIUS * 0.88,
+        dz * SKY_RADIUS * 0.88
+      );
+    }
+
+    // Compute dynamic, continuous color progression (sunrise -> midday -> sunset -> night)
+    const curElevation = curIsDay ? Math.sin(((curHour - 6) / 12) * Math.PI) : 0;
+    const curPalette = applyOvercast(
+      skyPalette(curElevation, curIsDay),
+      WEATHER_ATMOSPHERE[weather].overcast,
+      curIsDay
+    );
+
+    // Smoothly update light colors & intensities
+    if (keyLightRef.current) {
+      keyLightRef.current.color.set(curPalette.sun);
+      keyLightRef.current.intensity = curPalette.keyIntensity;
+    }
+    if (hemiLightRef.current) {
+      hemiLightRef.current.color.set(curPalette.hemiSky);
+      hemiLightRef.current.groundColor.set(curPalette.hemiGround);
+      hemiLightRef.current.intensity = curPalette.hemiIntensity;
+    }
+    if (fillLightRef.current) {
+      fillLightRef.current.intensity = curPalette.hemiIntensity * 0.45;
+    }
+
+    // Smoothly update sky & cloud uniforms
+    if (skyUniformsRef.current) {
+      skyUniformsRef.current.uSunDir.value.set(dx, dy, dz);
+      skyUniformsRef.current.uZenith.value.set(curPalette.zenith);
+      skyUniformsRef.current.uHorizon.value.set(curPalette.horizon);
+      skyUniformsRef.current.uGlow.value.set(curPalette.sunGlow);
+    }
+    if (cloudUniformsRef.current) {
+      cloudUniformsRef.current.uSunDir.value.set(dx, dy, dz);
+      cloudUniformsRef.current.uSunColor.value.set(curPalette.sun);
+      cloudUniformsRef.current.uSkyColor.value.set(curPalette.hemiSky);
+      cloudUniformsRef.current.uGroundColor.value.set(curPalette.hemiGround);
+      cloudUniformsRef.current.uSunGlow.value.set(curPalette.sunGlow);
+    }
+
+    const diff = shortestHourDelta(currentHourRef.current, timeIndex);
+    if (isPlaying || Math.abs(diff) > 0.0005) {
+      // 60 FPS real-time smooth shadow updates while in motion
+      state.gl.shadowMap.needsUpdate = true;
+      state.invalidate();
     }
   });
 
   return (
     <>
+      <hemisphereLight
+        ref={hemiLightRef}
+        args={[palette.hemiSky, palette.hemiGround, palette.hemiIntensity]}
+      />
       <directionalLight
         ref={keyLightRef}
-        position={initialKeyLightPos}
         color={palette.sun}
         intensity={palette.keyIntensity}
         castShadow={quality === 'high'}
@@ -236,6 +316,7 @@ function CelestialLighting({
       />
       {/* Cool sky fill from the opposite side keeps shadows readable. */}
       <directionalLight
+        ref={fillLightRef}
         position={[-40, 30, 40]}
         color="#8fa3d9"
         intensity={palette.hemiIntensity * 0.45}
