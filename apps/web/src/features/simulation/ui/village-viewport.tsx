@@ -9,6 +9,7 @@ import {
   Box,
   Camera,
   Gauge,
+  Glasses,
   Hand,
   Maximize2,
   Minimize2,
@@ -22,6 +23,7 @@ import {
   SlidersHorizontal,
   X,
 } from 'lucide-react';
+import type { WebGLRenderer } from 'three';
 import { CopilotTerminal } from '@/features/copilot';
 import { FireAlertBanner, ReportFireControl, useActiveFires } from '@/features/fire-alert';
 import type { SectorId, SimulationInput, SimulationResult, WeatherId } from '@mitsinjo/engine';
@@ -40,6 +42,7 @@ import {
   GridDiagram,
   useFullscreen,
   useSceneQuality,
+  useWebXR,
   type CameraPreset,
   type SceneQuality,
 } from '@/features/microgrid-3d';
@@ -107,6 +110,10 @@ export function VillageViewport({
     supported: fullscreenSupported,
   } = useFullscreen(rootRef);
   const { quality, userChosen, setQuality } = useSceneQuality();
+  // VR session for the 3D canvas (filled by the canvas once its renderer mounts).
+  const rendererRef = useRef<WebGLRenderer | null>(null);
+  const xr = useWebXR(rendererRef);
+  const xrActive = xr.status === 'active';
   const [userViewMode, setUserViewMode] = useState<'3d' | 'schematic' | 'circuit' | null>(null);
   const viewMode = userViewMode ?? (hasWebGL ? '3d' : 'schematic');
   const [cameraPreset, setCameraPreset] = useState<CameraPreset>('village');
@@ -289,6 +296,13 @@ export function VillageViewport({
                 {tSim(labelKey)}
               </button>
             ))}
+            {(xr.status === 'supported' || xrActive) && (
+              <VRButton
+                active={xrActive}
+                error={xr.error}
+                onClick={xrActive ? xr.exit : xr.enter}
+              />
+            )}
             {fullscreenSupported && (
               <FullscreenButton
                 isFullscreen={isFullscreen}
@@ -383,6 +397,8 @@ export function VillageViewport({
             cameraResetKey={cameraResetKey}
             focusApplianceId={focusApplianceId}
             panMode={panMode}
+            rendererRef={rendererRef}
+            xrActive={xrActive}
             className={cn(
               'w-full h-full absolute inset-0 transition-opacity',
               isModified && 'opacity-60'
@@ -587,6 +603,36 @@ export function VillageViewport({
         <span className="font-mono text-[10px] text-energy-cyan">{tCommon('simulatedData')}</span>
       </div>
     </div>
+  );
+}
+
+function VRButton({
+  active,
+  error,
+  onClick,
+}: {
+  active: boolean;
+  error: string | null;
+  onClick: () => void;
+}) {
+  const tSim = useTranslations('features.simulation');
+  const label = active ? tSim('vrExit') : tSim('vrEnter');
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      aria-label={error ?? label}
+      title={error ?? label}
+      className={cn(
+        'p-1 rounded-control-sm transition-colors cursor-pointer',
+        active
+          ? 'bg-energy-cyan/20 text-energy-cyan'
+          : 'text-text-muted hover:text-text-primary hover:bg-surface'
+      )}
+    >
+      <Glasses className="h-3 w-3" aria-hidden="true" />
+    </button>
   );
 }
 

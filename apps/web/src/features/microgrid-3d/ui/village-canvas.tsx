@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { Environment } from '@react-three/drei';
+import type { WebGLRenderer } from 'three';
 import { SECTOR_IDS, type Priority, type SectorId } from '@mitsinjo/engine';
 import { useTranslations } from '@/lib/i18n';
 import { useSimulationStore } from '@/stores';
@@ -125,6 +126,10 @@ export interface VillageCanvasProps {
   panMode?: boolean;
   /** Render tier override. Default: the shared tier from `useSceneQuality` (toggle + auto-downgrade). */
   quality?: SceneQuality;
+  /** Filled with the R3F renderer on mount: the VR button needs it to open the XR session. */
+  rendererRef?: RefObject<WebGLRenderer | null>;
+  /** An XR session is presenting: continuous loop, no post-processing, orbit off, VR viewpoint. */
+  xrActive?: boolean;
   className?: string;
 }
 
@@ -138,6 +143,8 @@ export function VillageCanvas({
   focusApplianceId = null,
   panMode = false,
   quality: qualityOverride,
+  rendererRef,
+  xrActive = false,
   className,
 }: VillageCanvasProps) {
   const sceneQuality = useSceneQuality();
@@ -274,6 +281,8 @@ export function VillageCanvas({
   );
   // Shadow casters are static: re-bake the sun shadow map only when light or data change.
   const shadowBakeKey = useMemo(() => [keyLightPos, model] as const, [keyLightPos, model]);
+  // XR renders the headset pose every frame; otherwise render on demand (never off-screen).
+  const frameloop = xrActive ? 'always' : inView ? 'demand' : 'never';
 
   return (
     <div
@@ -293,6 +302,7 @@ export function VillageCanvas({
         key={`${quality}-${contextLoss.epoch}`}
         onCreated={({ gl, get, scene, camera }) => {
           contextLoss.attach(gl.domElement, () => get().internal.active);
+          if (rendererRef) rendererRef.current = gl;
           setWarmTarget({ gl, scene, camera });
         }}
         className={cn(
@@ -301,7 +311,7 @@ export function VillageCanvas({
         )}
         camera={{ position: [2, 10.5, 28], fov: 42, near: 0.5, far: 1400 }}
         dpr={high ? [1, 1.5] : [1, 1.25]}
-        frameloop={inView ? 'demand' : 'never'}
+        frameloop={frameloop}
         shadows={high ? 'soft' : false}
         gl={{ antialias: !high, powerPreference: 'high-performance' }}
         style={{ background: palette.horizon }}
@@ -420,20 +430,23 @@ export function VillageCanvas({
           lampGlow={palette.lampGlow}
         />
 
-        {high ? (
-          <>
-            <PostEffects />
-            {/* Probe only on screen: a paused loop would starve it and force a downgrade. */}
-            {onSlowDevice && inView && <QualityProbe onSlow={onSlowDevice} />}
-          </>
-        ) : (
-          // Low tier: one baked contact shadow instead of real-time shadow maps.
-          <BakedContactShadows />
-        )}
+        {/* No post-processing in XR: EffectComposer breaks stereo rendering. */}
+        {!xrActive &&
+          (high ? (
+            <>
+              <PostEffects />
+              {/* Probe only on screen: a paused loop would starve it and force a downgrade. */}
+              {onSlowDevice && inView && <QualityProbe onSlow={onSlowDevice} />}
+            </>
+          ) : (
+            // Low tier: one baked contact shadow instead of real-time shadow maps.
+            <BakedContactShadows />
+          ))}
 
         <CameraController
           preset={cameraPreset}
           resetKey={cameraResetKey}
+          xrActive={xrActive}
           focusSector={selectedSector}
           focusPoint={model.appliances.find((a) => a.id === focusApplianceId)?.position ?? null}
           panMode={panMode}

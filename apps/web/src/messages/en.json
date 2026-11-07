@@ -223,6 +223,8 @@
       "qualityAutoLowered": "Lowered automatically for this device",
       "fullscreenEnter": "Full screen",
       "fullscreenExit": "Exit full screen",
+      "vrEnter": "View in VR",
+      "vrExit": "Exit VR",
       "villageDemand": "Village demand",
       "tabMetrics": "Metrics",
       "tabControls": "Controls",
