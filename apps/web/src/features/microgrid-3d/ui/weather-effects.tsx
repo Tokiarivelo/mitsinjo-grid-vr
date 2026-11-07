@@ -161,6 +161,23 @@ void main() {
 }
 `;
 
+interface CloudShaderUniforms {
+  [key: string]: THREE.IUniform;
+  fogColor: THREE.IUniform<THREE.Color>;
+  fogNear: THREE.IUniform<number>;
+  fogFar: THREE.IUniform<number>;
+  fogDensity: THREE.IUniform<number>;
+  uSunDir: THREE.IUniform<THREE.Vector3>;
+  uSunColor: THREE.IUniform<THREE.Color>;
+  uSkyColor: THREE.IUniform<THREE.Color>;
+  uGroundColor: THREE.IUniform<THREE.Color>;
+  uSunGlow: THREE.IUniform<THREE.Color>;
+  uCloudBase: THREE.IUniform<THREE.Color>;
+  uCloudShadow: THREE.IUniform<THREE.Color>;
+  uDarkness: THREE.IUniform<number>;
+  uLightning: THREE.IUniform<number>;
+}
+
 function CloudLayer({
   cover,
   darkness,
@@ -186,8 +203,9 @@ function CloudLayer({
   const requestFrame = useAmbientFrame();
   const puffs = useMemo(() => cloudPuffs(cover), [cover]);
 
-  const uniforms = useMemo(
+  const uniforms = useMemo<CloudShaderUniforms>(
     () => ({
+      ...THREE.UniformsUtils.clone(THREE.UniformsLib.fog),
       uSunDir: { value: new THREE.Vector3(0, 1, 0) },
       uSunColor: { value: new THREE.Color() },
       uSkyColor: { value: new THREE.Color() },
