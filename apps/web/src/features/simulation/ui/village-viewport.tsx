@@ -198,10 +198,9 @@ export function VillageViewport({
       ref={rootRef}
       className={cn(
         'relative flex flex-col justify-between rounded-card bg-canvas-sunken border border-border overflow-hidden shadow-inner',
-        isFullscreen || xrActive
+        isFullscreen
           ? 'w-full h-full min-h-full rounded-none border-0'
-          : cn('min-h-[360px] sm:min-h-[460px]', className),
-        xrActive && 'fixed inset-0 z-50 w-screen h-screen min-h-screen'
+          : cn('min-h-[360px] sm:min-h-[460px]', className)
       )}
     >
       {/* Top Floating HUD bar */}

@@ -85,8 +85,6 @@ describe('VillageViewport VR button (VR-T3)', () => {
       'immersive-vr',
       expect.objectContaining({ optionalFeatures: expect.arrayContaining(['local-floor']) })
     );
-    // Viewport card expands to full screen fixed position
-    const card = container.firstChild as HTMLElement;
-    expect(card.className).toContain('fixed inset-0 z-50 w-screen h-screen');
+    expect(seen.xrActive).toBe(true);
   });
 });

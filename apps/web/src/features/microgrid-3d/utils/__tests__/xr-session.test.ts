@@ -81,4 +81,53 @@ describe('startImmersiveVRSession', () => {
     const renderer = { xr: { enabled: false } } as unknown as WebGLRenderer;
     await expect(startImmersiveVRSession(renderer)).rejects.toThrow('NotAllowedError');
   });
+
+  it('sets canvas to 100% and protects setSize while presenting, restoring on end', async () => {
+    let endListener: (() => void) | undefined;
+    const session = {
+      id: 's1',
+      addEventListener: vi.fn((event: string, fn: () => void) => {
+        if (event === 'end') endListener = fn;
+      }),
+    } as unknown as XRSession;
+    const requestSession = vi.fn(async () => session);
+    vi.stubGlobal('navigator', { xr: xrDouble({ requestSession }) });
+
+    const parent = document.createElement('div');
+    const canvas = document.createElement('canvas');
+    canvas.style.width = '800px';
+    canvas.style.height = '600px';
+    parent.appendChild(canvas);
+
+    const underlyingSetSize = vi.fn();
+    const renderer = {
+      xr: { enabled: false, isPresenting: false, setSession: vi.fn(async () => undefined) },
+      domElement: canvas,
+      setSize: underlyingSetSize,
+    } as unknown as WebGLRenderer;
+
+    await startImmersiveVRSession(renderer);
+
+    // Canvas style expanded to full size
+    expect(canvas.style.width).toBe('100%');
+    expect(canvas.style.height).toBe('100%');
+    expect(canvas.style.maxWidth).toBe('100vw');
+    expect(canvas.style.maxHeight).toBe('100vh');
+    expect(parent.style.background).toBe('rgb(10, 13, 20)');
+
+    // While presenting, setSize is guarded and does not call through
+    renderer.xr.isPresenting = true;
+    renderer.setSize(1920, 1080);
+    expect(underlyingSetSize).not.toHaveBeenCalled();
+
+    // When not presenting, setSize calls through
+    renderer.xr.isPresenting = false;
+    renderer.setSize(1200, 800);
+    expect(underlyingSetSize).toHaveBeenCalledWith(1200, 800, undefined);
+
+    // Ending the session restores original canvas styles
+    endListener?.();
+    expect(canvas.style.width).toBe('800px');
+    expect(canvas.style.height).toBe('600px');
+  });
 });
