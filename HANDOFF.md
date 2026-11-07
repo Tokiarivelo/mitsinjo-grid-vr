@@ -8,6 +8,7 @@
 - Cloud shader: soft wrapped diffuse, atmospheric dual-tone ambient bounce (sky/ground), silver rim backlighting.
 - Abundant cloud banks (36 banks, 396 puffs) spread across 3 depth rings (village sky, ridge horizon, high canopy).
 - Extreme optimization: exactly 1 InstancedMesh draw call, smooth LOD tiering, zero per-frame allocs.
+- Fixed Three.js `fogColor` runtime uniform crash by cloning `UniformsLib.fog` into custom ShaderMaterial.
 - `make test-engine`, `pnpm --filter web typecheck`, and all 46 3D test suites passing 100%.
 
 ## Next
