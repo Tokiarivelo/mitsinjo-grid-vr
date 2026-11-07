@@ -3,6 +3,8 @@
 Guide complet pour tester le bouton « Voir en VR » de `/simulation` (session WebXR
 `immersive-vr` sur la scène village), **avec ou sans casque**. Tâche : `docs/tasks/VR-village-view.md` ·
 scénarios manuels : `test-scenarios/02-simulation.md` (S119–S123).
+Usage côté immersion (contrôles, navigation, plein écran, bons à savoir) :
+`docs/vr-immersion-guide.md`.
 
 ## En bref : trois chemins
 

@@ -119,4 +119,26 @@ describe('useFullscreen', () => {
     expect(document.exitFullscreen).toHaveBeenCalled();
     expect(result.current.isFullscreen).toBe(false);
   });
+
+  it('exposes enter and exit methods that operate idempotently', async () => {
+    const ref = { current: el };
+    const { result } = renderHook(() => useFullscreen(ref));
+    expect(result.current.isFullscreen).toBe(false);
+
+    await act(async () => result.current.enter());
+    expect(el.requestFullscreen).toHaveBeenCalledTimes(1);
+    expect(result.current.isFullscreen).toBe(true);
+
+    // Re-entering while already in fullscreen is a no-op
+    await act(async () => result.current.enter());
+    expect(el.requestFullscreen).toHaveBeenCalledTimes(1);
+
+    await act(async () => result.current.exit());
+    expect(document.exitFullscreen).toHaveBeenCalledTimes(1);
+    expect(result.current.isFullscreen).toBe(false);
+
+    // Re-exiting while already normal is a no-op
+    await act(async () => result.current.exit());
+    expect(document.exitFullscreen).toHaveBeenCalledTimes(1);
+  });
 });

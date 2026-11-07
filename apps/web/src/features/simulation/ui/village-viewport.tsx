@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useMediaQuery } from '@/lib/use-media-query';
 import { useElementHeight } from '@/lib/use-element-height';
 import { GlassPanel } from '@/components/ui/glass-panel';
@@ -107,6 +107,8 @@ export function VillageViewport({
   const {
     isFullscreen,
     toggle: toggleFullscreen,
+    enter: enterFullscreen,
+    exit: exitFullscreen,
     supported: fullscreenSupported,
   } = useFullscreen(rootRef);
   const { quality, userChosen, setQuality } = useSceneQuality();
@@ -114,6 +116,35 @@ export function VillageViewport({
   const rendererRef = useRef<WebGLRenderer | null>(null);
   const xr = useWebXR(rendererRef);
   const xrActive = xr.status === 'active';
+
+  // Automatically request fullscreen on entering VR; restore when exiting VR.
+  const vrTriggeredFullscreen = useRef(false);
+
+  const handleVREnter = useCallback(() => {
+    if (!isFullscreen && fullscreenSupported) {
+      vrTriggeredFullscreen.current = true;
+      enterFullscreen();
+    }
+    xr.enter();
+  }, [isFullscreen, fullscreenSupported, enterFullscreen, xr]);
+
+  const handleVRExit = useCallback(() => {
+    xr.exit();
+    if (vrTriggeredFullscreen.current) {
+      vrTriggeredFullscreen.current = false;
+      exitFullscreen();
+    }
+  }, [xr, exitFullscreen]);
+
+  // Session ending outside the button (headset system gesture / escape): exit auto-fullscreen.
+  const prevXrActive = useRef(false);
+  useEffect(() => {
+    if (prevXrActive.current && !xrActive && vrTriggeredFullscreen.current) {
+      vrTriggeredFullscreen.current = false;
+      exitFullscreen();
+    }
+    prevXrActive.current = xrActive;
+  }, [xrActive, exitFullscreen]);
   const [userViewMode, setUserViewMode] = useState<'3d' | 'schematic' | 'circuit' | null>(null);
   const viewMode = userViewMode ?? (hasWebGL ? '3d' : 'schematic');
   const [cameraPreset, setCameraPreset] = useState<CameraPreset>('village');
@@ -300,7 +331,7 @@ export function VillageViewport({
               <VRButton
                 active={xrActive}
                 error={xr.error}
-                onClick={xrActive ? xr.exit : xr.enter}
+                onClick={xrActive ? handleVRExit : handleVREnter}
               />
             )}
             {fullscreenSupported && (

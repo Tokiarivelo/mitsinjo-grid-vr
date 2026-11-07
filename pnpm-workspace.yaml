@@ -3,6 +3,10 @@ packages:
   - packages/*
   - tests
 
-onlyBuiltDependencies:
-  - esbuild
-  - unrs-resolver
+allowBuilds:
+  '@parcel/watcher': true
+  '@swc/core': true
+  esbuild: true
+  sharp: true
+  simple-git-hooks: true
+  unrs-resolver: true

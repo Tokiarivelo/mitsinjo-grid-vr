@@ -82,6 +82,7 @@ export function CameraController({
   xrActive = false,
 }: CameraControllerProps) {
   const camera = useThree((s) => s.camera);
+  const scene = useThree((s) => s.scene);
   const invalidate = useThree((s) => s.invalidate);
   const controlsRef = useRef<ComponentRef<typeof OrbitControls>>(null);
 
@@ -120,7 +121,7 @@ export function CameraController({
       orbitAfterTween.current = orbit && !reducedMotion;
 
       // First placement is instant (nothing to animate from); later moves tween.
-      // XR entry snaps too: the headset drives the camera from the viewpoint on.
+      // Mid-XR calls also snap (the headset pose overwrites them on the next frame).
       if (reducedMotion || xrActive || !hasMounted.current) {
         snapToTarget();
       } else {
@@ -164,18 +165,47 @@ export function CameraController({
     if (focusKey || previous) moveToFocusTarget(focusKey);
   }, [focusKey, moveToFocusTarget]);
 
-  // XR session: snap to the diorama viewpoint on entry, restore the 2D target on exit.
+  // XR session: the headset pose overwrites camera.position/quaternion every frame,
+  // so a camera snap can't place the viewpoint — parent the camera to a rig group
+  // at XR_VIEWPOINT on entry (the pose then applies relative to it), detach on exit.
   // Declared last so it wins over the preset/focus effects re-run by the `moveTo` change.
   const wasXrActive = useRef(false);
+  const xrRig = useRef<THREE.Group | null>(null);
+  const xrPrevParent = useRef<THREE.Object3D | null>(null);
   useEffect(() => {
-    if (xrActive) {
-      wasXrActive.current = true;
-      moveTo(XR_VIEWPOINT, false);
-    } else if (wasXrActive.current) {
-      wasXrActive.current = false;
-      moveToFocusTarget(focusKey);
+    if (!xrActive) {
+      if (wasXrActive.current) {
+        wasXrActive.current = false;
+        const rig = xrRig.current;
+        xrRig.current = null;
+        if (rig) {
+          (xrPrevParent.current ?? scene).attach(camera);
+          scene.remove(rig);
+        }
+        moveToFocusTarget(focusKey);
+      }
+      return;
     }
-  }, [xrActive, focusKey, moveTo, moveToFocusTarget]);
+    wasXrActive.current = true;
+    if (xrRig.current) return; // StrictMode double-invoke / focus change mid-session.
+    const rig = new THREE.Group();
+    rig.position.set(...XR_VIEWPOINT.position);
+    // Camera-convention orientation: Matrix4.lookAt aims -Z at the target.
+    rig.quaternion.setFromRotationMatrix(
+      new THREE.Matrix4().lookAt(
+        new THREE.Vector3(...XR_VIEWPOINT.position),
+        new THREE.Vector3(...XR_VIEWPOINT.target),
+        UP
+      )
+    );
+    scene.add(rig);
+    xrPrevParent.current = camera.parent;
+    rig.attach(camera); // keep the 2D world transform, then hand over to the headset
+    camera.position.set(0, 0, 0);
+    camera.quaternion.identity();
+    xrRig.current = rig;
+    invalidate();
+  }, [xrActive, focusKey, moveTo, moveToFocusTarget, camera, scene, invalidate]);
 
   useFrame((state, delta) => {
     if (reducedMotion || xrActive) return;

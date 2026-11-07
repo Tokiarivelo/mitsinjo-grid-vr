@@ -7,6 +7,7 @@ const three = vi.hoisted(() => ({
   state: {
     invalidate: vi.fn(),
     camera: null as unknown as THREE.Camera,
+    scene: null as unknown as THREE.Scene,
   },
   frameCb: null as null | ((state: { invalidate: () => void }, delta: number) => void),
   controlsProps: null as unknown as Record<string, unknown>,
@@ -52,6 +53,7 @@ import { VillageViewport } from '../ui/village-viewport';
 
 const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 1500);
 three.state.camera = camera;
+three.state.scene = new THREE.Scene();
 
 interface CreatedSession {
   /** Fire the 'end' event exactly like a headset system gesture: no end() call. */
@@ -142,7 +144,11 @@ describe('VillageViewport VR session, single pass (enter → gesture exit → ex
       expect.objectContaining({ optionalFeatures: expect.arrayContaining(['local-floor']) })
     );
     expect(seen.xrActive[seen.xrActive.length - 1]).toBe(true);
-    expect(camera.position.toArray()).toEqual([...XR_VIEWPOINT.position]);
+    // Headset owns the camera in XR: it hangs under a rig at the VR viewpoint.
+    expect(camera.parent).toBeInstanceOf(THREE.Group);
+    const world = new THREE.Vector3();
+    camera.getWorldPosition(world);
+    expect(world.distanceTo(new THREE.Vector3(...XR_VIEWPOINT.position))).toBeLessThan(1e-6);
     expect(three.controlsProps.enabled).toBe(false);
 
     // Headset system gesture ends the session outside the button: the UI resyncs …

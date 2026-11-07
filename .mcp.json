@@ -6,6 +6,10 @@
       "headers": {
         "X-Goog-Api-Key": "${STITCH_API_KEY}"
       }
+    },
+    "iwer": {
+      "command": "npx",
+      "args": ["-y", "@iwer/extension-bridge"]
     }
   }
 }

@@ -64,6 +64,19 @@ contrôleur dans ce lot (lot suivant).
         i18n 3/3) ; gate-out static + note « live pending » (stitch-map).
   - [x] Guide complet `docs/vr-testing-guide.md` (chemins A/B/C, S119–S123, dépannage).
 
+- [x] **VR-T6** Rig caméra XR (correctif : la pose casque écrase le snap caméra, spawn dans les murs)
+  - [x] Entrée XR : caméra parentée à un groupe rig sur `XR_VIEWPOINT` (-Z vers la cible),
+        transform local identité ; sortie : détachée vers son parent d'origine, rig retiré
+  - [x] Tests `camera-controller-xr` + `viewport-vr-session` alignés (monde sur viewpoint,
+        visée cible, rig retiré à la sortie)
+  - [ ] **Done when** : ré-entrée live → surplomb immédiat du village (S120).
+
+- [x] **VR-T7** Création WebGL bloquée (console error `could not be created … was blocked`)
+  - [x] `CanvasCreationBoundary` autour du `<Canvas>` (clé = epoch) + `reportCreationFailed`
+        dans `useContextLoss` : placeholder + 3 remontages max, jamais de crash ni de boucle
+  - [x] Tests `context-loss-hook` (cycle création) + `canvas-creation-boundary` (throw → null + report)
+  - [x] **Done when** : `typecheck` 0 erreur, lint 0 erreur, tests ciblés verts.
+
 ## Notes de vérification (2026-11-06)
 
 - `metavr ssim` (SpatialSim) écarté avec preuves : doc Meta « for 2D Android apps

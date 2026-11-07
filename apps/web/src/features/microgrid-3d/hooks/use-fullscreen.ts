@@ -16,6 +16,19 @@ export function useFullscreen(ref: RefObject<HTMLElement | null>) {
     return () => document.removeEventListener('fullscreenchange', onChange);
   }, [ref]);
 
+  const enter = useCallback(() => {
+    const el = ref.current;
+    if (!el || document.fullscreenElement) return;
+    void el.requestFullscreen?.().catch(() => {
+      // Denied (iframe policy, user gesture): stay in the card.
+    });
+  }, [ref]);
+
+  const exit = useCallback(() => {
+    if (!document.fullscreenElement) return;
+    void document.exitFullscreen?.().catch(() => {});
+  }, []);
+
   const toggle = useCallback(() => {
     const el = ref.current;
     if (!el) return;
@@ -28,5 +41,5 @@ export function useFullscreen(ref: RefObject<HTMLElement | null>) {
     }
   }, [ref]);
 
-  return { isFullscreen, toggle, supported };
+  return { isFullscreen, toggle, enter, exit, supported };
 }

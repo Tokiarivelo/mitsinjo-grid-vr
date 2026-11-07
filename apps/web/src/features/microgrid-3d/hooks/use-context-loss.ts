@@ -15,6 +15,11 @@ export interface ContextLoss {
    * still live (`() => get().internal.active`).
    */
   attach: (canvas: HTMLCanvasElement, isLive?: () => boolean) => void;
+  /**
+   * Report a context that failed at creation (the browser blocks new contexts after
+   * repeated losses): same placeholder + bounded-remount cycle, then a stuck placeholder.
+   */
+  reportCreationFailed: () => void;
 }
 
 /**
@@ -51,5 +56,7 @@ export function useContextLoss(): ContextLoss {
     detach.current = () => canvas.removeEventListener('webglcontextlost', onLost);
   }, []);
 
-  return { lost, epoch, attach };
+  const reportCreationFailed = useCallback(() => setLost(true), []);
+
+  return { lost, epoch, attach, reportCreationFailed };
 }

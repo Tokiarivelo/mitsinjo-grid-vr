@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { scenarios } from '@mitsinjo/engine';
 import { VillageViewport } from '../ui/village-viewport';
 
@@ -50,5 +50,39 @@ describe('VillageViewport VR button (VR-T3)', () => {
     expect(button).toHaveAttribute('aria-pressed', 'false');
     expect(seen.rendererRef).toMatchObject({ current: null });
     expect(seen.xrActive).toBe(false);
+  });
+
+  it('automatically triggers fullscreen when entering VR if supported', async () => {
+    const requestFullscreen = vi.fn(async () => {});
+    document.documentElement.requestFullscreen = requestFullscreen;
+    HTMLElement.prototype.requestFullscreen = requestFullscreen;
+
+    vi.stubGlobal('navigator', {
+      xr: {
+        isSessionSupported: async () => true,
+        requestSession: vi.fn(async () => {
+          return {
+            addEventListener: vi.fn(),
+            removeEventListener: vi.fn(),
+            end: vi.fn(async () => {}),
+          };
+        }),
+      },
+    });
+
+    renderViewport();
+    const button = await screen.findByRole('button', { name: 'View in VR' });
+    // Mount mock renderer so xr.enter proceeds
+    if (seen.rendererRef && typeof seen.rendererRef === 'object' && 'current' in seen.rendererRef) {
+      (seen.rendererRef as { current: unknown }).current = {
+        xr: { enabled: false, setSession: vi.fn(async () => {}) },
+      };
+    }
+
+    await act(async () => {
+      fireEvent.click(button);
+    });
+
+    expect(requestFullscreen).toHaveBeenCalled();
   });
 });

@@ -13,7 +13,8 @@
 
 ## Next (operator machine, sandbox blocks loopback/fonts/build)
 
-1. Relire + merger la PR VR (poussée via `gh`, branche rebasée sur ebdf49b).
+1. Relire + merger la PR VR [#3](https://github.com/Tokiarivelo/mitsinjo-grid-vr/pull/3)
+   (poussée via `gh` HTTPS, branche rebasée sur ebdf49b).
 2. `make dev-mock` → S119–S123 (`test-scenarios/02-simulation.md`), incl. gate-out shots.
 3. Quest Browser HTTPS when a headset is available (S122).
 4. Still pending from HF session: HF_TOKEN → `make hf-publish`; verify namespace `Tokiarivelo`.
@@ -36,3 +37,5 @@
 
 - drei `<Html>` labels invisible in-headset (desktop mirror OK); no controller input yet.
 - DevUI overlay pulls its own three 0.184 (dev-only chunk, never in prod).
+- Env: corepack 0.34 can't run pnpm 12 (`pnpm.cjs` vs `pnpm.mjs`); user fix =
+  `npm i -g corepack@latest`. Sandbox workaround: `PATH=/tmp/pnpm-bin:$PATH`.

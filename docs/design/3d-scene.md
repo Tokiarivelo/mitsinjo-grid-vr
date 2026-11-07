@@ -40,6 +40,7 @@ Reference visuals: `design/reference/Mitsinjo Grid_ Village at Sunset.png` (mast
 - Selecting a building (3D badge, viewport chips or inspector list) flies the camera to it, then slowly orbits it (`utils/camera-focus`). A drag stops the orbit; deselecting returns to the current preset. Reduced motion: instant jump, no orbit; no GPU: no orbit.
 - Inserted appliances get their own chip (plug icon, name) after the sector chips; the bar wraps instead of scrolling. A chip flies the camera closer to the object (`APPLIANCE_FOCUS_SCALE`); a sector chip, a building click or a preset takes it back.
 - Hand tool (hand icon next to reset, `aria-pressed`): left drag / one finger pans along the ground instead of orbiting (right drag still orbits). Without it, right drag / two fingers pan. Pan stays on the ground plane (`screenSpacePanning={false}`).
+- XR session (`immersive-vr`, /simulation only): orbit off, post-processing off, camera parented to a rig group at `XR_VIEWPOINT` (the headset pose applies relative to it); on exit the camera detaches and tweens back to its 2D target.
 
 ## Energy visual mapping (render only; never compute flows here)
 
