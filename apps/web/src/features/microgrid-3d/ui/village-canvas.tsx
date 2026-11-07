@@ -357,6 +357,8 @@ export function VillageCanvas({
             isDaytime={model.isDaytime}
             quality={quality}
             animate={weatherMotion}
+            palette={palette}
+            sunDirection={skySunDirection}
           />
           <FireEffects buildings={model.buildings} quality={quality} animate={weatherMotion} />
 

@@ -32,7 +32,19 @@ describe('weather atmosphere', () => {
     expect(cloudPuffs(0)).toHaveLength(0);
     expect(cloudPuffs(1)).toHaveLength(MAX_CLOUD_BANKS * PUFFS_PER_BANK);
     expect(cloudPuffs(0.5)).toEqual(cloudPuffs(0.5));
-    for (const p of cloudPuffs(1)) expect(p.position[1]).toBeGreaterThan(25);
+    const fullPuffs = cloudPuffs(1);
+    for (const p of fullPuffs) {
+      expect(p.position[1]).toBeGreaterThan(25);
+      expect(p.scale[0]).toBeGreaterThan(0);
+      expect(p.scale[1]).toBeGreaterThan(0);
+      expect(p.scale[2]).toBeGreaterThan(0);
+    }
+    // Verify multi-layered horizontal depth spanning near and far horizon
+    const radii = fullPuffs.map((p) => Math.hypot(p.position[0], p.position[2]));
+    const minRadius = Math.min(...radii);
+    const maxRadius = Math.max(...radii);
+    expect(minRadius).toBeLessThan(140);
+    expect(maxRadius).toBeGreaterThan(160);
   });
 
   it('sizes rain by density and quality tier', () => {
