@@ -5,24 +5,24 @@
 ## Current state
 
 - Complete WebXR immersion on `/village` (Village Studio / In-Air Detection & Shoot):
-  - Fixed VR Exit loop: removed re-triggering effect; synchronized session `end` event with `setVrViewOpen(false)` so exit cleanly unmounts.
-  - Fixed black screen: 2D bridge canvas preloaded with `/samples/vision-room.jpg` guarantees immediate visual backdrop, while hidden DOM video keeps Chrome Linux hardware decoding active for live webcam frames with `DoubleSide` material.
-  - Meta IWSDK-aligned MultiPointer & Canvas Forwarding: tracks controllers 0 & 1 with trigger listeners and mouse pointer forwarding on desktop.
-  - In-air targeting integration: floating Air Button `<SpatialAirButton />` is directly aimable and shootable via laser ray to trigger scanning.
-  - Auto-start WebXR session on viewport mount with Meta IWER DevUI emulator controls (headset, controllers, play mode) identical to `/simulation`.
-  - In-air microgrid connect & disconnect (`VS-T7`): shooting materialized objects toggles `@mitsinjo/engine` state with dynamic `<PowerConnectionBeam />`.
-  - Diegetic Holographic Telemetry HUD (`VS-T8`): `<VillageSpatialHUD />` floats in the air showing live Battery %, Solar kW, Demand kW, Net balance, and transient connect notifications.
+  - Fixed VR Exit loop: added `isStartingRef` concurrency lock in `useWebXR`, removed duplicate `xr.enter()` calls so exiting via DevUI exit door `[->]` or HUD cleanly unmounts without re-entering.
+  - Meta IWSDK Chapter 13 camera access: `XRCameraSource` and `CameraUtils` with `CameraFacing.Unknown` (desktop & headset support).
+  - Fixed black screen: preloaded `/samples/vision-room.jpg` baseline renders immediately; video element placed within viewport so Chrome Linux hardware decoder never pauses; seamless transition to live stream only when real frames decode.
+  - Eliminated crashes: throttled WebGL texture updates to video frame changes (~30fps) via `source.updateTexture()`, preventing GPU bus saturation and context loss.
+  - Full-height immersive wrap: 8.5m high panoramic cylinder (270° arc, unmirrored interior scale) and 360° studio dome covering entire visual field of view.
+  - MultiPointer & in-air targeting: tracks controllers 0 & 1 with blaster rays, desktop pointer forwarding, aimable `<SpatialAirButton />`, and holographic telemetry HUD.
   - 100% key parity across `en.json`, `fr.json`, `mg.json` (`make check-i18n`).
-  - 0 TypeScript errors (`tsc --noEmit`), 41/41 vision-insert test suites pass (286 tests), 27/27 engine test suites pass (353 tests).
+  - 0 TypeScript errors (`tsc --noEmit`), 21/21 XR tests pass, 27/27 engine test suites pass (353 tests).
 
 ## Next
 
-1. Run `make dev-mock` and test live at `http://localhost:3000/village` with Meta IWER DevUI emulator.
+1. Test live at `http://localhost:3001/village` with Meta IWER DevUI emulator.
 2. Review scenarios V196–V203 in `test-scenarios/06-village.md`.
 3. VS-T9: 3D positional audio panner (`PannerNode` / `PositionalAudio`).
 
 ## Files touched
 
-- `apps/web/src/features/vision-insert/ui/xr/*` (`live-webcam-backdrop.tsx`, `village-xr-viewport.tsx`, `xr-blaster-controller.tsx`, `spatial-air-button.tsx`, `village-xr-studio.tsx`)
+- `apps/web/src/features/vision-insert/ui/xr/*` (`xr-camera-source.ts`, `live-webcam-backdrop.tsx`, `village-xr-viewport.tsx`)
+- `apps/web/src/features/microgrid-3d/hooks/use-webxr.ts`
 - `apps/web/src/features/vision-insert/ui/village-editor-page.tsx`
 - `HANDOFF.md`
