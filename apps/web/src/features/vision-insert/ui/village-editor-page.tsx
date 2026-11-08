@@ -259,13 +259,8 @@ export function VillageEditorPage() {
                 if (xrActive) {
                   xr.exit();
                   setVrViewOpen(false);
-                } else if (vrViewOpen) {
-                  setVrViewOpen(false);
                 } else {
-                  setVrViewOpen(true);
-                  if (rendererRef.current) {
-                    xr.enter();
-                  }
+                  setVrViewOpen((open) => !open);
                 }
               }}
               aria-pressed={xrActive || vrViewOpen}

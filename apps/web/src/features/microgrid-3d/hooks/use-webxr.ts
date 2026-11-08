@@ -24,6 +24,7 @@ export function useWebXR(rendererRef: RefObject<WebGLRenderer | null>): UseWebXR
   const [status, setStatus] = useState<WebXRStatus>('checking');
   const [error, setError] = useState<string | null>(null);
   const sessionRef = useRef<XRSession | null>(null);
+  const isStartingRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -50,10 +51,12 @@ export function useWebXR(rendererRef: RefObject<WebGLRenderer | null>): UseWebXR
 
   const enter = useCallback(() => {
     const renderer = rendererRef.current;
-    if (!renderer || sessionRef.current) return;
+    if (!renderer || sessionRef.current || isStartingRef.current) return;
     setError(null);
+    isStartingRef.current = true;
     startImmersiveVRSession(renderer).then(
       (session) => {
+        isStartingRef.current = false;
         sessionRef.current = session;
         // Sync back when the session ends outside the button (headset system gesture).
         session.addEventListener(
@@ -66,7 +69,10 @@ export function useWebXR(rendererRef: RefObject<WebGLRenderer | null>): UseWebXR
         );
         setStatus('active');
       },
-      (cause: unknown) => setError(cause instanceof Error ? cause.message : String(cause))
+      (cause: unknown) => {
+        isStartingRef.current = false;
+        setError(cause instanceof Error ? cause.message : String(cause));
+      }
     );
   }, [rendererRef]);
 

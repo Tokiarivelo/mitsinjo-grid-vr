@@ -4,177 +4,139 @@ import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
 import { useTranslations } from '@/lib/i18n';
+import { CameraUtils, XRCameraSource, type CameraState } from './xr-camera-source';
 
 export interface LiveWebcamBackdropProps {
   /** Optional callback to register the frame capture function with the parent scene. */
   onRegisterCapture?: (captureFn: () => string | null) => void;
-  /** Radius of the panoramic projection screen in meters. Default: 5.0m. */
+  /** Radius of the panoramic projection screen in meters. Default: 4.8m. */
   radius?: number;
-  /** Height of the curved screen in meters. Default: 4.2m. */
+  /** Height of the curved screen in meters. Default: 8.5m for complete vertical immersion. */
   height?: number;
 }
 
 const SAMPLE_ROOM_SRC = '/samples/vision-room.jpg';
 
 /**
- * Resilient Live Camera & Panoramic Studio Surroundings for WebXR Immersion (VS-T10).
- * Displays real-time webcam video stream across a panoramic curved screen centered at eye level.
- * Features an instant Canvas-bridge texture preloaded with HD sample room so the operator
- * NEVER sees a pitch-black screen, transitioning seamlessly to the live camera feed
- * as soon as frames are decoded from the hardware.
+ * Meta IWSDK-aligned Live Camera & Studio Surroundings (Chapter 13: Camera Access).
+ * Integrates XRCameraSource, CameraUtils, and VideoTexture lifecycle management:
+ * - Uses CameraFacing.Unknown by default to select the first available device without failing.
+ * - Manages stream start/stop with page and WebXR session visibility.
+ * - Employs sample room texture fallback so the operator NEVER sees an empty black screen.
+ * - Throttles GPU video texture updates to hardware frame arrivals (~30fps) to eliminate crashes.
+ * - Full-height panoramic cylindrical projection (8.5m high, 270° arc) ensuring complete visual immersion.
+ * - Captures high-res frames with CameraUtils.captureFrame for in-air perception.
  */
 export const LiveWebcamBackdrop = memo(function LiveWebcamBackdrop({
   onRegisterCapture,
-  radius = 5.0,
-  height = 4.2,
+  radius = 4.8,
+  height = 8.5,
 }: LiveWebcamBackdropProps) {
   const t = useTranslations('features.visionInsert');
 
-  const [isLive, setIsLive] = useState(false);
+  const [cameraState, setCameraState] = useState<CameraState>('inactive');
   const [activeTexture, setActiveTexture] = useState<THREE.Texture | null>(null);
+  const [hasStreamingVideo, setHasStreamingVideo] = useState(false);
 
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const lastVideoTimeRef = useRef<number>(-1);
+  const cameraSourceRef = useRef<XRCameraSource | null>(null);
+  const sampleTextureRef = useRef<THREE.Texture | null>(null);
+  const hasSwitchedToVideoRef = useRef(false);
 
-  // Initialize Canvas Texture with fallback sample photo immediately, then stream webcam
+  // Initialize Camera Source and Sample Fallback Texture
   useEffect(() => {
     let isMounted = true;
+    hasSwitchedToVideoRef.current = false;
 
-    // 1. Prepare 2D bridge canvas
-    const canvas = document.createElement('canvas');
-    canvas.width = 1280;
-    canvas.height = 720;
-    canvasRef.current = canvas;
+    // 1. Preload sample room texture as the immediate baseline
+    const loader = new THREE.TextureLoader();
+    loader.load(
+      SAMPLE_ROOM_SRC,
+      (tex) => {
+        if (!isMounted) {
+          tex.dispose();
+          return;
+        }
+        tex.colorSpace = THREE.SRGBColorSpace;
+        tex.minFilter = THREE.LinearFilter;
+        tex.magFilter = THREE.LinearFilter;
+        tex.wrapS = THREE.ClampToEdgeWrapping;
+        tex.wrapT = THREE.ClampToEdgeWrapping;
+        sampleTextureRef.current = tex;
 
-    const ctx = canvas.getContext('2d');
+        // Display sample room immediately if real video frame hasn't arrived yet
+        if (!hasSwitchedToVideoRef.current) {
+          setActiveTexture(tex);
+        }
+      },
+      undefined,
+      () => {
+        // Fallback procedural color stays active if sample image is unreachable
+      }
+    );
 
-    // Preload sample image immediately to ensure zero black screen
-    const sampleImg = new Image();
-    sampleImg.crossOrigin = 'anonymous';
-    sampleImg.src = SAMPLE_ROOM_SRC;
-    sampleImg.onload = () => {
+    // 2. Initialize IWSDK XRCameraSource with CameraFacing.Unknown
+    const cameraSource = new XRCameraSource(
+      {
+        facing: 'unknown',
+        width: 1280,
+        height: 720,
+        frameRate: 30,
+      },
+      (state) => {
+        if (!isMounted) return;
+        setCameraState(state);
+        if (state === 'error' || state === 'inactive') {
+          setHasStreamingVideo(false);
+          hasSwitchedToVideoRef.current = false;
+          if (sampleTextureRef.current) {
+            setActiveTexture(sampleTextureRef.current);
+          }
+        }
+      }
+    );
+
+    cameraSourceRef.current = cameraSource;
+
+    void cameraSource.start().then((success) => {
       if (!isMounted) return;
-      if (ctx && lastVideoTimeRef.current === -1) {
-        ctx.drawImage(sampleImg, 0, 0, canvas.width, canvas.height);
-        if (texture) texture.needsUpdate = true;
+      if (!success && sampleTextureRef.current) {
+        setActiveTexture(sampleTextureRef.current);
       }
-    };
-
-    const texture = new THREE.CanvasTexture(canvas);
-    texture.colorSpace = THREE.SRGBColorSpace;
-    texture.minFilter = THREE.LinearFilter;
-    texture.magFilter = THREE.LinearFilter;
-    texture.generateMipmaps = false;
-    texture.wrapS = THREE.ClampToEdgeWrapping;
-    texture.wrapT = THREE.ClampToEdgeWrapping;
-    texture.repeat.set(1, 1);
-    setActiveTexture(texture);
-
-    // 2. Setup webcam and attach to DOM (hidden) so Chrome hardware decoder stays active
-    async function setupCamera() {
-      if (typeof navigator !== 'undefined' && navigator.mediaDevices?.getUserMedia) {
-        let stream: MediaStream | null = null;
-
-        // Try environment camera first, then user webcam, then any camera
-        try {
-          stream = await navigator.mediaDevices.getUserMedia({
-            video: {
-              width: { ideal: 1280 },
-              height: { ideal: 720 },
-              facingMode: { ideal: 'environment' },
-            },
-            audio: false,
-          });
-        } catch {
-          try {
-            stream = await navigator.mediaDevices.getUserMedia({
-              video: {
-                width: { ideal: 1280 },
-                height: { ideal: 720 },
-                facingMode: { ideal: 'user' },
-              },
-              audio: false,
-            });
-          } catch {
-            try {
-              stream = await navigator.mediaDevices.getUserMedia({
-                video: true,
-                audio: false,
-              });
-            } catch {
-              // No camera available
-            }
-          }
-        }
-
-        if (stream && isMounted) {
-          streamRef.current = stream;
-
-          const video = document.createElement('video');
-          video.srcObject = stream;
-          video.setAttribute('playsinline', '');
-          video.setAttribute('webkit-playsinline', '');
-          video.autoplay = true;
-          video.muted = true;
-          video.loop = true;
-
-          // Crucial for Chrome on Linux: hidden DOM element keeps frame decoding running
-          video.style.position = 'fixed';
-          video.style.top = '-9999px';
-          video.style.left = '-9999px';
-          video.style.width = '640px';
-          video.style.height = '360px';
-          video.style.opacity = '0';
-          video.style.pointerEvents = 'none';
-          video.style.zIndex = '-999';
-          document.body.appendChild(video);
-
-          videoRef.current = video;
-
-          try {
-            await video.play();
-          } catch {
-            // Autoplay may be deferred until user interaction
-          }
-
-          if (isMounted) {
-            setIsLive(true);
-          }
-        }
-      }
-    }
-
-    void setupCamera();
+    });
 
     return () => {
       isMounted = false;
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach((track) => track.stop());
-        streamRef.current = null;
-      }
-      if (videoRef.current) {
-        videoRef.current.pause();
-        videoRef.current.srcObject = null;
-        if (videoRef.current.parentNode) {
-          videoRef.current.parentNode.removeChild(videoRef.current);
-        }
-        videoRef.current = null;
-      }
-      if (texture) {
-        texture.dispose();
+      cameraSource.stop();
+      cameraSourceRef.current = null;
+      if (sampleTextureRef.current) {
+        sampleTextureRef.current.dispose();
+        sampleTextureRef.current = null;
       }
     };
   }, []);
 
-  // Frame capture function for instant vision scan
+  // Frame tick: throttle video frame uploads to WebGL hardware timing (~30fps)
+  useFrame(() => {
+    const source = cameraSourceRef.current;
+    if (source && source.state === 'active') {
+      const updated = source.updateTexture();
+      if (updated && !hasSwitchedToVideoRef.current && source.texture) {
+        hasSwitchedToVideoRef.current = true;
+        setActiveTexture(source.texture);
+        setHasStreamingVideo(true);
+      }
+    }
+  });
+
+  // Register frame capture function with parent scene
   useEffect(() => {
     if (!onRegisterCapture) return;
 
     const captureCurrentFrame = (): string | null => {
-      if (canvasRef.current) {
-        return canvasRef.current.toDataURL('image/jpeg', 0.88);
+      const source = cameraSourceRef.current;
+      if (source && source.state === 'active' && source.videoElement) {
+        const frame = CameraUtils.captureFrame(source.videoElement);
+        if (frame) return frame;
       }
       return null;
     };
@@ -182,30 +144,13 @@ export const LiveWebcamBackdrop = memo(function LiveWebcamBackdrop({
     onRegisterCapture(captureCurrentFrame);
   }, [onRegisterCapture]);
 
-  // Keep 2D canvas texture updated smoothly from the video stream
-  useFrame(() => {
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    if (isLive && video && canvas) {
-      if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
-        const curTime = video.currentTime;
-        if (curTime !== lastVideoTimeRef.current) {
-          lastVideoTimeRef.current = curTime;
-          const ctx = canvas.getContext('2d');
-          if (ctx) {
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-            if (activeTexture) {
-              activeTexture.needsUpdate = true;
-            }
-          }
-        }
-      }
-    }
-  });
+  const isLive = cameraState === 'active' && hasStreamingVideo;
 
   const pillText = isLive
     ? `● ${t('vrLiveWebcam').toUpperCase()} // 720p`
-    : `⟳ ${t('vrVirtualRoom').toUpperCase()}`;
+    : cameraState === 'starting'
+      ? `⟳ STARTING CAMERA…`
+      : `⟳ ${t('vrVirtualRoom').toUpperCase()}`;
 
   const pillTexture = useMemo(() => {
     const canvas = document.createElement('canvas');
@@ -213,7 +158,7 @@ export const LiveWebcamBackdrop = memo(function LiveWebcamBackdrop({
     canvas.height = 70;
     const ctx = canvas.getContext('2d');
     if (ctx) {
-      ctx.fillStyle = isLive ? '#4ade80' : '#38bdf8';
+      ctx.fillStyle = isLive ? '#4ade80' : cameraState === 'starting' ? '#f59e0b' : '#38bdf8';
       ctx.font = 'bold 20px "Inter", -apple-system, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
@@ -222,23 +167,23 @@ export const LiveWebcamBackdrop = memo(function LiveWebcamBackdrop({
     const tex = new THREE.CanvasTexture(canvas);
     tex.colorSpace = THREE.SRGBColorSpace;
     return tex;
-  }, [isLive, pillText]);
+  }, [isLive, cameraState, pillText]);
 
   // Calculate cylindrical projection arc:
-  // Spans ~240° (Math.PI * 1.35) horizontally, centered straight forward at -Z.
-  const thetaLength = Math.PI * 1.35;
+  // Spans 270° (Math.PI * 1.5) horizontally, centered straight forward at -Z.
+  const thetaLength = Math.PI * 1.5;
   const thetaStart = Math.PI - thetaLength / 2;
 
   return (
     <group name="live-webcam-backdrop-root">
-      {/* 1. Curved Panoramic Video / Room Screen (Centered at eye level y = 1.5m, DoubleSide) */}
-      <mesh position={[0, 1.5, 0]} name="curved-webcam-screen">
+      {/* 1. Curved Panoramic Video / Room Screen (Height: 8.5m, Centered at eye level y = 1.5m, scale.x = -1 for unmirrored interior projection) */}
+      <mesh position={[0, 1.5, 0]} scale={[-1, 1, 1]} name="curved-webcam-screen">
         <cylinderGeometry
           args={[
             radius,
             radius,
             height,
-            48,
+            64,
             1,
             true, // open ended
             thetaStart,
@@ -254,19 +199,24 @@ export const LiveWebcamBackdrop = memo(function LiveWebcamBackdrop({
 
       {/* 2. Soft Studio Atmosphere Dome (Wraps remaining space so no black void exists) */}
       <mesh position={[0, 1.5, 0]}>
-        <sphereGeometry args={[18, 32, 32]} />
-        <meshBasicMaterial color="#081022" side={THREE.BackSide} toneMapped={false} />
+        <sphereGeometry args={[16, 32, 32]} />
+        <meshBasicMaterial
+          map={sampleTextureRef.current ?? undefined}
+          color={sampleTextureRef.current ? '#ffffff' : '#081022'}
+          side={THREE.BackSide}
+          toneMapped={false}
+        />
       </mesh>
 
       {/* 3. Studio Floor Platform & Spatial Orienting Rings */}
       <mesh position={[0, -0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <circleGeometry args={[radius + 1.5, 48]} />
-        <meshBasicMaterial color="#0f172a" side={THREE.DoubleSide} toneMapped={false} />
+        <circleGeometry args={[radius + 2.0, 48]} />
+        <meshBasicMaterial color="#0b1329" side={THREE.DoubleSide} toneMapped={false} />
       </mesh>
 
       <mesh position={[0, 0.01, -1.5]} rotation={[-Math.PI / 2, 0, 0]}>
         <ringGeometry args={[2.0, 2.05, 64]} />
-        <meshBasicMaterial color="#38bdf8" transparent opacity={0.3} side={THREE.DoubleSide} />
+        <meshBasicMaterial color="#38bdf8" transparent opacity={0.35} side={THREE.DoubleSide} />
       </mesh>
 
       <mesh position={[0, 0.01, -1.5]} rotation={[-Math.PI / 2, 0, 0]}>
@@ -274,12 +224,18 @@ export const LiveWebcamBackdrop = memo(function LiveWebcamBackdrop({
         <meshBasicMaterial color="#0284c7" transparent opacity={0.25} side={THREE.DoubleSide} />
       </mesh>
 
-      {/* 4. Live Camera Status Pill in front of the operator */}
-      <group position={[0, 2.5, -2.5]}>
+      {/* 4. Ceiling Orienting Ring */}
+      <mesh position={[0, 5.8, -1.5]} rotation={[Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[3.8, 3.85, 64]} />
+        <meshBasicMaterial color="#0284c7" transparent opacity={0.15} side={THREE.DoubleSide} />
+      </mesh>
+
+      {/* 5. Live Camera Status Pill in front of the operator */}
+      <group position={[0, 2.8, -2.5]}>
         <mesh>
           <planeGeometry args={[0.7, 0.12]} />
           <meshBasicMaterial
-            color={isLive ? '#064e3b' : '#0c4a6e'}
+            color={isLive ? '#064e3b' : cameraState === 'starting' ? '#78350f' : '#0c4a6e'}
             transparent
             opacity={0.88}
             side={THREE.DoubleSide}
