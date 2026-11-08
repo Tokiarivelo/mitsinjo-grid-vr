@@ -6,7 +6,7 @@ import { Instance, Instances } from '@react-three/drei';
 import type { SectorId } from '@mitsinjo/engine';
 import { createHipRoofGeometry } from '../utils/hip-roof';
 import { mergeParts, type Part } from '../utils/merge-parts';
-import { HouseCluster, VillageHouse, windowColor } from './village-house';
+import { HouseCluster, VillageHouse } from './village-house';
 import type { HouseSpec } from '../utils/house-geometry';
 import { stripeTexture } from './procedural-textures';
 import { UNLIT_BULB_HEX } from '../utils/scene-palette';
@@ -174,14 +174,43 @@ function WaterBody({ glow }: BodyProps) {
         position={[1.9, 0, 1.4]}
         rotationY={-0.5}
       />
+      {/* Water tank pinnacle status beacon */}
+      <mesh position={[0, TOWER_H + 2.05, 0]}>
+        <sphereGeometry args={[0.09, 12, 10]} />
+        <meshBasicMaterial color={glow > 0 ? '#38bdf8' : '#1e293b'} toneMapped={false} />
+      </mesh>
+      {/* Pump house entrance porch lantern */}
+      <mesh position={[2.25, 1.05, 2.1]}>
+        <sphereGeometry args={[0.06, 8, 8]} />
+        <meshBasicMaterial color={glow > 0 ? '#ffe082' : '#222'} toneMapped={false} />
+      </mesh>
       {glow > 0 && (
-        <pointLight
-          position={[0, TOWER_H + 0.5, 0]}
-          color="#38bdf8"
-          intensity={1.2 * glow}
-          distance={6}
-          decay={2}
-        />
+        <>
+          {/* Tank upper beacon & platform lighting */}
+          <pointLight
+            position={[0, TOWER_H + 0.8, 0]}
+            color="#38bdf8"
+            intensity={1.8 * glow}
+            distance={8}
+            decay={2}
+          />
+          {/* Pump house doorstep warm incandescent illumination */}
+          <pointLight
+            position={[2.25, 1.1, 2.1]}
+            color="#ffb74d"
+            intensity={1.5 * glow}
+            distance={6}
+            decay={2}
+          />
+          {/* Ground floodlight reflecting near the pond */}
+          <pointLight
+            position={[0, 0.8, 0]}
+            color="#67e8f9"
+            intensity={1.2 * glow}
+            distance={6}
+            decay={2}
+          />
+        </>
       )}
     </group>
   );
@@ -301,20 +330,48 @@ function MarketBody({ glow }: BodyProps) {
     }
     return mergeParts(parts);
   }, []);
-  // String lights between the stalls: one geometry, glow follows the market's status.
+  // String lights and stall lanterns: one geometry, glow follows the market's status.
   const bulbs = useMemo(() => {
     const parts: Part[] = [];
+    // Central festive festoon line
     for (let i = 0; i <= 14; i++) {
       const t = i / 14;
       parts.push({
-        shape: { kind: 'sphere', radius: 0.06, segments: 8 },
+        shape: { kind: 'sphere', radius: 0.065, segments: 8 },
         position: [-2.7 + 5.4 * t, 1.95 - Math.sin(t * Math.PI * 3) ** 2 * 0.22, 0],
+      });
+    }
+    // Front and back festoon lines connecting stall corners
+    for (const z of [-1.1, 1.1]) {
+      for (let i = 0; i <= 10; i++) {
+        const t = i / 10;
+        parts.push({
+          shape: { kind: 'sphere', radius: 0.055, segments: 8 },
+          position: [-2.4 + 4.8 * t, 1.85 - Math.sin(t * Math.PI * 2) ** 2 * 0.16, z],
+        });
+      }
+    }
+    // Under-canopy warm hanging lantern inside each of the 6 stalls
+    for (const s of STALLS) {
+      parts.push({
+        shape: { kind: 'sphere', radius: 0.09, segments: 10 },
+        position: [s.pos[0], 1.45, s.pos[2]],
+      });
+      parts.push({
+        shape: {
+          kind: 'cylinder',
+          radiusTop: 0.012,
+          radiusBottom: 0.012,
+          height: 0.2,
+          segments: 6,
+        },
+        position: [s.pos[0], 1.55, s.pos[2]],
       });
     }
     return mergeParts(parts);
   }, []);
   const bulbColor = useMemo(
-    () => (glow <= 0 ? new THREE.Color(UNLIT_BULB_HEX) : windowColor(glow).multiplyScalar(1.3)),
+    () => (glow <= 0 ? new THREE.Color(UNLIT_BULB_HEX) : new THREE.Color('#ffe299')),
     [glow]
   );
 
@@ -350,13 +407,46 @@ function MarketBody({ glow }: BodyProps) {
         <meshBasicMaterial color={bulbColor} toneMapped={false} />
       </mesh>
       {glow > 0 && (
-        <pointLight
-          position={[0, 2.2, 0]}
-          color="#ffba66"
-          intensity={1.6 * glow}
-          distance={8}
-          decay={2}
-        />
+        <>
+          {/* Central high ambient market glow */}
+          <pointLight
+            position={[0, 2.3, 0]}
+            color="#ffb25e"
+            intensity={1.8 * glow}
+            distance={9}
+            decay={2}
+          />
+          {/* North row illumination over produce counters */}
+          <pointLight
+            position={[-1.0, 1.7, 1.1]}
+            color="#ffa844"
+            intensity={1.4 * glow}
+            distance={6}
+            decay={2}
+          />
+          <pointLight
+            position={[1.0, 1.7, 1.1]}
+            color="#ffa844"
+            intensity={1.4 * glow}
+            distance={6}
+            decay={2}
+          />
+          {/* South row illumination over produce counters */}
+          <pointLight
+            position={[-1.0, 1.7, -1.1]}
+            color="#ffa844"
+            intensity={1.4 * glow}
+            distance={6}
+            decay={2}
+          />
+          <pointLight
+            position={[1.0, 1.7, -1.1]}
+            color="#ffa844"
+            intensity={1.4 * glow}
+            distance={6}
+            decay={2}
+          />
+        </>
       )}
     </group>
   );

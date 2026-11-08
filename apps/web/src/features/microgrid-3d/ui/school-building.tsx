@@ -75,27 +75,44 @@ export function SchoolBuilding({ glow = 0 }: SchoolBuildingProps) {
       {/* Nighttime / dusk architectural illumination */}
       {isLit && (
         <>
+          {/* Main entrance portico lantern globe */}
+          <mesh position={[0, 1.42, 1.95]}>
+            <sphereGeometry args={[0.07, 12, 10]} />
+            <meshBasicMaterial color="#ffe082" toneMapped={false} />
+          </mesh>
           {/* Main entrance portico lantern lighting the front steps and path */}
           <pointLight
             position={[0, 1.45, 2.0]}
             color="#ffb74d"
-            intensity={1.8 * glow}
-            distance={8}
+            intensity={2.2 * glow}
+            distance={9}
             decay={2}
           />
-          {/* Gentle classroom light spilling out from left and right wings */}
+          {/* Belfry bell lantern */}
+          <mesh position={[0, 3.8, 0]}>
+            <sphereGeometry args={[0.08, 12, 10]} />
+            <meshBasicMaterial color="#ffe6a8" toneMapped={false} />
+          </mesh>
+          <pointLight
+            position={[0, 3.85, 0]}
+            color="#ffe082"
+            intensity={1.6 * glow}
+            distance={7}
+            decay={2}
+          />
+          {/* Warm classroom light spilling out from left and right wings */}
           <pointLight
             position={[-2.4, 1.6, 0.4]}
             color="#ffd57e"
-            intensity={1.2 * glow}
-            distance={6}
+            intensity={1.8 * glow}
+            distance={7}
             decay={2}
           />
           <pointLight
             position={[2.4, 1.6, 0.4]}
             color="#ffd57e"
-            intensity={1.2 * glow}
-            distance={6}
+            intensity={1.8 * glow}
+            distance={7}
             decay={2}
           />
         </>

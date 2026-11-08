@@ -111,26 +111,26 @@ export function createSchoolGeometry(): SchoolGeometries {
     rotation: [0, 0, -roofAngle],
   });
 
-  // Round / Arched Attic Window on Central Pediment (staged cleanly to prevent z-fighting)
+  // Round / Arched Attic Window on Central Pediment (staged cleanly to prevent z-fighting and occlusion)
   blueParts.push({
-    shape: { kind: 'cylinder', radiusTop: 0.22, radiusBottom: 0.22, height: 0.04, segments: 12 },
-    position: [0, pedBaseY + 0.48, CD / 2 + 0.09],
+    shape: { kind: 'cylinder', radiusTop: 0.24, radiusBottom: 0.24, height: 0.02, segments: 16 },
+    position: [0, pedBaseY + 0.48, CD / 2 + 0.08],
     rotation: [Math.PI / 2, 0, 0],
   });
   glassParts.push({
-    shape: { kind: 'cylinder', radiusTop: 0.18, radiusBottom: 0.18, height: 0.01, segments: 12 },
-    position: [0, pedBaseY + 0.48, CD / 2 + 0.08],
+    shape: { kind: 'cylinder', radiusTop: 0.19, radiusBottom: 0.19, height: 0.014, segments: 16 },
+    position: [0, pedBaseY + 0.48, CD / 2 + 0.095],
     rotation: [Math.PI / 2, 0, 0],
   });
   woodParts.push(
     // Cross muntins on round window
     {
-      shape: { kind: 'box', size: [0.36, 0.025, 0.02] },
-      position: [0, pedBaseY + 0.48, CD / 2 + 0.095],
+      shape: { kind: 'box', size: [0.38, 0.02, 0.012] },
+      position: [0, pedBaseY + 0.48, CD / 2 + 0.106],
     },
     {
-      shape: { kind: 'box', size: [0.025, 0.36, 0.02] },
-      position: [0, pedBaseY + 0.48, CD / 2 + 0.095],
+      shape: { kind: 'box', size: [0.02, 0.38, 0.012] },
+      position: [0, pedBaseY + 0.48, CD / 2 + 0.106],
     }
   );
 

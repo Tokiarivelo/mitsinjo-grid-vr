@@ -61,6 +61,7 @@ import { CameraController } from './camera-controller';
 import { SkyBackdrop, SKY_RADIUS } from './sky-backdrop';
 import { Vegetation } from './vegetation';
 import { WindTurbines } from './wind-turbines';
+import { LakeGrille } from './lake-grille';
 import { Vehicles } from './vehicles';
 import { PostEffects } from './post-effects';
 import { QualityProbe } from './quality-probe';
@@ -581,7 +582,15 @@ export function VillageCanvas({
           <PlacedYards clearings={yards} paths={tracks} />
           <Suspense fallback={null}>
             <Vegetation quality={quality} clearings={treeClearings} />
-            <WindTurbines />
+            <WindTurbines lampGlow={palette.lampGlow} />
+            <LakeGrille
+              lampGlow={palette.lampGlow}
+              hasPower={
+                model.battery.socPct > 5 ||
+                model.solar.currentKw > 0.1 ||
+                Object.values(model.buildings).some((b) => b.servedKw > 0.05)
+              }
+            />
             <Vehicles />
             {/* Inside the casters' Suspense so the first bake includes the loaded trees. */}
             {high && <ShadowBake bakeKey={shadowBakeKey} />}

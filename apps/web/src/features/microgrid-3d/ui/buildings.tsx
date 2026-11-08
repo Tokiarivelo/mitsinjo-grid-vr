@@ -153,7 +153,12 @@ export function VillageBuildings({
         const model = buildings[id];
         const isSelected = selectedSector === id;
         const hasPower =
-          model.connected && model.servedKw > 0.05 && model.status !== 'unserved' && !model.onFire;
+          model.connected &&
+          model.servedKw > 0.05 &&
+          model.status !== 'unserved' &&
+          model.status !== 'disconnected' &&
+          (model.coveragePct === null || model.coveragePct > 0) &&
+          !model.onFire;
         const powerFactor = hasPower ? Math.max(0.65, glowFromIntensity(model.intensity)) : 0;
         const glow = darkness * powerFactor;
 
