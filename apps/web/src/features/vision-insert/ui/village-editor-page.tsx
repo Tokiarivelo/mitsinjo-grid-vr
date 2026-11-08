@@ -1,9 +1,11 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
+import type { WebGLRenderer } from 'three';
 import {
   Box,
   ChevronRight,
+  Glasses,
   Grid3X3,
   ImagePlus,
   Plug,
@@ -12,6 +14,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { StatusBadge } from '@/components/ui/status-badge';
+import { useWebXR } from '@/features/microgrid-3d';
 import { GridSchematicPreview } from '@/features/overview';
 import { selectActiveResult, selectInput, selectTimeIndex, useSimulationStore } from '@/stores';
 import { readAsDataUrl } from '@/lib/files';
@@ -29,6 +32,7 @@ import { ApplianceList } from './appliance-list';
 import { DetectionCanvas } from './detection-canvas';
 import { ObjectShapePanel } from './object-shape-panel';
 import { SelectedAppliance } from './selected-appliance';
+import { VillageXRViewport } from './xr';
 
 /** Photos the vision route accepts. */
 const PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
@@ -45,6 +49,12 @@ export function VillageEditorPage() {
   const t = useTranslations('features.visionInsert');
   const tCommon = useTranslations('common');
   const fileRef = useRef<HTMLInputElement>(null);
+  // VR session for the 3D room (filled once the WebGL renderer mounts).
+  const rendererRef = useRef<WebGLRenderer | null>(null);
+  const xr = useWebXR(rendererRef);
+  const xrActive = xr.status === 'active';
+  const [vrViewOpen, setVrViewOpen] = useState(false);
+
   // Photo, objects, 2D and 3D stay when the operator visits another page and comes back.
   const [imageUrl, setImageUrl] = useKeptState<string | null>(VILLAGE_SCOPE, 'photo', null);
   const [badType, setBadType] = useState(false);
@@ -201,6 +211,36 @@ export function VillageEditorPage() {
               </span>
             </div>
           )}
+
+          {(xr.status === 'supported' || xrActive || vrViewOpen) && (
+            <button
+              type="button"
+              onClick={() => {
+                if (xrActive) {
+                  xr.exit();
+                  setVrViewOpen(false);
+                } else if (vrViewOpen) {
+                  setVrViewOpen(false);
+                } else {
+                  setVrViewOpen(true);
+                  xr.enter();
+                }
+              }}
+              aria-pressed={xrActive || vrViewOpen}
+              aria-label={xr.error ?? (xrActive || vrViewOpen ? t('vrExit') : t('vrEnter'))}
+              title={xr.error ?? (xrActive || vrViewOpen ? t('vrExit') : t('vrEnter'))}
+              className={cn(
+                'inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-all cursor-pointer',
+                xrActive || vrViewOpen
+                  ? 'border-energy-cyan bg-energy-cyan/20 text-energy-cyan shadow-xs'
+                  : 'border-border bg-surface text-text-secondary hover:text-text-primary hover:border-energy-cyan/50'
+              )}
+            >
+              <Glasses className="h-4 w-4" aria-hidden="true" />
+              <span>{xrActive || vrViewOpen ? t('vrExit') : t('vrEnter')}</span>
+            </button>
+          )}
+
           <StatusBadge variant="simulated" size="sm" label={tCommon('simulatedData')} />
         </div>
       </section>
@@ -218,7 +258,26 @@ export function VillageEditorPage() {
         }}
       />
 
-      {!imageUrl ? (
+      {xrActive || vrViewOpen ? (
+        <VillageXRViewport
+          detections={vision.detections}
+          isScanning={vision.status === 'loading' || vision.status === 'refining'}
+          onTriggerScan={() => {
+            if (!imageUrl) {
+              void loadSample();
+            } else {
+              void vision.retry();
+            }
+          }}
+          onSelectAppliance={onSelectObject}
+          rendererRef={rendererRef}
+          xrActive={xrActive}
+          onExitVR={() => {
+            if (xrActive) xr.exit();
+            setVrViewOpen(false);
+          }}
+        />
+      ) : !imageUrl ? (
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_440px] xl:grid-cols-[minmax(0,1fr)_480px]">
           <div className="flex flex-col gap-5">
             <section

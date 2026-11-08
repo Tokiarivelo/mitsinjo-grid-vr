@@ -180,4 +180,20 @@ describe('VillageEditorPage (/village)', () => {
     // Nothing is asked again: no new detection, facade or 3D call.
     expect(fetchMock.mock.calls.length).toBe(calls);
   }, 15000);
+
+  it('shows the WebXR button when supported and toggles the immersive diorama viewport', async () => {
+    vi.stubGlobal('navigator', { xr: { isSessionSupported: async () => true } });
+    renderPage();
+    const vrBtn = await screen.findByRole('button', { name: 'View in VR immersion' });
+    expect(vrBtn).toBeTruthy();
+
+    fireEvent.click(vrBtn);
+    expect(await screen.findByTestId('village-xr-viewport')).toBeTruthy();
+
+    const exitBtns = screen.getAllByRole('button', { name: 'Exit VR immersion' });
+    expect(exitBtns.length).toBeGreaterThanOrEqual(1);
+    fireEvent.click(exitBtns[0]!);
+    expect(screen.queryByTestId('village-xr-viewport')).toBeNull();
+    vi.unstubAllGlobals();
+  });
 });
