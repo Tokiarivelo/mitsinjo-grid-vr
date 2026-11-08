@@ -11,6 +11,7 @@ import type { HouseSpec } from '../utils/house-geometry';
 import { stripeTexture } from './procedural-textures';
 import { UNLIT_BULB_HEX } from '../utils/scene-palette';
 import { ClinicBuilding } from './clinic-building';
+import { SchoolBuilding } from './school-building';
 
 /**
  * Building meshes per sector (look only). Each body gets `glow` (0..1), the window/lamp
@@ -178,37 +179,8 @@ function WaterBody({ glow }: BodyProps) {
 }
 
 // ---------------- School ----------------
-const SCHOOL = { width: 7.2, depth: 2.8, wall: 1.7, roof: 1.25, overhang: 0.35 };
-
 function SchoolBody({ glow }: BodyProps) {
-  return (
-    <group name="school-mesh">
-      <VillageHouse
-        width={SCHOOL.width}
-        depth={SCHOOL.depth}
-        wallHeight={SCHOOL.wall}
-        roofHeight={SCHOOL.roof}
-        overhang={SCHOOL.overhang}
-        wallColor="#e2ceaa"
-        roofColor="#1a232e"
-        roofStyle="gable"
-        roofFinish="bipv"
-        slatCladding
-        windowGlow={glow}
-        windowsPerSide={5}
-        deckFurniture
-      />
-      {/* Official school entrance name board */}
-      <mesh position={[0, SCHOOL.wall * 0.88 + 0.12, SCHOOL.depth / 2 + 0.03]}>
-        <planeGeometry args={[1.3, 0.35]} />
-        <meshStandardMaterial color="#1f4f99" roughness={0.5} metalness={0.1} />
-      </mesh>
-      {/* Community flagpole */}
-      <mesh position={[-4.1, 1.65, 2.3]} material={STEEL} castShadow>
-        <cylinderGeometry args={[0.035, 0.045, 3.3, 12]} />
-      </mesh>
-    </group>
-  );
+  return <SchoolBuilding glow={glow} />;
 }
 
 // ---------------- Households ----------------
@@ -220,28 +192,27 @@ const HOMES: {
   wall: string;
   roof: string;
 }[] = [
-  { pos: [-2.4, 0, -1.6], rot: 0.22, w: 2.3, d: 1.8, wall: '#c48849', roof: '#1a232e' },
-  { pos: [0.6, 0, -2.5], rot: -0.12, w: 2.1, d: 1.6, wall: '#b87b3e', roof: '#18212c' },
-  { pos: [2.9, 0, -0.3], rot: -0.32, w: 2.4, d: 1.8, wall: '#d19757', roof: '#1b2532' },
-  { pos: [-2.6, 0, 1.8], rot: 0.16, w: 2.2, d: 1.7, wall: '#be8346', roof: '#1a232e' },
-  { pos: [0.2, 0, 0.7], rot: 0.06, w: 2.5, d: 1.8, wall: '#a86c34', roof: '#19222d' },
-  { pos: [2.2, 0, 2.8], rot: -0.22, w: 2.0, d: 1.6, wall: '#cf9a5b', roof: '#1e2835' },
+  { pos: [-2.4, 0, -1.6], rot: 0.22, w: 2.3, d: 1.8, wall: '#f4ede2', roof: '#c26d3a' },
+  { pos: [0.6, 0, -2.5], rot: -0.12, w: 2.1, d: 1.6, wall: '#ede0c8', roof: '#4a6b52' },
+  { pos: [2.9, 0, -0.3], rot: -0.32, w: 2.4, d: 1.8, wall: '#f6ecdb', roof: '#334e68' },
+  { pos: [-2.6, 0, 1.8], rot: 0.16, w: 2.2, d: 1.7, wall: '#e8dcc4', roof: '#96572e' },
+  { pos: [0.2, 0, 0.7], rot: 0.06, w: 2.5, d: 1.8, wall: '#f0e6d6', roof: '#9e3c3c' },
+  { pos: [2.2, 0, 2.8], rot: -0.22, w: 2.0, d: 1.6, wall: '#f5eee4', roof: '#b8823b' },
 ];
 
 /** All homes merged: 5 draw calls instead of one set of meshes per home. */
 const HOME_SPECS: HouseSpec[] = HOMES.map((h) => ({
   width: h.w,
   depth: h.d,
-  wallHeight: 1.25,
-  roofHeight: 0.82,
+  wallHeight: 1.3,
+  roofHeight: 0.95,
   wallColor: h.wall,
   roofColor: h.roof,
   windowsPerSide: 2,
   position: h.pos,
   rotationY: h.rot,
   roofStyle: 'gable',
-  slatCladding: true,
-  deckFurniture: true,
+  cottage: true,
 }));
 
 function HouseholdsBody({ glow }: BodyProps) {
@@ -251,7 +222,7 @@ function HouseholdsBody({ glow }: BodyProps) {
         name="houses-cluster-mesh"
         houses={HOME_SPECS}
         windowGlow={glow}
-        roofFinish="bipv"
+        roofFinish="tile"
       />
     </group>
   );
@@ -416,8 +387,8 @@ export function BuildingBody({ id, glow }: { id: SectorId; glow: number }) {
 export const BODY_LAYOUT: Record<SectorId, { ringInner: number; ledY: number }> = {
   health: { ringInner: 3.8, ledY: 3.95 },
   water: { ringInner: 2.6, ledY: 6.0 },
-  school: { ringInner: 4.2, ledY: 3.4 },
-  households: { ringInner: 3.9, ledY: 2.6 },
+  school: { ringInner: 4.4, ledY: 5.1 },
+  households: { ringInner: 3.9, ledY: 2.8 },
   market: { ringInner: 3.4, ledY: 2.9 },
   industry: { ringInner: 3.7, ledY: 5.0 },
 };

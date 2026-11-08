@@ -77,4 +77,24 @@ describe('buildHouseCluster', () => {
     // Roof sits atop walls
     expect(roofBounds.max.y).toBeGreaterThan(1.15);
   });
+
+  it('supports classic cottages with chimney, arched dormer, and front gabled porch', () => {
+    const cluster = buildHouseCluster([
+      house({
+        roofStyle: 'gable',
+        cottage: true,
+      }),
+    ]);
+
+    expect(houseClusterDrawCalls([house({ cottage: true })])).toBe(5);
+    expect(cluster.roofs).toBeInstanceOf(THREE.BufferGeometry);
+    expect(cluster.windows).toBeInstanceOf(THREE.BufferGeometry);
+    expect(cluster.trim).toBeInstanceOf(THREE.BufferGeometry);
+    expect(cluster.verandas).toBeInstanceOf(THREE.BufferGeometry);
+
+    cluster.trim.computeBoundingBox();
+    const trimBounds = cluster.trim.boundingBox!;
+    // Chimney sits higher than wallHeight (1.15)
+    expect(trimBounds.max.y).toBeGreaterThan(1.5);
+  });
 });

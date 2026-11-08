@@ -4,28 +4,29 @@
 
 ## Current state
 
-- Contemporary 3-Storey Health Clinic Pavilion: Remodeled into a modern healthcare center matching architectural reference:
-  - Wrap-around panoramic 3-storey curtain wall glass with dark charcoal aluminium mullions and floor-separation fascia bands.
-  - Projecting entrance portico canopy with square architectural columns and automatic sliding doors.
-  - 1st-floor rooftop terrace with glass balustrade railing and cedar planter trough.
-  - Warm horizontal cedar timber slat accent facade (`horizontalTimberSlatTexture()`) behind the terrace.
-  - Flat gravel roof deck with 2 rows of BIPV solar modules and louvered HVAC chiller unit.
-  - Forecourt landscaping: geometric boxwood hedge parterres, ornamental tree, purple/burgundy shrubs, paver walkway, and totem sign with illuminated red cross.
-  - Dynamic medical glow: glass curtain walls illuminate warmly when powered; red crosses glow on facade and totem.
-  - Optimal batching: merged into BufferGeometries by material (only 6-7 draw calls total).
-- Verification: 55 test files / 346 unit tests passing; zero TypeScript errors.
+- Primary Schoolhouse (Springfield Elementary reference):
+  - 2-storey central pavilion with side wings: sunny yellow lower floor, sky-blue upper floor, red divider band, gabled portico entrance with double red doors, belfry tower with arched openings & 3D brass bell, brick chimney with corbeled cap.
+  - Schoolyard playground: multi-platform play tower with slide, 2-seat swing set, schoolyard benches, raised flower bed, and miniature yellow school bus.
+- Cottage Households cluster (Architectural reference):
+  - 6 distinct cottages with steep-pitched gable roofs, masonry chimneys on roof slopes, arched attic dormer windows at gable peaks, covered front entrance porticos with 3-tier steps and balustrade railings, and multi-pane sash windows.
+  - Distinctive roof colors per house (`#c26d3a` Terracotta, `#4a6b52` Forest Sage, `#334e68` Deep Slate Blue, `#96572e` Warm Cedar, `#9e3c3c` Crimson Red, `#b8823b` Honey Amber) with warm stucco walls.
+  - Merged geometries: entire 6-home cluster stays at ≤ 5 draw calls.
+- Foreground palm clearing (`scatter.ts`):
+  - Cleared tall palms in the direct camera viewing corridor south of the village (`z > 2.0 && |x| < 18`), replacing with low bushes/rocks to completely relieve the view of homes, school, and roads.
+- Verification: 57 test files / 350 unit tests passing; zero TypeScript errors.
 
 ## Next
 
-- User feedback on the new Health Clinic pavilion.
-- Next building or landscape element to refine upon request (School, Market, Agricultural parcels, or EV chargers).
+- User feedback on the new Primary School and Cottage cluster.
+- Further scene refinements (Agricultural parcels, Market, or Battery/Inverter shelter) as requested.
 
 ## Files touched
 
-- `apps/web/src/features/microgrid-3d/utils/clinic-geometry.ts`
-- `apps/web/src/features/microgrid-3d/utils/__tests__/clinic-geometry.test.ts`
-- `apps/web/src/features/microgrid-3d/ui/clinic-building.tsx`
-- `apps/web/src/features/microgrid-3d/ui/__tests__/clinic-building.test.tsx`
+- `apps/web/src/features/microgrid-3d/utils/school-geometry.ts`
+- `apps/web/src/features/microgrid-3d/utils/__tests__/school-geometry.test.ts`
+- `apps/web/src/features/microgrid-3d/ui/school-building.tsx`
+- `apps/web/src/features/microgrid-3d/ui/__tests__/school-building.test.tsx`
+- `apps/web/src/features/microgrid-3d/utils/house-geometry.ts`
+- `apps/web/src/features/microgrid-3d/utils/__tests__/house-geometry.test.ts`
 - `apps/web/src/features/microgrid-3d/ui/building-bodies.tsx`
-- `apps/web/src/features/microgrid-3d/ui/procedural-textures.ts`
-- `apps/web/src/features/microgrid-3d/__tests__/procedural-textures.test.ts`
+- `apps/web/src/features/microgrid-3d/utils/scatter.ts`
