@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useFrame, useThree } from '@react-three/fiber';
 import type { SpatialTarget } from './spatial-projection';
@@ -14,17 +14,20 @@ export interface XRBlasterControllerProps {
   onShootTarget: (id: string) => void;
 }
 
-interface BlastEffect {
-  id: number;
-  origin: THREE.Vector3;
-  targetPos: THREE.Vector3;
-  progress: number;
-}
+// Module-level reusable scratch objects to avoid any heap allocation in useFrame
+const _raycaster = new THREE.Raycaster();
+const _tempMatrix = new THREE.Matrix4();
+const _vOrigin = new THREE.Vector3();
+const _vDirection = new THREE.Vector3();
+const _vTargetPos = new THREE.Vector3();
+const _vHitEndpoint = new THREE.Vector3();
+const _vCurPos = new THREE.Vector3();
+const _FORWARD = new THREE.Vector3(0, 0, -1);
 
 /**
  * WebXR Laser Blaster Controller.
- * Handles continuous raycasting from the Quest controller or emulator pointer,
- * renders directional laser pointer, firing beam projectile, and impact explosion.
+ * Handles continuous raycasting from the Quest controller or emulator pointer with 0 heap allocation,
+ * renders directional aiming laser pointer, and animates imperatively to avoid React re-render lag.
  */
 export const XRBlasterController = memo(function XRBlasterController({
   targets,
@@ -33,38 +36,42 @@ export const XRBlasterController = memo(function XRBlasterController({
   onShootTarget,
 }: XRBlasterControllerProps) {
   const { gl, camera } = useThree();
-  const [blasts, setBlasts] = useState<BlastEffect[]>([]);
-  const blastSeq = useRef(0);
   const hoveredRef = useRef<string | null>(null);
+
+  // Imperative active blast tracking (zero React state updates in useFrame)
+  const activeBlastRef = useRef<{
+    origin: THREE.Vector3;
+    targetPos: THREE.Vector3;
+    progress: number;
+  } | null>(null);
+
+  const projectileMeshRef = useRef<THREE.Mesh>(null);
+  const impactMeshRef = useRef<THREE.Mesh>(null);
+  const pointerPipRef = useRef<THREE.Mesh>(null);
 
   // Setup WebXR Controller Target Ray & Trigger Listener
   useEffect(() => {
     if (!gl?.xr?.getController) return;
 
     const controller = gl.xr.getController(0);
-    const raycaster = new THREE.Raycaster();
-    const tempMatrix = new THREE.Matrix4();
 
     const onSelect = () => {
-      // Find candidate targets in scene (both unmaterialized targets and materialized appliances)
       if (targets.length === 0) return;
 
-      // Extract ray origin and direction from controller
-      tempMatrix.identity().extractRotation(controller.matrixWorld);
-      const origin = new THREE.Vector3().setFromMatrixPosition(controller.matrixWorld);
-      const direction = new THREE.Vector3(0, 0, -1).applyMatrix4(tempMatrix).normalize();
+      _tempMatrix.identity().extractRotation(controller.matrixWorld);
+      _vOrigin.setFromMatrixPosition(controller.matrixWorld);
+      _vDirection.copy(_FORWARD).applyMatrix4(_tempMatrix).normalize();
 
-      raycaster.ray.origin.copy(origin);
-      raycaster.ray.direction.copy(direction);
-      if (camera) raycaster.camera = camera;
+      _raycaster.ray.origin.copy(_vOrigin);
+      _raycaster.ray.direction.copy(_vDirection);
+      if (camera) _raycaster.camera = camera;
 
-      // Check collision with all active targets
       let closestTarget: SpatialTarget | null = null;
       let closestDist = Infinity;
 
       for (const t of targets) {
-        const targetPos = new THREE.Vector3(...t.position);
-        const dist = raycaster.ray.distanceToPoint(targetPos);
+        _vTargetPos.set(t.position[0], t.position[1], t.position[2]);
+        const dist = _raycaster.ray.distanceToPoint(_vTargetPos);
         const radius = t.hitRadius * 1.35;
         if (dist <= radius && dist < closestDist) {
           closestDist = dist;
@@ -72,19 +79,14 @@ export const XRBlasterController = memo(function XRBlasterController({
         }
       }
 
-      // If hit, spawn blaster beam effect and notify parent
       if (closestTarget) {
         const hitTargetPos = new THREE.Vector3(...closestTarget.position);
-        blastSeq.current += 1;
-        setBlasts((prev) => [
-          ...prev,
-          {
-            id: blastSeq.current,
-            origin: origin.clone(),
-            targetPos: hitTargetPos,
-            progress: 0,
-          },
-        ]);
+
+        activeBlastRef.current = {
+          origin: _vOrigin.clone(),
+          targetPos: hitTargetPos,
+          progress: 0,
+        };
 
         // Play laser blast and impact sounds
         playLaserShootSound();
@@ -125,8 +127,6 @@ export const XRBlasterController = memo(function XRBlasterController({
     return line;
   }, []);
 
-  const pointerPipRef = useRef<THREE.Mesh>(null);
-
   useEffect(() => {
     return () => {
       pointerObject.geometry.dispose();
@@ -136,40 +136,57 @@ export const XRBlasterController = memo(function XRBlasterController({
 
   // Frame update for blaster projectile animations & continuous hover tracking
   useFrame((_, delta) => {
-    // 1. Advance and prune active blasts
-    if (blasts.length > 0) {
-      setBlasts((prev) =>
-        prev
-          .map((b) => ({ ...b, progress: b.progress + delta * 3.5 }))
-          .filter((b) => b.progress < 1.0)
-      );
+    // 1. Imperative animation of active projectile and impact shockwave (0 re-renders)
+    if (activeBlastRef.current) {
+      const b = activeBlastRef.current;
+      b.progress += delta * 3.5;
+      if (b.progress >= 1.0) {
+        activeBlastRef.current = null;
+        if (projectileMeshRef.current) projectileMeshRef.current.visible = false;
+        if (impactMeshRef.current) impactMeshRef.current.visible = false;
+      } else {
+        _vCurPos.lerpVectors(b.origin, b.targetPos, Math.min(1, b.progress));
+        if (projectileMeshRef.current) {
+          projectileMeshRef.current.visible = b.progress < 0.8;
+          projectileMeshRef.current.position.copy(_vCurPos);
+        }
+        if (impactMeshRef.current) {
+          impactMeshRef.current.visible = b.progress >= 0.7;
+          if (b.progress >= 0.7) {
+            impactMeshRef.current.position.copy(b.targetPos);
+            const scale = Math.max(0.01, (b.progress - 0.7) * 4.0);
+            impactMeshRef.current.scale.set(scale, scale, scale);
+            const mat = impactMeshRef.current.material as THREE.MeshBasicMaterial;
+            mat.opacity = Math.max(0, 1 - (b.progress - 0.7) / 0.3);
+          }
+        }
+      }
     }
 
-    // 2. Track hover target and update aiming beam in WebXR
+    // 2. Track hover target and update aiming beam in WebXR with 0 heap allocation
     if (gl?.xr?.isPresenting) {
       const controller = gl.xr.getController(0);
-      const raycaster = new THREE.Raycaster();
-      const tempMatrix = new THREE.Matrix4();
-      tempMatrix.identity().extractRotation(controller.matrixWorld);
-      const origin = new THREE.Vector3().setFromMatrixPosition(controller.matrixWorld);
-      const direction = new THREE.Vector3(0, 0, -1).applyMatrix4(tempMatrix).normalize();
 
-      raycaster.ray.origin.copy(origin);
-      raycaster.ray.direction.copy(direction);
-      if (camera) raycaster.camera = camera;
+      _tempMatrix.identity().extractRotation(controller.matrixWorld);
+      _vOrigin.setFromMatrixPosition(controller.matrixWorld);
+      _vDirection.copy(_FORWARD).applyMatrix4(_tempMatrix).normalize();
+
+      _raycaster.ray.origin.copy(_vOrigin);
+      _raycaster.ray.direction.copy(_vDirection);
+      if (camera) _raycaster.camera = camera;
 
       let currentHover: string | null = null;
       let minDist = Infinity;
-      const hitEndpoint = origin.clone().addScaledVector(direction, 2.5);
+      _vHitEndpoint.copy(_vOrigin).addScaledVector(_vDirection, 2.5);
 
       for (const t of targets) {
-        const targetPos = new THREE.Vector3(...t.position);
-        const dist = raycaster.ray.distanceToPoint(targetPos);
+        _vTargetPos.set(t.position[0], t.position[1], t.position[2]);
+        const dist = _raycaster.ray.distanceToPoint(_vTargetPos);
         const radius = t.hitRadius * 1.35;
         if (dist <= radius && dist < minDist) {
           minDist = dist;
           currentHover = t.id;
-          hitEndpoint.copy(targetPos);
+          _vHitEndpoint.copy(_vTargetPos);
         }
       }
 
@@ -182,8 +199,8 @@ export const XRBlasterController = memo(function XRBlasterController({
       pointerObject.visible = true;
       const attr = pointerObject.geometry.attributes.position as THREE.BufferAttribute | undefined;
       if (attr) {
-        attr.setXYZ(0, origin.x, origin.y, origin.z);
-        attr.setXYZ(1, hitEndpoint.x, hitEndpoint.y, hitEndpoint.z);
+        attr.setXYZ(0, _vOrigin.x, _vOrigin.y, _vOrigin.z);
+        attr.setXYZ(1, _vHitEndpoint.x, _vHitEndpoint.y, _vHitEndpoint.z);
         attr.needsUpdate = true;
       }
       const beamColor = currentHover ? '#f59e0b' : '#38bdf8';
@@ -191,7 +208,7 @@ export const XRBlasterController = memo(function XRBlasterController({
 
       if (pointerPipRef.current) {
         pointerPipRef.current.visible = true;
-        pointerPipRef.current.position.copy(hitEndpoint);
+        pointerPipRef.current.position.copy(_vHitEndpoint);
         (pointerPipRef.current.material as THREE.MeshBasicMaterial).color.set(beamColor);
       }
     } else {
@@ -211,42 +228,16 @@ export const XRBlasterController = memo(function XRBlasterController({
         <meshBasicMaterial color="#38bdf8" />
       </mesh>
 
-      {/* Dynamic Laser Projectiles & Impact Bursts */}
-      {blasts.map((b) => {
-        const curPos = new THREE.Vector3().lerpVectors(
-          b.origin,
-          b.targetPos,
-          Math.min(1, b.progress)
-        );
-        const impactScale = Math.max(0.01, (b.progress - 0.7) * 4.0);
+      {/* Imperatively Animated Blaster Projectile & Impact Burst (Zero React Re-renders) */}
+      <mesh ref={projectileMeshRef} visible={false}>
+        <sphereGeometry args={[0.035, 12, 12]} />
+        <meshBasicMaterial color="#38bdf8" />
+      </mesh>
 
-        return (
-          <group key={b.id}>
-            {/* Blaster projectile sphere traveling forward */}
-            {b.progress < 0.8 && (
-              <mesh position={curPos}>
-                <sphereGeometry args={[0.035, 12, 12]} />
-                <meshBasicMaterial color="#38bdf8" />
-              </mesh>
-            )}
-
-            {/* Impact Flash Shockwave at target position */}
-            {b.progress >= 0.7 && (
-              <group position={b.targetPos}>
-                <mesh scale={[impactScale, impactScale, impactScale]}>
-                  <ringGeometry args={[0.05, 0.28, 24]} />
-                  <meshBasicMaterial
-                    color="#f59e0b"
-                    transparent
-                    opacity={Math.max(0, 1 - (b.progress - 0.7) / 0.3)}
-                    side={THREE.DoubleSide}
-                  />
-                </mesh>
-              </group>
-            )}
-          </group>
-        );
-      })}
+      <mesh ref={impactMeshRef} visible={false}>
+        <ringGeometry args={[0.05, 0.28, 24]} />
+        <meshBasicMaterial color="#f59e0b" transparent opacity={1} side={THREE.DoubleSide} />
+      </mesh>
     </group>
   );
 });

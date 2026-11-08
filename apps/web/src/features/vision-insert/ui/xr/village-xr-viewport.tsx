@@ -77,7 +77,13 @@ export const VillageXRViewport = memo(function VillageXRViewport({
       <CanvasCreationBoundary onFail={() => undefined}>
         <Canvas
           frameloop={xrActive ? 'always' : 'demand'}
-          shadows
+          shadows={false}
+          dpr={[1, 1.5]}
+          gl={{
+            powerPreference: 'high-performance',
+            antialias: false,
+            alpha: true,
+          }}
           camera={{ position: [0, 1.5, 1.6], fov: 60 }}
           onCreated={({ gl }) => {
             if (rendererRef) {

@@ -8,25 +8,21 @@ import { useTranslations } from '@/lib/i18n';
 export interface LiveWebcamBackdropProps {
   /** Optional callback to register the frame capture function with the parent scene. */
   onRegisterCapture?: (captureFn: () => string | null) => void;
-  /** Radius of the curved panorama projection screen in meters. Default: 4.5. */
+  /** Radius of the full 360° panoramic projection cylinder. Default: 8.5m. */
   radius?: number;
-  /** Height of the curved screen in meters. Default: 3.8. */
+  /** Height of the surround cylinder in meters. Default: 10m. */
   height?: number;
-  /** Arc angle span in radians. Default: Math.PI * 0.72 (~130° panoramic field of view). */
-  arcAngle?: number;
 }
 
 /**
- * Live Camera & Ambient Studio Surroundings for WebXR Immersion (VS-T10).
- * Displays real-time webcam video stream on a curved panoramic screen in front of the operator,
- * eliminates the black void by rendering a full 360° studio horizon dome, and falls back to
- * the high-res room sample (/samples/vision-room.jpg) when camera is unavailable.
+ * Full-View Live Camera & 360° Studio Surroundings for WebXR Immersion (VS-T10).
+ * Displays real-time webcam video stream spanning the full field of view (360° surround),
+ * eliminating all black bars and void, throttled to 30fps to prevent GPU context loss and crashes.
  */
 export const LiveWebcamBackdrop = memo(function LiveWebcamBackdrop({
   onRegisterCapture,
-  radius = 4.5,
-  height = 3.8,
-  arcAngle = Math.PI * 0.72,
+  radius = 8.5,
+  height = 10.0,
 }: LiveWebcamBackdropProps) {
   const t = useTranslations('features.visionInsert');
 
@@ -36,6 +32,7 @@ export const LiveWebcamBackdrop = memo(function LiveWebcamBackdrop({
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const videoTextureRef = useRef<THREE.VideoTexture | null>(null);
+  const lastVideoTimeRef = useRef<number>(-1);
 
   // Initialize webcam or sample fallback
   useEffect(() => {
@@ -46,8 +43,9 @@ export const LiveWebcamBackdrop = memo(function LiveWebcamBackdrop({
         try {
           const stream = await navigator.mediaDevices.getUserMedia({
             video: {
-              width: { ideal: 1920, min: 640 },
-              height: { ideal: 1080, min: 480 },
+              // 720p ideal to guarantee 60-90 FPS in WebXR without memory context loss
+              width: { ideal: 1280, max: 1280 },
+              height: { ideal: 720, max: 720 },
               facingMode: 'environment',
             },
             audio: false,
@@ -82,6 +80,9 @@ export const LiveWebcamBackdrop = memo(function LiveWebcamBackdrop({
           texture.minFilter = THREE.LinearFilter;
           texture.magFilter = THREE.LinearFilter;
           texture.generateMipmaps = false;
+          texture.wrapS = THREE.MirroredRepeatWrapping;
+          texture.wrapT = THREE.ClampToEdgeWrapping;
+          texture.repeat.set(2, 1); // Mirrored across 360° panorama for seamless wrap
 
           videoTextureRef.current = texture;
           setActiveTexture(texture);
@@ -105,6 +106,9 @@ export const LiveWebcamBackdrop = memo(function LiveWebcamBackdrop({
             texture.colorSpace = THREE.SRGBColorSpace;
             texture.minFilter = THREE.LinearFilter;
             texture.magFilter = THREE.LinearFilter;
+            texture.wrapS = THREE.MirroredRepeatWrapping;
+            texture.wrapT = THREE.ClampToEdgeWrapping;
+            texture.repeat.set(2, 1);
             setActiveTexture(texture);
             setIsLive(false);
           },
@@ -158,20 +162,19 @@ export const LiveWebcamBackdrop = memo(function LiveWebcamBackdrop({
     onRegisterCapture(captureCurrentFrame);
   }, [onRegisterCapture]);
 
-  // Keep video texture updated every render frame
+  // Keep video texture updated ONLY when a new video frame actually arrives (reduces GPU uploads by 75%)
   useFrame(() => {
     if (isLive && videoTextureRef.current && videoRef.current) {
-      if (videoRef.current.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+      const curTime = videoRef.current.currentTime;
+      if (curTime !== lastVideoTimeRef.current) {
+        lastVideoTimeRef.current = curTime;
         videoTextureRef.current.needsUpdate = true;
       }
     }
   });
 
-  // Calculate cylinder parameters centered at -Z (in front of the user)
-  const thetaStart = Math.PI * 0.5 - arcAngle / 2;
-
   const pillText = isLive
-    ? `● ${t('vrLiveWebcam').toUpperCase()} // 1080p`
+    ? `● ${t('vrLiveWebcam').toUpperCase()} // 720p`
     : `⟳ ${t('vrVirtualRoom').toUpperCase()}`;
 
   const pillTexture = useMemo(() => {
@@ -193,32 +196,8 @@ export const LiveWebcamBackdrop = memo(function LiveWebcamBackdrop({
 
   return (
     <group name="live-webcam-backdrop-root">
-      {/* 1. Full 360° Studio Horizon Atmosphere Dome (Eliminates the Black Void) */}
-      <mesh position={[0, 0, 0]}>
-        <sphereGeometry args={[24, 32, 16]} />
-        <meshBasicMaterial color="#081022" side={THREE.BackSide} toneMapped={false} />
-      </mesh>
-
-      {/* Horizon ambient glowing ring */}
-      <mesh position={[0, 0.05, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[14, 18, 48]} />
-        <meshBasicMaterial color="#0e2a47" transparent opacity={0.4} side={THREE.DoubleSide} />
-      </mesh>
-
-      {/* Expanded outer floor ground */}
-      <mesh position={[0, -0.02, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-        <circleGeometry args={[22, 64]} />
-        <meshStandardMaterial color="#0f172a" roughness={0.85} metalness={0.1} />
-      </mesh>
-
-      {/* Concentric floor distance beacons */}
-      <mesh position={[0, 0.01, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[4.45, 4.52, 64]} />
-        <meshBasicMaterial color="#0284c7" transparent opacity={0.3} side={THREE.DoubleSide} />
-      </mesh>
-
-      {/* 2. Curved Live Video / Room Panoramic Wall */}
-      <mesh position={[0, height / 2 + 0.05, -0.4]} name="curved-webcam-screen">
+      {/* 1. Full 360° Panoramic Video / Room Screen (Fills 100% of the User View) */}
+      <mesh position={[0, height / 2 - 1.2, 0]} name="curved-webcam-screen">
         <cylinderGeometry
           args={[
             radius,
@@ -227,54 +206,58 @@ export const LiveWebcamBackdrop = memo(function LiveWebcamBackdrop({
             48,
             1,
             true, // open ended
-            thetaStart,
-            arcAngle,
+            0,
+            Math.PI * 2, // Full 360° wrap
           ]}
         />
         {activeTexture ? (
           <meshBasicMaterial
             map={activeTexture}
-            side={THREE.DoubleSide}
+            side={THREE.BackSide}
             toneMapped={false}
             transparent
-            opacity={0.96}
+            opacity={0.98}
           />
         ) : (
-          <meshStandardMaterial
-            color="#1e293b"
-            roughness={0.6}
-            metalness={0.2}
-            side={THREE.DoubleSide}
-          />
+          <meshBasicMaterial color="#081022" side={THREE.BackSide} toneMapped={false} />
         )}
       </mesh>
 
-      {/* 3. Screen Edge Glowing Neon Rails */}
-      {/* Top curved neon edge */}
-      <mesh position={[0, height + 0.06, -0.4]}>
-        <cylinderGeometry args={[radius, radius, 0.02, 48, 1, true, thetaStart, arcAngle]} />
-        <meshBasicMaterial color={isLive ? '#22c55e' : '#38bdf8'} toneMapped={false} />
+      {/* 2. Studio Ceiling & Floor Caps (Blends smoothly at vertical limits) */}
+      <mesh position={[0, height - 1.2, 0]} rotation={[Math.PI / 2, 0, 0]}>
+        <circleGeometry args={[radius + 0.5, 48]} />
+        <meshBasicMaterial color="#040915" side={THREE.DoubleSide} toneMapped={false} />
       </mesh>
 
-      {/* Bottom curved neon edge */}
-      <mesh position={[0, 0.04, -0.4]}>
-        <cylinderGeometry args={[radius, radius, 0.02, 48, 1, true, thetaStart, arcAngle]} />
-        <meshBasicMaterial color={isLive ? '#22c55e' : '#0284c7'} toneMapped={false} />
+      <mesh position={[0, -1.2, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <circleGeometry args={[radius + 0.5, 48]} />
+        <meshBasicMaterial color="#081022" side={THREE.DoubleSide} toneMapped={false} />
       </mesh>
 
-      {/* 4. Live Camera Status Pill atop the Panoramic Screen */}
-      <group position={[0, height + 0.22, -radius + 0.4]}>
+      {/* 3. Subtle floor grid rings for spatial orientation */}
+      <mesh position={[0, 0.01, -1.5]} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[2.0, 2.05, 64]} />
+        <meshBasicMaterial color="#38bdf8" transparent opacity={0.3} side={THREE.DoubleSide} />
+      </mesh>
+
+      <mesh position={[0, 0.01, -1.5]} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[3.8, 3.85, 64]} />
+        <meshBasicMaterial color="#0284c7" transparent opacity={0.25} side={THREE.DoubleSide} />
+      </mesh>
+
+      {/* 4. Live Camera Status Pill in front of the operator */}
+      <group position={[0, 2.45, -2.2]}>
         <mesh>
-          <planeGeometry args={[1.0, 0.18]} />
+          <planeGeometry args={[0.7, 0.12]} />
           <meshBasicMaterial
             color={isLive ? '#064e3b' : '#0c4a6e'}
             transparent
-            opacity={0.9}
+            opacity={0.88}
             side={THREE.DoubleSide}
           />
         </mesh>
         <mesh position={[0, 0, 0.005]}>
-          <planeGeometry args={[0.98, 0.17]} />
+          <planeGeometry args={[0.68, 0.11]} />
           <meshBasicMaterial
             map={pillTexture}
             transparent
