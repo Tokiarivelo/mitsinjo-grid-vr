@@ -102,5 +102,14 @@ describe('buildHouseCluster', () => {
     const trimBounds = cluster.trim.boundingBox!;
     // Chimney sits higher than wallHeight (1.15)
     expect(trimBounds.max.y).toBeGreaterThan(1.5);
+
+    // Windows layer contains front, attic, door and side window glass
+    cluster.windows.computeBoundingBox();
+    const winBounds = cluster.windows.boundingBox!;
+    expect(cluster.windows.getAttribute('position').count).toBeGreaterThan(0);
+    // Front window glass sits proud of front wall (depth / 2 = 1.6 / 2 = 0.8)
+    expect(winBounds.max.z).toBeGreaterThan(0.8);
+    // Attic window glass sits high up on the front gable
+    expect(winBounds.max.y).toBeGreaterThan(1.15);
   });
 });

@@ -81,40 +81,45 @@ function windowParts(h: HouseSpec): Part[] {
     const winH = h.wallHeight * 0.44;
     const winY = 0.12 + winH / 2 + 0.15;
     const doorH = h.wallHeight * 0.68;
+    const doorW = 0.44;
+    const lowerDoorH = doorH * 0.58;
+    const doorGlassH = doorH - lowerDoorH - 0.05;
+    const doorGlassW = doorW - 0.08;
+    const doorGlassY = 0.12 + lowerDoorH + 0.025 + doorGlassH / 2;
 
     // Front arched attic dormer window at the gable peak
     parts.push({
-      shape: { kind: 'box', size: [0.32, 0.24, 0.012] },
-      position: [0, h.wallHeight + 0.12 + h.roofHeight * 0.48, h.depth / 2 + 0.022],
+      shape: { kind: 'box', size: [0.32, 0.24, 0.016] },
+      position: [0, h.wallHeight + 0.12 + h.roofHeight * 0.48, h.depth / 2 + 0.02],
     });
 
     // Front door glass upper panels
     parts.push({
-      shape: { kind: 'box', size: [0.28, doorH * 0.36, 0.012] },
-      position: [0, 0.12 + doorH * 0.68, h.depth / 2 + 0.022],
+      shape: { kind: 'box', size: [doorGlassW, doorGlassH, 0.016] },
+      position: [0, doorGlassY, h.depth / 2 + 0.02],
     });
 
     // Front multi-pane sash windows flanking the entrance
     const frontX = h.width * 0.32;
     for (const side of [-1, 1]) {
       parts.push({
-        shape: { kind: 'box', size: [winW, winH, 0.012] },
-        position: [side * frontX, winY, h.depth / 2 + 0.022],
+        shape: { kind: 'box', size: [winW, winH, 0.016] },
+        position: [side * frontX, winY, h.depth / 2 + 0.02],
       });
     }
 
     // Side multi-pane windows
     for (const side of [-1, 1]) {
       parts.push({
-        shape: { kind: 'box', size: [0.012, winH, winW] },
-        position: [side * (h.width / 2 + 0.022), winY, 0],
+        shape: { kind: 'box', size: [0.016, winH, winW] },
+        position: [side * (h.width / 2 + 0.02), winY, 0],
       });
     }
 
     // Rear window
     parts.push({
-      shape: { kind: 'box', size: [winW, winH, 0.012] },
-      position: [0, winY, -h.depth / 2 - 0.022],
+      shape: { kind: 'box', size: [winW, winH, 0.016] },
+      position: [0, winY, -h.depth / 2 - 0.02],
     });
 
     return parts;
@@ -194,7 +199,10 @@ function trimParts(h: HouseSpec): Part[] {
     const doorW = 0.44;
     const doorH = h.wallHeight * 0.68;
     const doorY = 0.12 + doorH / 2;
-    const doorZ = h.depth / 2 + 0.015;
+    const border = 0.035;
+    const frameD = 0.024;
+    const wallFrontZ = h.depth / 2;
+    const frameZ = wallFrontZ + frameD / 2;
 
     // Foundation plinth band
     parts.push({
@@ -222,64 +230,221 @@ function trimParts(h: HouseSpec): Part[] {
       }
     );
 
-    // Arched attic dormer window surround & muntins
+    // Arched attic dormer window surround, sill & muntins
+    const atticW = 0.32;
+    const atticH = 0.24;
     const atticY = h.wallHeight + 0.12 + h.roofHeight * 0.48;
     parts.push(
-      { shape: { kind: 'box', size: [0.36, 0.28, 0.035] }, position: [0, atticY, doorZ] },
-      { shape: { kind: 'box', size: [0.3, 0.02, 0.045] }, position: [0, atticY, doorZ + 0.01] },
-      { shape: { kind: 'box', size: [0.02, 0.24, 0.045] }, position: [0, atticY, doorZ + 0.01] },
+      // Top header
       {
-        shape: { kind: 'box', size: [0.42, 0.03, 0.05] },
-        position: [0, atticY - 0.14, doorZ + 0.015],
-      }
-    );
-
-    // Front door frame & panel
-    parts.push(
+        shape: { kind: 'box', size: [atticW + border * 2, border, frameD] },
+        position: [0, atticY + atticH / 2 + border / 2, frameZ],
+      },
+      // Bottom rail
       {
-        shape: { kind: 'box', size: [doorW + 0.08, doorH + 0.04, 0.04] },
-        position: [0, doorY, doorZ],
+        shape: { kind: 'box', size: [atticW + border * 2, border, frameD] },
+        position: [0, atticY - atticH / 2 - border / 2, frameZ],
+      },
+      // Left jamb
+      {
+        shape: { kind: 'box', size: [border, atticH, frameD] },
+        position: [-atticW / 2 - border / 2, atticY, frameZ],
+      },
+      // Right jamb
+      {
+        shape: { kind: 'box', size: [border, atticH, frameD] },
+        position: [atticW / 2 + border / 2, atticY, frameZ],
+      },
+      // Projecting sill
+      {
+        shape: { kind: 'box', size: [atticW + border * 2 + 0.08, 0.035, frameD + 0.025] },
+        position: [0, atticY - atticH / 2 - border - 0.012, wallFrontZ + (frameD + 0.025) / 2],
+      },
+      // Cross muntins across attic glass
+      {
+        shape: { kind: 'box', size: [atticW, 0.018, 0.012] },
+        position: [0, atticY, wallFrontZ + 0.025],
       },
       {
-        shape: { kind: 'box', size: [0.02, 0.18, 0.03] },
-        position: [doorW * 0.35, doorY, doorZ + 0.02],
+        shape: { kind: 'box', size: [0.018, atticH, 0.012] },
+        position: [0, atticY, wallFrontZ + 0.025],
       }
     );
 
-    // Front multi-pane window frames & sills (flanking door)
+    // Front door frame, lower panel, handle & upper muntins
+    const lowerDoorH = doorH * 0.58;
+    const doorGlassH = doorH - lowerDoorH - 0.05;
+    const doorGlassW = doorW - 0.08;
+    const doorGlassY = 0.12 + lowerDoorH + 0.025 + doorGlassH / 2;
+    parts.push(
+      // Top lintel
+      {
+        shape: { kind: 'box', size: [doorW + border * 2, border, frameD] },
+        position: [0, doorY + doorH / 2 + border / 2, frameZ],
+      },
+      // Left door jamb
+      {
+        shape: { kind: 'box', size: [border, doorH, frameD] },
+        position: [-doorW / 2 - border / 2, doorY, frameZ],
+      },
+      // Right door jamb
+      {
+        shape: { kind: 'box', size: [border, doorH, frameD] },
+        position: [doorW / 2 + border / 2, doorY, frameZ],
+      },
+      // Lower solid wood door panel
+      {
+        shape: { kind: 'box', size: [doorW - 0.01, lowerDoorH, 0.02] },
+        position: [0, 0.12 + lowerDoorH / 2, wallFrontZ + 0.01],
+      },
+      // Center divider rail between lower door and upper window
+      {
+        shape: { kind: 'box', size: [doorW, 0.035, 0.025] },
+        position: [0, 0.12 + lowerDoorH, wallFrontZ + 0.015],
+      },
+      // Door handle
+      {
+        shape: { kind: 'box', size: [0.02, 0.12, 0.025] },
+        position: [doorW * 0.35, 0.12 + doorH * 0.48, wallFrontZ + 0.025],
+      },
+      // Cross muntins on door upper glass
+      {
+        shape: { kind: 'box', size: [doorGlassW, 0.015, 0.012] },
+        position: [0, doorGlassY, wallFrontZ + 0.025],
+      },
+      {
+        shape: { kind: 'box', size: [0.015, doorGlassH, 0.012] },
+        position: [0, doorGlassY, wallFrontZ + 0.025],
+      }
+    );
+
+    // Front multi-pane window frames, sills & muntins (flanking door)
     const frontX = h.width * 0.32;
     for (const side of [-1, 1]) {
       const fx = side * frontX;
       parts.push(
+        // Top header
         {
-          shape: { kind: 'box', size: [winW + 0.08, winH + 0.08, 0.04] },
-          position: [fx, winY, doorZ],
+          shape: { kind: 'box', size: [winW + border * 2, border, frameD] },
+          position: [fx, winY + winH / 2 + border / 2, frameZ],
+        },
+        // Bottom rail
+        {
+          shape: { kind: 'box', size: [winW + border * 2, border, frameD] },
+          position: [fx, winY - winH / 2 - border / 2, frameZ],
+        },
+        // Left jamb
+        {
+          shape: { kind: 'box', size: [border, winH, frameD] },
+          position: [fx - winW / 2 - border / 2, winY, frameZ],
+        },
+        // Right jamb
+        {
+          shape: { kind: 'box', size: [border, winH, frameD] },
+          position: [fx + winW / 2 + border / 2, winY, frameZ],
+        },
+        // Projecting window sill (appui de fenêtre)
+        {
+          shape: { kind: 'box', size: [winW + border * 2 + 0.08, 0.035, frameD + 0.025] },
+          position: [fx, winY - winH / 2 - border - 0.012, wallFrontZ + (frameD + 0.025) / 2],
+        },
+        // Cross muntins across the window opening
+        {
+          shape: { kind: 'box', size: [winW, 0.018, 0.012] },
+          position: [fx, winY, wallFrontZ + 0.025],
         },
         {
-          shape: { kind: 'box', size: [winW + 0.14, 0.035, 0.06] },
-          position: [fx, winY - winH / 2 - 0.02, doorZ + 0.015],
-        },
-        { shape: { kind: 'box', size: [winW, 0.02, 0.045] }, position: [fx, winY, doorZ + 0.01] },
-        { shape: { kind: 'box', size: [0.02, winH, 0.045] }, position: [fx, winY, doorZ + 0.01] }
+          shape: { kind: 'box', size: [0.018, winH, 0.012] },
+          position: [fx, winY, wallFrontZ + 0.025],
+        }
       );
     }
 
-    // Side multi-pane window frames & sills
+    // Side multi-pane window frames, sills & muntins
     for (const side of [-1, 1]) {
-      const sx = side * (h.width / 2 + 0.015);
+      const sideWallX = side * (h.width / 2);
+      const sideFrameX = sideWallX + side * (frameD / 2);
       parts.push(
-        { shape: { kind: 'box', size: [0.04, winH + 0.08, winW + 0.08] }, position: [sx, winY, 0] },
+        // Top header
         {
-          shape: { kind: 'box', size: [0.06, 0.035, winW + 0.14] },
-          position: [sx + side * 0.015, winY - winH / 2 - 0.02, 0],
+          shape: { kind: 'box', size: [frameD, border, winW + border * 2] },
+          position: [sideFrameX, winY + winH / 2 + border / 2, 0],
+        },
+        // Bottom rail
+        {
+          shape: { kind: 'box', size: [frameD, border, winW + border * 2] },
+          position: [sideFrameX, winY - winH / 2 - border / 2, 0],
+        },
+        // Front jamb
+        {
+          shape: { kind: 'box', size: [frameD, winH, border] },
+          position: [sideFrameX, winY, winW / 2 + border / 2],
+        },
+        // Back jamb
+        {
+          shape: { kind: 'box', size: [frameD, winH, border] },
+          position: [sideFrameX, winY, -winW / 2 - border / 2],
+        },
+        // Projecting sill
+        {
+          shape: { kind: 'box', size: [frameD + 0.025, 0.035, winW + border * 2 + 0.08] },
+          position: [
+            sideWallX + side * ((frameD + 0.025) / 2),
+            winY - winH / 2 - border - 0.012,
+            0,
+          ],
+        },
+        // Cross muntins
+        {
+          shape: { kind: 'box', size: [0.012, 0.018, winW] },
+          position: [sideWallX + side * 0.025, winY, 0],
         },
         {
-          shape: { kind: 'box', size: [0.045, 0.02, winW] },
-          position: [sx + side * 0.01, winY, 0],
-        },
-        { shape: { kind: 'box', size: [0.045, winH, 0.02] }, position: [sx + side * 0.01, winY, 0] }
+          shape: { kind: 'box', size: [0.012, winH, 0.018] },
+          position: [sideWallX + side * 0.025, winY, 0],
+        }
       );
     }
+
+    // Rear multi-pane window frames, sills & muntins
+    const wallBackZ = -h.depth / 2;
+    const backFrameZ = wallBackZ - frameD / 2;
+    parts.push(
+      // Top header
+      {
+        shape: { kind: 'box', size: [winW + border * 2, border, frameD] },
+        position: [0, winY + winH / 2 + border / 2, backFrameZ],
+      },
+      // Bottom rail
+      {
+        shape: { kind: 'box', size: [winW + border * 2, border, frameD] },
+        position: [0, winY - winH / 2 - border / 2, backFrameZ],
+      },
+      // Left jamb
+      {
+        shape: { kind: 'box', size: [border, winH, frameD] },
+        position: [-winW / 2 - border / 2, winY, backFrameZ],
+      },
+      // Right jamb
+      {
+        shape: { kind: 'box', size: [border, winH, frameD] },
+        position: [winW / 2 + border / 2, winY, backFrameZ],
+      },
+      // Projecting sill
+      {
+        shape: { kind: 'box', size: [winW + border * 2 + 0.08, 0.035, frameD + 0.025] },
+        position: [0, winY - winH / 2 - border - 0.012, wallBackZ - (frameD + 0.025) / 2],
+      },
+      // Cross muntins
+      {
+        shape: { kind: 'box', size: [winW, 0.018, 0.012] },
+        position: [0, winY, wallBackZ - 0.025],
+      },
+      {
+        shape: { kind: 'box', size: [0.018, winH, 0.012] },
+        position: [0, winY, wallBackZ - 0.025],
+      }
+    );
 
     return parts;
   }

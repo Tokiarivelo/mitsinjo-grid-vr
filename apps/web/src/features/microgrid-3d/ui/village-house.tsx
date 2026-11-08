@@ -106,7 +106,7 @@ export function HouseCluster({
   );
   const isLit = windowGlow > 0;
   const glassColor = useMemo(
-    () => (isLit ? new THREE.Color('#ffe0a0') : new THREE.Color(DARK_GLASS)),
+    () => (isLit ? new THREE.Color('#ffe8a3') : new THREE.Color(DARK_GLASS)),
     [isLit]
   );
 
@@ -115,15 +115,16 @@ export function HouseCluster({
       <mesh geometry={geo.trim} material={TRIM_MAT} receiveShadow castShadow />
       <mesh geometry={geo.walls} material={WALL_MAT} castShadow receiveShadow />
       <mesh geometry={geo.roofs} material={roofMaterial(roofFinish)} castShadow receiveShadow />
-      {/* Windows (gentle warm interior light at night when powered, reflective dark glass when daytime/unpowered) */}
+      {/* Windows (warm interior incandescent light at night when powered, reflective dark glass when daytime/unpowered) */}
       <mesh geometry={geo.windows}>
         <meshStandardMaterial
           color={glassColor}
           emissive={isLit ? '#ff9933' : '#000000'}
-          emissiveIntensity={isLit ? 0.9 * windowGlow : 0}
-          roughness={isLit ? 0.25 : 0.08}
-          metalness={isLit ? 0.1 : 0.88}
-          envMapIntensity={isLit ? 0.8 : 2.2}
+          emissiveIntensity={isLit ? 1.8 * windowGlow : 0}
+          toneMapped={!isLit}
+          roughness={isLit ? 0.2 : 0.08}
+          metalness={isLit ? 0.05 : 0.88}
+          envMapIntensity={isLit ? 0.6 : 2.2}
         />
       </mesh>
       {geo.verandas && (

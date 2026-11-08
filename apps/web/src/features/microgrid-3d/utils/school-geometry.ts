@@ -385,26 +385,48 @@ export function createSchoolGeometry(): SchoolGeometries {
     // Multi-pane Windows on Upper Story (3 windows per wing front; staged in front of wall at WD/2 + 0.06)
     const winX = [wx - 0.7, wx, wx + 0.7];
     const upWallZ = WD / 2 + 0.06;
+    const sBorder = 0.035;
+    const sFrameD = 0.024;
     for (const x of winX) {
-      // Window glass pane (0.015m proud of wall, 0.01m thickness)
+      // Window glass pane (0.015m proud of wall, 0.014m thickness)
       glassParts.push({
-        shape: { kind: 'box', size: [0.38, 0.52, 0.01] },
-        position: [x, upCenterY, upWallZ + 0.015],
+        shape: { kind: 'box', size: [0.38, 0.52, 0.014] },
+        position: [x, upCenterY, upWallZ + 0.018],
       });
       woodParts.push(
-        // Window outer frame (flush to wall, framing the glass)
+        // Top header
         {
-          shape: { kind: 'box', size: [0.44, 0.58, 0.04] },
-          position: [x, upCenterY, upWallZ + 0.02],
+          shape: { kind: 'box', size: [0.38 + sBorder * 2, sBorder, sFrameD] },
+          position: [x, upCenterY + 0.26 + sBorder / 2, upWallZ + sFrameD / 2],
+        },
+        // Bottom rail
+        {
+          shape: { kind: 'box', size: [0.38 + sBorder * 2, sBorder, sFrameD] },
+          position: [x, upCenterY - 0.26 - sBorder / 2, upWallZ + sFrameD / 2],
+        },
+        // Left jamb
+        {
+          shape: { kind: 'box', size: [sBorder, 0.52, sFrameD] },
+          position: [x - 0.19 - sBorder / 2, upCenterY, upWallZ + sFrameD / 2],
+        },
+        // Right jamb
+        {
+          shape: { kind: 'box', size: [sBorder, 0.52, sFrameD] },
+          position: [x + 0.19 + sBorder / 2, upCenterY, upWallZ + sFrameD / 2],
+        },
+        // Projecting sill
+        {
+          shape: { kind: 'box', size: [0.52, 0.035, sFrameD + 0.02] },
+          position: [x, upCenterY - 0.26 - sBorder - 0.012, upWallZ + (sFrameD + 0.02) / 2],
         },
         // Window cross muntins
         {
-          shape: { kind: 'box', size: [0.38, 0.02, 0.015] },
-          position: [x, upCenterY, upWallZ + 0.022],
+          shape: { kind: 'box', size: [0.38, 0.018, 0.012] },
+          position: [x, upCenterY, upWallZ + 0.024],
         },
         {
-          shape: { kind: 'box', size: [0.02, 0.52, 0.015] },
-          position: [x, upCenterY, upWallZ + 0.022],
+          shape: { kind: 'box', size: [0.018, 0.52, 0.012] },
+          position: [x, upCenterY, upWallZ + 0.024],
         }
       );
     }
@@ -414,21 +436,43 @@ export function createSchoolGeometry(): SchoolGeometries {
     const lowWallZ = WD / 2 + 0.06;
     for (const x of lowWinX) {
       glassParts.push({
-        shape: { kind: 'box', size: [0.36, 0.48, 0.01] },
-        position: [x, H1 / 2, lowWallZ + 0.015],
+        shape: { kind: 'box', size: [0.36, 0.48, 0.014] },
+        position: [x, H1 / 2, lowWallZ + 0.018],
       });
       woodParts.push(
+        // Top header
         {
-          shape: { kind: 'box', size: [0.42, 0.54, 0.04] },
-          position: [x, H1 / 2, lowWallZ + 0.02],
+          shape: { kind: 'box', size: [0.36 + sBorder * 2, sBorder, sFrameD] },
+          position: [x, H1 / 2 + 0.24 + sBorder / 2, lowWallZ + sFrameD / 2],
+        },
+        // Bottom rail
+        {
+          shape: { kind: 'box', size: [0.36 + sBorder * 2, sBorder, sFrameD] },
+          position: [x, H1 / 2 - 0.24 - sBorder / 2, lowWallZ + sFrameD / 2],
+        },
+        // Left jamb
+        {
+          shape: { kind: 'box', size: [sBorder, 0.48, sFrameD] },
+          position: [x - 0.18 - sBorder / 2, H1 / 2, lowWallZ + sFrameD / 2],
+        },
+        // Right jamb
+        {
+          shape: { kind: 'box', size: [sBorder, 0.48, sFrameD] },
+          position: [x + 0.18 + sBorder / 2, H1 / 2, lowWallZ + sFrameD / 2],
+        },
+        // Projecting sill
+        {
+          shape: { kind: 'box', size: [0.5, 0.035, sFrameD + 0.02] },
+          position: [x, H1 / 2 - 0.24 - sBorder - 0.012, lowWallZ + (sFrameD + 0.02) / 2],
+        },
+        // Window cross muntins
+        {
+          shape: { kind: 'box', size: [0.36, 0.018, 0.012] },
+          position: [x, H1 / 2, lowWallZ + 0.024],
         },
         {
-          shape: { kind: 'box', size: [0.36, 0.02, 0.015] },
-          position: [x, H1 / 2, lowWallZ + 0.022],
-        },
-        {
-          shape: { kind: 'box', size: [0.02, 0.48, 0.015] },
-          position: [x, H1 / 2, lowWallZ + 0.022],
+          shape: { kind: 'box', size: [0.018, 0.48, 0.012] },
+          position: [x, H1 / 2, lowWallZ + 0.024],
         }
       );
     }
@@ -437,20 +481,47 @@ export function createSchoolGeometry(): SchoolGeometries {
   // Windows on Central Pavilion Upper Story (wall front at CD/2 + 0.07)
   const cWinX = [-0.65, 0.65];
   const cWallZ = CD / 2 + 0.07;
+  const cBorder = 0.035;
+  const cFrameD = 0.024;
   for (const x of cWinX) {
     glassParts.push({
-      shape: { kind: 'box', size: [0.4, 0.55, 0.01] },
-      position: [x, upCenterY, cWallZ + 0.015],
+      shape: { kind: 'box', size: [0.4, 0.55, 0.014] },
+      position: [x, upCenterY, cWallZ + 0.018],
     });
     woodParts.push(
-      { shape: { kind: 'box', size: [0.46, 0.62, 0.04] }, position: [x, upCenterY, cWallZ + 0.02] },
+      // Top header
       {
-        shape: { kind: 'box', size: [0.4, 0.02, 0.015] },
-        position: [x, upCenterY, cWallZ + 0.022],
+        shape: { kind: 'box', size: [0.4 + cBorder * 2, cBorder, cFrameD] },
+        position: [x, upCenterY + 0.275 + cBorder / 2, cWallZ + cFrameD / 2],
+      },
+      // Bottom rail
+      {
+        shape: { kind: 'box', size: [0.4 + cBorder * 2, cBorder, cFrameD] },
+        position: [x, upCenterY - 0.275 - cBorder / 2, cWallZ + cFrameD / 2],
+      },
+      // Left jamb
+      {
+        shape: { kind: 'box', size: [cBorder, 0.55, cFrameD] },
+        position: [x - 0.2 - cBorder / 2, upCenterY, cWallZ + cFrameD / 2],
+      },
+      // Right jamb
+      {
+        shape: { kind: 'box', size: [cBorder, 0.55, cFrameD] },
+        position: [x + 0.2 + cBorder / 2, upCenterY, cWallZ + cFrameD / 2],
+      },
+      // Projecting sill
+      {
+        shape: { kind: 'box', size: [0.54, 0.035, cFrameD + 0.02] },
+        position: [x, upCenterY - 0.275 - cBorder - 0.012, cWallZ + (cFrameD + 0.02) / 2],
+      },
+      // Window cross muntins
+      {
+        shape: { kind: 'box', size: [0.4, 0.018, 0.012] },
+        position: [x, upCenterY, cWallZ + 0.024],
       },
       {
-        shape: { kind: 'box', size: [0.02, 0.55, 0.015] },
-        position: [x, upCenterY, cWallZ + 0.022],
+        shape: { kind: 'box', size: [0.018, 0.55, 0.012] },
+        position: [x, upCenterY, cWallZ + 0.024],
       }
     );
   }

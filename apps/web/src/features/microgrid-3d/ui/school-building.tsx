@@ -49,15 +49,16 @@ export function SchoolBuilding({ glow = 0 }: SchoolBuildingProps) {
         <meshStandardMaterial color="#b88a5d" map={roofTexture} roughness={0.68} metalness={0.15} />
       </mesh>
 
-      {/* 6. Multi-pane classroom windows (gentle warm interior light at night when powered, dark reflective when unpowered/daytime) */}
+      {/* 6. Multi-pane classroom windows (warm interior incandescent light at night when powered, dark reflective when unpowered/daytime) */}
       <mesh geometry={geos.glass}>
         <meshStandardMaterial
           color={glassColor}
           emissive={isLit ? '#ff9933' : '#000000'}
-          emissiveIntensity={isLit ? 0.9 * glow : 0}
-          roughness={isLit ? 0.25 : 0.08}
-          metalness={isLit ? 0.1 : 0.92}
-          envMapIntensity={isLit ? 0.8 : 2.5}
+          emissiveIntensity={isLit ? 1.8 * glow : 0}
+          toneMapped={!isLit}
+          roughness={isLit ? 0.2 : 0.08}
+          metalness={isLit ? 0.05 : 0.92}
+          envMapIntensity={isLit ? 0.6 : 2.5}
         />
       </mesh>
 

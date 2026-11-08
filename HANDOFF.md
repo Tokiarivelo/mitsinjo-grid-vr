@@ -4,19 +4,14 @@
 
 ## Current state
 
-- Village Sectors Spaced Out (`site-positions.ts`, `landscape.ts`):
-  - Spaced out all sectors (households at `[-9, 0, 11]`, market at `[7, 0, 10]`, school at `[2.5, 0, -13]`, clinic at `[12.5, 0, -0.5]`, water at `[-10.5, 0, 0.5]`, industry at `[15.5, 0, -11.5]`, solar at `[-14, 0, -11.5]`).
-  - Expanded flat terrain plateau `FLAT_RADIUS` to 25 and `HILL_RADIUS` to 52; rerouted access paths.
-- School Roof & Doors Fixed (`school-geometry.ts`):
-  - Wing roofs now perched on top of 2nd floor walls (`y = 2.45m` to ridge `3.10m`), completely clear of 2nd floor windows and outer crow-stepped parapets.
-  - Entrance porch canopy stops flush with exterior front wall (`z = 1.46m`), removing interior penetration.
-  - Staged central and wing red entrance doors proud of yellow walls with wood surrounds, eliminating door z-fighting/flicker.
-- Night/Dusk Dynamic Lighting Across All Sectors (`buildings.tsx`, `village-house.tsx`, `school-building.tsx`, `clinic-building.tsx`, `building-bodies.tsx`):
-  - Converted cottage and eco-pavilion windows from thin 2D planes to solid 3D glass boxes (`house-geometry.ts`).
-  - Lighting triggers only when darkness sets in (`lampGlow > 0.45`, dusk/twilight to night); 0 in broad daylight.
-  - Powered sectors (`servedKw > 0.05` and not unserved) glow with soft warm incandescent light and gentle doorstep illumination.
-  - Unpowered sectors (cut, délesté, unserved, on fire) remain completely dark.
-- Verification: 57 test files / 352 unit tests passing; zero TypeScript errors (`tsc --noEmit`).
+- Fixed Cottage & School Window Illumination (`house-geometry.ts`, `school-geometry.ts`):
+  - Identified root cause of dark windows: solid block trim parts (`TRIM_MAT`) previously sealed the window openings, completely occluding the glass.
+  - Replaced solid trim boxes with architectural open casing frames (top header, bottom rail, left/right jambs, projecting sills, and cross muntins).
+  - Openings now expose the glass panes across front, attic, side, back, and door panels.
+- Enhanced Night Window Incandescent Glow (`village-house.tsx`, `school-building.tsx`, `clinic-building.tsx`):
+  - Set `toneMapped={!isLit}` and bumped `emissiveIntensity={1.8 * glow}` so glowing window glass bypasses ACESFilmic clamping and shines brightly into the bloom pass at night.
+  - Off/unpowered windows remain dark, reflective glass with AA-clean trim frames.
+- Verification: 57 test files / 352 unit tests passing in `src/features/microgrid-3d`; zero TypeScript errors (`tsc --noEmit`).
 
 ## Next
 
@@ -24,12 +19,9 @@
 
 ## Files touched
 
-- `apps/web/src/features/microgrid-3d/utils/site-positions.ts`
-- `apps/web/src/features/microgrid-3d/utils/landscape.ts`
-- `apps/web/src/features/microgrid-3d/utils/school-geometry.ts`
 - `apps/web/src/features/microgrid-3d/utils/house-geometry.ts`
-- `apps/web/src/features/microgrid-3d/ui/buildings.tsx`
+- `apps/web/src/features/microgrid-3d/utils/school-geometry.ts`
 - `apps/web/src/features/microgrid-3d/ui/village-house.tsx`
 - `apps/web/src/features/microgrid-3d/ui/school-building.tsx`
 - `apps/web/src/features/microgrid-3d/ui/clinic-building.tsx`
-- `apps/web/src/features/microgrid-3d/ui/building-bodies.tsx`
+- `apps/web/src/features/microgrid-3d/utils/__tests__/house-geometry.test.ts`

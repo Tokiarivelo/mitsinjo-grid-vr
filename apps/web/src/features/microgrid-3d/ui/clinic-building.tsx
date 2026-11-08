@@ -59,11 +59,12 @@ export function ClinicBuilding({ glow }: ClinicBuildingProps) {
         <meshStandardMaterial
           color={glassColor}
           emissive={isLit ? glassColor : '#000000'}
-          emissiveIntensity={isLit ? 0.9 * glow : 0}
+          emissiveIntensity={isLit ? 1.6 * glow : 0}
+          toneMapped={!isLit}
           transparent
-          opacity={isLit ? 0.9 : 0.72}
+          opacity={isLit ? 0.92 : 0.72}
           roughness={isLit ? 0.12 : 0.18}
-          metalness={isLit ? 0.2 : 0.85}
+          metalness={isLit ? 0.15 : 0.85}
         />
       </mesh>
 
