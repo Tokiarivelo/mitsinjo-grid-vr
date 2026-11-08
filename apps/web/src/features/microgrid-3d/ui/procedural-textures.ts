@@ -206,6 +206,30 @@ export function timberSlatTexture(): THREE.Texture {
   });
 }
 
+/** Architectural horizontal timber battens (cedar / honey slats with dark shadow gaps). */
+export function horizontalTimberSlatTexture(): THREE.Texture {
+  return make('horizontal-timber-slat', 128, 128, (g) => {
+    // Warm honey / golden cedar base
+    g.fillStyle = '#be8347';
+    g.fillRect(0, 0, 128, 128);
+    // Horizontal wood grain fibers
+    const rand = mulberry32(0x9a3e1);
+    for (let y = 0; y < 128; y++) {
+      const v = 0.92 + 0.16 * rand();
+      g.fillStyle = `rgba(0,0,0,${0.08 * (1 - v)})`;
+      g.fillRect(0, y, 128, 1);
+    }
+    // Horizontal shadow joints every 16px (slats of height 14px, gap of 2px)
+    for (let y = 0; y < 128; y += 16) {
+      g.fillStyle = '#261b12';
+      g.fillRect(0, y, 128, 2);
+      // Highlight on the top edge of next slat
+      g.fillStyle = 'rgba(255,230,190,0.22)';
+      g.fillRect(0, y + 2, 128, 1);
+    }
+  });
+}
+
 /** BIPV full-roof solar photovoltaic glass tiles for modern eco-pavilions. */
 export function bipvRoofTexture(): THREE.Texture {
   return make('bipv-roof', 128, 128, (g) => {

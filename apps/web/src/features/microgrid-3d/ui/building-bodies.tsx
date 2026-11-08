@@ -10,6 +10,7 @@ import { HouseCluster, VillageHouse, windowColor } from './village-house';
 import type { HouseSpec } from '../utils/house-geometry';
 import { stripeTexture } from './procedural-textures';
 import { UNLIT_BULB_HEX } from '../utils/scene-palette';
+import { ClinicBuilding } from './clinic-building';
 
 /**
  * Building meshes per sector (look only). Each body gets `glow` (0..1), the window/lamp
@@ -25,64 +26,10 @@ const STEEL = new THREE.MeshStandardMaterial({
   metalness: 0.75,
   roughness: 0.35,
 });
-const CLINIC_RED = '#d63a3a';
 
 // ---------------- Clinic ----------------
-/** Two posts + white board, one geometry. */
-const SIGN_BOARD = mergeParts([
-  { shape: { kind: 'box', size: [0.06, 1.4, 0.06] }, position: [-0.38, 0.7, 0] },
-  { shape: { kind: 'box', size: [0.06, 1.4, 0.06] }, position: [0.38, 0.7, 0] },
-  { shape: { kind: 'box', size: [0.95, 0.95, 0.06] }, position: [0, 1.45, 0.02] },
-]);
-
-const crossCache = new Map<string, THREE.BufferGeometry>();
-/** Red cross (two crossed planes) as one geometry, cached per size/position. */
-function crossGeometry(len: number, bar: number, at: [number, number, number]) {
-  const key = `${len}:${bar}:${at.join(',')}`;
-  let g = crossCache.get(key);
-  if (!g) {
-    g = mergeParts([
-      { shape: { kind: 'plane', size: [len, bar] }, position: at },
-      { shape: { kind: 'plane', size: [bar, len] }, position: at },
-    ]);
-    crossCache.set(key, g);
-  }
-  return g;
-}
-
 function ClinicBody({ glow }: BodyProps) {
-  return (
-    <group name="health-clinic-mesh">
-      <VillageHouse
-        width={4.4}
-        depth={2.8}
-        wallHeight={1.75}
-        roofHeight={1.1}
-        wallColor="#f6f7f3"
-        roofColor="#1a2530"
-        roofStyle="gable"
-        roofFinish="bipv"
-        slatCladding
-        windowGlow={glow}
-        windowsPerSide={3}
-        deckFurniture
-        position={[0, 0, -0.4]}
-      />
-      {/* Red-cross sign on two posts, angled to the camera */}
-      <group position={[-2.6, 0, 1.6]} rotation={[0, 0.45, 0]}>
-        <mesh geometry={SIGN_BOARD} castShadow>
-          <meshStandardMaterial color="#f7f7f5" roughness={0.5} />
-        </mesh>
-        <mesh geometry={crossGeometry(0.66, 0.2, [0, 1.45, 0.06])}>
-          <meshBasicMaterial color={CLINIC_RED} />
-        </mesh>
-      </group>
-      {/* Red cross on the front wall above entrance */}
-      <mesh geometry={crossGeometry(0.42, 0.13, [-0.08, 1.65, 1.02])}>
-        <meshBasicMaterial color={CLINIC_RED} />
-      </mesh>
-    </group>
-  );
+  return <ClinicBuilding glow={glow} />;
 }
 
 // ---------------- Water station ----------------
@@ -467,7 +414,7 @@ export function BuildingBody({ id, glow }: { id: SectorId; glow: number }) {
 
 /** Ring radius and status-beacon height per sector body. */
 export const BODY_LAYOUT: Record<SectorId, { ringInner: number; ledY: number }> = {
-  health: { ringInner: 3.4, ledY: 3.4 },
+  health: { ringInner: 3.8, ledY: 3.95 },
   water: { ringInner: 2.6, ledY: 6.0 },
   school: { ringInner: 4.2, ledY: 3.4 },
   households: { ringInner: 3.9, ledY: 2.6 },

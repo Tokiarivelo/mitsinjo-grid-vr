@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import {
   corrugatedTexture,
+  horizontalTimberSlatTexture,
   mulberry32,
   paddyTexture,
   redEarthTexture,
@@ -18,7 +19,12 @@ describe('procedural textures (M12-T1)', () => {
   });
 
   it('each texture is cached, repeat-wrapped and sRGB', () => {
-    for (const make of [corrugatedTexture, redEarthTexture, paddyTexture]) {
+    for (const make of [
+      corrugatedTexture,
+      redEarthTexture,
+      paddyTexture,
+      horizontalTimberSlatTexture,
+    ]) {
       const tex = make();
       expect(make()).toBe(tex);
       expect(tex.wrapS).toBe(THREE.RepeatWrapping);
