@@ -166,6 +166,37 @@ export function VillageEditorPage() {
     }
   };
 
+  const captureLiveOrSample = async () => {
+    if (typeof navigator !== 'undefined' && navigator.mediaDevices?.getUserMedia) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'environment' },
+        });
+        const video = document.createElement('video');
+        video.srcObject = stream;
+        video.playsInline = true;
+        await video.play();
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth || 1280;
+        canvas.height = video.videoHeight || 720;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          stream.getTracks().forEach((track) => track.stop());
+          const capturedUrl = canvas.toDataURL('image/jpeg', 0.85);
+          if (capturedUrl && capturedUrl.length > 100) {
+            setImageUrl(capturedUrl);
+            return;
+          }
+        }
+        stream.getTracks().forEach((track) => track.stop());
+      } catch {
+        // Fallback to sample photo if webcam denied, unavailable, or in test
+      }
+    }
+    await loadSample();
+  };
+
   const onDrop = (e: DragEvent<HTMLElement>) => {
     e.preventDefault();
     setDragging(false);
@@ -264,7 +295,7 @@ export function VillageEditorPage() {
           isScanning={vision.status === 'loading' || vision.status === 'refining'}
           onTriggerScan={() => {
             if (!imageUrl) {
-              void loadSample();
+              void captureLiveOrSample();
             } else {
               void vision.retry();
             }

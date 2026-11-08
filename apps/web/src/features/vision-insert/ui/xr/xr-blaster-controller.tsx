@@ -1,9 +1,10 @@
 'use client';
 
-import { memo, useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { useFrame, useThree } from '@react-three/fiber';
 import type { SpatialTarget } from './spatial-projection';
+import { playLaserShootSound, playTargetHitSound } from './xr-audio-fx';
 
 export interface XRBlasterControllerProps {
   targets: SpatialTarget[];
@@ -85,6 +86,10 @@ export const XRBlasterController = memo(function XRBlasterController({
           },
         ]);
 
+        // Play laser blast and impact sounds
+        playLaserShootSound();
+        playTargetHitSound();
+
         // Haptic feedback
         try {
           const session = gl.xr.getSession();
@@ -105,6 +110,30 @@ export const XRBlasterController = memo(function XRBlasterController({
     };
   }, [gl, camera, targets, materializedIds, onShootTarget]);
 
+  // Real-time Aiming Laser Pointer Beam in WebXR
+  const pointerObject = useMemo(() => {
+    const geo = new THREE.BufferGeometry();
+    const positions = new Float32Array([0, 0, 0, 0, 0, -2.5]);
+    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    const mat = new THREE.LineBasicMaterial({
+      color: '#38bdf8',
+      transparent: true,
+      opacity: 0.65,
+    });
+    const line = new THREE.Line(geo, mat);
+    line.visible = false;
+    return line;
+  }, []);
+
+  const pointerPipRef = useRef<THREE.Mesh>(null);
+
+  useEffect(() => {
+    return () => {
+      pointerObject.geometry.dispose();
+      (pointerObject.material as THREE.Material).dispose();
+    };
+  }, [pointerObject]);
+
   // Frame update for blaster projectile animations & continuous hover tracking
   useFrame((_, delta) => {
     // 1. Advance and prune active blasts
@@ -116,17 +145,22 @@ export const XRBlasterController = memo(function XRBlasterController({
       );
     }
 
-    // 2. Track hover target in WebXR
+    // 2. Track hover target and update aiming beam in WebXR
     if (gl?.xr?.isPresenting) {
       const controller = gl.xr.getController(0);
       const raycaster = new THREE.Raycaster();
       const tempMatrix = new THREE.Matrix4();
       tempMatrix.identity().extractRotation(controller.matrixWorld);
-      raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
-      raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix).normalize();
+      const origin = new THREE.Vector3().setFromMatrixPosition(controller.matrixWorld);
+      const direction = new THREE.Vector3(0, 0, -1).applyMatrix4(tempMatrix).normalize();
+
+      raycaster.ray.origin.copy(origin);
+      raycaster.ray.direction.copy(direction);
+      if (camera) raycaster.camera = camera;
 
       let currentHover: string | null = null;
       let minDist = Infinity;
+      const hitEndpoint = origin.clone().addScaledVector(direction, 2.5);
 
       for (const t of targets) {
         const targetPos = new THREE.Vector3(...t.position);
@@ -135,6 +169,7 @@ export const XRBlasterController = memo(function XRBlasterController({
         if (dist <= radius && dist < minDist) {
           minDist = dist;
           currentHover = t.id;
+          hitEndpoint.copy(targetPos);
         }
       }
 
@@ -142,11 +177,40 @@ export const XRBlasterController = memo(function XRBlasterController({
         hoveredRef.current = currentHover;
         onHoverTarget(currentHover);
       }
+
+      // Update pointing laser line and targeting reticle pip
+      pointerObject.visible = true;
+      const attr = pointerObject.geometry.attributes.position as THREE.BufferAttribute | undefined;
+      if (attr) {
+        attr.setXYZ(0, origin.x, origin.y, origin.z);
+        attr.setXYZ(1, hitEndpoint.x, hitEndpoint.y, hitEndpoint.z);
+        attr.needsUpdate = true;
+      }
+      const beamColor = currentHover ? '#f59e0b' : '#38bdf8';
+      (pointerObject.material as THREE.LineBasicMaterial).color.set(beamColor);
+
+      if (pointerPipRef.current) {
+        pointerPipRef.current.visible = true;
+        pointerPipRef.current.position.copy(hitEndpoint);
+        (pointerPipRef.current.material as THREE.MeshBasicMaterial).color.set(beamColor);
+      }
+    } else {
+      pointerObject.visible = false;
+      if (pointerPipRef.current) {
+        pointerPipRef.current.visible = false;
+      }
     }
   });
 
   return (
     <group name="xr-blaster-effects">
+      {/* Real-time Aiming Laser Beam & Reticle Dot */}
+      <primitive object={pointerObject} />
+      <mesh ref={pointerPipRef} visible={false}>
+        <sphereGeometry args={[0.015, 12, 12]} />
+        <meshBasicMaterial color="#38bdf8" />
+      </mesh>
+
       {/* Dynamic Laser Projectiles & Impact Bursts */}
       {blasts.map((b) => {
         const curPos = new THREE.Vector3().lerpVectors(

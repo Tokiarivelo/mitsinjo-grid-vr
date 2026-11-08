@@ -88,9 +88,9 @@ describe('useApplianceDraft (PV-T11)', () => {
     expect(result.current.draft.sector).toBe('market');
     expect(result.current.draft.feederAuto).toBe(true);
     // A building centre snaps out of its footprint.
-    act(() => result.current.setPosition({ x: -8, z: 2 }));
+    act(() => result.current.setPosition({ x: -10.5, z: 0.5 }));
     const snapped = result.current.draft.position!;
-    expect(Math.hypot(snapped.x + 8, snapped.z - 2)).toBeGreaterThanOrEqual(3.9 - 1e-9);
+    expect(Math.hypot(snapped.x + 10.5, snapped.z - 0.5)).toBeGreaterThanOrEqual(3.9 - 1e-9);
     expect(result.current.draft.sector).toBe('water');
     // An explicit feeder sticks when the spot moves; Auto restores the nearest.
     act(() => result.current.setSector('water'));

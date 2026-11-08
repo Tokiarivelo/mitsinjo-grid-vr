@@ -6,6 +6,7 @@ import { useFrame } from '@react-three/fiber';
 import { Billboard } from '@react-three/drei';
 import { useTranslations } from '@/lib/i18n';
 import { getSpatialAirButtonTexture } from './spatial-air-button-texture';
+import { playScanRadarSound } from './xr-audio-fx';
 
 export interface SpatialAirButtonProps {
   status: 'idle' | 'scanning' | 'detected';
@@ -110,6 +111,7 @@ export const SpatialAirButton = memo(function SpatialAirButton({
         }}
         onClick={(e) => {
           e.stopPropagation();
+          playScanRadarSound();
           onTriggerScan();
         }}
       >

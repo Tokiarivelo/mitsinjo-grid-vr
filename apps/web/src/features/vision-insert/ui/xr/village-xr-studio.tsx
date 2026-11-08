@@ -13,6 +13,7 @@ import { SpatialAirButton } from './spatial-air-button';
 import { HoloDetectionTarget } from './holo-detection-target';
 import { SpawnedObject3D } from './spawned-object-3d';
 import { XRBlasterController } from './xr-blaster-controller';
+import { playGridConnectSound, playGridDisconnectSound } from './xr-audio-fx';
 
 export interface VillageXRStudioProps {
   detections: ApplianceDetection[];
@@ -81,9 +82,11 @@ export const VillageXRStudio = memo(function VillageXRStudio({
 
       if (isConnected) {
         // Disconnect from microgrid
+        playGridDisconnectSound();
         remove(applianceId);
       } else {
         // Connect to microgrid with catalog defaults
+        playGridConnectSound();
         const title = localLabel(target.detection, locale) || target.detection.label;
         const draft = aiDraft(target.detection, title);
         const appliance = toAppliance(applianceId, draft);
