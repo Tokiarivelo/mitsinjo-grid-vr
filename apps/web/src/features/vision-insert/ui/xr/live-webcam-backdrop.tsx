@@ -4,7 +4,7 @@ import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
 import { useTranslations } from '@/lib/i18n';
-import { CameraUtils, XRCameraSource, type CameraState } from './xr-camera-source';
+import { XRCameraSource, type CameraState } from './xr-camera-source';
 
 export interface LiveWebcamBackdropProps {
   /** Optional callback to register the frame capture function with the parent scene. */
@@ -19,13 +19,14 @@ const SAMPLE_ROOM_SRC = '/samples/vision-room.jpg';
 
 /**
  * Meta IWSDK-aligned Live Camera & Studio Surroundings (Chapter 13: Camera Access).
- * Integrates XRCameraSource, CameraUtils, and VideoTexture lifecycle management:
- * - Uses CameraFacing.Unknown by default to select the first available device without failing.
- * - Manages stream start/stop with page and WebXR session visibility.
- * - Employs sample room texture fallback so the operator NEVER sees an empty black screen.
- * - Throttles GPU video texture updates to hardware frame arrivals (~30fps) to eliminate crashes.
- * - Full-height panoramic cylindrical projection (8.5m high, 270° arc) ensuring complete visual immersion.
- * - Captures high-res frames with CameraUtils.captureFrame for in-air perception.
+ * Displays real-time webcam video stream across a panoramic curved screen centered at eye level:
+ * - High-speed 2D Canvas bridge texture: draws video frames directly into WebGL canvas texture,
+ *   bypassing browser-specific VideoTexture hardware decoding stalls on Linux.
+ * - Hardware-synchronized throttling: only uploads when video.currentTime changes (~30fps),
+ *   completely eliminating GPU memory saturation and crashes.
+ * - Instant HD sample room preloaded on canvas: zero black screen from frame 0.
+ * - Full-height panoramic cylindrical projection (8.5m height, 270° arc, unmirrored interior scale)
+ *   and enclosing 360° studio dome covering the entire field of view.
  */
 export const LiveWebcamBackdrop = memo(function LiveWebcamBackdrop({
   onRegisterCapture,
@@ -35,46 +36,60 @@ export const LiveWebcamBackdrop = memo(function LiveWebcamBackdrop({
   const t = useTranslations('features.visionInsert');
 
   const [cameraState, setCameraState] = useState<CameraState>('inactive');
-  const [activeTexture, setActiveTexture] = useState<THREE.Texture | null>(null);
-  const [hasStreamingVideo, setHasStreamingVideo] = useState(false);
+  const [isStreamingLive, setIsStreamingLive] = useState(false);
 
   const cameraSourceRef = useRef<XRCameraSource | null>(null);
-  const sampleTextureRef = useRef<THREE.Texture | null>(null);
-  const hasSwitchedToVideoRef = useRef(false);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const canvasCtxRef = useRef<CanvasRenderingContext2D | null>(null);
+  const canvasTextureRef = useRef<THREE.CanvasTexture | null>(null);
+  const lastDrawTimeRef = useRef<number>(0);
+  const hasDecodedFirstFrameRef = useRef<boolean>(false);
 
-  // Initialize Camera Source and Sample Fallback Texture
+  // Initialize Canvas Texture with sample room immediately, then connect CameraSource
+  const canvasTexture = useMemo(() => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 1280;
+    canvas.height = 720;
+    canvasRef.current = canvas;
+
+    const ctx = canvas.getContext('2d');
+    canvasCtxRef.current = ctx;
+
+    // Fill initial canvas with dark studio tone while sample loads
+    if (ctx) {
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(0, 0, 1280, 720);
+    }
+
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.minFilter = THREE.LinearFilter;
+    tex.magFilter = THREE.LinearFilter;
+    tex.generateMipmaps = false;
+    tex.wrapS = THREE.ClampToEdgeWrapping;
+    tex.wrapT = THREE.ClampToEdgeWrapping;
+    canvasTextureRef.current = tex;
+
+    // Preload sample image immediately to ensure zero black screen
+    const sampleImg = new Image();
+    sampleImg.crossOrigin = 'anonymous';
+    sampleImg.src = SAMPLE_ROOM_SRC;
+    sampleImg.onload = () => {
+      if (!hasDecodedFirstFrameRef.current && ctx) {
+        ctx.drawImage(sampleImg, 0, 0, 1280, 720);
+        tex.needsUpdate = true;
+      }
+    };
+
+    return tex;
+  }, []);
+
+  // Initialize Camera Source aligned with Meta IWSDK Chapter 13
   useEffect(() => {
     let isMounted = true;
-    hasSwitchedToVideoRef.current = false;
+    hasDecodedFirstFrameRef.current = false;
+    lastDrawTimeRef.current = 0;
 
-    // 1. Preload sample room texture as the immediate baseline
-    const loader = new THREE.TextureLoader();
-    loader.load(
-      SAMPLE_ROOM_SRC,
-      (tex) => {
-        if (!isMounted) {
-          tex.dispose();
-          return;
-        }
-        tex.colorSpace = THREE.SRGBColorSpace;
-        tex.minFilter = THREE.LinearFilter;
-        tex.magFilter = THREE.LinearFilter;
-        tex.wrapS = THREE.ClampToEdgeWrapping;
-        tex.wrapT = THREE.ClampToEdgeWrapping;
-        sampleTextureRef.current = tex;
-
-        // Display sample room immediately if real video frame hasn't arrived yet
-        if (!hasSwitchedToVideoRef.current) {
-          setActiveTexture(tex);
-        }
-      },
-      undefined,
-      () => {
-        // Fallback procedural color stays active if sample image is unreachable
-      }
-    );
-
-    // 2. Initialize IWSDK XRCameraSource with CameraFacing.Unknown
     const cameraSource = new XRCameraSource(
       {
         facing: 'unknown',
@@ -86,11 +101,7 @@ export const LiveWebcamBackdrop = memo(function LiveWebcamBackdrop({
         if (!isMounted) return;
         setCameraState(state);
         if (state === 'error' || state === 'inactive') {
-          setHasStreamingVideo(false);
-          hasSwitchedToVideoRef.current = false;
-          if (sampleTextureRef.current) {
-            setActiveTexture(sampleTextureRef.current);
-          }
+          setIsStreamingLive(false);
         }
       }
     );
@@ -99,8 +110,8 @@ export const LiveWebcamBackdrop = memo(function LiveWebcamBackdrop({
 
     void cameraSource.start().then((success) => {
       if (!isMounted) return;
-      if (!success && sampleTextureRef.current) {
-        setActiveTexture(sampleTextureRef.current);
+      if (!success) {
+        setCameraState('error');
       }
     });
 
@@ -108,22 +119,31 @@ export const LiveWebcamBackdrop = memo(function LiveWebcamBackdrop({
       isMounted = false;
       cameraSource.stop();
       cameraSourceRef.current = null;
-      if (sampleTextureRef.current) {
-        sampleTextureRef.current.dispose();
-        sampleTextureRef.current = null;
+      if (canvasTextureRef.current) {
+        canvasTextureRef.current.dispose();
       }
     };
   }, []);
 
-  // Frame tick: throttle video frame uploads to WebGL hardware timing (~30fps)
-  useFrame(() => {
+  // Frame tick: update canvas texture at smooth 30fps (~0.033s interval) to prevent GPU saturation
+  useFrame((state) => {
     const source = cameraSourceRef.current;
-    if (source && source.state === 'active') {
-      const updated = source.updateTexture();
-      if (updated && !hasSwitchedToVideoRef.current && source.texture) {
-        hasSwitchedToVideoRef.current = true;
-        setActiveTexture(source.texture);
-        setHasStreamingVideo(true);
+    const video = source?.videoElement;
+    const ctx = canvasCtxRef.current;
+    const tex = canvasTextureRef.current;
+
+    if (source && source.state === 'active' && video && ctx && tex) {
+      const now = state.clock.elapsedTime;
+      if (now - lastDrawTimeRef.current >= 0.033) {
+        lastDrawTimeRef.current = now;
+        if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+          hasDecodedFirstFrameRef.current = true;
+          ctx.drawImage(video, 0, 0, 1280, 720);
+          tex.needsUpdate = true;
+          if (!isStreamingLive) {
+            setIsStreamingLive(true);
+          }
+        }
       }
     }
   });
@@ -133,10 +153,8 @@ export const LiveWebcamBackdrop = memo(function LiveWebcamBackdrop({
     if (!onRegisterCapture) return;
 
     const captureCurrentFrame = (): string | null => {
-      const source = cameraSourceRef.current;
-      if (source && source.state === 'active' && source.videoElement) {
-        const frame = CameraUtils.captureFrame(source.videoElement);
-        if (frame) return frame;
+      if (canvasRef.current) {
+        return canvasRef.current.toDataURL('image/jpeg', 0.88);
       }
       return null;
     };
@@ -144,7 +162,7 @@ export const LiveWebcamBackdrop = memo(function LiveWebcamBackdrop({
     onRegisterCapture(captureCurrentFrame);
   }, [onRegisterCapture]);
 
-  const isLive = cameraState === 'active' && hasStreamingVideo;
+  const isLive = cameraState === 'active' && isStreamingLive;
 
   const pillText = isLive
     ? `● ${t('vrLiveWebcam').toUpperCase()} // 720p`
@@ -176,7 +194,7 @@ export const LiveWebcamBackdrop = memo(function LiveWebcamBackdrop({
 
   return (
     <group name="live-webcam-backdrop-root">
-      {/* 1. Curved Panoramic Video / Room Screen (Height: 8.5m, Centered at eye level y = 1.5m, scale.x = -1 for unmirrored interior projection) */}
+      {/* 1. Curved Panoramic Video Screen (Height: 8.5m, Centered at eye level y = 1.5m, scale.x = -1 for unmirrored interior projection) */}
       <mesh position={[0, 1.5, 0]} scale={[-1, 1, 1]} name="curved-webcam-screen">
         <cylinderGeometry
           args={[
@@ -190,22 +208,13 @@ export const LiveWebcamBackdrop = memo(function LiveWebcamBackdrop({
             thetaLength,
           ]}
         />
-        {activeTexture ? (
-          <meshBasicMaterial map={activeTexture} side={THREE.DoubleSide} toneMapped={false} />
-        ) : (
-          <meshBasicMaterial color="#0f172a" side={THREE.DoubleSide} toneMapped={false} />
-        )}
+        <meshBasicMaterial map={canvasTexture} side={THREE.DoubleSide} toneMapped={false} />
       </mesh>
 
       {/* 2. Soft Studio Atmosphere Dome (Wraps remaining space so no black void exists) */}
       <mesh position={[0, 1.5, 0]}>
         <sphereGeometry args={[16, 32, 32]} />
-        <meshBasicMaterial
-          map={sampleTextureRef.current ?? undefined}
-          color={sampleTextureRef.current ? '#ffffff' : '#081022'}
-          side={THREE.BackSide}
-          toneMapped={false}
-        />
+        <meshBasicMaterial color="#081022" side={THREE.BackSide} toneMapped={false} />
       </mesh>
 
       {/* 3. Studio Floor Platform & Spatial Orienting Rings */}

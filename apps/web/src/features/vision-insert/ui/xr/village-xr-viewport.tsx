@@ -110,7 +110,7 @@ export const VillageXRViewport = memo(function VillageXRViewport({
       {/* WebXR Canvas */}
       <CanvasCreationBoundary onFail={() => undefined}>
         <Canvas
-          frameloop={xrActive ? 'always' : 'demand'}
+          frameloop="always"
           shadows={false}
           dpr={[1, 1.5]}
           gl={{
