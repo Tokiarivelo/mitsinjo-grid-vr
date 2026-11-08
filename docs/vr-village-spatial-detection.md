@@ -174,6 +174,28 @@ flowchart TD
 
 ---
 
+### Phase 8 : Écran Panoramique Webcam Live & Atmosphère 360° (Live Camera Screen & Surroundings)
+
+- **Vision :** Afficher en temps réel le flux vidéo de la webcam locale dans la scène 3D sans écran noir, entouré d'une atmosphère studio immersive à 360° :
+  - Flux vidéo webcam continu via `navigator.mediaDevices.getUserMedia` et `THREE.VideoTexture`.
+  - Écran panoramique incurvé (130°, rayon 4.5m) positionné en arrière-plan des cibles holographiques.
+  - Dôme céleste d'atelier de 24m (`#081022`) et sol étendu éliminant complètement le vide noir autour de l'utilisateur.
+  - Fallback automatique sans coupure sur `/samples/vision-room.jpg` en l'absence de caméra.
+  - Capture instantanée du flux vidéo actif au clic du bouton spatial aérien.
+
+#### Checklist Phase 8 :
+
+- [x] Créer le composant `<LiveWebcamBackdrop />` (`features/vision-insert/ui/xr/live-webcam-backdrop.tsx`).
+- [x] Stream vidéo temps réel webcam via `THREE.VideoTexture` et boucle de rafraîchissement `useFrame`.
+- [x] Projection sur écran cylindrique incurvé (arc de 130°, rayon 4.5m, hauteur 3.8m).
+- [x] Élimination du vide noir 360° : dôme céleste d'atelier (`#081022`), anneau d'horizon ambiant et sol étendu.
+- [x] Fallback automatique sur l'image témoin `/samples/vision-room.jpg` en l'absence de caméra.
+- [x] Capture instantanée du flux vidéo actif au clic du bouton spatial aérien.
+- [x] Clés de traduction localisées (`vrLiveWebcam`, `vrVirtualRoom`, `vrCameraStandby`) avec parité 100 %.
+- [x] Tests unitaires Vitest pour le backdrop webcam et la gestion du flux.
+
+---
+
 ## 4. Fonctionnement sous Émulateur (Mode Desktop Développeur)
 
 ### Comment tester sans aucun casque physique :
@@ -211,6 +233,7 @@ flowchart TD
 | `power-connection-beam.tsx`     | Conduit d'énergie 3D courbe en tube Catmull-Rom reliant l'appareil au microgrid du village.        | [x]  |
 | `village-spatial-hud.tsx`       | Tableau de bord télémétrique holographique flottant (Batterie, Solaire, Demande, Alertes).         | [x]  |
 | `spatial-hud-texture.ts`        | Générateur de texture canvas pour le tableau de bord holographique dans les airs.                  | [x]  |
+| `live-webcam-backdrop.tsx`      | Écran panoramique incurvé webcam live, atmosphère 360° et capture instantanée.                     | [x]  |
 
 ---
 

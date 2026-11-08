@@ -15,11 +15,12 @@ import { SpawnedObject3D } from './spawned-object-3d';
 import { XRBlasterController } from './xr-blaster-controller';
 import { playGridConnectSound, playGridDisconnectSound } from './xr-audio-fx';
 import { VillageSpatialHUD } from './village-spatial-hud';
+import { LiveWebcamBackdrop } from './live-webcam-backdrop';
 
 export interface VillageXRStudioProps {
   detections: ApplianceDetection[];
   isScanning: boolean;
-  onTriggerScan: () => void;
+  onTriggerScan: (capturedUrl?: string) => void;
   onSelectAppliance?: (id: string) => void;
   photoKey?: string;
 }
@@ -43,6 +44,7 @@ export const VillageXRStudio = memo(function VillageXRStudio({
   const [hoveredTargetId, setHoveredTargetId] = useState<string | null>(null);
   const [recentEvent, setRecentEvent] = useState<string | null>(null);
   const eventTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const captureFnRef = useRef<(() => string | null) | null>(null);
 
   const notifyEvent = useCallback((msg: string) => {
     if (eventTimerRef.current) clearTimeout(eventTimerRef.current);
@@ -51,6 +53,11 @@ export const VillageXRStudio = memo(function VillageXRStudio({
       setRecentEvent(null);
     }, 4500);
   }, []);
+
+  const handleTriggerScan = useCallback(() => {
+    const frame = captureFnRef.current ? captureFnRef.current() : null;
+    onTriggerScan(frame || undefined);
+  }, [onTriggerScan]);
 
   const photo = photoKey ?? 'vr-studio';
 
@@ -155,6 +162,7 @@ export const VillageXRStudio = memo(function VillageXRStudio({
     <group name="village-xr-studio-root">
       {/* 1. Studio Lighting */}
       <ambientLight intensity={0.7} />
+      <hemisphereLight args={['#7dd3fc', '#0f172a', 0.6]} />
       <directionalLight
         position={[4, 6, 3]}
         intensity={1.2}
@@ -165,7 +173,14 @@ export const VillageXRStudio = memo(function VillageXRStudio({
       />
       <directionalLight position={[-3, 4, -2]} intensity={0.4} color="#7dd3fc" />
 
-      {/* 2. Studio Floor Platform & Grid Markings */}
+      {/* 2. Live Webcam Panoramic Screen & 360° Studio Atmosphere (VS-T10) */}
+      <LiveWebcamBackdrop
+        onRegisterCapture={(fn) => {
+          captureFnRef.current = fn;
+        }}
+      />
+
+      {/* 3. Studio Floor Platform & Grid Markings */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.01, -1.5]} receiveShadow>
         <circleGeometry args={[5, 48]} />
         <meshStandardMaterial color="#1e293b" roughness={0.7} metalness={0.15} />
@@ -177,22 +192,22 @@ export const VillageXRStudio = memo(function VillageXRStudio({
         <meshBasicMaterial color="#38bdf8" transparent opacity={0.25} />
       </mesh>
 
-      {/* 3. In-Air Interactive Spatial Button */}
+      {/* 4. In-Air Interactive Spatial Button */}
       <SpatialAirButton
         status={status}
         detectedCount={targets.length}
-        onTriggerScan={onTriggerScan}
+        onTriggerScan={handleTriggerScan}
         position={[0, 1.45, -1.2]}
       />
 
-      {/* 4. Diegetic Holographic Telemetry HUD (VS-T8) */}
+      {/* 5. Diegetic Holographic Telemetry HUD (VS-T8) */}
       <VillageSpatialHUD
         position={[-0.95, 1.55, -1.2]}
         rotation={[0.05, 0.45, 0]}
         recentEvent={recentEvent}
       />
 
-      {/* 5. Holographic Detection Targets */}
+      {/* 6. Holographic Detection Targets */}
       {targets.map((target) => (
         <HoloDetectionTarget
           key={target.id}

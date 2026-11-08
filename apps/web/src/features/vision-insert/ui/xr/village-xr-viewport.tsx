@@ -14,7 +14,7 @@ import { VillageXRStudio } from './village-xr-studio';
 export interface VillageXRViewportProps {
   detections: ApplianceDetection[];
   isScanning: boolean;
-  onTriggerScan: () => void;
+  onTriggerScan: (capturedUrl?: string) => void;
   onSelectAppliance?: (id: string) => void;
   rendererRef: RefObject<WebGLRenderer | null>;
   xrActive: boolean;

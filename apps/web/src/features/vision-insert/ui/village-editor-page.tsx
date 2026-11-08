@@ -293,8 +293,10 @@ export function VillageEditorPage() {
         <VillageXRViewport
           detections={vision.detections}
           isScanning={vision.status === 'loading' || vision.status === 'refining'}
-          onTriggerScan={() => {
-            if (!imageUrl) {
+          onTriggerScan={(capturedUrl) => {
+            if (capturedUrl) {
+              setImageUrl(capturedUrl);
+            } else if (!imageUrl) {
               void captureLiveOrSample();
             } else {
               void vision.retry();

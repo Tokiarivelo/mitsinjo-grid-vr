@@ -126,6 +126,18 @@
 - [ ] Synchroniser l'écouteur Web Audio avec la caméra WebXR.
 - [ ] Tests et validation audio.
 
+### VS-T10 : Écran Panoramique Webcam Live & Atmosphère 360° (Live Camera Screen & Surroundings)
+
+- [x] Créer le composant `<LiveWebcamBackdrop />` (`features/vision-insert/ui/xr/live-webcam-backdrop.tsx`).
+- [x] Stream vidéo temps réel webcam via `navigator.mediaDevices.getUserMedia` et texture vidéo Three.js (`THREE.VideoTexture`).
+- [x] Projection sur écran cylindrique incurvé (arc panoramique de 130°, rayon 4.5m) en face de l'opérateur.
+- [x] Élimination du vide noir 360° : dôme céleste d'atelier de rayon 24m (`#081022`), anneau d'horizon ambiant et sol étendu.
+- [x] Fallback automatique sur la pièce témoin haute définition `/samples/vision-room.jpg` en l'absence de webcam ou sous émulateur.
+- [x] Capture instantanée du flux vidéo actif au clic du bouton spatial aérien pour la détection perception.
+- [x] Clés de traduction localisées (`vrLiveWebcam`, `vrVirtualRoom`, `vrCameraStandby`) avec parité 100 % (`make check-i18n`).
+- [x] Tests unitaires Vitest pour le backdrop webcam et la gestion du flux.
+- [x] **Done when :** En immersion VR, la webcam affiche le flux vidéo en direct devant l'utilisateur, l'espace 360° est entouré d'une atmosphère studio sans aucun vide noir, et le scan s'effectue directement sur l'image vue.
+
 ---
 
 ## Exit criteria
