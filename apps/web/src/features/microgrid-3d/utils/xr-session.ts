@@ -4,7 +4,7 @@ import type { WebGLRenderer } from 'three';
 export const XR_IMMERSIVE_VR = 'immersive-vr' as const;
 
 export const XR_SESSION_INIT: XRSessionInit = {
-  optionalFeatures: ['local-floor', 'bounded-floor'],
+  optionalFeatures: ['local-floor', 'bounded-floor', 'hand-tracking'],
 };
 
 /** Minimal renderer surface the XR session needs (kept narrow for tests). */

@@ -13,7 +13,7 @@ import {
 } from '../utils/camera-focus';
 import { SECTOR_POSITIONS } from '../utils/to-scene-model';
 import { terrainHeight } from '../utils/landscape';
-import { setupXRHandsAndControllers } from '../utils/xr-hands';
+import { setupXRHandsAndControllers, type XRHandsHandle } from '../utils/xr-hands';
 import * as THREE from 'three';
 import type { CameraPreset } from '../types';
 
@@ -210,15 +210,15 @@ export function CameraController({
   const wasXrActive = useRef(false);
   const xrRig = useRef<THREE.Group | null>(null);
   const xrPrevParent = useRef<THREE.Object3D | null>(null);
-  const xrHandsCleanup = useRef<(() => void) | null>(null);
+  const xrHandsHandle = useRef<XRHandsHandle | null>(null);
   const hasFloorTracking = useRef(false);
   useEffect(() => {
     if (!xrActive) {
       if (wasXrActive.current) {
         wasXrActive.current = false;
         hasFloorTracking.current = false;
-        xrHandsCleanup.current?.();
-        xrHandsCleanup.current = null;
+        xrHandsHandle.current?.dispose();
+        xrHandsHandle.current = null;
         const rig = xrRig.current;
         xrRig.current = null;
         if (rig) {
@@ -248,13 +248,14 @@ export function CameraController({
     xrRig.current = rig;
 
     // Attach articulated hands and controller pointers inside the rig
-    xrHandsCleanup.current = setupXRHandsAndControllers(rig, gl);
+    xrHandsHandle.current = setupXRHandsAndControllers(rig, gl);
 
     invalidate();
   }, [xrActive, focusKey, moveTo, moveToFocusTarget, camera, scene, gl, invalidate]);
 
   useFrame((state, delta) => {
     if (xrActive) {
+      xrHandsHandle.current?.update();
       const rig = xrRig.current;
       if (!rig) return;
 
