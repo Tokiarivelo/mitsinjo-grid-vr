@@ -8,21 +8,22 @@ import { useTranslations } from '@/lib/i18n';
 export interface LiveWebcamBackdropProps {
   /** Optional callback to register the frame capture function with the parent scene. */
   onRegisterCapture?: (captureFn: () => string | null) => void;
-  /** Radius of the full 360° panoramic projection cylinder. Default: 8.5m. */
+  /** Radius of the panoramic projection screen in meters. Default: 5.0m. */
   radius?: number;
-  /** Height of the surround cylinder in meters. Default: 10m. */
+  /** Height of the curved screen in meters. Default: 4.2m. */
   height?: number;
 }
 
 /**
- * Full-View Live Camera & 360° Studio Surroundings for WebXR Immersion (VS-T10).
- * Displays real-time webcam video stream spanning the full field of view (360° surround),
- * eliminating all black bars and void, throttled to 30fps to prevent GPU context loss and crashes.
+ * Resilient Live Camera & Panoramic Studio Surroundings for WebXR Immersion (VS-T10).
+ * Displays real-time webcam video stream across a panoramic curved screen centered at eye level,
+ * with multi-stage fallback (environment -> user -> any video -> sample room photo),
+ * throttled to 30fps to prevent GPU context loss and crashes.
  */
 export const LiveWebcamBackdrop = memo(function LiveWebcamBackdrop({
   onRegisterCapture,
-  radius = 8.5,
-  height = 10.0,
+  radius = 5.0,
+  height = 4.2,
 }: LiveWebcamBackdropProps) {
   const t = useTranslations('features.visionInsert');
 
@@ -34,28 +35,49 @@ export const LiveWebcamBackdrop = memo(function LiveWebcamBackdrop({
   const videoTextureRef = useRef<THREE.VideoTexture | null>(null);
   const lastVideoTimeRef = useRef<number>(-1);
 
-  // Initialize webcam or sample fallback
+  // Initialize webcam with robust fallback hierarchy
   useEffect(() => {
     let isMounted = true;
 
     async function setupCamera() {
       if (typeof navigator !== 'undefined' && navigator.mediaDevices?.getUserMedia) {
+        let stream: MediaStream | null = null;
+
+        // 1. Try 720p with environment camera (Meta Quest passthrough / mobile rear cam)
         try {
-          const stream = await navigator.mediaDevices.getUserMedia({
+          stream = await navigator.mediaDevices.getUserMedia({
             video: {
-              // 720p ideal to guarantee 60-90 FPS in WebXR without memory context loss
-              width: { ideal: 1280, max: 1280 },
-              height: { ideal: 720, max: 720 },
-              facingMode: 'environment',
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+              facingMode: { ideal: 'environment' },
             },
             audio: false,
           });
-
-          if (!isMounted) {
-            stream.getTracks().forEach((track) => track.stop());
-            return;
+        } catch {
+          // 2. Try laptop / desktop front webcam (user-facing)
+          try {
+            stream = await navigator.mediaDevices.getUserMedia({
+              video: {
+                width: { ideal: 1280 },
+                height: { ideal: 720 },
+                facingMode: { ideal: 'user' },
+              },
+              audio: false,
+            });
+          } catch {
+            // 3. Permissive fallback to any available camera input
+            try {
+              stream = await navigator.mediaDevices.getUserMedia({
+                video: true,
+                audio: false,
+              });
+            } catch {
+              // Camera denied, headless, or no hardware available
+            }
           }
+        }
 
+        if (stream && isMounted) {
           streamRef.current = stream;
 
           const video = document.createElement('video');
@@ -66,7 +88,17 @@ export const LiveWebcamBackdrop = memo(function LiveWebcamBackdrop({
           video.muted = true;
           video.loop = true;
 
-          await video.play();
+          // Wait for metadata ready state
+          await new Promise<void>((resolve) => {
+            if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+              resolve();
+            } else {
+              video.onloadedmetadata = () => resolve();
+              setTimeout(resolve, 800);
+            }
+          });
+
+          await video.play().catch(() => {});
 
           if (!isMounted) {
             stream.getTracks().forEach((track) => track.stop());
@@ -80,20 +112,18 @@ export const LiveWebcamBackdrop = memo(function LiveWebcamBackdrop({
           texture.minFilter = THREE.LinearFilter;
           texture.magFilter = THREE.LinearFilter;
           texture.generateMipmaps = false;
-          texture.wrapS = THREE.MirroredRepeatWrapping;
+          texture.wrapS = THREE.ClampToEdgeWrapping;
           texture.wrapT = THREE.ClampToEdgeWrapping;
-          texture.repeat.set(2, 1); // Mirrored across 360° panorama for seamless wrap
+          texture.repeat.set(1, 1);
 
           videoTextureRef.current = texture;
           setActiveTexture(texture);
           setIsLive(true);
           return;
-        } catch {
-          // Camera permission denied or not available (headless/emulator) -> fall back to sample
         }
       }
 
-      // Fallback to high-res room photo
+      // Fallback to high-res room sample photo (/samples/vision-room.jpg)
       if (isMounted) {
         const loader = new THREE.TextureLoader();
         loader.load(
@@ -106,9 +136,9 @@ export const LiveWebcamBackdrop = memo(function LiveWebcamBackdrop({
             texture.colorSpace = THREE.SRGBColorSpace;
             texture.minFilter = THREE.LinearFilter;
             texture.magFilter = THREE.LinearFilter;
-            texture.wrapS = THREE.MirroredRepeatWrapping;
+            texture.wrapS = THREE.ClampToEdgeWrapping;
             texture.wrapT = THREE.ClampToEdgeWrapping;
-            texture.repeat.set(2, 1);
+            texture.repeat.set(1, 1);
             setActiveTexture(texture);
             setIsLive(false);
           },
@@ -194,10 +224,15 @@ export const LiveWebcamBackdrop = memo(function LiveWebcamBackdrop({
     return tex;
   }, [isLive, pillText]);
 
+  // Calculate cylindrical projection arc:
+  // Spans ~240° (Math.PI * 1.35) horizontally, centered straight forward at -Z.
+  const thetaLength = Math.PI * 1.35;
+  const thetaStart = Math.PI - thetaLength / 2;
+
   return (
     <group name="live-webcam-backdrop-root">
-      {/* 1. Full 360° Panoramic Video / Room Screen (Fills 100% of the User View) */}
-      <mesh position={[0, height / 2 - 1.2, 0]} name="curved-webcam-screen">
+      {/* 1. Curved Panoramic Video / Room Screen (Centered at eye level y = 1.5m) */}
+      <mesh position={[0, 1.5, 0]} name="curved-webcam-screen">
         <cylinderGeometry
           args={[
             radius,
@@ -206,8 +241,8 @@ export const LiveWebcamBackdrop = memo(function LiveWebcamBackdrop({
             48,
             1,
             true, // open ended
-            0,
-            Math.PI * 2, // Full 360° wrap
+            thetaStart,
+            thetaLength,
           ]}
         />
         {activeTexture ? (
@@ -223,18 +258,18 @@ export const LiveWebcamBackdrop = memo(function LiveWebcamBackdrop({
         )}
       </mesh>
 
-      {/* 2. Studio Ceiling & Floor Caps (Blends smoothly at vertical limits) */}
-      <mesh position={[0, height - 1.2, 0]} rotation={[Math.PI / 2, 0, 0]}>
-        <circleGeometry args={[radius + 0.5, 48]} />
-        <meshBasicMaterial color="#040915" side={THREE.DoubleSide} toneMapped={false} />
+      {/* 2. Soft Studio Atmosphere Dome (Wraps remaining space so no black void exists) */}
+      <mesh position={[0, 1.5, 0]}>
+        <sphereGeometry args={[18, 32, 32]} />
+        <meshBasicMaterial color="#081022" side={THREE.BackSide} toneMapped={false} />
       </mesh>
 
-      <mesh position={[0, -1.2, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <circleGeometry args={[radius + 0.5, 48]} />
-        <meshBasicMaterial color="#081022" side={THREE.DoubleSide} toneMapped={false} />
+      {/* 3. Studio Floor Platform & Spatial Orienting Rings */}
+      <mesh position={[0, -0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <circleGeometry args={[radius + 1.5, 48]} />
+        <meshBasicMaterial color="#0f172a" side={THREE.DoubleSide} toneMapped={false} />
       </mesh>
 
-      {/* 3. Subtle floor grid rings for spatial orientation */}
       <mesh position={[0, 0.01, -1.5]} rotation={[-Math.PI / 2, 0, 0]}>
         <ringGeometry args={[2.0, 2.05, 64]} />
         <meshBasicMaterial color="#38bdf8" transparent opacity={0.3} side={THREE.DoubleSide} />
@@ -246,7 +281,7 @@ export const LiveWebcamBackdrop = memo(function LiveWebcamBackdrop({
       </mesh>
 
       {/* 4. Live Camera Status Pill in front of the operator */}
-      <group position={[0, 2.45, -2.2]}>
+      <group position={[0, 2.5, -2.5]}>
         <mesh>
           <planeGeometry args={[0.7, 0.12]} />
           <meshBasicMaterial

@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, useEffect, useMemo, useRef } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useFrame, useThree } from '@react-three/fiber';
 import type { SpatialTarget } from './spatial-projection';
@@ -9,29 +9,31 @@ import { playLaserShootSound, playTargetHitSound } from './xr-audio-fx';
 export interface XRBlasterControllerProps {
   targets: SpatialTarget[];
   materializedIds: Set<string>;
-  connectedIds?: Set<string>;
+  connectedIds: Set<string>;
   onHoverTarget: (id: string | null) => void;
   onShootTarget: (id: string) => void;
 }
 
-// Module-level reusable scratch objects to avoid any heap allocation in useFrame
+// Module-level reusable singletons to eliminate all heap allocations at 90 FPS
 const _raycaster = new THREE.Raycaster();
 const _tempMatrix = new THREE.Matrix4();
 const _vOrigin = new THREE.Vector3();
 const _vDirection = new THREE.Vector3();
-const _vTargetPos = new THREE.Vector3();
 const _vHitEndpoint = new THREE.Vector3();
+const _vTargetPos = new THREE.Vector3();
 const _vCurPos = new THREE.Vector3();
 const _FORWARD = new THREE.Vector3(0, 0, -1);
 
 /**
- * WebXR Laser Blaster Controller.
- * Handles continuous raycasting from the Quest controller or emulator pointer with 0 heap allocation,
- * renders directional aiming laser pointer, and animates imperatively to avoid React re-render lag.
+ * Real-time WebXR Blaster & Aiming Raycast Controller (VS-T4).
+ * Tracks the primary VR controller (or desktop camera fallback in emulator mode),
+ * casts aiming rays, illuminates hover target reticles, fires procedural laser bolts,
+ * and triggers 3D model generation on impact.
  */
 export const XRBlasterController = memo(function XRBlasterController({
   targets,
-  materializedIds,
+  materializedIds: _materializedIds,
+  connectedIds: _connectedIds,
   onHoverTarget,
   onShootTarget,
 }: XRBlasterControllerProps) {
@@ -49,21 +51,13 @@ export const XRBlasterController = memo(function XRBlasterController({
   const impactMeshRef = useRef<THREE.Mesh>(null);
   const pointerPipRef = useRef<THREE.Mesh>(null);
 
-  // Setup WebXR Controller Target Ray & Trigger Listener
-  useEffect(() => {
-    if (!gl?.xr?.getController) return;
-
-    const controller = gl.xr.getController(0);
-
-    const onSelect = () => {
+  // Shared shoot resolution function
+  const triggerShot = useCallback(
+    (origin: THREE.Vector3, direction: THREE.Vector3) => {
       if (targets.length === 0) return;
 
-      _tempMatrix.identity().extractRotation(controller.matrixWorld);
-      _vOrigin.setFromMatrixPosition(controller.matrixWorld);
-      _vDirection.copy(_FORWARD).applyMatrix4(_tempMatrix).normalize();
-
-      _raycaster.ray.origin.copy(_vOrigin);
-      _raycaster.ray.direction.copy(_vDirection);
+      _raycaster.ray.origin.copy(origin);
+      _raycaster.ray.direction.copy(direction);
       if (camera) _raycaster.camera = camera;
 
       let closestTarget: SpatialTarget | null = null;
@@ -83,7 +77,7 @@ export const XRBlasterController = memo(function XRBlasterController({
         const hitTargetPos = new THREE.Vector3(...closestTarget.position);
 
         activeBlastRef.current = {
-          origin: _vOrigin.clone(),
+          origin: origin.clone(),
           targetPos: hitTargetPos,
           progress: 0,
         };
@@ -94,7 +88,7 @@ export const XRBlasterController = memo(function XRBlasterController({
 
         // Haptic feedback
         try {
-          const session = gl.xr.getSession();
+          const session = gl.xr?.getSession?.();
           const source = session?.inputSources?.[0];
           const actuator = source?.gamepad?.hapticActuators?.[0];
           actuator?.pulse(0.8, 120);
@@ -104,13 +98,49 @@ export const XRBlasterController = memo(function XRBlasterController({
 
         onShootTarget(closestTarget.id);
       }
+    },
+    [camera, gl, targets, onShootTarget]
+  );
+
+  // Setup WebXR Controller Target Ray & Trigger Listener
+  useEffect(() => {
+    if (!gl?.xr?.getController) return;
+
+    const controller = gl.xr.getController(0);
+
+    const onSelect = () => {
+      _tempMatrix.identity().extractRotation(controller.matrixWorld);
+      _vOrigin.setFromMatrixPosition(controller.matrixWorld);
+      _vDirection.copy(_FORWARD).applyMatrix4(_tempMatrix).normalize();
+      triggerShot(_vOrigin, _vDirection);
     };
 
     controller.addEventListener('selectstart', onSelect);
     return () => {
       controller.removeEventListener('selectstart', onSelect);
     };
-  }, [gl, camera, targets, materializedIds, onShootTarget]);
+  }, [gl, triggerShot]);
+
+  // Desktop Pointer / Mouse click fallback
+  useEffect(() => {
+    const dom = gl.domElement;
+    if (!dom) return;
+
+    const onPointerDown = (e: MouseEvent) => {
+      if (gl.xr?.isPresenting) return;
+      if (e.button !== 0) return;
+      if (camera) {
+        _vOrigin.copy(camera.position);
+        camera.getWorldDirection(_vDirection);
+        triggerShot(_vOrigin, _vDirection);
+      }
+    };
+
+    dom.addEventListener('pointerdown', onPointerDown);
+    return () => {
+      dom.removeEventListener('pointerdown', onPointerDown);
+    };
+  }, [gl, camera, triggerShot]);
 
   // Real-time Aiming Laser Pointer Beam in WebXR
   const pointerObject = useMemo(() => {
@@ -163,14 +193,21 @@ export const XRBlasterController = memo(function XRBlasterController({
       }
     }
 
-    // 2. Track hover target and update aiming beam in WebXR with 0 heap allocation
+    // 2. Track hover target and update aiming beam (WebXR Controller or Desktop Camera)
+    let hasAim = false;
     if (gl?.xr?.isPresenting) {
       const controller = gl.xr.getController(0);
-
       _tempMatrix.identity().extractRotation(controller.matrixWorld);
       _vOrigin.setFromMatrixPosition(controller.matrixWorld);
       _vDirection.copy(_FORWARD).applyMatrix4(_tempMatrix).normalize();
+      hasAim = true;
+    } else if (camera) {
+      _vOrigin.copy(camera.position);
+      camera.getWorldDirection(_vDirection);
+      hasAim = true;
+    }
 
+    if (hasAim) {
       _raycaster.ray.origin.copy(_vOrigin);
       _raycaster.ray.direction.copy(_vDirection);
       if (camera) _raycaster.camera = camera;
@@ -220,11 +257,13 @@ export const XRBlasterController = memo(function XRBlasterController({
   });
 
   return (
-    <group name="xr-blaster-effects">
-      {/* Real-time Aiming Laser Beam & Reticle Dot */}
+    <group name="xr-blaster-controller-root">
+      {/* Real-time Aiming Laser Line */}
       <primitive object={pointerObject} />
+
+      {/* Target Aiming Reticle Dot at Endpoint */}
       <mesh ref={pointerPipRef} visible={false}>
-        <sphereGeometry args={[0.015, 12, 12]} />
+        <sphereGeometry args={[0.022, 16, 16]} />
         <meshBasicMaterial color="#38bdf8" />
       </mesh>
 

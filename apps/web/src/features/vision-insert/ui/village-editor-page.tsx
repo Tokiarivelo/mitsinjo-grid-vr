@@ -254,7 +254,9 @@ export function VillageEditorPage() {
                   setVrViewOpen(false);
                 } else {
                   setVrViewOpen(true);
-                  xr.enter();
+                  if (rendererRef.current) {
+                    xr.enter();
+                  }
                 }
               }}
               aria-pressed={xrActive || vrViewOpen}
@@ -305,6 +307,7 @@ export function VillageEditorPage() {
           onSelectAppliance={onSelectObject}
           rendererRef={rendererRef}
           xrActive={xrActive}
+          onEnterVR={xr.enter}
           photoKey={photo || 'studio-sample'}
           onExitVR={() => {
             if (xrActive) xr.exit();

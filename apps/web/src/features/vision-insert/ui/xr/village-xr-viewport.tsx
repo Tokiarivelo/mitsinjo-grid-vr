@@ -1,12 +1,13 @@
 'use client';
 
-import { memo, type RefObject } from 'react';
+import { memo, useCallback, useEffect, type RefObject } from 'react';
 import type { WebGLRenderer } from 'three';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import { Glasses, Sparkles, X } from 'lucide-react';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { useTranslations } from '@/lib/i18n';
+import { cn } from '@/lib/utils';
 import type { ApplianceDetection } from '@/lib/vision';
 import { CanvasCreationBoundary } from '@/features/microgrid-3d/ui/canvas-creation-boundary';
 import { VillageXRStudio } from './village-xr-studio';
@@ -18,6 +19,7 @@ export interface VillageXRViewportProps {
   onSelectAppliance?: (id: string) => void;
   rendererRef: RefObject<WebGLRenderer | null>;
   xrActive: boolean;
+  onEnterVR?: () => void;
   onExitVR: () => void;
   photoKey?: string;
 }
@@ -26,6 +28,7 @@ export interface VillageXRViewportProps {
  * Fullscreen WebXR Immersive Viewport for Village Studio (/village).
  * Renders the interactive 3D studio, in-air spatial scan button, holographic targets,
  * laser blaster, and procedural 3D model spawns.
+ * Automatically activates the WebXR session and Meta IWER emulator upon mounting.
  */
 export const VillageXRViewport = memo(function VillageXRViewport({
   detections,
@@ -34,11 +37,32 @@ export const VillageXRViewport = memo(function VillageXRViewport({
   onSelectAppliance,
   rendererRef,
   xrActive,
+  onEnterVR,
   onExitVR,
   photoKey,
 }: VillageXRViewportProps) {
   const t = useTranslations('features.visionInsert');
   const tCommon = useTranslations('common');
+
+  // Trigger enter session once renderer is ready
+  const handleCreated = useCallback(
+    ({ gl }: { gl: WebGLRenderer }) => {
+      if (rendererRef) {
+        (rendererRef as { current: WebGLRenderer | null }).current = gl;
+      }
+      if (!xrActive && onEnterVR) {
+        onEnterVR();
+      }
+    },
+    [rendererRef, xrActive, onEnterVR]
+  );
+
+  // Auto-activate WebXR session once mounted and rendererRef is set
+  useEffect(() => {
+    if (!xrActive && rendererRef?.current && onEnterVR) {
+      onEnterVR();
+    }
+  }, [xrActive, rendererRef, onEnterVR]);
 
   return (
     <div
@@ -48,10 +72,24 @@ export const VillageXRViewport = memo(function VillageXRViewport({
       {/* 2D Overlay HUD (Visible on Desktop Screen / Mirror) */}
       <div className="absolute top-4 left-4 right-4 z-20 flex items-center justify-between pointer-events-none">
         <div className="flex items-center gap-2 pointer-events-auto">
-          <div className="flex items-center gap-1.5 rounded-xl border border-energy-cyan/40 bg-slate-900/80 px-3 py-1.5 backdrop-blur-md text-xs font-semibold text-energy-cyan">
-            <Glasses className="h-4 w-4 animate-pulse" aria-hidden="true" />
-            <span>{t('vrEnter')}</span>
-          </div>
+          {/* Interactive Start / Status WebXR Button */}
+          <button
+            type="button"
+            onClick={onEnterVR}
+            className={cn(
+              'flex items-center gap-1.5 rounded-xl border px-3 py-1.5 backdrop-blur-md text-xs font-semibold transition-all cursor-pointer',
+              xrActive
+                ? 'border-battery-green/50 bg-battery-green/15 text-battery-green shadow-xs'
+                : 'border-energy-cyan/50 bg-energy-cyan/20 text-energy-cyan hover:bg-energy-cyan/30 shadow-xs'
+            )}
+            aria-label={t('vrEnter')}
+          >
+            <Glasses
+              className={cn('h-4 w-4', xrActive ? 'text-battery-green' : 'animate-pulse')}
+              aria-hidden="true"
+            />
+            <span>{xrActive ? t('vrEnter') : t('vrEnter')}</span>
+          </button>
 
           <span className="hidden sm:inline-flex items-center gap-1 rounded-full border border-ai-violet/30 bg-ai-violet/10 px-2.5 py-1 text-xs font-medium text-ai-violet backdrop-blur-md">
             <Sparkles className="h-3 w-3" aria-hidden="true" />
@@ -85,11 +123,7 @@ export const VillageXRViewport = memo(function VillageXRViewport({
             alpha: true,
           }}
           camera={{ position: [0, 1.5, 1.6], fov: 60 }}
-          onCreated={({ gl }) => {
-            if (rendererRef) {
-              (rendererRef as { current: WebGLRenderer | null }).current = gl;
-            }
-          }}
+          onCreated={handleCreated}
           className="w-full h-full"
         >
           {/* Orbit controls for desktop preview when not presenting in headset */}
