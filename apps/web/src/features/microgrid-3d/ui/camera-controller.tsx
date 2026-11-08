@@ -253,7 +253,7 @@ export function CameraController({
     xrRig.current = rig;
 
     // Attach articulated hands and controller pointers inside the rig
-    xrHandsHandle.current = setupXRHandsAndControllers(rig, gl, scene);
+    xrHandsHandle.current = setupXRHandsAndControllers(rig, gl, scene, camera);
 
     invalidate();
   }, [xrActive, focusKey, moveTo, moveToFocusTarget, camera, scene, gl, invalidate]);

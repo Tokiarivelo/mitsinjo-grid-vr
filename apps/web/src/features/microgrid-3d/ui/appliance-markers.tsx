@@ -51,7 +51,7 @@ export interface ApplianceMarkersProps {
   aiBadgeLabel?: string;
   /** Badge click: toggle this marker's selection. */
   onSelectMarker?: (id: string) => void;
-  htmlPortal?: RefObject<HTMLElement | null>;
+  htmlPortal?: RefObject<HTMLElement | null> | null;
   /** Click-selected marker: ring + tag highlight (PP-T5). */
   selectedId?: string | null;
   /** Marker being dragged: its instance hides while the ghost shows (PP-T5). */

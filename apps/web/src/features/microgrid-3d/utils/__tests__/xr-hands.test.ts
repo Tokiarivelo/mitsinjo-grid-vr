@@ -102,4 +102,46 @@ describe('setupXRHandsAndControllers', () => {
 
     handle.dispose();
   });
+
+  it('safely raycasts when LineSegments2 with worldUnits=false is in the scene without logging camera errors', () => {
+    const rig = new THREE.Group();
+    const scene = new THREE.Scene();
+
+    // Mock LineSegments2 behavior that logs error if raycaster.camera is missing
+    const mockLine = new THREE.Object3D() as THREE.Object3D & {
+      material: { worldUnits: boolean };
+    };
+    mockLine.material = { worldUnits: false };
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    mockLine.raycast = function (raycaster) {
+      if (raycaster.camera === null && !this.material.worldUnits) {
+        console.error(
+          'LineSegments2: "Raycaster.camera" needs to be set in order to raycast against LineSegments2 while worldUnits is set to false.'
+        );
+      }
+    };
+    scene.add(mockLine);
+
+    const controller0 = new THREE.Group();
+    const mockGl = {
+      xr: {
+        getHand: vi.fn(() => new THREE.Group()),
+        getController: vi.fn(() => controller0),
+        getControllerGrip: vi.fn(() => new THREE.Group()),
+      },
+    } as unknown as THREE.WebGLRenderer;
+
+    const camera = new THREE.PerspectiveCamera();
+    const handle = setupXRHandsAndControllers(rig, mockGl, scene, camera);
+
+    (controller0 as unknown as { dispatchEvent: (e: { type: string }) => void }).dispatchEvent({
+      type: 'select',
+    });
+
+    expect(consoleErrorSpy).not.toHaveBeenCalledWith(expect.stringContaining('Raycaster.camera'));
+
+    consoleErrorSpy.mockRestore();
+    handle.dispose();
+  });
 });

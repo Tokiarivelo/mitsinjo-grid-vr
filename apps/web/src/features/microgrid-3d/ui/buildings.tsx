@@ -21,7 +21,7 @@ export interface VillageBuildingsProps {
   /** Small "AI" tag on every label while the AI dispatches alone (PA-T4c); hidden when unset. */
   aiBadgeLabel?: string;
   /** Stable DOM parent for labels (see VillageCanvas). */
-  htmlPortal?: RefObject<HTMLElement | null>;
+  htmlPortal?: RefObject<HTMLElement | null> | null;
   /** Time-of-day lamp factor from the sky palette (dusk/night → 1, afternoon → low). */
   lampGlow?: number;
 }
@@ -41,7 +41,7 @@ interface BuildingFrameProps extends FrameLayout {
   /** Shown instead of the coverage when the sector's load is 0. */
   disconnectedLabel: string;
   aiBadgeLabel?: string;
-  htmlPortal?: RefObject<HTMLElement | null>;
+  htmlPortal?: RefObject<HTMLElement | null> | null;
   children: ReactNode;
 }
 

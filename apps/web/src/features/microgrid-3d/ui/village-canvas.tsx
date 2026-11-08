@@ -94,7 +94,7 @@ function DraggableApplianceMarkers({
   tagOf: (m: ApplianceMarkerSceneModel) => string;
   priorityLabels?: Record<Priority, string>;
   aiBadgeLabel?: string | undefined;
-  htmlPortal?: RefObject<HTMLElement | null>;
+  htmlPortal?: RefObject<HTMLElement | null> | null;
   tier?: 'high' | 'low';
   sectorStatuses?: Partial<Record<SectorId, SectorStateOverride>>;
 }) {

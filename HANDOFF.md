@@ -9,10 +9,10 @@
   - Clicking beacon or WebXR controller trigger toggles 3D tagged labels of all 11 village types.
   - 11 village types: 6 sectors (Households, School, Water, Market, Clinic, Workshop) + 5 infrastructure/landmarks (Solar Array, BESS Battery, EMS Dispatch Hub, Wind Turbines, Lake Promenade).
   - Each tag renders vertical laser stalk, base anchor dot and glow ring, and facing billboard card with category pill, title, and live metrics.
-  - WebXR controller raycast click support in `xr-hands.ts`.
+  - WebXR controller raycast click support in `xr-hands.ts` with `raycaster.camera` configured for `LineSegments2`.
   - In-scene 2D DOM HTML overlays cleanly suppressed in immersion mode (`htmlPortal === null`).
   - 100% key parity across `en.json`, `fr.json`, `mg.json` (`make check-i18n`).
-  - Verification: 60 test files / 361 tests passing in `src/features/microgrid-3d`; 14 test files / 76 tests passing in `src/features/simulation`; zero TypeScript errors (`tsc --noEmit`).
+  - Verification: 60 test files / 362 tests passing in `src/features/microgrid-3d`; 14 test files / 76 tests passing in `src/features/simulation`; zero TypeScript errors (`tsc --noEmit`).
 
 ## Next
 

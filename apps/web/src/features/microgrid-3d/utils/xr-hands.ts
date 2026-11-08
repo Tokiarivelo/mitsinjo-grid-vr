@@ -161,7 +161,8 @@ interface ModelRef {
 export function setupXRHandsAndControllers(
   rig: THREE.Group,
   gl: THREE.WebGLRenderer,
-  scene?: THREE.Scene
+  scene?: THREE.Scene,
+  camera?: THREE.Camera
 ): XRHandsHandle {
   if (!gl?.xr?.getHand || !gl?.xr?.getController) {
     const noop = (() => undefined) as XRHandsHandle;
@@ -197,13 +198,26 @@ export function setupXRHandsAndControllers(
     const onSelect = () => {
       if (!scene) return;
       const raycaster = new THREE.Raycaster();
+      // LineSegments2 / Line2 in the scene (power lines, cables) require raycaster.camera
+      // when worldUnits is false. Set camera from WebXR presentation or viewport fallback.
+      const activeCamera =
+        (gl?.xr?.isPresenting ? gl.xr.getCamera() : null) ||
+        camera ||
+        new THREE.PerspectiveCamera();
+      raycaster.camera = activeCamera;
+
       const origin = new THREE.Vector3();
       const direction = new THREE.Vector3(0, 0, -1);
       controllerRay.getWorldPosition(origin);
       direction.transformDirection(controllerRay.matrixWorld).normalize();
       raycaster.set(origin, direction);
 
-      const intersects = raycaster.intersectObjects(scene.children, true);
+      let intersects: THREE.Intersection[] = [];
+      try {
+        intersects = raycaster.intersectObjects(scene.children, true);
+      } catch {
+        intersects = [];
+      }
       for (const hit of intersects) {
         let curr: THREE.Object3D | null = hit.object;
         while (curr) {
