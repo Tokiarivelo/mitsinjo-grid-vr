@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, useCallback, useEffect, type RefObject } from 'react';
+import { memo, useCallback, useRef, type RefObject } from 'react';
 import type { WebGLRenderer } from 'three';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
@@ -44,25 +44,21 @@ export const VillageXRViewport = memo(function VillageXRViewport({
   const t = useTranslations('features.visionInsert');
   const tCommon = useTranslations('common');
 
-  // Trigger enter session once renderer is ready
+  const hasAutoEnteredRef = useRef(false);
+
+  // Trigger enter session once renderer is ready on initial mount
   const handleCreated = useCallback(
     ({ gl }: { gl: WebGLRenderer }) => {
       if (rendererRef) {
         (rendererRef as { current: WebGLRenderer | null }).current = gl;
       }
-      if (!xrActive && onEnterVR) {
+      if (!hasAutoEnteredRef.current && !xrActive && onEnterVR) {
+        hasAutoEnteredRef.current = true;
         onEnterVR();
       }
     },
     [rendererRef, xrActive, onEnterVR]
   );
-
-  // Auto-activate WebXR session once mounted and rendererRef is set
-  useEffect(() => {
-    if (!xrActive && rendererRef?.current && onEnterVR) {
-      onEnterVR();
-    }
-  }, [xrActive, rendererRef, onEnterVR]);
 
   return (
     <div

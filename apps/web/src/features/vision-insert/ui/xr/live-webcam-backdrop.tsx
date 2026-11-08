@@ -14,11 +14,14 @@ export interface LiveWebcamBackdropProps {
   height?: number;
 }
 
+const SAMPLE_ROOM_SRC = '/samples/vision-room.jpg';
+
 /**
  * Resilient Live Camera & Panoramic Studio Surroundings for WebXR Immersion (VS-T10).
- * Displays real-time webcam video stream across a panoramic curved screen centered at eye level,
- * with multi-stage fallback (environment -> user -> any video -> sample room photo),
- * throttled to 30fps to prevent GPU context loss and crashes.
+ * Displays real-time webcam video stream across a panoramic curved screen centered at eye level.
+ * Features an instant Canvas-bridge texture preloaded with HD sample room so the operator
+ * NEVER sees a pitch-black screen, transitioning seamlessly to the live camera feed
+ * as soon as frames are decoded from the hardware.
  */
 export const LiveWebcamBackdrop = memo(function LiveWebcamBackdrop({
   onRegisterCapture,
@@ -30,20 +33,51 @@ export const LiveWebcamBackdrop = memo(function LiveWebcamBackdrop({
   const [isLive, setIsLive] = useState(false);
   const [activeTexture, setActiveTexture] = useState<THREE.Texture | null>(null);
 
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const videoTextureRef = useRef<THREE.VideoTexture | null>(null);
   const lastVideoTimeRef = useRef<number>(-1);
 
-  // Initialize webcam with robust fallback hierarchy
+  // Initialize Canvas Texture with fallback sample photo immediately, then stream webcam
   useEffect(() => {
     let isMounted = true;
 
+    // 1. Prepare 2D bridge canvas
+    const canvas = document.createElement('canvas');
+    canvas.width = 1280;
+    canvas.height = 720;
+    canvasRef.current = canvas;
+
+    const ctx = canvas.getContext('2d');
+
+    // Preload sample image immediately to ensure zero black screen
+    const sampleImg = new Image();
+    sampleImg.crossOrigin = 'anonymous';
+    sampleImg.src = SAMPLE_ROOM_SRC;
+    sampleImg.onload = () => {
+      if (!isMounted) return;
+      if (ctx && lastVideoTimeRef.current === -1) {
+        ctx.drawImage(sampleImg, 0, 0, canvas.width, canvas.height);
+        if (texture) texture.needsUpdate = true;
+      }
+    };
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.minFilter = THREE.LinearFilter;
+    texture.magFilter = THREE.LinearFilter;
+    texture.generateMipmaps = false;
+    texture.wrapS = THREE.ClampToEdgeWrapping;
+    texture.wrapT = THREE.ClampToEdgeWrapping;
+    texture.repeat.set(1, 1);
+    setActiveTexture(texture);
+
+    // 2. Setup webcam and attach to DOM (hidden) so Chrome hardware decoder stays active
     async function setupCamera() {
       if (typeof navigator !== 'undefined' && navigator.mediaDevices?.getUserMedia) {
         let stream: MediaStream | null = null;
 
-        // 1. Try 720p with environment camera (Meta Quest passthrough / mobile rear cam)
+        // Try environment camera first, then user webcam, then any camera
         try {
           stream = await navigator.mediaDevices.getUserMedia({
             video: {
@@ -54,7 +88,6 @@ export const LiveWebcamBackdrop = memo(function LiveWebcamBackdrop({
             audio: false,
           });
         } catch {
-          // 2. Try laptop / desktop front webcam (user-facing)
           try {
             stream = await navigator.mediaDevices.getUserMedia({
               video: {
@@ -65,14 +98,13 @@ export const LiveWebcamBackdrop = memo(function LiveWebcamBackdrop({
               audio: false,
             });
           } catch {
-            // 3. Permissive fallback to any available camera input
             try {
               stream = await navigator.mediaDevices.getUserMedia({
                 video: true,
                 audio: false,
               });
             } catch {
-              // Camera denied, headless, or no hardware available
+              // No camera available
             }
           }
         }
@@ -88,65 +120,29 @@ export const LiveWebcamBackdrop = memo(function LiveWebcamBackdrop({
           video.muted = true;
           video.loop = true;
 
-          // Wait for metadata ready state
-          await new Promise<void>((resolve) => {
-            if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
-              resolve();
-            } else {
-              video.onloadedmetadata = () => resolve();
-              setTimeout(resolve, 800);
-            }
-          });
-
-          await video.play().catch(() => {});
-
-          if (!isMounted) {
-            stream.getTracks().forEach((track) => track.stop());
-            return;
-          }
+          // Crucial for Chrome on Linux: hidden DOM element keeps frame decoding running
+          video.style.position = 'fixed';
+          video.style.top = '-9999px';
+          video.style.left = '-9999px';
+          video.style.width = '640px';
+          video.style.height = '360px';
+          video.style.opacity = '0';
+          video.style.pointerEvents = 'none';
+          video.style.zIndex = '-999';
+          document.body.appendChild(video);
 
           videoRef.current = video;
 
-          const texture = new THREE.VideoTexture(video);
-          texture.colorSpace = THREE.SRGBColorSpace;
-          texture.minFilter = THREE.LinearFilter;
-          texture.magFilter = THREE.LinearFilter;
-          texture.generateMipmaps = false;
-          texture.wrapS = THREE.ClampToEdgeWrapping;
-          texture.wrapT = THREE.ClampToEdgeWrapping;
-          texture.repeat.set(1, 1);
-
-          videoTextureRef.current = texture;
-          setActiveTexture(texture);
-          setIsLive(true);
-          return;
-        }
-      }
-
-      // Fallback to high-res room sample photo (/samples/vision-room.jpg)
-      if (isMounted) {
-        const loader = new THREE.TextureLoader();
-        loader.load(
-          '/samples/vision-room.jpg',
-          (texture) => {
-            if (!isMounted) {
-              texture.dispose();
-              return;
-            }
-            texture.colorSpace = THREE.SRGBColorSpace;
-            texture.minFilter = THREE.LinearFilter;
-            texture.magFilter = THREE.LinearFilter;
-            texture.wrapS = THREE.ClampToEdgeWrapping;
-            texture.wrapT = THREE.ClampToEdgeWrapping;
-            texture.repeat.set(1, 1);
-            setActiveTexture(texture);
-            setIsLive(false);
-          },
-          undefined,
-          () => {
-            // Keep procedural backdrop
+          try {
+            await video.play();
+          } catch {
+            // Autoplay may be deferred until user interaction
           }
-        );
+
+          if (isMounted) {
+            setIsLive(true);
+          }
+        }
       }
     }
 
@@ -161,11 +157,13 @@ export const LiveWebcamBackdrop = memo(function LiveWebcamBackdrop({
       if (videoRef.current) {
         videoRef.current.pause();
         videoRef.current.srcObject = null;
+        if (videoRef.current.parentNode) {
+          videoRef.current.parentNode.removeChild(videoRef.current);
+        }
         videoRef.current = null;
       }
-      if (videoTextureRef.current) {
-        videoTextureRef.current.dispose();
-        videoTextureRef.current = null;
+      if (texture) {
+        texture.dispose();
       }
     };
   }, []);
@@ -175,16 +173,8 @@ export const LiveWebcamBackdrop = memo(function LiveWebcamBackdrop({
     if (!onRegisterCapture) return;
 
     const captureCurrentFrame = (): string | null => {
-      if (videoRef.current && videoRef.current.readyState >= 2) {
-        const video = videoRef.current;
-        const canvas = document.createElement('canvas');
-        canvas.width = video.videoWidth || 1280;
-        canvas.height = video.videoHeight || 720;
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-          return canvas.toDataURL('image/jpeg', 0.88);
-        }
+      if (canvasRef.current) {
+        return canvasRef.current.toDataURL('image/jpeg', 0.88);
       }
       return null;
     };
@@ -192,13 +182,23 @@ export const LiveWebcamBackdrop = memo(function LiveWebcamBackdrop({
     onRegisterCapture(captureCurrentFrame);
   }, [onRegisterCapture]);
 
-  // Keep video texture updated ONLY when a new video frame actually arrives (reduces GPU uploads by 75%)
+  // Keep 2D canvas texture updated smoothly from the video stream
   useFrame(() => {
-    if (isLive && videoTextureRef.current && videoRef.current) {
-      const curTime = videoRef.current.currentTime;
-      if (curTime !== lastVideoTimeRef.current) {
-        lastVideoTimeRef.current = curTime;
-        videoTextureRef.current.needsUpdate = true;
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    if (isLive && video && canvas) {
+      if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+        const curTime = video.currentTime;
+        if (curTime !== lastVideoTimeRef.current) {
+          lastVideoTimeRef.current = curTime;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            if (activeTexture) {
+              activeTexture.needsUpdate = true;
+            }
+          }
+        }
       }
     }
   });
@@ -231,7 +231,7 @@ export const LiveWebcamBackdrop = memo(function LiveWebcamBackdrop({
 
   return (
     <group name="live-webcam-backdrop-root">
-      {/* 1. Curved Panoramic Video / Room Screen (Centered at eye level y = 1.5m) */}
+      {/* 1. Curved Panoramic Video / Room Screen (Centered at eye level y = 1.5m, DoubleSide) */}
       <mesh position={[0, 1.5, 0]} name="curved-webcam-screen">
         <cylinderGeometry
           args={[
@@ -246,15 +246,9 @@ export const LiveWebcamBackdrop = memo(function LiveWebcamBackdrop({
           ]}
         />
         {activeTexture ? (
-          <meshBasicMaterial
-            map={activeTexture}
-            side={THREE.BackSide}
-            toneMapped={false}
-            transparent
-            opacity={0.98}
-          />
+          <meshBasicMaterial map={activeTexture} side={THREE.DoubleSide} toneMapped={false} />
         ) : (
-          <meshBasicMaterial color="#081022" side={THREE.BackSide} toneMapped={false} />
+          <meshBasicMaterial color="#0f172a" side={THREE.DoubleSide} toneMapped={false} />
         )}
       </mesh>
 

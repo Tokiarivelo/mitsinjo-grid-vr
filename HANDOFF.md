@@ -5,10 +5,11 @@
 ## Current state
 
 - Complete WebXR immersion on `/village` (Village Studio / In-Air Detection & Shoot):
+  - Fixed VR Exit loop: removed re-triggering effect; synchronized session `end` event with `setVrViewOpen(false)` so exit cleanly unmounts.
+  - Fixed black screen: 2D bridge canvas preloaded with `/samples/vision-room.jpg` guarantees immediate visual backdrop, while hidden DOM video keeps Chrome Linux hardware decoding active for live webcam frames with `DoubleSide` material.
   - Meta IWSDK-aligned MultiPointer & Canvas Forwarding: tracks controllers 0 & 1 with trigger listeners and mouse pointer forwarding on desktop.
   - In-air targeting integration: floating Air Button `<SpatialAirButton />` is directly aimable and shootable via laser ray to trigger scanning.
   - Auto-start WebXR session on viewport mount with Meta IWER DevUI emulator controls (headset, controllers, play mode) identical to `/simulation`.
-  - Multi-tier webcam acquisition (`environment` → `user` → any device → HD sample fallback) on curved panoramic screen centered at eye level (`y = 1.5m`, 240° arc).
   - In-air microgrid connect & disconnect (`VS-T7`): shooting materialized objects toggles `@mitsinjo/engine` state with dynamic `<PowerConnectionBeam />`.
   - Diegetic Holographic Telemetry HUD (`VS-T8`): `<VillageSpatialHUD />` floats in the air showing live Battery %, Solar kW, Demand kW, Net balance, and transient connect notifications.
   - 100% key parity across `en.json`, `fr.json`, `mg.json` (`make check-i18n`).

@@ -55,6 +55,15 @@ export function VillageEditorPage() {
   const xrActive = xr.status === 'active';
   const [vrViewOpen, setVrViewOpen] = useState(false);
 
+  // Synchronize when the WebXR session ends (via DevUI exit icon, headset gesture, etc.)
+  const prevXrActiveRef = useRef(xrActive);
+  useEffect(() => {
+    if (prevXrActiveRef.current && !xrActive) {
+      setVrViewOpen(false);
+    }
+    prevXrActiveRef.current = xrActive;
+  }, [xrActive]);
+
   // Photo, objects, 2D and 3D stay when the operator visits another page and comes back.
   const [imageUrl, setImageUrl] = useKeptState<string | null>(VILLAGE_SCOPE, 'photo', null);
   const [badType, setBadType] = useState(false);
