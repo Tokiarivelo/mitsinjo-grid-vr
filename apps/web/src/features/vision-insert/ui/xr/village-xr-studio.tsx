@@ -1,7 +1,13 @@
 'use client';
 
 import { memo, useCallback, useMemo, useState } from 'react';
-import type { ApplianceDetection } from '@/lib/vision';
+import { useAppLocale } from '@/lib/i18n';
+import { localLabel, type ApplianceDetection } from '@/lib/vision';
+import { defaultArchetype, kitToRecipe, type ObjectKit } from '@/lib/object-kit';
+import { fitRecipe } from '@/lib/object-shape';
+import { sceneScale, usePlacedModelsStore } from '@/stores';
+import { useSimulationAppliances } from '../../hooks/use-simulation-appliances';
+import { aiDraft, applianceIdFor, toAppliance } from '../../utils/appliance-draft';
 import { projectDetectionsTo3D, type SpatialTarget } from './spatial-projection';
 import { SpatialAirButton } from './spatial-air-button';
 import { HoloDetectionTarget } from './holo-detection-target';
@@ -13,6 +19,7 @@ export interface VillageXRStudioProps {
   isScanning: boolean;
   onTriggerScan: () => void;
   onSelectAppliance?: (id: string) => void;
+  photoKey?: string;
 }
 
 /**
@@ -25,9 +32,27 @@ export const VillageXRStudio = memo(function VillageXRStudio({
   isScanning,
   onTriggerScan,
   onSelectAppliance,
+  photoKey,
 }: VillageXRStudioProps) {
+  const { locale } = useAppLocale();
+  const { list: simulationAppliances, upsert, remove } = useSimulationAppliances();
   const [materializedIds, setMaterializedIds] = useState<Set<string>>(() => new Set());
   const [hoveredTargetId, setHoveredTargetId] = useState<string | null>(null);
+
+  const photo = photoKey ?? 'vr-studio';
+
+  // Identify which detected targets are currently connected to the simulation
+  const connectedIds = useMemo(() => {
+    const activeApplianceIds = new Set((simulationAppliances ?? []).map((a) => a.id));
+    const set = new Set<string>();
+    for (const d of detections) {
+      const appId = applianceIdFor(photo, d.id);
+      if (activeApplianceIds.has(appId) || activeApplianceIds.has(d.id)) {
+        set.add(d.id);
+      }
+    }
+    return set;
+  }, [simulationAppliances, detections, photo]);
 
   // Convert 2D detections to 3D spatial target slots
   const targets = useMemo<SpatialTarget[]>(() => {
@@ -36,14 +61,63 @@ export const VillageXRStudio = memo(function VillageXRStudio({
 
   const handleShootTarget = useCallback(
     (id: string) => {
-      setMaterializedIds((prev) => {
-        const next = new Set(prev);
-        next.add(id);
-        return next;
-      });
+      // 1. If not yet materialized, first laser shot materializes procedural 3D model
+      if (!materializedIds.has(id)) {
+        setMaterializedIds((prev) => {
+          const next = new Set(prev);
+          next.add(id);
+          return next;
+        });
+        onSelectAppliance?.(id);
+        return;
+      }
+
+      // 2. If already materialized, subsequent shot toggles microgrid connection
+      const target = targets.find((t) => t.id === id);
+      if (!target) return;
+
+      const applianceId = applianceIdFor(photo, id);
+      const isConnected = connectedIds.has(id);
+
+      if (isConnected) {
+        // Disconnect from microgrid
+        remove(applianceId);
+      } else {
+        // Connect to microgrid with catalog defaults
+        const title = localLabel(target.detection, locale) || target.detection.label;
+        const draft = aiDraft(target.detection, title);
+        const appliance = toAppliance(applianceId, draft);
+        if (appliance) {
+          upsert(appliance);
+          const archetype = defaultArchetype(
+            target.detection.category,
+            target.detection.scenery,
+            target.detection.label
+          );
+          const fallbackKit: ObjectKit = {
+            archetype,
+            proportions: {
+              w: target.dimensions[0],
+              h: target.dimensions[1],
+              d: target.dimensions[2],
+            },
+            colors: { main: '#78909c', secondary: '#37474f', accent: '#00bcd4' },
+            materials: { main: 'metal', secondary: 'glass', accent: 'plastic' },
+          };
+          const recipe = fitRecipe(kitToRecipe(fallbackKit), 1.0);
+          usePlacedModelsStore.getState().upsert({
+            applianceId,
+            recipe,
+            scale: sceneScale(archetype, recipe.proportions),
+            archetype,
+            connectionMode: 'branch',
+          });
+        }
+      }
+
       onSelectAppliance?.(id);
     },
-    [onSelectAppliance]
+    [materializedIds, targets, connectedIds, photo, locale, remove, upsert, onSelectAppliance]
   );
 
   const status = isScanning ? 'scanning' : targets.length > 0 ? 'detected' : 'idle';
@@ -89,6 +163,7 @@ export const VillageXRStudio = memo(function VillageXRStudio({
           target={target}
           hovered={hoveredTargetId === target.id}
           isMaterialized={materializedIds.has(target.id)}
+          isConnected={connectedIds.has(target.id)}
           onHoverChange={(id, hovered) => setHoveredTargetId(hovered ? id : null)}
           onShootTarget={handleShootTarget}
         />
@@ -98,13 +173,18 @@ export const VillageXRStudio = memo(function VillageXRStudio({
       {targets
         .filter((t) => materializedIds.has(t.id))
         .map((target) => (
-          <SpawnedObject3D key={`spawned-${target.id}`} target={target} />
+          <SpawnedObject3D
+            key={`spawned-${target.id}`}
+            target={target}
+            isConnected={connectedIds.has(target.id)}
+          />
         ))}
 
       {/* 6. XR Blaster Controller Raycasting & Particle Effects */}
       <XRBlasterController
         targets={targets}
         materializedIds={materializedIds}
+        connectedIds={connectedIds}
         onHoverTarget={setHoveredTargetId}
         onShootTarget={handleShootTarget}
       />

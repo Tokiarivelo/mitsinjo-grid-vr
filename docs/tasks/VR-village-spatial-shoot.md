@@ -85,11 +85,26 @@
   - `apps/web/src/features/vision-insert/ui/xr/__tests__/spatial-projection.test.ts`
   - `apps/web/src/features/vision-insert/ui/xr/__tests__/spatial-air-button.test.tsx`
   - `apps/web/src/features/vision-insert/ui/xr/__tests__/holo-detection-target.test.tsx`
+  - `apps/web/src/features/vision-insert/ui/xr/__tests__/power-connection-beam.test.tsx`
   - `apps/web/src/features/vision-insert/ui/xr/__tests__/village-xr-viewport.test.tsx`
   - `apps/web/src/features/vision-insert/__tests__/village-editor-page.test.tsx`
 - [x] Exécuter `make check-i18n` pour garantir 100 % de parité sur les nouvelles clés (EN, FR, MG).
 - [x] Exécuter `tsc --noEmit` (typecheck 0 erreur).
 - [x] Mettre à jour `HANDOFF.md` et cocher les tâches.
+
+### VS-T7 : Raccordement au Réseau dans les Airs & Synchronisation Jumeau Numérique (In-Air Grid Connect)
+
+- [x] Ajouter l'action de raccordement / déconnexion au réseau directement dans l'espace 3D :
+  - Viser et tirer sur un appareil déjà matérialisé bascule son état de raccordement au microgrid.
+  - Viser affiche l'action contextuelle localisée : _« ⚡ Visez et tirez pour raccorder (+150 W) »_ ou _« ⚡ Visez et tirez pour déconnecter »_.
+- [x] Intégrer les stores `@mitsinjo/engine` :
+  - `useSimulationAppliances().upsert()` ajoute la charge calculée (`APPLIANCE_CATALOG`) au secteur suggéré (`suggestSector`).
+  - `usePlacedModelsStore.getState().upsert()` enregistre la recette 3D (`activeRecipe`) avec échelle réaliste (`sceneScale`).
+- [x] Retour visuel 3D immersif :
+  - Conduit d'énergie courbe `<PowerConnectionBeam />` reliant l'appareil à la jonction centrale du village.
+  - Anneau d'aura énergétique vert émeraude (`#22c55e`) à la base avec pulsation active.
+  - Carte holographique 3D mise à jour avec statut _« ✓ Raccordé au réseau (+150 W) »_.
+- [x] **Done when :** Tirer sur un meuble matérialisé le raccorde au microgrid, fait jaillir le conduit d'énergie vert 3D et incrémente le compteur d'appareils de la simulation sans quitter l'immersion VR.
 
 ---
 
@@ -100,5 +115,6 @@
 - [x] Cliquer sur le bouton déclenche le scan et fait apparaître les cibles holographiques des objets détectés.
 - [x] Le rayon laser suit les mouvements de la souris (ou du contrôleur), survolant et verrouillant les cibles.
 - [x] Tirer sur une cible détruit le réticule et fait apparaître le modèle 3D animé in-situ.
+- [x] Tirer sur un modèle 3D matérialisé le raccorde ou le déconnecte du microgrid avec câble d'énergie 3D dynamique.
 - [x] Quitter la session VR restaure proprement la page 2D sans fuite de contexte WebGL ni erreur console.
 - [x] `make check-i18n` passe à 100 % et les tests unitaires sont verts.

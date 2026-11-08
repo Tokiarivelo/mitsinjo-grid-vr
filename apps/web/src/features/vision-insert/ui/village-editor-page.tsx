@@ -272,6 +272,7 @@ export function VillageEditorPage() {
           onSelectAppliance={onSelectObject}
           rendererRef={rendererRef}
           xrActive={xrActive}
+          photoKey={photo || 'studio-sample'}
           onExitVR={() => {
             if (xrActive) xr.exit();
             setVrViewOpen(false);

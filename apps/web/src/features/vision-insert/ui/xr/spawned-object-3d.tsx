@@ -9,18 +9,24 @@ import { fitRecipe } from '@/lib/object-shape';
 import { recipeMesh } from '../../utils/object-geometry';
 import { surfaceMaterial, SURFACES, type Surface } from '../../utils/surface-look';
 import type { SpatialTarget } from './spatial-projection';
+import { PowerConnectionBeam } from './power-connection-beam';
 
 export interface SpawnedObject3DProps {
   target: SpatialTarget;
   /** Spawn animation progress [0..1] */
   spawnProgress?: number;
+  /** Whether the appliance is actively connected to the village microgrid */
+  isConnected?: boolean;
 }
 
 /**
  * 3D Procedural Appliance Materialized in-situ in the WebXR room.
  * Extrudes from 0 to 1 scale with elastic bounce, renders real materials and contact shadows.
  */
-export const SpawnedObject3D = memo(function SpawnedObject3D({ target }: SpawnedObject3DProps) {
+export const SpawnedObject3D = memo(function SpawnedObject3D({
+  target,
+  isConnected = false,
+}: SpawnedObject3DProps) {
   const groupRef = useRef<THREE.Group>(null);
   const scaleRef = useRef(0);
   const { detection, position, dimensions } = target;
@@ -84,11 +90,23 @@ export const SpawnedObject3D = memo(function SpawnedObject3D({ target }: Spawned
         far={1.2}
       />
 
-      {/* Green energy connection aura ring at base */}
+      {/* Energy connection aura ring at base (Green when connected, Cyan when idle) */}
       <mesh position={[0, -dimensions[1] / 2 + 0.01, 0]} rotation={[-Math.PI / 2, 0, 0]}>
         <ringGeometry args={[0.1, Math.max(dimensions[0], dimensions[2]) * 0.7, 32]} />
-        <meshBasicMaterial color="#22c55e" transparent opacity={0.35} />
+        <meshBasicMaterial
+          color={isConnected ? '#22c55e' : '#38bdf8'}
+          transparent
+          opacity={isConnected ? 0.7 : 0.3}
+        />
       </mesh>
+
+      {/* 3D Electrical Power Connection Conduit linking to village diorama */}
+      {isConnected && (
+        <PowerConnectionBeam
+          from={[position[0], position[1] - dimensions[1] / 2, position[2]]}
+          to={[0, 0, -1.5]}
+        />
+      )}
     </group>
   );
 });

@@ -88,4 +88,30 @@ describe('HoloDetectionTarget (VS-T4)', () => {
     });
     expect(onHover).toHaveBeenCalledWith('target-fridge', false);
   });
+
+  it('renders interactive collider even when materialized to allow grid toggle', () => {
+    const onShoot = vi.fn();
+    const onHover = vi.fn();
+
+    const { container } = render(
+      <I18nProvider>
+        <HoloDetectionTarget
+          target={mockTarget}
+          hovered={false}
+          isMaterialized={true}
+          isConnected={true}
+          onHoverChange={onHover}
+          onShootTarget={onShoot}
+        />
+      </I18nProvider>
+    );
+
+    const clickMesh = container.querySelector('[name="holo-target-target-fridge"] mesh');
+    expect(clickMesh).toBeTruthy();
+
+    act(() => {
+      fireEvent.click(clickMesh!);
+    });
+    expect(onShoot).toHaveBeenCalledWith('target-fridge');
+  });
 });

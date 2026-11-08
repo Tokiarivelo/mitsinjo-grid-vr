@@ -5,6 +5,7 @@ export interface HoloTargetLabelSpec {
   category: string;
   powerHint: string;
   actionHint: string;
+  isConnected?: boolean;
 }
 
 const textureCache = new Map<string, THREE.CanvasTexture>();
@@ -35,7 +36,8 @@ export function getHoloTargetTexture(
   isMaterialized: boolean,
   spec: HoloTargetLabelSpec
 ): THREE.CanvasTexture {
-  const key = `holo-tgt:${hovered}:${isMaterialized}:${spec.title}:${spec.category}:${spec.powerHint}:${spec.actionHint}`;
+  const isConnected = Boolean(spec.isConnected);
+  const key = `holo-tgt:${hovered}:${isMaterialized}:${isConnected}:${spec.title}:${spec.category}:${spec.powerHint}:${spec.actionHint}`;
   const cached = textureCache.get(key);
   if (cached) return cached;
 
@@ -50,9 +52,12 @@ export function getHoloTargetTexture(
     // 1. Semi-translucent card background
     drawRoundedRect(ctx, 6, 6, w - 12, h - 12, 18);
     const bgGrad = ctx.createLinearGradient(0, 0, 0, h);
-    if (isMaterialized) {
-      bgGrad.addColorStop(0, 'rgba(6, 78, 59, 0.92)'); // Emerald
-      bgGrad.addColorStop(1, 'rgba(2, 44, 34, 0.92)');
+    if (isMaterialized && isConnected) {
+      bgGrad.addColorStop(0, 'rgba(6, 78, 59, 0.94)'); // Emerald connected
+      bgGrad.addColorStop(1, 'rgba(2, 44, 34, 0.94)');
+    } else if (isMaterialized && !isConnected) {
+      bgGrad.addColorStop(0, 'rgba(15, 23, 42, 0.94)'); // Slate unlinked
+      bgGrad.addColorStop(1, 'rgba(30, 41, 59, 0.94)');
     } else if (hovered) {
       bgGrad.addColorStop(0, 'rgba(120, 53, 15, 0.94)'); // Amber glow
       bgGrad.addColorStop(1, 'rgba(69, 26, 3, 0.94)');
@@ -65,7 +70,15 @@ export function getHoloTargetTexture(
 
     // 2. Glowing stroke
     ctx.lineWidth = hovered ? 4 : 2.5;
-    ctx.strokeStyle = isMaterialized ? '#4ade80' : hovered ? '#f59e0b' : '#38bdf8';
+    ctx.strokeStyle = isMaterialized
+      ? isConnected
+        ? '#4ade80'
+        : hovered
+          ? '#f59e0b'
+          : '#38bdf8'
+      : hovered
+        ? '#f59e0b'
+        : '#38bdf8';
     ctx.stroke();
 
     // 3. Category Pill
@@ -94,12 +107,16 @@ export function getHoloTargetTexture(
 
     // 6. Action status hint at bottom
     ctx.font = '13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-    ctx.fillStyle = isMaterialized ? '#86efac' : hovered ? '#fde68a' : '#94a3b8';
-    ctx.fillText(
-      isMaterialized ? '✓ 3D INSTALLED' : hovered ? '⚡ PULL TRIGGER TO SHOOT' : spec.actionHint,
-      18,
-      118
-    );
+    ctx.fillStyle = isMaterialized
+      ? isConnected
+        ? '#86efac'
+        : hovered
+          ? '#fde68a'
+          : '#bae6fd'
+      : hovered
+        ? '#fde68a'
+        : '#94a3b8';
+    ctx.fillText(spec.actionHint, 18, 118);
   }
 
   const texture = new THREE.CanvasTexture(canvas);

@@ -19,6 +19,7 @@ export interface VillageXRViewportProps {
   rendererRef: RefObject<WebGLRenderer | null>;
   xrActive: boolean;
   onExitVR: () => void;
+  photoKey?: string;
 }
 
 /**
@@ -34,6 +35,7 @@ export const VillageXRViewport = memo(function VillageXRViewport({
   rendererRef,
   xrActive,
   onExitVR,
+  photoKey,
 }: VillageXRViewportProps) {
   const t = useTranslations('features.visionInsert');
   const tCommon = useTranslations('common');
@@ -101,6 +103,7 @@ export const VillageXRViewport = memo(function VillageXRViewport({
             isScanning={isScanning}
             onTriggerScan={onTriggerScan}
             onSelectAppliance={onSelectAppliance}
+            photoKey={photoKey}
           />
         </Canvas>
       </CanvasCreationBoundary>

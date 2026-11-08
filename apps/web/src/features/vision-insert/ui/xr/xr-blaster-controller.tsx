@@ -8,6 +8,7 @@ import type { SpatialTarget } from './spatial-projection';
 export interface XRBlasterControllerProps {
   targets: SpatialTarget[];
   materializedIds: Set<string>;
+  connectedIds?: Set<string>;
   onHoverTarget: (id: string | null) => void;
   onShootTarget: (id: string) => void;
 }
@@ -44,9 +45,8 @@ export const XRBlasterController = memo(function XRBlasterController({
     const tempMatrix = new THREE.Matrix4();
 
     const onSelect = () => {
-      // Find candidate targets in scene that are not yet materialized
-      const activeTargets = targets.filter((t) => !materializedIds.has(t.id));
-      if (activeTargets.length === 0) return;
+      // Find candidate targets in scene (both unmaterialized targets and materialized appliances)
+      if (targets.length === 0) return;
 
       // Extract ray origin and direction from controller
       tempMatrix.identity().extractRotation(controller.matrixWorld);
@@ -61,10 +61,11 @@ export const XRBlasterController = memo(function XRBlasterController({
       let closestTarget: SpatialTarget | null = null;
       let closestDist = Infinity;
 
-      for (const t of activeTargets) {
+      for (const t of targets) {
         const targetPos = new THREE.Vector3(...t.position);
         const dist = raycaster.ray.distanceToPoint(targetPos);
-        if (dist <= t.hitRadius && dist < closestDist) {
+        const radius = t.hitRadius * 1.35;
+        if (dist <= radius && dist < closestDist) {
           closestDist = dist;
           closestTarget = t;
         }
@@ -124,14 +125,14 @@ export const XRBlasterController = memo(function XRBlasterController({
       raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
       raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix).normalize();
 
-      const activeTargets = targets.filter((t) => !materializedIds.has(t.id));
       let currentHover: string | null = null;
       let minDist = Infinity;
 
-      for (const t of activeTargets) {
+      for (const t of targets) {
         const targetPos = new THREE.Vector3(...t.position);
         const dist = raycaster.ray.distanceToPoint(targetPos);
-        if (dist <= t.hitRadius && dist < minDist) {
+        const radius = t.hitRadius * 1.35;
+        if (dist <= radius && dist < minDist) {
           minDist = dist;
           currentHover = t.id;
         }
