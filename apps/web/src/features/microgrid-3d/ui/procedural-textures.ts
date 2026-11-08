@@ -181,3 +181,53 @@ export function leafVeinTexture(): THREE.Texture {
     }
   });
 }
+
+/** Architectural vertical timber battens (cedar / honey slats with dark shadow gaps). */
+export function timberSlatTexture(): THREE.Texture {
+  return make('timber-slat', 128, 128, (g) => {
+    // Warm honey / golden cedar base
+    g.fillStyle = '#c48849';
+    g.fillRect(0, 0, 128, 128);
+    // Vertical wood grain fibers
+    const rand = mulberry32(0x82b49);
+    for (let x = 0; x < 128; x++) {
+      const v = 0.92 + 0.16 * rand();
+      g.fillStyle = `rgba(0,0,0,${0.08 * (1 - v)})`;
+      g.fillRect(x, 0, 1, 128);
+    }
+    // Vertical shadow joints every 16px (slats of width 14px, gap of 2px)
+    for (let x = 0; x < 128; x += 16) {
+      g.fillStyle = '#261b12';
+      g.fillRect(x, 0, 2, 128);
+      // Highlight on the left edge of next slat
+      g.fillStyle = 'rgba(255,230,190,0.22)';
+      g.fillRect(x + 2, 0, 1, 128);
+    }
+  });
+}
+
+/** BIPV full-roof solar photovoltaic glass tiles for modern eco-pavilions. */
+export function bipvRoofTexture(): THREE.Texture {
+  return make('bipv-roof', 128, 128, (g) => {
+    // Dark frame / backsheet
+    g.fillStyle = '#0f1722';
+    g.fillRect(0, 0, 128, 128);
+    // Silicon wafer cells with antireflective blue coating
+    const cols = 8;
+    const rows = 8;
+    const cw = 128 / cols;
+    const ch = 128 / rows;
+    for (let i = 0; i < cols; i++) {
+      for (let j = 0; j < rows; j++) {
+        // Deep monocrystalline navy blue with subtle wafer variation
+        const b = 52 + ((i * 5 + j * 11) % 14);
+        g.fillStyle = `rgb(16, 28, ${b})`;
+        g.fillRect(i * cw + 1, j * ch + 1, cw - 2, ch - 2);
+        // Fine silver busbar lines
+        g.fillStyle = 'rgba(200, 225, 250, 0.32)';
+        g.fillRect(i * cw + 1, j * ch + ch * 0.33, cw - 2, 0.6);
+        g.fillRect(i * cw + 1, j * ch + ch * 0.66, cw - 2, 0.6);
+      }
+    }
+  });
+}

@@ -8,7 +8,7 @@ import { createHipRoofGeometry } from '../utils/hip-roof';
 import { mergeParts, type Part } from '../utils/merge-parts';
 import { HouseCluster, VillageHouse, windowColor } from './village-house';
 import type { HouseSpec } from '../utils/house-geometry';
-import { solarCellTexture, stripeTexture } from './procedural-textures';
+import { stripeTexture } from './procedural-textures';
 import { UNLIT_BULB_HEX } from '../utils/scene-palette';
 
 /**
@@ -49,59 +49,36 @@ function crossGeometry(len: number, bar: number, at: [number, number, number]) {
   }
   return g;
 }
-let sharedPvMat: THREE.MeshStandardMaterial | null = null;
-function getPvMaterial(): THREE.MeshStandardMaterial {
-  if (!sharedPvMat) {
-    const tex = solarCellTexture().clone();
-    tex.needsUpdate = true;
-    tex.repeat.set(2, 1);
-    sharedPvMat = new THREE.MeshStandardMaterial({
-      map: tex,
-      color: '#ffffff',
-      metalness: 0.65,
-      roughness: 0.22,
-      envMapIntensity: 1.5,
-    });
-  }
-  return sharedPvMat;
-}
 
 function ClinicBody({ glow }: BodyProps) {
-  const pvMat = useMemo(() => getPvMaterial(), []);
   return (
     <group name="health-clinic-mesh">
       <VillageHouse
-        width={4.2}
-        depth={2.6}
-        wallHeight={1.7}
-        roofHeight={1.05}
-        wallColor="#f4f3ed"
-        roofColor="#4a5d6e"
+        width={4.4}
+        depth={2.8}
+        wallHeight={1.75}
+        roofHeight={1.1}
+        wallColor="#f6f7f3"
+        roofColor="#1a2530"
+        roofStyle="gable"
+        roofFinish="bipv"
+        slatCladding
         windowGlow={glow}
         windowsPerSide={3}
-        veranda
+        deckFurniture
         position={[0, 0, -0.4]}
       />
-      {/* Rooftop solar backup on Clinic (essential-first facility) */}
-      <mesh
-        position={[0, 1.7 + 0.1 + 1.05 / 2 + 0.05, -0.4 + 0.45 + (2.6 + 0.64 + 0.9) / 4]}
-        rotation={[Math.atan2(1.05, (2.6 + 0.64 + 0.9) / 2), 0, 0]}
-        material={pvMat}
-        castShadow
-      >
-        <boxGeometry args={[2.5, 0.04, 0.95]} />
-      </mesh>
       {/* Red-cross sign on two posts, angled to the camera */}
-      <group position={[-2.6, 0, 1.6]} rotation={[0, 0.5, 0]}>
+      <group position={[-2.6, 0, 1.6]} rotation={[0, 0.45, 0]}>
         <mesh geometry={SIGN_BOARD} castShadow>
-          <meshStandardMaterial color="#f4f4f2" roughness={0.6} />
+          <meshStandardMaterial color="#f7f7f5" roughness={0.5} />
         </mesh>
         <mesh geometry={crossGeometry(0.66, 0.2, [0, 1.45, 0.06])}>
           <meshBasicMaterial color={CLINIC_RED} />
         </mesh>
       </group>
-      {/* Red cross on the front wall, above the door */}
-      <mesh geometry={crossGeometry(0.42, 0.13, [0, 1.55, 0.92])}>
+      {/* Red cross on the front wall above entrance */}
+      <mesh geometry={crossGeometry(0.42, 0.13, [-0.08, 1.65, 1.02])}>
         <meshBasicMaterial color={CLINIC_RED} />
       </mesh>
     </group>
@@ -235,12 +212,15 @@ function WaterBody({ glow }: BodyProps) {
       </mesh>
       {/* Pump house */}
       <VillageHouse
-        width={1.4}
-        depth={1.1}
-        wallHeight={1.0}
-        roofHeight={0.45}
-        wallColor="#9fc0d8"
-        roofColor="#6c7a88"
+        width={1.6}
+        depth={1.3}
+        wallHeight={1.1}
+        roofHeight={0.55}
+        wallColor="#a88c6e"
+        roofColor="#1a232e"
+        roofStyle="gable"
+        roofFinish="bipv"
+        slatCladding
         windowGlow={glow}
         windowsPerSide={1}
         position={[1.9, 0, 1.4]}
@@ -251,16 +231,9 @@ function WaterBody({ glow }: BodyProps) {
 }
 
 // ---------------- School ----------------
-const SCHOOL = { width: 6.6, depth: 2.6, wall: 1.6, roof: 1.2, overhang: 0.32 };
+const SCHOOL = { width: 7.2, depth: 2.8, wall: 1.7, roof: 1.25, overhang: 0.35 };
 
 function SchoolBody({ glow }: BodyProps) {
-  const pvMat = useMemo(() => getPvMaterial(), []);
-  // Panel lies mid-way up the front roof slope.
-  const roofD = SCHOOL.depth + SCHOOL.overhang * 2 + 0.9;
-  const slope = Math.atan2(SCHOOL.roof, roofD / 2);
-  const zMid = 0.45 + roofD / 4;
-  const yMid = SCHOOL.wall + 0.1 + SCHOOL.roof / 2 + 0.06;
-
   return (
     <group name="school-mesh">
       <VillageHouse
@@ -269,23 +242,23 @@ function SchoolBody({ glow }: BodyProps) {
         wallHeight={SCHOOL.wall}
         roofHeight={SCHOOL.roof}
         overhang={SCHOOL.overhang}
-        wallColor="#ead9b8"
-        roofColor="#8f3a22"
+        wallColor="#e2ceaa"
+        roofColor="#1a232e"
+        roofStyle="gable"
+        roofFinish="bipv"
+        slatCladding
         windowGlow={glow}
         windowsPerSide={5}
-        veranda
+        deckFurniture
       />
-      <mesh position={[0, yMid, zMid]} rotation={[slope, 0, 0]} material={pvMat} castShadow>
-        <boxGeometry args={[3.4, 0.05, 1.15]} />
+      {/* Official school entrance name board */}
+      <mesh position={[0, SCHOOL.wall * 0.88 + 0.12, SCHOOL.depth / 2 + 0.03]}>
+        <planeGeometry args={[1.3, 0.35]} />
+        <meshStandardMaterial color="#1f4f99" roughness={0.5} metalness={0.1} />
       </mesh>
-      {/* Blue name board above the entrance */}
-      <mesh position={[0, SCHOOL.wall * 0.86 + 0.12, SCHOOL.depth / 2 + 0.02]}>
-        <planeGeometry args={[1.1, 0.32]} />
-        <meshStandardMaterial color="#1f4f99" roughness={0.6} />
-      </mesh>
-      {/* Flag pole */}
-      <mesh position={[-3.9, 1.6, 2.2]} material={STEEL} castShadow>
-        <cylinderGeometry args={[0.035, 0.045, 3.2, 8]} />
+      {/* Community flagpole */}
+      <mesh position={[-4.1, 1.65, 2.3]} material={STEEL} castShadow>
+        <cylinderGeometry args={[0.035, 0.045, 3.3, 12]} />
       </mesh>
     </group>
   );
@@ -299,71 +272,40 @@ const HOMES: {
   d: number;
   wall: string;
   roof: string;
-  solar?: boolean;
 }[] = [
-  {
-    pos: [-2.3, 0, -1.5],
-    rot: 0.25,
-    w: 2.1,
-    d: 1.6,
-    wall: '#dfceb6',
-    roof: '#333e4a',
-    solar: true,
-  },
-  { pos: [0.6, 0, -2.4], rot: -0.1, w: 1.9, d: 1.5, wall: '#e8dcbe', roof: '#475463' },
-  {
-    pos: [2.8, 0, -0.2],
-    rot: -0.35,
-    w: 2.0,
-    d: 1.6,
-    wall: '#cdb18a',
-    roof: '#2e3843',
-    solar: true,
-  },
-  { pos: [-2.5, 0, 1.7], rot: 0.15, w: 1.9, d: 1.6, wall: '#c8a478', roof: '#804b32' },
-  { pos: [0.2, 0, 0.6], rot: 0.05, w: 2.2, d: 1.6, wall: '#dec4a2', roof: '#3a4755', solar: true },
-  { pos: [2.0, 0, 2.7], rot: -0.2, w: 1.8, d: 1.4, wall: '#e3d0ab', roof: '#7a422a' },
+  { pos: [-2.4, 0, -1.6], rot: 0.22, w: 2.3, d: 1.8, wall: '#c48849', roof: '#1a232e' },
+  { pos: [0.6, 0, -2.5], rot: -0.12, w: 2.1, d: 1.6, wall: '#b87b3e', roof: '#18212c' },
+  { pos: [2.9, 0, -0.3], rot: -0.32, w: 2.4, d: 1.8, wall: '#d19757', roof: '#1b2532' },
+  { pos: [-2.6, 0, 1.8], rot: 0.16, w: 2.2, d: 1.7, wall: '#be8346', roof: '#1a232e' },
+  { pos: [0.2, 0, 0.7], rot: 0.06, w: 2.5, d: 1.8, wall: '#a86c34', roof: '#19222d' },
+  { pos: [2.2, 0, 2.8], rot: -0.22, w: 2.0, d: 1.6, wall: '#cf9a5b', roof: '#1e2835' },
 ];
 
 /** All homes merged: 5 draw calls instead of one set of meshes per home. */
-const HOME_SPECS: HouseSpec[] = HOMES.map((h, i) => ({
+const HOME_SPECS: HouseSpec[] = HOMES.map((h) => ({
   width: h.w,
   depth: h.d,
-  wallHeight: 1.15,
-  roofHeight: 0.75,
+  wallHeight: 1.25,
+  roofHeight: 0.82,
   wallColor: h.wall,
   roofColor: h.roof,
   windowsPerSide: 2,
   position: h.pos,
   rotationY: h.rot,
-  veranda: i % 3 === 0,
+  roofStyle: 'gable',
+  slatCladding: true,
+  deckFurniture: true,
 }));
 
 function HouseholdsBody({ glow }: BodyProps) {
-  const pvMat = useMemo(() => getPvMaterial(), []);
   return (
     <group name="households-group">
-      <HouseCluster name="houses-cluster-mesh" houses={HOME_SPECS} windowGlow={glow} />
-      {/* Rooftop solar panels on modern eco-homes */}
-      {HOMES.map((h, i) => {
-        if (!h.solar) return null;
-        const roofD = h.d + 0.64 + (i % 3 === 0 ? 0.9 : 0);
-        const slope = Math.atan2(0.75, roofD / 2);
-        const localZ = (i % 3 === 0 ? 0.45 : 0) + roofD / 4;
-        const localY = 1.15 + 0.1 + 0.75 / 2 + 0.04;
-        return (
-          <group key={i} position={h.pos} rotation={[0, h.rot, 0]}>
-            <mesh
-              position={[0, localY, localZ]}
-              rotation={[slope, 0, 0]}
-              material={pvMat}
-              castShadow
-            >
-              <boxGeometry args={[h.w * 0.65, 0.03, roofD * 0.32]} />
-            </mesh>
-          </group>
-        );
-      })}
+      <HouseCluster
+        name="houses-cluster-mesh"
+        houses={HOME_SPECS}
+        windowGlow={glow}
+        roofFinish="bipv"
+      />
     </group>
   );
 }

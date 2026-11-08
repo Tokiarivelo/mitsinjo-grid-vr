@@ -57,4 +57,24 @@ describe('buildHouseCluster', () => {
     expect(size.z).toBeCloseTo(2);
     expect(size.x).toBeCloseTo(1.6);
   });
+
+  it('supports modern eco-pavilions with gable roofs and terrace deck furniture', () => {
+    const cluster = buildHouseCluster([
+      house({
+        roofStyle: 'gable',
+        deckFurniture: true,
+        slatCladding: true,
+      }),
+    ]);
+
+    expect(cluster.roofs).toBeInstanceOf(THREE.BufferGeometry);
+    expect(cluster.windows).toBeInstanceOf(THREE.BufferGeometry);
+    expect(cluster.trim).toBeInstanceOf(THREE.BufferGeometry);
+    expect(cluster.verandas).toBeInstanceOf(THREE.BufferGeometry);
+
+    cluster.roofs.computeBoundingBox();
+    const roofBounds = cluster.roofs.boundingBox!;
+    // Roof sits atop walls
+    expect(roofBounds.max.y).toBeGreaterThan(1.15);
+  });
 });

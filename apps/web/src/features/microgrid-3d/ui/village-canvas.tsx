@@ -58,8 +58,9 @@ import { ApplianceMarkers, MarkerDragGhost } from './appliance-markers';
 import { DistributionLines } from './distribution-lines';
 import { VillageBuildings } from './buildings';
 import { CameraController } from './camera-controller';
-import { SKY_RADIUS, SkyBackdrop } from './sky-backdrop';
+import { SkyBackdrop, SKY_RADIUS } from './sky-backdrop';
 import { Vegetation } from './vegetation';
+import { WindTurbines } from './wind-turbines';
 import { Vehicles } from './vehicles';
 import { PostEffects } from './post-effects';
 import { QualityProbe } from './quality-probe';
@@ -580,6 +581,7 @@ export function VillageCanvas({
           <PlacedYards clearings={yards} paths={tracks} />
           <Suspense fallback={null}>
             <Vegetation quality={quality} clearings={treeClearings} />
+            <WindTurbines />
             <Vehicles />
             {/* Inside the casters' Suspense so the first bake includes the loaded trees. */}
             {high && <ShadowBake bakeKey={shadowBakeKey} />}

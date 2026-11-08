@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { createHipRoofGeometry } from './hip-roof';
+import { createGableRoofGeometry } from './gable-roof';
 import { mergeParts, type Part } from './merge-parts';
 
 /** One house of a cluster. Colors are sRGB hex; position/rotation place it in the cluster. */
@@ -18,6 +19,14 @@ export interface HouseSpec {
   veranda?: boolean;
   position?: [number, number, number];
   rotationY?: number;
+  /** Architectural roof profile: 'gable' for modern eco-pavilions, 'hip' for traditional 4-slope. */
+  roofStyle?: 'hip' | 'gable';
+  /** Asymmetrical ridge offset along Z (negative shifts ridge backwards, expanding the front solar roof slope). */
+  ridgeZOffset?: number;
+  /** Outdoor terrace patio furniture (timber dining table + benches + stone curb). */
+  deckFurniture?: boolean;
+  /** Vertical timber slat battens (claire-voie) on the facade flanking panoramic glass. */
+  slatCladding?: boolean;
 }
 
 /**
@@ -35,7 +44,7 @@ export interface HouseClusterGeometry {
 /** Number of meshes (draw calls) a cluster renders. */
 export function houseClusterDrawCalls(houses: readonly HouseSpec[]): number {
   if (houses.length === 0) return 0;
-  return houses.some((h) => h.veranda) ? 5 : 4;
+  return houses.some((h) => h.veranda || h.deckFurniture) ? 5 : 4;
 }
 
 const tmpColor = new THREE.Color();
@@ -59,6 +68,46 @@ function placement(h: HouseSpec): THREE.Matrix4 {
 }
 
 function windowParts(h: HouseSpec): Part[] {
+  // 1. Modern Eco-Pavilion (Gable / Saltbox): Floor-to-ceiling panoramic sliding glass doors
+  if (h.roofStyle === 'gable') {
+    const parts: Part[] = [];
+    const panoW = h.width * 0.54;
+    const panoH = h.wallHeight * 0.78;
+    const panoY = 0.12 + panoH / 2;
+    const panoX = -h.width * 0.08;
+    const panoZ = h.depth / 2 + 0.014;
+
+    // Front panoramic sliding glass
+    parts.push({
+      shape: { kind: 'plane', size: [panoW, panoH] },
+      position: [panoX, panoY, panoZ],
+      rotation: [0, 0, 0],
+    });
+
+    // Side floor-to-ceiling picture window facing the surrounding nature
+    const sideW = Math.min(1.1, h.depth * 0.52);
+    const sideH = h.wallHeight * 0.72;
+    const sideY = 0.12 + sideH / 2;
+    parts.push({
+      shape: { kind: 'plane', size: [sideW, sideH] },
+      position: [h.width / 2 + 0.014, sideY, 0],
+      rotation: [0, Math.PI / 2, 0],
+    });
+
+    // Back clerestory / window
+    const backW = Math.min(0.9, h.width * 0.45);
+    const backH = h.wallHeight * 0.38;
+    const backY = h.wallHeight * 0.62 + 0.12;
+    parts.push({
+      shape: { kind: 'plane', size: [backW, backH] },
+      position: [0, backY, -h.depth / 2 - 0.014],
+      rotation: [0, Math.PI, 0],
+    });
+
+    return parts;
+  }
+
+  // 2. Traditional Hip Roof Windows
   const n = Math.max(1, h.windowsPerSide ?? 2);
   const winW = Math.min(0.42, (h.width * 0.6) / n);
   const winH = h.wallHeight * 0.38;
@@ -89,6 +138,88 @@ function windowParts(h: HouseSpec): Part[] {
 }
 
 function trimParts(h: HouseSpec): Part[] {
+  // 1. Modern Eco-Pavilion Architectural Trim & Slat Battens
+  if (h.roofStyle === 'gable') {
+    const panoW = h.width * 0.54;
+    const panoH = h.wallHeight * 0.78;
+    const panoY = 0.12 + panoH / 2;
+    const panoX = -h.width * 0.08;
+    const panoZ = h.depth / 2 + 0.014;
+
+    const parts: Part[] = [
+      // Base plinth foundation band
+      {
+        shape: { kind: 'box', size: [h.width + 0.18, 0.12, h.depth + 0.18] },
+        position: [0, 0.06, 0],
+      },
+      // Panoramic glass charcoal frame header
+      {
+        shape: { kind: 'box', size: [panoW + 0.07, 0.038, 0.035] },
+        position: [panoX, panoY + panoH / 2 + 0.015, panoZ + 0.008],
+      },
+      // Floor threshold runner
+      {
+        shape: { kind: 'box', size: [panoW + 0.07, 0.025, 0.045] },
+        position: [panoX, 0.12, panoZ + 0.008],
+      },
+      // Left vertical frame jamb
+      {
+        shape: { kind: 'box', size: [0.035, panoH, 0.035] },
+        position: [panoX - panoW / 2 - 0.015, panoY, panoZ + 0.008],
+      },
+      // Right vertical frame jamb
+      {
+        shape: { kind: 'box', size: [0.035, panoH, 0.035] },
+        position: [panoX + panoW / 2 + 0.015, panoY, panoZ + 0.008],
+      },
+      // Center sliding division mullion
+      {
+        shape: { kind: 'box', size: [0.03, panoH, 0.038] },
+        position: [panoX, panoY, panoZ + 0.008],
+      },
+      // Minimalist vertical pull handle on sliding leaf
+      {
+        shape: { kind: 'box', size: [0.02, 0.22, 0.032] },
+        position: [panoX + 0.04, panoY, panoZ + 0.024],
+      },
+      // Side window frame
+      {
+        shape: { kind: 'box', size: [0.035, 0.035, Math.min(1.1, h.depth * 0.52) + 0.07] },
+        position: [h.width / 2 + 0.014, 0.12 + h.wallHeight * 0.72 + 0.015, 0],
+      },
+      {
+        shape: { kind: 'box', size: [0.035, 0.025, Math.min(1.1, h.depth * 0.52) + 0.07] },
+        position: [h.width / 2 + 0.014, 0.12, 0],
+      },
+      // Architectural fascia rakes along gable edges (dark trim defining roof silhouette)
+      {
+        shape: { kind: 'box', size: [h.width + 0.36, 0.05, 0.04] },
+        position: [0, h.wallHeight + 0.1, -h.depth / 2 - 0.16],
+      },
+    ];
+
+    // Vertical 3D cedar timber battens (claire-voie) flanking the sliding door
+    if (h.slatCladding !== false) {
+      const slatW = 0.032;
+      const slatD = 0.025;
+      const slatH = h.wallHeight * 0.88;
+      const slatY = 0.12 + slatH / 2;
+      const startX = panoX + panoW / 2 + 0.08;
+      const endX = h.width / 2 - 0.05;
+      const count = Math.max(2, Math.floor((endX - startX) / 0.11));
+      for (let s = 0; s < count; s++) {
+        const sx = startX + (s / (count - 1)) * (endX - startX);
+        parts.push({
+          shape: { kind: 'box', size: [slatW, slatH, slatD] },
+          position: [sx, slatY, panoZ + 0.01],
+        });
+      }
+    }
+
+    return parts;
+  }
+
+  // 2. Traditional Hip Roof Trim
   const n = h.windowsPerSide ?? 2;
   const doorW = 0.36;
   const doorH = h.wallHeight * 0.62;
@@ -212,6 +343,80 @@ function trimParts(h: HouseSpec): Part[] {
 }
 
 function verandaParts(h: HouseSpec): Part[] {
+  // 1. Modern Eco-Pavilion Raised Timber Deck with Outdoor Picnic Table & Benches
+  if (h.deckFurniture) {
+    const deckW = h.width + 0.45;
+    const deckD = 1.25;
+    const deckH = 0.12;
+    const deckZ = h.depth / 2 + deckD / 2;
+    const parts: Part[] = [
+      // Raised solid timber terrace deck platform
+      {
+        shape: { kind: 'box', size: [deckW, deckH, deckD] },
+        position: [0, deckH / 2, deckZ],
+      },
+      // Low stone retaining curb around the terrace perimeter
+      {
+        shape: { kind: 'box', size: [deckW + 0.12, 0.14, 0.1] },
+        position: [0, 0.07, deckZ + deckD / 2 + 0.05],
+      },
+      {
+        shape: { kind: 'box', size: [0.1, 0.14, deckD] },
+        position: [-deckW / 2 - 0.05, 0.07, deckZ],
+      },
+      {
+        shape: { kind: 'box', size: [0.1, 0.14, deckD] },
+        position: [deckW / 2 + 0.05, 0.07, deckZ],
+      },
+    ];
+
+    // Modern solid wood picnic table on the terrace
+    const tableX = h.width * 0.22;
+    const tableZ = deckZ;
+    const tableW = 0.68;
+    const tableD = 0.38;
+    const tableH = 0.44;
+    // Table top
+    parts.push({
+      shape: { kind: 'box', size: [tableW, 0.035, tableD] },
+      position: [tableX, deckH + tableH, tableZ],
+    });
+    // Table legs
+    for (const lx of [-tableW * 0.38, tableW * 0.38]) {
+      parts.push({
+        shape: { kind: 'box', size: [0.04, tableH, tableD * 0.8] },
+        position: [tableX + lx, deckH + tableH / 2, tableZ],
+      });
+    }
+
+    // Matching wooden bench seats on both sides of the table
+    for (const bSign of [-1, 1]) {
+      const bZ = tableZ + bSign * 0.28;
+      const bH = 0.26;
+      // Bench top
+      parts.push({
+        shape: { kind: 'box', size: [tableW * 0.95, 0.03, 0.16] },
+        position: [tableX, deckH + bH, bZ],
+      });
+      // Bench leg supports
+      for (const lx of [-tableW * 0.35, tableW * 0.35]) {
+        parts.push({
+          shape: { kind: 'box', size: [0.035, bH, 0.12] },
+          position: [tableX + lx, deckH + bH / 2, bZ],
+        });
+      }
+    }
+
+    // Front corner veranda post supporting the roof overhang
+    parts.push({
+      shape: { kind: 'box', size: [0.07, h.wallHeight + 0.15, 0.07] },
+      position: [-h.width / 2 + 0.06, (h.wallHeight + 0.15) / 2, deckZ + deckD / 2 - 0.08],
+    });
+
+    return parts;
+  }
+
+  // 2. Traditional Veranda with Posts
   const n = Math.max(2, Math.round(h.width / 1.3)) + 1;
   const parts: Part[] = [
     {
@@ -248,6 +453,7 @@ export function buildHouseCluster(houses: readonly HouseSpec[]): HouseClusterGeo
   for (const h of houses) {
     const m = placement(h);
     const overhang = h.overhang ?? 0.32;
+    const hasVeranda = Boolean(h.veranda || h.deckFurniture);
 
     trim.push(mergeParts(trimParts(h)).applyMatrix4(m));
     windows.push(mergeParts(windowParts(h)).applyMatrix4(m));
@@ -257,12 +463,19 @@ export function buildHouseCluster(houses: readonly HouseSpec[]): HouseClusterGeo
     walls.push(paint(wall, h.wallColor).applyMatrix4(m));
 
     const roofW = h.width + overhang * 2;
-    const roofD = h.depth + overhang * 2 + (h.veranda ? 0.9 : 0);
-    const roof = createHipRoofGeometry(roofW, roofD, h.roofHeight);
-    roof.translate(0, h.wallHeight + 0.1, h.veranda ? 0.45 : 0);
+    const roofD = h.depth + overhang * 2 + (hasVeranda ? 0.9 : 0);
+
+    let roof: THREE.BufferGeometry;
+    if (h.roofStyle === 'gable') {
+      const ridgeZ = h.ridgeZOffset ?? (hasVeranda ? -0.25 : -0.15);
+      roof = createGableRoofGeometry(roofW, roofD, h.roofHeight, 0, ridgeZ);
+    } else {
+      roof = createHipRoofGeometry(roofW, roofD, h.roofHeight);
+    }
+    roof.translate(0, h.wallHeight + 0.1, hasVeranda ? 0.45 : 0);
     roofs.push(paint(roof, h.roofColor).applyMatrix4(m));
 
-    if (h.veranda) verandas.push(mergeParts(verandaParts(h)).applyMatrix4(m));
+    if (hasVeranda) verandas.push(mergeParts(verandaParts(h)).applyMatrix4(m));
   }
 
   return {
