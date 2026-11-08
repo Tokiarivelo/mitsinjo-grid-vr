@@ -92,6 +92,12 @@ describe('buildHouseCluster', () => {
     expect(cluster.trim).toBeInstanceOf(THREE.BufferGeometry);
     expect(cluster.verandas).toBeInstanceOf(THREE.BufferGeometry);
 
+    // Walls include front and back triangular gables sealing the gap up to the roof peak
+    cluster.walls.computeBoundingBox();
+    const wallBounds = cluster.walls.boundingBox!;
+    // Base is 0.12, wallHeight 1.15, roofHeight 0.75 -> peak is 0.12 + 1.15 + 0.75 = 2.02
+    expect(wallBounds.max.y).toBeCloseTo(0.12 + 1.15 + 0.75, 2);
+
     cluster.trim.computeBoundingBox();
     const trimBounds = cluster.trim.boundingBox!;
     // Chimney sits higher than wallHeight (1.15)

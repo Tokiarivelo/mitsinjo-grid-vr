@@ -77,9 +77,9 @@ export function createClinicGeometry(): ClinicGeometries {
     // Parapet lips on left wing roof
     { shape: { kind: 'box', size: [2.65, 0.14, 0.1] }, position: [-1.5, 3.8, 1.18] },
     { shape: { kind: 'box', size: [0.1, 0.14, 2.85] }, position: [-2.78, 3.8, -0.2] },
-    // Left wing interior floors
-    { shape: { kind: 'box', size: [2.4, 0.12, 2.6] }, position: [-1.5, 1.22, -0.2] },
-    { shape: { kind: 'box', size: [2.4, 0.12, 2.6] }, position: [-1.5, 2.42, -0.2] }
+    // Left wing interior floors (staying behind the exterior cedar wall)
+    { shape: { kind: 'box', size: [2.35, 0.12, 2.35] }, position: [-1.5, 1.22, -0.32] },
+    { shape: { kind: 'box', size: [2.35, 0.12, 2.35] }, position: [-1.5, 2.42, -0.32] }
   );
 
   // Entrance Portico / Canopy
@@ -94,10 +94,10 @@ export function createClinicGeometry(): ClinicGeometries {
     { shape: { kind: 'box', size: [0.16, 1.14, 0.16] }, position: [-0.55, 0.59, 2.15] },
     // Entrance door frame lintel
     { shape: { kind: 'box', size: [1.4, 0.1, 0.12] }, position: [-1.5, 1.08, 1.1] },
-    // Balcony curbs around 1st floor terrace
-    { shape: { kind: 'box', size: [2.35, 0.06, 0.08] }, position: [-1.5, 1.32, 2.26] },
-    { shape: { kind: 'box', size: [0.08, 0.06, 1.2] }, position: [-2.64, 1.32, 1.68] },
-    { shape: { kind: 'box', size: [0.08, 0.06, 1.2] }, position: [-0.36, 1.32, 1.68] }
+    // Balcony curbs around 1st floor terrace (resting on slab deck, no vertical overlap)
+    { shape: { kind: 'box', size: [2.35, 0.04, 0.05] }, position: [-1.5, 1.31, 2.28] },
+    { shape: { kind: 'box', size: [0.05, 0.04, 1.25] }, position: [-2.65, 1.31, 1.68] },
+    { shape: { kind: 'box', size: [0.05, 0.04, 1.25] }, position: [-0.35, 1.31, 1.68] }
   );
 
   // Modern entrance totem sign
@@ -126,10 +126,10 @@ export function createClinicGeometry(): ClinicGeometries {
     });
   }
 
-  // Terrace planter trough front cladding
+  // Terrace planter trough front cladding (set back safely behind glass balustrades)
   woodParts.push({
-    shape: { kind: 'box', size: [1.8, 0.22, 0.18] },
-    position: [-1.5, 1.44, 2.18],
+    shape: { kind: 'box', size: [1.8, 0.18, 0.15] },
+    position: [-1.5, 1.39, 2.12],
   });
 
   // =========================================================================
@@ -161,9 +161,9 @@ export function createClinicGeometry(): ClinicGeometries {
     { shape: { kind: 'box', size: [0.04, 0.55, 1.8] }, position: [-2.71, 0.62, -0.2] },
     { shape: { kind: 'box', size: [0.04, 0.55, 1.8] }, position: [-2.71, 1.82, -0.2] },
     { shape: { kind: 'box', size: [0.04, 0.55, 1.8] }, position: [-2.71, 3.02, -0.2] },
-    // Terrace tempered glass balustrades
-    { shape: { kind: 'box', size: [2.2, 0.38, 0.02] }, position: [-1.5, 1.51, 2.26] },
-    { shape: { kind: 'box', size: [0.02, 0.38, 1.12] }, position: [-0.37, 1.51, 1.7] }
+    // Terrace tempered glass balustrades (resting on top of balcony curb at y = 1.33)
+    { shape: { kind: 'box', size: [2.25, 0.34, 0.02] }, position: [-1.5, 1.5, 2.28] },
+    { shape: { kind: 'box', size: [0.02, 0.34, 1.15] }, position: [-0.35, 1.5, 1.68] }
   );
 
   // =========================================================================
@@ -203,13 +203,13 @@ export function createClinicGeometry(): ClinicGeometries {
     // Entrance door frame and center divider
     { shape: { kind: 'box', size: [1.24, 0.98, 0.05] }, position: [-1.5, 0.55, 1.08] },
     { shape: { kind: 'box', size: [0.04, 0.98, 0.06] }, position: [-1.5, 0.55, 1.1] },
-    // Terrace handrails and posts
-    { shape: { kind: 'box', size: [2.28, 0.04, 0.04] }, position: [-1.5, 1.71, 2.26] },
-    { shape: { kind: 'box', size: [0.04, 0.04, 1.16] }, position: [-0.37, 1.71, 1.7] },
-    { shape: { kind: 'box', size: [0.03, 0.38, 0.03] }, position: [-2.62, 1.51, 2.26] },
-    { shape: { kind: 'box', size: [0.03, 0.38, 0.03] }, position: [-1.5, 1.51, 2.26] },
-    { shape: { kind: 'box', size: [0.03, 0.38, 0.03] }, position: [-0.37, 1.51, 2.26] },
-    { shape: { kind: 'box', size: [0.03, 0.38, 0.03] }, position: [-0.37, 1.51, 1.12] },
+    // Terrace handrails and posts (resting atop glass balustrades)
+    { shape: { kind: 'box', size: [2.3, 0.03, 0.03] }, position: [-1.5, 1.685, 2.28] },
+    { shape: { kind: 'box', size: [0.03, 0.03, 1.2] }, position: [-0.35, 1.685, 1.68] },
+    { shape: { kind: 'box', size: [0.03, 0.36, 0.03] }, position: [-2.63, 1.5, 2.28] },
+    { shape: { kind: 'box', size: [0.03, 0.36, 0.03] }, position: [-1.5, 1.5, 2.28] },
+    { shape: { kind: 'box', size: [0.03, 0.36, 0.03] }, position: [-0.35, 1.5, 2.28] },
+    { shape: { kind: 'box', size: [0.03, 0.36, 0.03] }, position: [-0.35, 1.5, 1.1] },
     // Wood facade ribbon window frames
     { shape: { kind: 'box', size: [0.89, 0.69, 0.05] }, position: [-2.0, 1.85, 1.11] },
     { shape: { kind: 'box', size: [0.89, 0.69, 0.05] }, position: [-2.0, 3.05, 1.11] }
@@ -269,20 +269,20 @@ export function createClinicGeometry(): ClinicGeometries {
     // Entrance walkway pathway & side hedge
     { shape: { kind: 'box', size: [1.5, 0.02, 1.4] }, position: [-1.5, 0.02, 2.45] },
     { shape: { kind: 'box', size: [0.22, 0.22, 1.2] }, position: [-0.25, 0.11, 2.25] },
-    // Terrace planter box topiary balls
-    { shape: { kind: 'sphere', radius: 0.11, segments: 8 }, position: [-1.9, 1.55, 2.18] },
-    { shape: { kind: 'sphere', radius: 0.11, segments: 8 }, position: [-1.5, 1.55, 2.18] },
-    { shape: { kind: 'sphere', radius: 0.11, segments: 8 }, position: [-1.1, 1.55, 2.18] }
+    // Terrace planter box topiary balls (centered inside the planter at z = 2.12)
+    { shape: { kind: 'sphere', radius: 0.11, segments: 8 }, position: [-1.9, 1.53, 2.12] },
+    { shape: { kind: 'sphere', radius: 0.11, segments: 8 }, position: [-1.5, 1.53, 2.12] },
+    { shape: { kind: 'sphere', radius: 0.11, segments: 8 }, position: [-1.1, 1.53, 2.12] }
   );
 
   // =========================================================================
   // 7. RED ILLUMINATED MEDICAL CROSSES
   // =========================================================================
 
-  // Facade cross mounted on canopy fascia band
+  // Facade cross mounted on canopy front fascia band
   crossParts.push(
-    { shape: { kind: 'box', size: [0.44, 0.13, 0.04] }, position: [-1.5, 1.34, 1.76] },
-    { shape: { kind: 'box', size: [0.13, 0.44, 0.04] }, position: [-1.5, 1.34, 1.76] }
+    { shape: { kind: 'box', size: [0.44, 0.13, 0.04] }, position: [-1.5, 1.22, 2.33] },
+    { shape: { kind: 'box', size: [0.13, 0.44, 0.04] }, position: [-1.5, 1.22, 2.33] }
   );
 
   // Totem sign cross

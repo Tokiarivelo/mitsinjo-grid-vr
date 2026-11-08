@@ -1,19 +1,15 @@
 'use client';
 
 import { useMemo } from 'react';
-import * as THREE from 'three';
 import { createSchoolGeometry } from '../utils/school-geometry';
 import { corrugatedTexture } from './procedural-textures';
-import { windowColor } from './village-house';
 
 export interface SchoolBuildingProps {
   /** Power glow 0..1 (derived from microgrid sector status). */
-  glow: number;
+  glow?: number;
 }
 
-const UNLIT_GLASS = '#253545';
-
-export function SchoolBuilding({ glow }: SchoolBuildingProps) {
+export function SchoolBuilding({ glow: _glow }: SchoolBuildingProps) {
   const geos = useMemo(() => createSchoolGeometry(), []);
 
   // Corrugated texture for cardboard / ribbed roofs
@@ -23,12 +19,6 @@ export function SchoolBuilding({ glow }: SchoolBuildingProps) {
     tex.needsUpdate = true;
     return tex;
   }, []);
-
-  // Glass material dynamically reacting to microgrid power
-  const glassColor = useMemo(() => {
-    if (glow <= 0) return new THREE.Color(UNLIT_GLASS);
-    return windowColor(glow);
-  }, [glow]);
 
   return (
     <group name="school-mesh">
@@ -57,16 +47,13 @@ export function SchoolBuilding({ glow }: SchoolBuildingProps) {
         <meshStandardMaterial color="#b88a5d" map={roofTexture} roughness={0.68} metalness={0.15} />
       </mesh>
 
-      {/* 6. Multi-pane classroom windows (illuminated when powered) */}
+      {/* 6. Multi-pane classroom windows (reflective architectural glass) */}
       <mesh geometry={geos.glass}>
         <meshStandardMaterial
-          color={glassColor}
-          emissive={glow > 0 ? glassColor : '#000000'}
-          emissiveIntensity={glow > 0 ? 0.7 * glow : 0}
-          transparent
-          opacity={glow > 0 ? 0.9 : 0.75}
-          roughness={glow > 0 ? 0.15 : 0.25}
-          metalness={glow > 0 ? 0.3 : 0.8}
+          color="#1c2836"
+          roughness={0.08}
+          metalness={0.92}
+          envMapIntensity={2.5}
         />
       </mesh>
 

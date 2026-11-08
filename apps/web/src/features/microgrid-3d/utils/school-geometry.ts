@@ -111,26 +111,26 @@ export function createSchoolGeometry(): SchoolGeometries {
     rotation: [0, 0, -roofAngle],
   });
 
-  // Round / Arched Attic Window on Central Pediment
+  // Round / Arched Attic Window on Central Pediment (staged cleanly to prevent z-fighting)
   blueParts.push({
-    shape: { kind: 'cylinder', radiusTop: 0.22, radiusBottom: 0.22, height: 0.05, segments: 12 },
-    position: [0, pedBaseY + 0.48, CD / 2 + 0.06],
+    shape: { kind: 'cylinder', radiusTop: 0.22, radiusBottom: 0.22, height: 0.04, segments: 12 },
+    position: [0, pedBaseY + 0.48, CD / 2 + 0.09],
     rotation: [Math.PI / 2, 0, 0],
   });
   glassParts.push({
-    shape: { kind: 'cylinder', radiusTop: 0.18, radiusBottom: 0.18, height: 0.06, segments: 12 },
-    position: [0, pedBaseY + 0.48, CD / 2 + 0.07],
+    shape: { kind: 'cylinder', radiusTop: 0.18, radiusBottom: 0.18, height: 0.01, segments: 12 },
+    position: [0, pedBaseY + 0.48, CD / 2 + 0.08],
     rotation: [Math.PI / 2, 0, 0],
   });
   woodParts.push(
     // Cross muntins on round window
     {
-      shape: { kind: 'box', size: [0.36, 0.03, 0.07] },
-      position: [0, pedBaseY + 0.48, CD / 2 + 0.08],
+      shape: { kind: 'box', size: [0.36, 0.025, 0.02] },
+      position: [0, pedBaseY + 0.48, CD / 2 + 0.095],
     },
     {
-      shape: { kind: 'box', size: [0.03, 0.36, 0.07] },
-      position: [0, pedBaseY + 0.48, CD / 2 + 0.08],
+      shape: { kind: 'box', size: [0.025, 0.36, 0.02] },
+      position: [0, pedBaseY + 0.48, CD / 2 + 0.095],
     }
   );
 
@@ -367,57 +367,76 @@ export function createSchoolGeometry(): SchoolGeometries {
       position: [wx - side * 0.5, 0.05, WD / 2 + 0.2],
     });
 
-    // Multi-pane Windows on Upper Story (3 windows per wing front)
+    // Multi-pane Windows on Upper Story (3 windows per wing front; staged in front of wall at WD/2 + 0.06)
     const winX = [wx - 0.7, wx, wx + 0.7];
+    const upWallZ = WD / 2 + 0.06;
     for (const x of winX) {
+      // Window glass pane (0.015m proud of wall, 0.01m thickness)
       glassParts.push({
-        shape: { kind: 'box', size: [0.38, 0.52, 0.04] },
-        position: [x, upCenterY, WD / 2 + 0.05],
+        shape: { kind: 'box', size: [0.38, 0.52, 0.01] },
+        position: [x, upCenterY, upWallZ + 0.015],
       });
       woodParts.push(
-        // Window outer frame
+        // Window outer frame (flush to wall, framing the glass)
         {
-          shape: { kind: 'box', size: [0.44, 0.58, 0.06] },
-          position: [x, upCenterY, WD / 2 + 0.04],
+          shape: { kind: 'box', size: [0.44, 0.58, 0.04] },
+          position: [x, upCenterY, upWallZ + 0.02],
         },
         // Window cross muntins
         {
-          shape: { kind: 'box', size: [0.38, 0.02, 0.06] },
-          position: [x, upCenterY, WD / 2 + 0.06],
+          shape: { kind: 'box', size: [0.38, 0.02, 0.015] },
+          position: [x, upCenterY, upWallZ + 0.022],
         },
         {
-          shape: { kind: 'box', size: [0.02, 0.52, 0.06] },
-          position: [x, upCenterY, WD / 2 + 0.06],
+          shape: { kind: 'box', size: [0.02, 0.52, 0.015] },
+          position: [x, upCenterY, upWallZ + 0.022],
         }
       );
     }
 
     // Multi-pane Windows on Lower Story (2 windows per wing front)
     const lowWinX = [wx + side * 0.45, wx + side * 0.95];
+    const lowWallZ = WD / 2 + 0.06;
     for (const x of lowWinX) {
       glassParts.push({
-        shape: { kind: 'box', size: [0.36, 0.48, 0.04] },
-        position: [x, H1 / 2, WD / 2 + 0.05],
+        shape: { kind: 'box', size: [0.36, 0.48, 0.01] },
+        position: [x, H1 / 2, lowWallZ + 0.015],
       });
       woodParts.push(
-        { shape: { kind: 'box', size: [0.42, 0.54, 0.06] }, position: [x, H1 / 2, WD / 2 + 0.04] },
-        { shape: { kind: 'box', size: [0.36, 0.02, 0.06] }, position: [x, H1 / 2, WD / 2 + 0.06] },
-        { shape: { kind: 'box', size: [0.02, 0.48, 0.06] }, position: [x, H1 / 2, WD / 2 + 0.06] }
+        {
+          shape: { kind: 'box', size: [0.42, 0.54, 0.04] },
+          position: [x, H1 / 2, lowWallZ + 0.02],
+        },
+        {
+          shape: { kind: 'box', size: [0.36, 0.02, 0.015] },
+          position: [x, H1 / 2, lowWallZ + 0.022],
+        },
+        {
+          shape: { kind: 'box', size: [0.02, 0.48, 0.015] },
+          position: [x, H1 / 2, lowWallZ + 0.022],
+        }
       );
     }
   }
 
-  // Windows on Central Pavilion Upper Story
+  // Windows on Central Pavilion Upper Story (wall front at CD/2 + 0.07)
   const cWinX = [-0.65, 0.65];
+  const cWallZ = CD / 2 + 0.07;
   for (const x of cWinX) {
     glassParts.push({
-      shape: { kind: 'box', size: [0.4, 0.55, 0.04] },
-      position: [x, upCenterY, CD / 2 + 0.05],
+      shape: { kind: 'box', size: [0.4, 0.55, 0.01] },
+      position: [x, upCenterY, cWallZ + 0.015],
     });
     woodParts.push(
-      { shape: { kind: 'box', size: [0.46, 0.62, 0.06] }, position: [x, upCenterY, CD / 2 + 0.04] },
-      { shape: { kind: 'box', size: [0.4, 0.02, 0.06] }, position: [x, upCenterY, CD / 2 + 0.06] },
-      { shape: { kind: 'box', size: [0.02, 0.55, 0.06] }, position: [x, upCenterY, CD / 2 + 0.06] }
+      { shape: { kind: 'box', size: [0.46, 0.62, 0.04] }, position: [x, upCenterY, cWallZ + 0.02] },
+      {
+        shape: { kind: 'box', size: [0.4, 0.02, 0.015] },
+        position: [x, upCenterY, cWallZ + 0.022],
+      },
+      {
+        shape: { kind: 'box', size: [0.02, 0.55, 0.015] },
+        position: [x, upCenterY, cWallZ + 0.022],
+      }
     );
   }
 

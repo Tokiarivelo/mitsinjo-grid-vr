@@ -403,7 +403,7 @@ export function CameraController({
       enableDamping={damping}
       dampingFactor={0.05}
       maxPolarAngle={Math.PI / 2.15}
-      minDistance={panMode ? 3 : 6}
+      minDistance={panMode ? 2.5 : 4}
       maxDistance={70}
       // Pan along the ground (not the screen) so the view never dives under the terrain.
       screenSpacePanning={false}

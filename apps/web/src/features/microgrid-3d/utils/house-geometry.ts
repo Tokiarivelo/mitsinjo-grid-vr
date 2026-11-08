@@ -1,7 +1,11 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { createHipRoofGeometry } from './hip-roof';
-import { createGableRoofGeometry } from './gable-roof';
+import {
+  createGableRoofGeometry,
+  createGableWallGeometry,
+  createCottageRoofGeometry,
+} from './gable-roof';
 import { mergeParts, type Part } from './merge-parts';
 
 /** One house of a cluster. Colors are sRGB hex; position/rotation place it in the cluster. */
@@ -81,7 +85,7 @@ function windowParts(h: HouseSpec): Part[] {
     // Front arched attic dormer window at the gable peak
     parts.push({
       shape: { kind: 'plane', size: [0.32, 0.24] },
-      position: [0, h.wallHeight + h.roofHeight * 0.48, h.depth / 2 + 0.016],
+      position: [0, h.wallHeight + 0.12 + h.roofHeight * 0.48, h.depth / 2 + 0.016],
       rotation: [0, 0, 0],
     });
 
@@ -208,27 +212,28 @@ function trimParts(h: HouseSpec): Part[] {
       position: [0, 0.06, 0],
     });
 
-    // Masonry Roof Chimney on roof slope
-    const chimX = h.width * 0.22;
+    // Masonry Roof Chimney on right roof slope
+    const chimX = h.width * 0.26;
     const chimZ = -h.depth * 0.12;
-    const chimY = h.wallHeight + h.roofHeight * 0.6;
+    const chimH = h.roofHeight * 0.95;
+    const chimY = h.wallHeight + 0.12 + h.roofHeight * 0.42;
     parts.push(
       {
-        shape: { kind: 'box', size: [0.32, h.roofHeight * 0.95, 0.32] },
+        shape: { kind: 'box', size: [0.32, chimH, 0.32] },
         position: [chimX, chimY, chimZ],
       },
       {
         shape: { kind: 'box', size: [0.38, 0.06, 0.38] },
-        position: [chimX, chimY + h.roofHeight * 0.48, chimZ],
+        position: [chimX, chimY + chimH / 2, chimZ],
       },
       {
-        shape: { kind: 'box', size: [0.22, 0.04, 0.22] },
-        position: [chimX, chimY + h.roofHeight * 0.52, chimZ],
+        shape: { kind: 'box', size: [0.22, 0.05, 0.22] },
+        position: [chimX, chimY + chimH / 2 + 0.04, chimZ],
       }
     );
 
     // Arched attic dormer window surround & muntins
-    const atticY = h.wallHeight + h.roofHeight * 0.48;
+    const atticY = h.wallHeight + 0.12 + h.roofHeight * 0.48;
     parts.push(
       { shape: { kind: 'box', size: [0.36, 0.28, 0.035] }, position: [0, atticY, doorZ] },
       { shape: { kind: 'box', size: [0.3, 0.02, 0.045] }, position: [0, atticY, doorZ + 0.01] },
@@ -683,21 +688,54 @@ export function buildHouseCluster(houses: readonly HouseSpec[]): HouseClusterGeo
     trim.push(mergeParts(trimParts(h)).applyMatrix4(m));
     windows.push(mergeParts(windowParts(h)).applyMatrix4(m));
 
-    const wall = new THREE.BoxGeometry(h.width, h.wallHeight, h.depth).toNonIndexed();
-    wall.translate(0, h.wallHeight / 2 + 0.12, 0);
-    walls.push(paint(wall, h.wallColor).applyMatrix4(m));
+    const wallParts: THREE.BufferGeometry[] = [];
+    const wallBase = new THREE.BoxGeometry(h.width, h.wallHeight, h.depth).toNonIndexed();
+    wallBase.translate(0, h.wallHeight / 2 + 0.12, 0);
+    wallParts.push(wallBase);
+
+    if (h.cottage) {
+      // Front triangular gable wall at +depth/2 (sealed under front gable)
+      const frontGable = createGableWallGeometry(h.width, h.roofHeight, 0.08).toNonIndexed();
+      frontGable.translate(0, h.wallHeight + 0.12, h.depth / 2 - 0.04);
+      wallParts.push(frontGable);
+
+      // Back triangular gable wall at -depth/2 (sealed under back gable)
+      const backGable = createGableWallGeometry(h.width, h.roofHeight, 0.08).toNonIndexed();
+      backGable.translate(0, h.wallHeight + 0.12, -h.depth / 2 + 0.04);
+      wallParts.push(backGable);
+    } else if (h.roofStyle === 'gable') {
+      // Left triangular gable wall at -width/2
+      const leftGable = createGableWallGeometry(h.depth, h.roofHeight, 0.08).toNonIndexed();
+      leftGable.rotateY(Math.PI / 2);
+      leftGable.translate(-h.width / 2 + 0.04, h.wallHeight + 0.12, 0);
+      wallParts.push(leftGable);
+
+      // Right triangular gable wall at +width/2
+      const rightGable = createGableWallGeometry(h.depth, h.roofHeight, 0.08).toNonIndexed();
+      rightGable.rotateY(-Math.PI / 2);
+      rightGable.translate(h.width / 2 - 0.04, h.wallHeight + 0.12, 0);
+      wallParts.push(rightGable);
+    }
+
+    const mergedWall = mergeGeometries(wallParts);
+    wallParts.forEach((g) => g.dispose());
+    walls.push(paint(mergedWall!, h.wallColor).applyMatrix4(m));
 
     const roofW = h.width + overhang * 2;
     const roofD = h.depth + overhang * 2 + (h.veranda ? 0.9 : 0);
 
     let roof: THREE.BufferGeometry;
-    if (h.roofStyle === 'gable') {
+    if (h.cottage) {
+      roof = createCottageRoofGeometry(h.width, h.depth, h.roofHeight, overhang);
+      roof.translate(0, h.wallHeight + 0.12, 0);
+    } else if (h.roofStyle === 'gable') {
       const ridgeZ = h.ridgeZOffset ?? (h.veranda ? -0.25 : h.deckFurniture ? -0.15 : 0);
       roof = createGableRoofGeometry(roofW, roofD, h.roofHeight, 0, ridgeZ);
+      roof.translate(0, h.wallHeight + 0.12, h.veranda ? 0.45 : 0);
     } else {
       roof = createHipRoofGeometry(roofW, roofD, h.roofHeight);
+      roof.translate(0, h.wallHeight + 0.12, 0);
     }
-    roof.translate(0, h.wallHeight + 0.1, h.veranda ? 0.45 : 0);
     roofs.push(paint(roof, h.roofColor).applyMatrix4(m));
 
     if (hasVeranda) verandas.push(mergeParts(verandaParts(h)).applyMatrix4(m));
