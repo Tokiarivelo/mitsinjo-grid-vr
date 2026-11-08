@@ -9,9 +9,9 @@ import { fbm2d, smoothstep } from './noise';
  */
 
 /** Village plateau: flat inside this radius so buildings never float. */
-export const FLAT_RADIUS = 19;
+export const FLAT_RADIUS = 25;
 /** Hills reach full height at this radius. */
-export const HILL_RADIUS = 46;
+export const HILL_RADIUS = 52;
 /** Terrain mesh radius (fog hides the edge). */
 export const TERRAIN_RADIUS = 110;
 
@@ -67,47 +67,47 @@ export const VILLAGE_PATHS: [number, number][][] = [
   ],
   [
     [BUS_POSITION[0], BUS_POSITION[2]],
-    [4, 0.5],
-    [SECTOR_POSITIONS.health[0] - 1, SECTOR_POSITIONS.health[2] + 1.5],
+    [5.5, 0.5],
+    [SECTOR_POSITIONS.health[0] - 1.2, SECTOR_POSITIONS.health[2] + 1.5],
   ],
   [
     [BUS_POSITION[0], BUS_POSITION[2]],
-    [-4, 2],
+    [-5, 0.8],
     [SECTOR_POSITIONS.water[0] + 1.5, SECTOR_POSITIONS.water[2]],
   ],
   [
     [BATTERY_POSITION[0], BATTERY_POSITION[2]],
-    [1.5, -5.5],
+    [1.5, -7.5],
     [SECTOR_POSITIONS.school[0], SECTOR_POSITIONS.school[2] + 2],
   ],
   [
     [BUS_POSITION[0], BUS_POSITION[2]],
-    [-3, 5],
-    [SECTOR_POSITIONS.households[0] + 1, SECTOR_POSITIONS.households[2]],
+    [-4.5, 6.5],
+    [SECTOR_POSITIONS.households[0] + 1.2, SECTOR_POSITIONS.households[2]],
   ],
   [
     [BUS_POSITION[0], BUS_POSITION[2]],
-    [2.5, 4.5],
+    [3.5, 5.5],
     [SECTOR_POSITIONS.market[0], SECTOR_POSITIONS.market[2] - 1],
   ],
   // Service track to the factory (north-east, behind the clinic).
   [
     [BUS_POSITION[0], BUS_POSITION[2]],
-    [5, -3],
+    [7.5, -4.5],
     [SECTOR_POSITIONS.industry[0] - 2.4, SECTOR_POSITIONS.industry[2]],
   ],
   // Main road leaving the village to the south-east.
   [
     [SECTOR_POSITIONS.market[0], SECTOR_POSITIONS.market[2]],
-    [9, 12],
-    [14, 20],
-    [17, 34],
-    [24, 52],
+    [12, 15],
+    [17, 23],
+    [20, 36],
+    [26, 54],
   ],
   // Ring road to the clinic and school.
   [
     [SECTOR_POSITIONS.health[0], SECTOR_POSITIONS.health[2]],
-    [8, -6],
+    [10, -9],
     [SECTOR_POSITIONS.school[0] + 3, SECTOR_POSITIONS.school[2]],
   ],
 ];

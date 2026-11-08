@@ -244,41 +244,47 @@ export function createSchoolGeometry(): SchoolGeometries {
     }
   );
 
-  // Porch Gabled Roof Canopy
+  // Porch Gabled Roof Canopy (flush to front wall at CD/2 + 0.06, overhanging porch front)
   const porchRoofY = 1.25;
   const porchSlopeLen = Math.hypot(porchW / 2 + 0.15, 0.35);
   const porchAngle = Math.atan2(0.35, porchW / 2 + 0.15);
+  const porchCanopyD = porchD + 0.04;
+  const porchCanopyZ = CD / 2 + 0.06 + porchCanopyD / 2;
   roofParts.push(
     {
-      shape: { kind: 'box', size: [porchSlopeLen, 0.06, porchD + 0.15] },
-      position: [-(porchW / 4), porchRoofY + 0.18, porchZ],
+      shape: { kind: 'box', size: [porchSlopeLen, 0.06, porchCanopyD] },
+      position: [-(porchW / 4), porchRoofY + 0.18, porchCanopyZ],
       rotation: [0, 0, porchAngle],
     },
     {
-      shape: { kind: 'box', size: [porchSlopeLen, 0.06, porchD + 0.15] },
-      position: [porchW / 4, porchRoofY + 0.18, porchZ],
+      shape: { kind: 'box', size: [porchSlopeLen, 0.06, porchCanopyD] },
+      position: [porchW / 4, porchRoofY + 0.18, porchCanopyZ],
       rotation: [0, 0, -porchAngle],
     }
   );
 
-  // Double Red Entry Doors
+  // Double Red Entry Doors (proudly staged in front of yellow wall at CD/2 + 0.06 to eliminate z-fighting)
+  const mainDoorZ = CD / 2 + 0.075;
   redParts.push(
-    { shape: { kind: 'box', size: [0.44, 0.9, 0.04] }, position: [-0.23, 0.65, CD / 2 + 0.04] },
-    { shape: { kind: 'box', size: [0.44, 0.9, 0.04] }, position: [0.23, 0.65, CD / 2 + 0.04] }
+    { shape: { kind: 'box', size: [0.44, 0.9, 0.03] }, position: [-0.23, 0.65, mainDoorZ] },
+    { shape: { kind: 'box', size: [0.44, 0.9, 0.03] }, position: [0.23, 0.65, mainDoorZ] }
   );
   woodParts.push(
     // Door surround frame
-    { shape: { kind: 'box', size: [1.02, 0.98, 0.06] }, position: [0, 0.66, CD / 2 + 0.03] },
+    { shape: { kind: 'box', size: [1.02, 0.98, 0.04] }, position: [0, 0.66, CD / 2 + 0.068] },
     // Center divider
-    { shape: { kind: 'box', size: [0.04, 0.92, 0.06] }, position: [0, 0.65, CD / 2 + 0.05] }
+    { shape: { kind: 'box', size: [0.04, 0.92, 0.04] }, position: [0, 0.65, mainDoorZ + 0.015] }
   );
   // Brass handles
   bellParts.push(
     {
       shape: { kind: 'sphere', radius: 0.02, segments: 6 },
-      position: [-0.06, 0.62, CD / 2 + 0.07],
+      position: [-0.06, 0.62, mainDoorZ + 0.025],
     },
-    { shape: { kind: 'sphere', radius: 0.02, segments: 6 }, position: [0.06, 0.62, CD / 2 + 0.07] }
+    {
+      shape: { kind: 'sphere', radius: 0.02, segments: 6 },
+      position: [0.06, 0.62, mainDoorZ + 0.025],
+    }
   );
 
   // =========================================================================
@@ -321,45 +327,54 @@ export function createSchoolGeometry(): SchoolGeometries {
       }
     );
 
-    // Wing Gabled Roof (Ridge along X)
-    const wingRoofH = 0.8;
-    const wingRidgeY = pedBaseY + 0.1;
-    const wingSlopeLen = Math.hypot(WD / 2 + 0.2, wingRoofH);
-    const wingRoofAngle = Math.atan2(wingRoofH, WD / 2 + 0.2);
+    // Wing Gabled Roof (Ridge along X, perched on top of blue walls at y = 2.45m; does not intersect windows or walls)
+    const wingRoofH = 0.65;
+    const wallTopY = pedBaseY; // 2.45m (top of 2nd floor walls, comfortably above 2nd floor windows at y <= 2.19m)
+    const roofHalfD = WD / 2 + 0.1; // 1.20m (slight architectural overhang beyond front and back wall faces)
+    const wingSlopeLen = Math.hypot(roofHalfD, wingRoofH);
+    const wingRoofAngle = Math.atan2(wingRoofH, roofHalfD);
+    const roofW = WW - 0.06; // 2.34m (sits snugly between central pavilion and outer stepped parapet)
+    const roofX = side * (CW / 2 + roofW / 2 + 0.01);
 
-    // Front slope
+    // Front slope (slopes from ridge down to eaves at y = 2.45m, z = 1.20m)
     roofParts.push({
-      shape: { kind: 'box', size: [WW + 0.25, 0.08, wingSlopeLen] },
-      position: [wx, wingRidgeY - wingRoofH / 2 + 0.04, WD / 4 + 0.05],
+      shape: { kind: 'box', size: [roofW, 0.06, wingSlopeLen] },
+      position: [roofX, wallTopY + wingRoofH / 2, roofHalfD / 2],
       rotation: [wingRoofAngle, 0, 0],
     });
-    // Back slope
+    // Back slope (slopes from ridge down to eaves at y = 2.45m, z = -1.20m)
     roofParts.push({
-      shape: { kind: 'box', size: [WW + 0.25, 0.08, wingSlopeLen] },
-      position: [wx, wingRidgeY - wingRoofH / 2 + 0.04, -(WD / 4 + 0.05)],
+      shape: { kind: 'box', size: [roofW, 0.06, wingSlopeLen] },
+      position: [roofX, wallTopY + wingRoofH / 2, -roofHalfD / 2],
       rotation: [-wingRoofAngle, 0, 0],
     });
 
-    // Outer gable triangular face (Sky blue)
+    // Outer crow-stepped gable parapet (Sky blue, neatly framing the gabled roof)
     for (let i = 0; i < 5; i++) {
       const t = i / 5;
-      const d = WD * (1 - t);
+      const d = (WD + 0.22) * (1 - t * 0.85);
       const sh = wingRoofH / 5;
-      const sy = pedBaseY - 0.15 + t * wingRoofH + sh / 2;
+      const sy = wallTopY + t * wingRoofH + sh / 2;
       blueParts.push({
-        shape: { kind: 'box', size: [0.1, sh, d] },
+        shape: { kind: 'box', size: [0.12, sh, d] },
         position: [wx + (side * WW) / 2, sy, 0],
       });
     }
 
-    // Secondary Red Entrance Door on each wing
+    // Secondary Red Entrance Door on each wing (proudly staged in front of yellow wall at WD/2 + 0.06 to eliminate z-fighting)
+    const secDoorZ = WD / 2 + 0.076;
     redParts.push({
-      shape: { kind: 'box', size: [0.42, 0.85, 0.04] },
-      position: [wx - side * 0.5, 0.55, WD / 2 + 0.04],
+      shape: { kind: 'box', size: [0.42, 0.86, 0.03] },
+      position: [wx - side * 0.5, 0.55, secDoorZ],
     });
     woodParts.push({
-      shape: { kind: 'box', size: [0.48, 0.9, 0.06] },
-      position: [wx - side * 0.5, 0.55, WD / 2 + 0.03],
+      shape: { kind: 'box', size: [0.5, 0.92, 0.04] },
+      position: [wx - side * 0.5, 0.55, WD / 2 + 0.07],
+    });
+    // Brass door knob
+    bellParts.push({
+      shape: { kind: 'sphere', radius: 0.02, segments: 6 },
+      position: [wx - side * 0.5 + (side > 0 ? -0.14 : 0.14), 0.55, secDoorZ + 0.02],
     });
     // Secondary steps
     yellowParts.push({
@@ -443,9 +458,9 @@ export function createSchoolGeometry(): SchoolGeometries {
   // Brick Red Chimney on Left Roof
   redParts.push(
     // Chimney shaft
-    { shape: { kind: 'box', size: [0.36, 0.95, 0.36] }, position: [-2.6, 2.9, -0.4] },
+    { shape: { kind: 'box', size: [0.36, 1.05, 0.36] }, position: [-2.6, 3.15, -0.4] },
     // Chimney decorative cap
-    { shape: { kind: 'box', size: [0.44, 0.08, 0.44] }, position: [-2.6, 3.4, -0.4] }
+    { shape: { kind: 'box', size: [0.44, 0.08, 0.44] }, position: [-2.6, 3.7, -0.4] }
   );
 
   // =========================================================================

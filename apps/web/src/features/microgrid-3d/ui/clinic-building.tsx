@@ -34,11 +34,13 @@ export function ClinicBuilding({ glow }: ClinicBuildingProps) {
     return tex;
   }, []);
 
-  // Glass material dynamically reacting to microgrid power
+  const isLit = glow > 0;
+
+  // Glass material dynamically reacting to microgrid power at dusk / night
   const glassColor = useMemo(() => {
-    if (glow <= 0) return new THREE.Color(UNLIT_GLASS);
+    if (!isLit) return new THREE.Color(UNLIT_GLASS);
     return windowColor(glow);
-  }, [glow]);
+  }, [isLit, glow]);
 
   return (
     <group name="health-clinic-mesh">
@@ -52,16 +54,16 @@ export function ClinicBuilding({ glow }: ClinicBuildingProps) {
         <meshStandardMaterial color="#be8347" map={woodTexture} roughness={0.65} metalness={0.05} />
       </mesh>
 
-      {/* 3. Curtain wall glass (translucent, illuminated when powered) */}
+      {/* 3. Curtain wall glass (translucent, warmly illuminated when powered at night) */}
       <mesh geometry={geos.curtainGlass}>
         <meshStandardMaterial
           color={glassColor}
-          emissive={glow > 0 ? glassColor : '#000000'}
-          emissiveIntensity={glow > 0 ? 0.65 * glow : 0}
+          emissive={isLit ? glassColor : '#000000'}
+          emissiveIntensity={isLit ? 0.9 * glow : 0}
           transparent
-          opacity={glow > 0 ? 0.88 : 0.72}
-          roughness={glow > 0 ? 0.12 : 0.18}
-          metalness={glow > 0 ? 0.35 : 0.85}
+          opacity={isLit ? 0.9 : 0.72}
+          roughness={isLit ? 0.12 : 0.18}
+          metalness={isLit ? 0.2 : 0.85}
         />
       </mesh>
 
@@ -82,11 +84,30 @@ export function ClinicBuilding({ glow }: ClinicBuildingProps) {
 
       {/* 7. Red illuminated medical crosses (facade & entrance totem) */}
       <mesh geometry={geos.redCross}>
-        <meshBasicMaterial
-          color={glow > 0 ? CLINIC_RED_LIT : CLINIC_RED_UNLIT}
-          toneMapped={false}
-        />
+        <meshBasicMaterial color={isLit ? CLINIC_RED_LIT : CLINIC_RED_UNLIT} toneMapped={false} />
       </mesh>
+
+      {/* Nighttime / dusk architectural illumination */}
+      {isLit && (
+        <>
+          {/* Clinic entrance ambulance bay & portico illumination */}
+          <pointLight
+            position={[-0.8, 1.8, 2.2]}
+            color="#fff0c2"
+            intensity={1.8 * glow}
+            distance={8}
+            decay={2}
+          />
+          {/* Clinic interior curtain wall gentle ambient glow */}
+          <pointLight
+            position={[0.8, 2.2, 0]}
+            color="#e0f2fe"
+            intensity={1.4 * glow}
+            distance={7}
+            decay={2}
+          />
+        </>
+      )}
     </group>
   );
 }

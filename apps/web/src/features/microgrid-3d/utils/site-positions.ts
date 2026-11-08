@@ -6,15 +6,15 @@ import type { SectorId } from '@mitsinjo/engine';
  * cycle that crashed module evaluation (PP-T3).
  */
 export const SECTOR_POSITIONS: Record<SectorId, [number, number, number]> = {
-  health: [9, 0, -1],
-  water: [-8, 0, 2],
-  school: [2, 0, -9],
-  households: [-6, 0, 8],
-  market: [4, 0, 7],
-  industry: [11, 0, -8.5],
+  health: [12.5, 0, -0.5],
+  water: [-10.5, 0, 0.5],
+  school: [2.5, 0, -13.0],
+  households: [-9.0, 0, 11.0],
+  market: [7.0, 0, 10.0],
+  industry: [15.5, 0, -11.5],
 };
 
-export const SOLAR_POSITION: [number, number, number] = [-10, 0, -8];
+export const SOLAR_POSITION: [number, number, number] = [-14.0, 0, -11.5];
 export const BATTERY_POSITION: [number, number, number] = [0, 0, -2];
 export const BUS_POSITION: [number, number, number] = [0, 0, 1];
 

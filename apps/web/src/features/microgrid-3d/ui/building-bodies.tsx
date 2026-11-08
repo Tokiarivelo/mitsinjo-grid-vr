@@ -174,6 +174,15 @@ function WaterBody({ glow }: BodyProps) {
         position={[1.9, 0, 1.4]}
         rotationY={-0.5}
       />
+      {glow > 0 && (
+        <pointLight
+          position={[0, TOWER_H + 0.5, 0]}
+          color="#38bdf8"
+          intensity={1.2 * glow}
+          distance={6}
+          decay={2}
+        />
+      )}
     </group>
   );
 }
@@ -216,6 +225,7 @@ const HOME_SPECS: HouseSpec[] = HOMES.map((h) => ({
 }));
 
 function HouseholdsBody({ glow }: BodyProps) {
+  const isLit = glow > 0;
   return (
     <group name="households-group">
       <HouseCluster
@@ -224,6 +234,25 @@ function HouseholdsBody({ glow }: BodyProps) {
         windowGlow={glow}
         roofFinish="tile"
       />
+      {isLit && (
+        <>
+          {/* Gentle neighborhood porch lights illuminating the cottage cluster at night */}
+          <pointLight
+            position={[-1.2, 1.8, 1.2]}
+            color="#ffa742"
+            intensity={1.5 * glow}
+            distance={8}
+            decay={2}
+          />
+          <pointLight
+            position={[1.4, 1.8, -0.8]}
+            color="#ffa742"
+            intensity={1.5 * glow}
+            distance={8}
+            decay={2}
+          />
+        </>
+      )}
     </group>
   );
 }
@@ -320,6 +349,15 @@ function MarketBody({ glow }: BodyProps) {
       <mesh geometry={bulbs}>
         <meshBasicMaterial color={bulbColor} toneMapped={false} />
       </mesh>
+      {glow > 0 && (
+        <pointLight
+          position={[0, 2.2, 0]}
+          color="#ffba66"
+          intensity={1.6 * glow}
+          distance={8}
+          decay={2}
+        />
+      )}
     </group>
   );
 }
@@ -358,10 +396,20 @@ const FACTORY_STEEL = mergeParts([
 ]);
 
 function FactoryBody({ glow }: BodyProps) {
+  const isLit = glow > 0;
   return (
     <group name="factory-mesh">
       <HouseCluster houses={FACTORY_HALL} windowGlow={glow} />
       <mesh geometry={FACTORY_STEEL} material={STEEL} castShadow receiveShadow />
+      {isLit && (
+        <pointLight
+          position={[0, 2.5, 1.5]}
+          color="#fde047"
+          intensity={1.4 * glow}
+          distance={8}
+          decay={2}
+        />
+      )}
     </group>
   );
 }

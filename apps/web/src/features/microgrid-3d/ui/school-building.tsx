@@ -9,8 +9,10 @@ export interface SchoolBuildingProps {
   glow?: number;
 }
 
-export function SchoolBuilding({ glow: _glow }: SchoolBuildingProps) {
+export function SchoolBuilding({ glow = 0 }: SchoolBuildingProps) {
   const geos = useMemo(() => createSchoolGeometry(), []);
+  const isLit = glow > 0;
+  const glassColor = isLit ? '#ffe6a3' : '#1c2836';
 
   // Corrugated texture for cardboard / ribbed roofs
   const roofTexture = useMemo(() => {
@@ -47,13 +49,15 @@ export function SchoolBuilding({ glow: _glow }: SchoolBuildingProps) {
         <meshStandardMaterial color="#b88a5d" map={roofTexture} roughness={0.68} metalness={0.15} />
       </mesh>
 
-      {/* 6. Multi-pane classroom windows (reflective architectural glass) */}
+      {/* 6. Multi-pane classroom windows (gentle warm interior light at night when powered, dark reflective when unpowered/daytime) */}
       <mesh geometry={geos.glass}>
         <meshStandardMaterial
-          color="#1c2836"
-          roughness={0.08}
-          metalness={0.92}
-          envMapIntensity={2.5}
+          color={glassColor}
+          emissive={isLit ? '#ff9933' : '#000000'}
+          emissiveIntensity={isLit ? 0.9 * glow : 0}
+          roughness={isLit ? 0.25 : 0.08}
+          metalness={isLit ? 0.1 : 0.92}
+          envMapIntensity={isLit ? 0.8 : 2.5}
         />
       </mesh>
 
@@ -66,6 +70,35 @@ export function SchoolBuilding({ glow: _glow }: SchoolBuildingProps) {
       <mesh geometry={geos.brassBell} castShadow>
         <meshStandardMaterial color="#facc15" roughness={0.22} metalness={0.88} />
       </mesh>
+
+      {/* Nighttime / dusk architectural illumination */}
+      {isLit && (
+        <>
+          {/* Main entrance portico lantern lighting the front steps and path */}
+          <pointLight
+            position={[0, 1.45, 2.0]}
+            color="#ffb74d"
+            intensity={1.8 * glow}
+            distance={8}
+            decay={2}
+          />
+          {/* Gentle classroom light spilling out from left and right wings */}
+          <pointLight
+            position={[-2.4, 1.6, 0.4]}
+            color="#ffd57e"
+            intensity={1.2 * glow}
+            distance={6}
+            decay={2}
+          />
+          <pointLight
+            position={[2.4, 1.6, 0.4]}
+            color="#ffd57e"
+            intensity={1.2 * glow}
+            distance={6}
+            decay={2}
+          />
+        </>
+      )}
     </group>
   );
 }

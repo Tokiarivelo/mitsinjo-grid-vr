@@ -142,11 +142,21 @@ export function VillageBuildings({
   htmlPortal,
   lampGlow = 1,
 }: VillageBuildingsProps) {
+  // Only start glowing when it begins to get dark (dusk / night: lampGlow > 0.45).
+  // Zero in broad daylight (lampGlow <= 0.45).
+  const duskThreshold = 0.45;
+  const darkness = Math.max(0, Math.min(1, (lampGlow - duskThreshold) / 0.4));
+
   return (
     <group name="village-buildings">
       {SECTOR_IDS.map((id) => {
         const model = buildings[id];
         const isSelected = selectedSector === id;
+        const hasPower =
+          model.connected && model.servedKw > 0.05 && model.status !== 'unserved' && !model.onFire;
+        const powerFactor = hasPower ? Math.max(0.65, glowFromIntensity(model.intensity)) : 0;
+        const glow = darkness * powerFactor;
+
         return (
           <BuildingFrame
             key={id}
@@ -161,10 +171,7 @@ export function VillageBuildings({
             htmlPortal={htmlPortal}
             {...BODY_LAYOUT[id]}
           >
-            <BuildingBody
-              id={id}
-              glow={glowFromIntensity(model.intensity) * (0.3 + 0.7 * lampGlow)}
-            />
+            <BuildingBody id={id} glow={glow} />
           </BuildingFrame>
         );
       })}

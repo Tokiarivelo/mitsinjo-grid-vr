@@ -84,42 +84,37 @@ function windowParts(h: HouseSpec): Part[] {
 
     // Front arched attic dormer window at the gable peak
     parts.push({
-      shape: { kind: 'plane', size: [0.32, 0.24] },
-      position: [0, h.wallHeight + 0.12 + h.roofHeight * 0.48, h.depth / 2 + 0.016],
-      rotation: [0, 0, 0],
+      shape: { kind: 'box', size: [0.32, 0.24, 0.012] },
+      position: [0, h.wallHeight + 0.12 + h.roofHeight * 0.48, h.depth / 2 + 0.022],
     });
 
     // Front door glass upper panels
     parts.push({
-      shape: { kind: 'plane', size: [0.28, doorH * 0.36] },
-      position: [0, 0.12 + doorH * 0.68, h.depth / 2 + 0.016],
-      rotation: [0, 0, 0],
+      shape: { kind: 'box', size: [0.28, doorH * 0.36, 0.012] },
+      position: [0, 0.12 + doorH * 0.68, h.depth / 2 + 0.022],
     });
 
     // Front multi-pane sash windows flanking the entrance
     const frontX = h.width * 0.32;
     for (const side of [-1, 1]) {
       parts.push({
-        shape: { kind: 'plane', size: [winW, winH] },
-        position: [side * frontX, winY, h.depth / 2 + 0.016],
-        rotation: [0, 0, 0],
+        shape: { kind: 'box', size: [winW, winH, 0.012] },
+        position: [side * frontX, winY, h.depth / 2 + 0.022],
       });
     }
 
     // Side multi-pane windows
     for (const side of [-1, 1]) {
       parts.push({
-        shape: { kind: 'plane', size: [winW, winH] },
-        position: [side * (h.width / 2 + 0.016), winY, 0],
-        rotation: [0, (side * Math.PI) / 2, 0],
+        shape: { kind: 'box', size: [0.012, winH, winW] },
+        position: [side * (h.width / 2 + 0.022), winY, 0],
       });
     }
 
     // Rear window
     parts.push({
-      shape: { kind: 'plane', size: [winW, winH] },
-      position: [0, winY, -h.depth / 2 - 0.016],
-      rotation: [0, Math.PI, 0],
+      shape: { kind: 'box', size: [winW, winH, 0.012] },
+      position: [0, winY, -h.depth / 2 - 0.022],
     });
 
     return parts;
@@ -132,13 +127,12 @@ function windowParts(h: HouseSpec): Part[] {
     const panoH = h.wallHeight * 0.78;
     const panoY = 0.12 + panoH / 2;
     const panoX = -h.width * 0.08;
-    const panoZ = h.depth / 2 + 0.014;
+    const panoZ = h.depth / 2 + 0.02;
 
     // Front panoramic sliding glass
     parts.push({
-      shape: { kind: 'plane', size: [panoW, panoH] },
+      shape: { kind: 'box', size: [panoW, panoH, 0.012] },
       position: [panoX, panoY, panoZ],
-      rotation: [0, 0, 0],
     });
 
     // Side floor-to-ceiling picture window facing the surrounding nature
@@ -146,9 +140,8 @@ function windowParts(h: HouseSpec): Part[] {
     const sideH = h.wallHeight * 0.72;
     const sideY = 0.12 + sideH / 2;
     parts.push({
-      shape: { kind: 'plane', size: [sideW, sideH] },
-      position: [h.width / 2 + 0.014, sideY, 0],
-      rotation: [0, Math.PI / 2, 0],
+      shape: { kind: 'box', size: [0.012, sideH, sideW] },
+      position: [h.width / 2 + 0.02, sideY, 0],
     });
 
     // Back clerestory / window
@@ -156,9 +149,8 @@ function windowParts(h: HouseSpec): Part[] {
     const backH = h.wallHeight * 0.38;
     const backY = h.wallHeight * 0.62 + 0.12;
     parts.push({
-      shape: { kind: 'plane', size: [backW, backH] },
-      position: [0, backY, -h.depth / 2 - 0.014],
-      rotation: [0, Math.PI, 0],
+      shape: { kind: 'box', size: [backW, backH, 0.012] },
+      position: [0, backY, -h.depth / 2 - 0.02],
     });
 
     return parts;
@@ -180,15 +172,13 @@ function windowParts(h: HouseSpec): Part[] {
     for (const x of xs) {
       if (side === 1 && Math.abs(x - doorX) < (winW + doorW) / 2) continue;
       parts.push({
-        shape: { kind: 'plane', size: [winW, winH] },
-        position: [x, winY, side * (h.depth / 2 + 0.014)],
-        rotation: [0, side === 1 ? 0 : Math.PI, 0],
+        shape: { kind: 'box', size: [winW, winH, 0.012] },
+        position: [x, winY, side * (h.depth / 2 + 0.02)],
       });
     }
     parts.push({
-      shape: { kind: 'plane', size: [winW, winH] },
-      position: [side * (h.width / 2 + 0.014), winY, 0],
-      rotation: [0, (side * Math.PI) / 2, 0],
+      shape: { kind: 'box', size: [0.012, winH, winW] },
+      position: [side * (h.width / 2 + 0.02), winY, 0],
     });
   }
   return parts;
