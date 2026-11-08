@@ -1,7 +1,7 @@
 'use client';
 
-import { memo, useCallback, useMemo, useState } from 'react';
-import { useAppLocale } from '@/lib/i18n';
+import { memo, useCallback, useMemo, useRef, useState } from 'react';
+import { useAppLocale, useTranslations } from '@/lib/i18n';
 import { localLabel, type ApplianceDetection } from '@/lib/vision';
 import { defaultArchetype, kitToRecipe, type ObjectKit } from '@/lib/object-kit';
 import { fitRecipe } from '@/lib/object-shape';
@@ -14,6 +14,7 @@ import { HoloDetectionTarget } from './holo-detection-target';
 import { SpawnedObject3D } from './spawned-object-3d';
 import { XRBlasterController } from './xr-blaster-controller';
 import { playGridConnectSound, playGridDisconnectSound } from './xr-audio-fx';
+import { VillageSpatialHUD } from './village-spatial-hud';
 
 export interface VillageXRStudioProps {
   detections: ApplianceDetection[];
@@ -36,9 +37,20 @@ export const VillageXRStudio = memo(function VillageXRStudio({
   photoKey,
 }: VillageXRStudioProps) {
   const { locale } = useAppLocale();
+  const t = useTranslations('features.visionInsert');
   const { list: simulationAppliances, upsert, remove } = useSimulationAppliances();
   const [materializedIds, setMaterializedIds] = useState<Set<string>>(() => new Set());
   const [hoveredTargetId, setHoveredTargetId] = useState<string | null>(null);
+  const [recentEvent, setRecentEvent] = useState<string | null>(null);
+  const eventTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const notifyEvent = useCallback((msg: string) => {
+    if (eventTimerRef.current) clearTimeout(eventTimerRef.current);
+    setRecentEvent(msg);
+    eventTimerRef.current = setTimeout(() => {
+      setRecentEvent(null);
+    }, 4500);
+  }, []);
 
   const photo = photoKey ?? 'vr-studio';
 
@@ -79,16 +91,18 @@ export const VillageXRStudio = memo(function VillageXRStudio({
 
       const applianceId = applianceIdFor(photo, id);
       const isConnected = connectedIds.has(id);
+      const title = localLabel(target.detection, locale) || target.detection.label;
+      const draft = aiDraft(target.detection, title);
+      const watts = draft.watts ?? 150;
 
       if (isConnected) {
         // Disconnect from microgrid
         playGridDisconnectSound();
         remove(applianceId);
+        notifyEvent(t('vrHudEventDisconnected', { watts, name: title }));
       } else {
         // Connect to microgrid with catalog defaults
         playGridConnectSound();
-        const title = localLabel(target.detection, locale) || target.detection.label;
-        const draft = aiDraft(target.detection, title);
         const appliance = toAppliance(applianceId, draft);
         if (appliance) {
           upsert(appliance);
@@ -115,12 +129,24 @@ export const VillageXRStudio = memo(function VillageXRStudio({
             archetype,
             connectionMode: 'branch',
           });
+          notifyEvent(t('vrHudEventConnected', { watts, name: title }));
         }
       }
 
       onSelectAppliance?.(id);
     },
-    [materializedIds, targets, connectedIds, photo, locale, remove, upsert, onSelectAppliance]
+    [
+      materializedIds,
+      targets,
+      connectedIds,
+      photo,
+      locale,
+      t,
+      remove,
+      upsert,
+      notifyEvent,
+      onSelectAppliance,
+    ]
   );
 
   const status = isScanning ? 'scanning' : targets.length > 0 ? 'detected' : 'idle';
@@ -159,7 +185,14 @@ export const VillageXRStudio = memo(function VillageXRStudio({
         position={[0, 1.45, -1.2]}
       />
 
-      {/* 4. Holographic Detection Targets */}
+      {/* 4. Diegetic Holographic Telemetry HUD (VS-T8) */}
+      <VillageSpatialHUD
+        position={[-0.95, 1.55, -1.2]}
+        rotation={[0.05, 0.45, 0]}
+        recentEvent={recentEvent}
+      />
+
+      {/* 5. Holographic Detection Targets */}
       {targets.map((target) => (
         <HoloDetectionTarget
           key={target.id}

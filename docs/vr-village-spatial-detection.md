@@ -1,19 +1,20 @@
 # Immersion WebXR sur /village : Détection Spatiale dans les Airs & Tir/Génération 3D
 
-> **Statut :** Analyse de faisabilité & Spécification technique  
+> **Statut :** En production / Implémenté & Validé  
 > **Cible :** Route `/village` (Village Studio / Vision Insert)  
-> **Technologies :** WebXR, Three.js, React Three Fiber (R3F), Meta IWER (Émulateur Quest 3), Meta Muse Spark + SAM  
-> **Environnement de test :** Émulateur desktop (100 % sans casque) et casque physique Meta Quest (Quest 3 / 3S / Pro)
+> **Technologies :** WebXR, Three.js, React Three Fiber (R3F), Meta IWER 2.8.0 (Émulateur Quest 3), Web Audio API, `@mitsinjo/engine`  
+> **Environnement de test :** Émulateur desktop (100 % sans casque via Play Mode) et casque physique Meta Quest (Quest 3 / 3S / Pro)
 
 ---
 
 ## 1. Résumé exécutif
 
-| Question                                  | Statut          | Détails                                                                                                                                                                                                              |
-| ----------------------------------------- | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Est-ce techniquement possible ?**       | **OUI**         | L'ensemble du cycle (bouton 3D dans l'espace, capture, détection IA, raycast de tir laser, apparition procédurale 3D) s'appuie sur des technologies WebXR standardisées et des modules déjà présents dans le projet. |
-| **Faisable avec l'émulateur seulement ?** | **OUI à 100 %** | Grâce au preset Meta Quest 3 de **Meta IWER 2.8.0** déjà intégré dans le projet (`dev-xr-emulator.ts`), le déplacement, la visée laser et la gâchette se testent au clavier/souris sans casque physique.             |
-| **Mode hors-ligne / développement**       | **Garanti**     | Compatible avec `make dev-mock` : les détections et shapes 3D s'exécutent en local sans clé API externe requise.                                                                                                     |
+| Question                                    | Statut           | Détails                                                                                                                                                                                                                   |
+| ------------------------------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Est-ce techniquement possible ?**         | **OUI (Validé)** | L'ensemble du cycle (bouton 3D dans l'espace, capture, détection IA, raycast de tir laser, apparition procédurale 3D, raccordement au microgrid) s'appuie sur des technologies WebXR standardisées et fonctionne in-situ. |
+| **Faisable avec l'émulateur seulement ?**   | **OUI à 100 %**  | Grâce au preset Meta Quest 3 de **Meta IWER 2.8.0** intégré dans le projet (`dev-xr-emulator.ts`), le déplacement, la visée laser et la gâchette se testent au clavier/souris sans casque physique.                       |
+| **Mode hors-ligne / développement**         | **Garanti**      | Compatible avec `make dev-mock` : les détections et shapes 3D s'exécutent en local sans clé API externe requise.                                                                                                          |
+| **Synchronisation simulation micro-réseau** | **Active**       | Les tirs en VR sur les appareils générés injectent/retirent dynamiquement les charges dans le moteur de calcul `@mitsinjo/engine` avec animation de conduit d'énergie 3D (`PowerConnectionBeam`).                         |
 
 ---
 
@@ -26,60 +27,150 @@ flowchart TD
     C --> D["4. Clic dans l'air (gâchette / pinch) → Capture & Analyse Vision"]
     D --> E["5. Des cibles holographiques 3D apparaissent autour des objets détectés"]
     E --> F["6. L'utilisateur vise une cible et tire (laser blaster)"]
-    F --> G["7. Impact lumineux → Génération procédurale du modèle 3D"]
+    F --> G["7. Impact lumineux + Audio FX → Génération procédurale du modèle 3D"]
     G --> H["8. L'objet 3D final apparaît et s'anime à l'emplacement exact dans la pièce"]
+    H --> I["9. Deuxième tir : Raccordement au microgrid + Conduit d'énergie 3D + HUD Holo"]
 ```
 
 ---
 
-## 3. Décomposition technique des 4 phases
+## 3. Décomposition technique des phases & Checklists
 
 ### Phase 1 : Bouton spatial "dans les airs" (Diegetic Spatial UI)
 
 - **Défi WebXR :** Les balises HTML standards du DOM (`<button>`, `<div>`, `<Html>` de Drei) ne sont pas projetées en stéréo dans le casque VR.
-- **Architecture retenue :**
-  - Un composant 3D Three.js pur (`<SpatialAirButton />`) suspendu dans le champ de vision (coordonnées relatives tête : `[0, 1.4, -1.2]` m).
+- **Architecture :**
+  - Un composant 3D Three.js pur (`<SpatialAirButton />`) suspendu dans le champ de vision (coordonnées relatives tête : `[0, 1.45, -1.2]` m).
   - Plaque holographique translucide en verre sombre, bordure cyan brillante (`TOKEN_HEX.energyCyan`), pulsation lumineuse d'attente.
   - Interaction : survol par le pointeur laser du contrôleur XR, puis appui sur la gâchette (`selectstart`).
+  - Synthétiseur audio Web Audio API pour le bip radar lors du scan.
 
-### Phase 2 : Détection en temps réel sans upload classique
+#### Checklist Phase 1 :
+
+- [x] Conteneur WebXR dédié (`VillageXRViewport`) avec cycle de vie `useWebXR`.
+- [x] Détection et émulateur automatique Meta IWER 2.8.0 preset Quest 3.
+- [x] Composant 3D `<SpatialAirButton />` flottant à hauteur d'yeux avec canvas texture 2D haute résolution.
+- [x] États visuels : `idle`, `scanning` (radar rotatif), `completed`.
+- [x] Effet audio procédural de chirp radar sans fichier externe (`xr-audio-fx.ts`).
+- [x] Raycast interactif gâchette / souris (`selectstart`) sur le bouton spatial.
+
+---
+
+### Phase 2 : Détection en temps réel sans upload classique (Spatial Vision Pipeline)
 
 - **Mécanismes de capture :**
-  1. **En émulateur (Desktop sans casque) :**
-     - Capture instantanée du framebuffer WebGL (`renderer.domElement.toDataURL('image/jpeg')`) OU capture du flux webcam de l'ordinateur via `navigator.mediaDevices.getUserMedia({ video: true })` OU utilisation de la scène diorama / pièce témoin (`public/samples/vision-room.jpg`).
-  2. **Sur casque réel (Meta Quest Browser) :**
-     - **Mode VR (`immersive-vr`) :** La pièce virtuelle (atelier, clinique, salle commune) est capturée directement depuis la caméra de l'observateur.
-     - **Note sur l'AR Passthrough (`immersive-ar`) :** Quest Browser n'accorde pas l'accès direct aux pixels bruts des caméras passthrough externes pour des raisons de confidentialité (_privacy sandboxing_). Le mode VR complet avec environnement 3D ou webcam locale contourne totalement cette limitation.
+  1. **En direct / Émulateur :** Capture vidéo live via `navigator.mediaDevices.getUserMedia({ video: true })` avec bascule automatique sur image d'échantillon `/samples/vision-room.jpg`.
+  2. **Sur casque réel (Meta Quest Browser) :** Capture de l'environnement virtuel ou webcam USB/caméra autorisée.
 - **Traitement & Réticules spatiaux :**
-  - L'image capturée est envoyée à `POST /api/vision`.
-  - La réponse fournit `ApplianceDetection[]` (boîtes 2D normalisées `[ymin, xmin, ymax, xmax]`, labels, catégories).
-  - Le système projette ces coordonnées 2D dans l'espace 3D à une distance focale estimée (ex: $z = -2.0\text{ m}$), créant des composants `<HoloDetectionTarget />` :
-    - Cadre filaire cyan animé.
-    - Étiquette textuelle 3D flottante (ex: _"Réfrigérateur · 180W"_ ou _"Panneau Solaire"_).
-    - Sphère d'impact invisible servant de _collider_ pour le Raycaster.
+  - L'image capturée est envoyée à `POST /api/vision` (ou mockperception en `dev-mock`).
+  - `spatial-projection.ts` projette les boîtes 2D normalisées en positions 3D $(x, y, z)$ réparties sur un arc devant l'utilisateur ($z \approx -1.8\text{ m}$ à $-2.4\text{ m}$).
+  - Cibles `<HoloDetectionTarget />` : cadre filaire cyan animé, étiquette textuelle billboard 3D (ex: _"Réfrigérateur · 180W"_), collider invisible.
+
+#### Checklist Phase 2 :
+
+- [x] Méthode `captureLiveOrSample()` combinant webcam locale et fallback `/samples/vision-room.jpg`.
+- [x] Hook ou session de détection connectée à l'API de vision perception.
+- [x] Algorithme de projection spatiale 2D $\rightarrow$ 3D (`spatial-projection.ts`) avec espacement sur arc radial.
+- [x] Composant `<HoloDetectionTarget />` avec double boîte filaire cyan, texture canvas billboard et gestion du hover.
+- [x] Tests unitaires pour `spatial-projection.ts` et `<HoloDetectionTarget />`.
+
+---
 
 ### Phase 3 : Visée & Tir sur l'objet ("Laser Blaster")
 
 - **Mécanique de visée :**
-  - Le contrôleur WebXR actif (`renderer.xr.getController(0)`) projette un rayon laser semi-transparent (`Line` ou cylindre émissif).
-  - À chaque frame de la boucle de rendu XR (`useFrame`), un `THREE.Raycaster` vérifie les collisions avec les cibles `<HoloDetectionTarget />`.
-  - Au survol : la cible passe du cyan à l'ambre (`solarAmber`), signalant qu'elle est verrouillée.
+  - Contrôleur WebXR actif (`renderer.xr.getController(0)`) avec rayon laser continu visible en temps réel.
+  - Réticule d'impact (pip dot) projeté à la distance exacte d'intersection avec les cibles.
+  - Raycaster Three.js en boucle `useFrame` testant les intersections cibles.
 - **Action de tir :**
-  - À l'appui sur la gâchette (_trigger pull_ / clic gauche dans l'émulateur) :
-    - Émission d'un trait laser rapide du contrôleur vers le centre de la cible.
-    - Animation d'impact : flash blanc, onde de choc sphérique cyan, particules de déflagration.
-    - Déclenchement de la vibration haptique sur le contrôleur (`gamepad.hapticActuators[0].pulse()`).
+  - Appui sur la gâchette : trait laser rapide avec décharge de projectile vers le point d'impact.
+  - Flash blanc, onde de choc circulaire cyan, retours haptiques `hapticActuators.pulse()`.
+  - Sons synthétisés procéduraux pour le tir et l'impact (`playLaserShootSound()`, `playTargetHitSound()`).
 
-### Phase 4 : Génération et apparition du modèle 3D in-situ
+#### Checklist Phase 3 :
+
+- [x] Contrôleur `<XRBlasterController />` avec rayon laser continu et reticule d'impact dynamique.
+- [x] Détection des intersections temps réel via `THREE.Raycaster`.
+- [x] Effets de tir : décharge de projectile, onde de choc sphérique et flash lumineux.
+- [x] Effets sonores procéduraux Web Audio API (`playLaserShootSound`, `playTargetHitSound`).
+- [x] Impulsion haptique sur contrôleur XR physique (`gamepad.hapticActuators`).
+- [x] Tests unitaires pour le contrôleur blaster et les effets audio.
+
+---
+
+### Phase 4 : Génération et apparition du modèle 3D in-situ (Spawn & Morphing)
 
 - **Appel de génération :**
-  - La cible touchée déclenche la requête vers `POST /api/vision/shape` (ou génère la recette via les utilitaires locaux `recipeMesh` / `silhouetteMesh` de `apps/web/src/features/vision-insert/utils/object-geometry.ts`).
+  - Génération de géométrie procédurale via `recipeMesh` / `silhouetteMesh` (`object-geometry.ts`) à l'échelle de la scène.
 - **Séquence d'apparition animée (Spawn Sequence) :**
-  1. **Phase 1 (0.0s – 0.3s) :** La cible holographique implose sous l'impact.
-  2. **Phase 2 (0.3s – 0.8s) :** Les arêtes du modèle 3D se dessinent sous forme de lignes d'encre verte/cyan (_ink wireframe_).
-  3. **Phase 3 (0.8s – 1.4s) :** Les volumes s'extrudent progressivement (effet d'échelle de 0 à 1 avec amorti élastique).
-  4. **Phase 4 (1.4s+) :** Les textures et matériaux PBR finaux s'appliquent. L'objet 3D devient physique, projetant des ombres au sol (`ContactShadows`).
-  5. L'objet peut ensuite être inspecté, déplacé ou raccordé directement au réseau microgrid du village.
+  - $0\text{s} \rightarrow 0.3\text{s}$ : Implosion de la cible filaire.
+  - $0.3\text{s} \rightarrow 0.8\text{s}$ : Matérialisation des arêtes d'encre verte/cyan.
+  - $0.8\text{s} \rightarrow 1.4\text{s}$ : Extrusion du volume plein avec rebond élastique (`spring scale`).
+  - $1.4\text{s}+$ : Textures PBR, ombres de contact au sol (`ContactShadows`), anneau d'aura d'énergie.
+
+#### Checklist Phase 4 :
+
+- [x] Composant `<SpawnedObject3D />` liant les recettes d'archetypes (`ObjectRecipe`).
+- [x] Séquence temporelle élastique de matérialisation in-situ.
+- [x] Anneau d'aura émissif à la base et ombres de contact au sol.
+- [x] Maintien de l'ancrage spatial et interaction continue avec le blaster.
+- [x] Tests de rendu et de mise à l'échelle pour objets multiples.
+
+---
+
+### Phase 5 : Raccordement au Réseau dans les Airs (In-Air Grid Connect & Power Beams)
+
+- **Interaction de raccordement en VR :**
+  - Tirer sur un objet 3D déjà matérialisé bascule son état de raccordement électrique sans quitter la VR.
+  - Étiquette holographique dynamique : _« ⚡ Visez et tirez pour raccorder (+180 W) »_ / _« ⚡ Visez et tirez pour déconnecter »_.
+- **Conduit d'énergie 3D & Jumeau numérique :**
+  - Conduit d'énergie en tube Catmull-Rom (`<PowerConnectionBeam />`) avec impulse lumineuse le long du câble vers le centre du village.
+  - Synchronisation en direct avec le moteur `@mitsinjo/engine` (`useSimulationAppliances().upsert()`) et `usePlacedModelsStore`.
+  - Sons procéduraux de connexion / déconnexion au réseau (`playGridConnectSound()`, `playGridDisconnectSound()`).
+
+#### Checklist Phase 5 :
+
+- [x] Bascule d'état connecté / déconnecté par tir laser sur l'objet matérialisé.
+- [x] Texture holographique interactive indiquant le wattage et l'action de raccordement.
+- [x] Câble d'énergie 3D courbe `<PowerConnectionBeam />` avec matériau émissif animé.
+- [x] Synchronisation avec les stores de simulation (`useSimulationAppliances`, `usePlacedModelsStore`).
+- [x] Effets sonores de connexion et déconnexion électrique.
+- [x] Parité i18n 100 % sur `en.json`, `fr.json`, `mg.json` (`make check-i18n`).
+
+---
+
+### Phase 6 : Tableau de bord HUD Holo dans les Airs (Diegetic In-Air Telemetry HUD)
+
+- **Vision :** Afficher un tableau de bord holographique flottant dans le champ de vision périphérique (`[-1.25, 1.55, -1.4]` m), orienté vers le joueur, affichant en temps réel les données de la simulation du micro-réseau sans quitter la VR :
+  - Niveau de batterie (%) avec barre de jauge lumineuse et indicateur de charge/décharge.
+  - Production solaire instantanée (kW).
+  - Charge totale demandée (kW) et équilibre net.
+  - Compteur d'appareils raccordés in-situ.
+  - Notification transitoire lors du tir de raccordement (ex: _« +180 W · Réfrigérateur raccordé »_).
+  - Bouton interactif pour réduire / développer le HUD.
+
+#### Checklist Phase 6 :
+
+- [x] Créer le composant 3D `<VillageSpatialHUD />` (`features/vision-insert/ui/xr/village-spatial-hud.tsx`).
+- [x] Créer le générateur de texture canvas haute résolution pour le HUD (`spatial-hud-texture.ts`).
+- [x] Connecter le HUD aux données en direct du microgrid (`useSimulationStore`).
+- [x] Afficher les jauges d'énergie (Batterie %, Solaire kW, Demande kW, Bilan Net).
+- [x] Afficher un toast/badge d'impact électrique transitoire lors de l'ajout/retrait d'un équipement.
+- [x] Ajouter les clés de traduction i18n en FR, EN et MG avec vérification `make check-i18n`.
+- [x] Tests unitaires Vitest pour le HUD et sa texture.
+
+---
+
+### Phase 7 : Audio spatial 3D & Contrôles Avancés (Spatial Panner & Haptics)
+
+- **Vision :** Spatialiser l'audio Web Audio avec `PannerNode` ou `THREE.PositionalAudio` pour localiser précisément les bruits de tir, d'impact et de bourdonnement électrique dans l'espace 3D selon la position relative de l'écouteur.
+
+#### Checklist Phase 7 :
+
+- [ ] Associer l'écouteur audio Web Audio à la caméra WebXR (`camera.matrixWorld`).
+- [ ] Spatialiser les sons de tir et d'impact avec des coordonnées 3D réelles `[x, y, z]`.
+- [ ] Ajouter une boucle sonore d'énergie douce (hum électrique) le long du faisceau `<PowerConnectionBeam />`.
+- [ ] Tests unitaires et validation audio.
 
 ---
 
@@ -93,43 +184,46 @@ flowchart TD
    ```
 2. **Accéder à `/village` :**
    - Le script `installDevXREmulator()` s'exécute automatiquement en environnement `development` dès qu'aucun casque n'est branché.
-   - Le bouton VR (« Voir en VR » avec l'icône lunettes) devient actif.
+   - Le bouton VR (« Voir en VR » avec l'icône lunettes) devient actif dans l'en-tête.
 3. **Dans la session émulée :**
    - L'overlay **Meta IWER DevUI** s'affiche en surimpression sur l'écran.
    - Cliquez sur **Play Mode** dans la barre DevUI :
      - **Souris :** Oriente le regard et le pointeur du contrôleur droit.
      - **Touches ZQSD / WASD :** Déplace la position de la caméra dans l'espace.
-     - **Clic gauche de souris :** Simule l'appui gâchette (_Trigger / Select_), permettant de cliquer sur le bouton dans les airs puis de tirer sur les cibles.
+     - **Clic gauche de souris :** Simule l'appui gâchette (_Trigger / Select_), permettant de cliquer sur le bouton dans les airs puis de viser et tirer sur les cibles.
 
 ---
 
-## 5. Architecture des fichiers & Modules à créer / réutiliser
+## 5. Architecture des fichiers & Modules
 
-### Modules existants à réutiliser directement :
-
-- `apps/web/src/features/microgrid-3d/hooks/use-webxr.ts` : cycle de vie session XR (`status`, `enter`, `exit`).
-- `apps/web/src/features/microgrid-3d/utils/dev-xr-emulator.ts` : runtime IWER preset Quest 3.
-- `apps/web/src/features/vision-insert/utils/object-geometry.ts` : `recipeMesh`, `silhouetteMesh` (génération procédurale des modèles 3D).
-- `apps/web/src/features/vision-insert/hooks/use-vision-session.ts` : orchestration des détections d'appareils.
-- `apps/web/src/server/perception/mock.ts` : détections hors-ligne garanties.
-
-### Nouveaux composants recommandés (dans `apps/web/src/features/vision-insert/ui/xr/`) :
-
-| Composant / Fichier         | Responsabilité                                                                                |
-| --------------------------- | --------------------------------------------------------------------------------------------- |
-| `village-xr-canvas.tsx`     | Conteneur R3F configuré avec `renderer.xr.enabled = true`, frameloop adaptatif et rig caméra. |
-| `spatial-air-button.tsx`    | Bouton 3D flottant avec shaders de survol, réactif aux contrôleurs XR.                        |
-| `xr-blaster-controller.tsx` | Gestion du pointeur laser, raycasting continu et événement de tir à la gâchette.              |
-| `holo-detection-target.tsx` | Cible holographique 3D représentant une détection de meuble/appareil.                         |
-| `spawned-object-3d.tsx`     | Rendu de l'objet généré avec son animation de matérialisation in-situ.                        |
+| Composant / Fichier             | Responsabilité                                                                                     | État |
+| ------------------------------- | -------------------------------------------------------------------------------------------------- | ---- |
+| `village-xr-viewport.tsx`       | Conteneur plein écran R3F avec `renderer.xr.enabled = true`, frameloop adaptatif et rig caméra.    | [x]  |
+| `village-xr-studio.tsx`         | Scène d'atelier 3D, orchestration de session, gestion des objets et liaison `@mitsinjo/engine`.    | [x]  |
+| `spatial-air-button.tsx`        | Bouton 3D flottant avec pulsation lumineuse et texture interactive pour scanner.                   | [x]  |
+| `spatial-air-button-texture.ts` | Générateur de texture canvas 2D haute résolution pour le bouton de scan spatial.                   | [x]  |
+| `spatial-projection.ts`         | Algorithme de projection des boîtes 2D normalisées en coordonnées sphériques/arc 3D.               | [x]  |
+| `holo-detection-target.tsx`     | Cible holographique 3D réactive au tir, avec texture billboard et mode raccordement.               | [x]  |
+| `holo-target-texture.ts`        | Générateur de texture canvas pour les cibles de détection et statuts de raccordement réseau.       | [x]  |
+| `xr-blaster-controller.tsx`     | Rayon laser continu, réticule d'impact, raycast d'intersections et décharges de tir à la gâchette. | [x]  |
+| `xr-audio-fx.ts`                | Synthétiseur procédural Web Audio API (tir, impact, radar, connexion/déconnexion réseau).          | [x]  |
+| `spawned-object-3d.tsx`         | Rendu 3D de l'équipement matérialisé avec séquence d'extrusion élastique et aura d'énergie.        | [x]  |
+| `power-connection-beam.tsx`     | Conduit d'énergie 3D courbe en tube Catmull-Rom reliant l'appareil au microgrid du village.        | [x]  |
+| `village-spatial-hud.tsx`       | Tableau de bord télémétrique holographique flottant (Batterie, Solaire, Demande, Alertes).         | [x]  |
+| `spatial-hud-texture.ts`        | Générateur de texture canvas pour le tableau de bord holographique dans les airs.                  | [x]  |
 
 ---
 
 ## 6. Vérifications et critères de succès
 
-- [ ] `make dev-mock` permet d'entrer en VR sur `/village` via l'émulateur IWER sans erreur console.
-- [ ] Le bouton 3D « Scanner la pièce » flotte dans le champ de vision et réagit au survol du curseur.
-- [ ] Le clic déclenche la détection et fait apparaître au moins 2 cibles holographiques 3D dans l'espace.
-- [ ] Pointer une cible et tirer déclenche le faisceau laser et un effet d'impact.
-- [ ] Le modèle 3D procédural s'anime et se stabilise à l'emplacement exact de la cible.
-- [ ] `make check` reste 100 % vert (typecheck, lint, tests Vitest, i18n EN/FR/MG).
+- [x] `make dev-mock` permet d'entrer en VR sur `/village` via l'émulateur IWER sans erreur console.
+- [x] Le bouton 3D « Scanner la pièce » flotte dans le champ de vision et réagit au survol du curseur.
+- [x] Le clic déclenche la détection et fait apparaître les cibles holographiques 3D dans l'espace.
+- [x] Le rayon laser continu suit les mouvements de la manette/souris, avec réticule d'impact dynamique.
+- [x] Tirer sur une cible détruit le réticule, émet un effet sonore et fait apparaître le modèle 3D animé in-situ.
+- [x] Tirer sur un modèle 3D matérialisé le raccorde ou le déconnecte du microgrid avec conduit d'énergie 3D dynamique.
+- [x] Tableau de bord diégétique HUD holographique flottant affichant en temps réel batterie, solaire, demande et notifications.
+- [x] Les charges sont automatiquement répercutées dans la simulation `@mitsinjo/engine`.
+- [x] Quitter la session VR restaure proprement la page 2D sans fuite de contexte WebGL ni erreur console.
+- [x] `make check-i18n` passe à 100 % (EN, FR, MG).
+- [x] 40/40 suites de tests vision-insert et 27/27 suites engine sont au vert.

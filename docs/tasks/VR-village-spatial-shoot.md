@@ -106,6 +106,26 @@
   - Carte holographique 3D mise à jour avec statut _« ✓ Raccordé au réseau (+150 W) »_.
 - [x] **Done when :** Tirer sur un meuble matérialisé le raccorde au microgrid, fait jaillir le conduit d'énergie vert 3D et incrémente le compteur d'appareils de la simulation sans quitter l'immersion VR.
 
+### VS-T8 : Tableau de bord HUD Holo dans les Airs (Diegetic Microgrid HUD)
+
+- [x] Créer le composant `<VillageSpatialHUD />` positionné en flottement diégétique (`[-0.95, 1.55, -1.2]`, orienté vers le joueur).
+- [x] Créer `spatial-hud-texture.ts` : canvas 2D haute définition avec :
+  - Jauge Batterie SoC (%) et indicateur état
+  - Puissance Solaire instantanée (kW)
+  - Charge Village totale (kW)
+  - Notification transitoire lors du raccordement d'un appareil (ex: `+180 W [Réfrigérateur] Raccordé`)
+  - Bouton interactif pour minimiser / déployer le panneau
+- [x] Connecter au store `@mitsinjo/engine` et `useSimulationAppliances()`
+- [x] Ajouter les clés i18n dans `en.json`, `fr.json`, `mg.json` (`make check-i18n`)
+- [x] Tests unitaires Vitest pour le HUD et sa texture.
+- [x] **Done when :** En immersion VR, le tableau de bord holographique affiche en direct la batterie, le solaire et la charge, et réagit instantanément lorsqu'un appareil est raccordé ou déconnecté au laser.
+
+### VS-T9 : Spatial Audio 3D Panner (Positionnement spatialisé des effets sonores)
+
+- [ ] Utiliser `PannerNode` pour positionner les sons selon les coordonnées 3D réelles `[x, y, z]` des impacts et du blaster.
+- [ ] Synchroniser l'écouteur Web Audio avec la caméra WebXR.
+- [ ] Tests et validation audio.
+
 ---
 
 ## Exit criteria
