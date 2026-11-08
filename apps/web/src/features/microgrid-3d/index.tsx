@@ -17,6 +17,7 @@ export {
   DispatchControllerUnit,
   type DispatchControllerUnitProps,
 } from './ui/dispatch-controller-unit';
+export { ImmersionLabels, AirOptionBeacon, type ImmersionLabelsProps } from './ui/immersion-labels';
 export type { DiagramVariant } from './utils/diagram-layout';
 
 export const LazyVillageCanvas = dynamic(

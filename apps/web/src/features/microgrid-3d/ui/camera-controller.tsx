@@ -40,6 +40,11 @@ export const CAMERA_PRESETS: Record<CameraPreset, { position: Vec3; target: Vec3
     position: [14, 13, 16],
     target: [4, 1, -2],
   },
+  // Standing at 1:1 human scale on the village entrance path (Immersion mode viewpoint).
+  immersion: {
+    position: [0, 1.8, 14],
+    target: [0, 1.8, 0],
+  },
 };
 
 /** Human eye level above ground (1.8m). */
@@ -248,7 +253,7 @@ export function CameraController({
     xrRig.current = rig;
 
     // Attach articulated hands and controller pointers inside the rig
-    xrHandsHandle.current = setupXRHandsAndControllers(rig, gl);
+    xrHandsHandle.current = setupXRHandsAndControllers(rig, gl, scene);
 
     invalidate();
   }, [xrActive, focusKey, moveTo, moveToFocusTarget, camera, scene, gl, invalidate]);

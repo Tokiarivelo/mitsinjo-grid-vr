@@ -160,7 +160,8 @@ interface ModelRef {
  */
 export function setupXRHandsAndControllers(
   rig: THREE.Group,
-  gl: THREE.WebGLRenderer
+  gl: THREE.WebGLRenderer,
+  scene?: THREE.Scene
 ): XRHandsHandle {
   if (!gl?.xr?.getHand || !gl?.xr?.getController) {
     const noop = (() => undefined) as XRHandsHandle;
@@ -171,6 +172,7 @@ export function setupXRHandsAndControllers(
 
   const hands: HandData[] = [];
   const modelRefs: ModelRef[] = [];
+  const selectListeners: Array<{ controller: THREE.XRTargetRaySpace; listener: () => void }> = [];
   const matrixTmp = new THREE.Matrix4();
   const scaleTmp = new THREE.Vector3();
 
@@ -185,11 +187,44 @@ export function setupXRHandsAndControllers(
     hands.push({ group: handGroup, mesh: handMesh });
 
     // 2. Controller Target Ray (Laser Pointer)
-    const controllerRay = gl.xr.getController(i) as THREE.Group;
+    const controllerRay = gl.xr.getController(i);
     const laserRay = createLaserRayModel();
     controllerRay.add(laserRay);
     rig.add(controllerRay);
     modelRefs.push({ parent: controllerRay, child: laserRay });
+
+    // WebXR Trigger / Select event handler: raycast along laser pointer to trigger interactive objects
+    const onSelect = () => {
+      if (!scene) return;
+      const raycaster = new THREE.Raycaster();
+      const origin = new THREE.Vector3();
+      const direction = new THREE.Vector3(0, 0, -1);
+      controllerRay.getWorldPosition(origin);
+      direction.transformDirection(controllerRay.matrixWorld).normalize();
+      raycaster.set(origin, direction);
+
+      const intersects = raycaster.intersectObjects(scene.children, true);
+      for (const hit of intersects) {
+        let curr: THREE.Object3D | null = hit.object;
+        while (curr) {
+          const handler =
+            curr.userData?.onSelect ||
+            curr.userData?.onClick ||
+            (curr as unknown as { __r3f?: { handlers?: { onClick?: (e: unknown) => void } } }).__r3f
+              ?.handlers?.onClick;
+          if (typeof handler === 'function') {
+            handler({ stopPropagation: () => {} });
+            return;
+          }
+          curr = curr.parent;
+        }
+      }
+    };
+
+    if (typeof controllerRay.addEventListener === 'function') {
+      controllerRay.addEventListener('select', onSelect);
+      selectListeners.push({ controller: controllerRay, listener: onSelect });
+    }
 
     // 3. Controller Grip (Physical 3D Controller Body)
     const getGrip = (gl.xr as unknown as { getControllerGrip?: (idx: number) => THREE.Group })
@@ -237,6 +272,11 @@ export function setupXRHandsAndControllers(
   };
 
   const dispose = () => {
+    for (const item of selectListeners) {
+      if (typeof item.controller.removeEventListener === 'function') {
+        item.controller.removeEventListener('select', item.listener);
+      }
+    }
     for (const h of hands) {
       rig.remove(h.group);
       h.group.remove(h.mesh);

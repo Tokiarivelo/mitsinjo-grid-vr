@@ -81,6 +81,7 @@ const CAMERA_PRESET_KEYS: { id: CameraPreset; labelKey: string }[] = [
   { id: 'battery', labelKey: 'presetBattery' },
   { id: 'controller', labelKey: 'presetController' },
   { id: 'essential', labelKey: 'presetEssential' },
+  { id: 'immersion', labelKey: 'presetImmersion' },
 ];
 
 export function VillageViewport({
@@ -415,6 +416,7 @@ export function VillageViewport({
             panMode={panMode}
             rendererRef={rendererRef}
             xrActive={xrActive}
+            immersionActive={xrActive || isFullscreen || cameraPreset === 'immersion'}
             className={cn(
               'w-full h-full absolute inset-0 transition-opacity',
               isModified && 'opacity-60'

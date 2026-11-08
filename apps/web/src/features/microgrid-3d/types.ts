@@ -114,4 +114,5 @@ export interface SceneModel {
 
 export type { ApplianceMarkerSceneModel, SectorPole };
 
-export type CameraPreset = 'village' | 'solar' | 'battery' | 'essential' | 'controller';
+export type CameraPreset =
+  'village' | 'solar' | 'battery' | 'essential' | 'controller' | 'immersion';

@@ -31,7 +31,7 @@ export interface DispatchControllerUnitProps {
   onFocus?: () => void;
   /** Translated name, e.g. "EMS Dispatch". */
   nameLabel: string;
-  htmlPortal?: RefObject<HTMLElement | null>;
+  htmlPortal?: RefObject<HTMLElement | null> | null;
 }
 
 /** Merged technical shelter: concrete pad, frame, roof, enclosure, and cable conduits. */
@@ -234,62 +234,64 @@ export function DispatchControllerUnit({
 
       {/* 4. HUD badge centered on the shelter's front edge, below roof level: it stays
           attached to the unit and never covers the battery behind. */}
-      <Html
-        position={CONTROLLER_LABEL_POSITION}
-        center
-        distanceFactor={18}
-        portal={htmlPortal as RefObject<HTMLElement>}
-        zIndexRange={[10, 0]}
-      >
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onFocus?.();
-          }}
-          aria-label={`${nameLabel} · ${modeLabel} · ${fmtKw(hasResult ? totalServedKw : null)}`}
-          className={cn(
-            'pointer-events-auto flex w-36 cursor-pointer flex-col gap-1 rounded-control-sm border bg-surface/90 px-2 py-1 text-left shadow-lg backdrop-blur-sm transition-transform hover:scale-105',
-            isEmergency
-              ? 'border-warning-amber/70 ring-1 ring-warning-amber/40'
-              : 'border-border/80 hover:border-energy-cyan/70'
-          )}
+      {htmlPortal !== null && (
+        <Html
+          position={CONTROLLER_LABEL_POSITION}
+          center
+          distanceFactor={18}
+          portal={htmlPortal as RefObject<HTMLElement>}
+          zIndexRange={[10, 0]}
         >
-          <span className="flex items-center gap-1 whitespace-nowrap font-mono text-[10px]">
-            <Cpu
-              className={cn(
-                'h-3 w-3 shrink-0',
-                isNormal ? 'text-energy-cyan' : 'text-warning-amber',
-                isEmergency && 'animate-pulse'
-              )}
-              aria-hidden="true"
-            />
-            <span className="truncate font-semibold text-text-primary">{nameLabel}</span>
-          </span>
-          <span className="flex items-center justify-between gap-1 whitespace-nowrap font-mono text-[9px]">
-            <span
-              className={cn(
-                'flex items-center gap-1 font-semibold',
-                isNormal ? 'text-battery-green' : 'text-warning-amber'
-              )}
-            >
-              <span
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onFocus?.();
+            }}
+            aria-label={`${nameLabel} · ${modeLabel} · ${fmtKw(hasResult ? totalServedKw : null)}`}
+            className={cn(
+              'pointer-events-auto flex w-36 cursor-pointer flex-col gap-1 rounded-control-sm border bg-surface/90 px-2 py-1 text-left shadow-lg backdrop-blur-sm transition-transform hover:scale-105',
+              isEmergency
+                ? 'border-warning-amber/70 ring-1 ring-warning-amber/40'
+                : 'border-border/80 hover:border-energy-cyan/70'
+            )}
+          >
+            <span className="flex items-center gap-1 whitespace-nowrap font-mono text-[10px]">
+              <Cpu
                 className={cn(
-                  'h-1.5 w-1.5 rounded-full',
-                  isNormal ? 'bg-battery-green' : 'bg-warning-amber',
+                  'h-3 w-3 shrink-0',
+                  isNormal ? 'text-energy-cyan' : 'text-warning-amber',
                   isEmergency && 'animate-pulse'
                 )}
                 aria-hidden="true"
               />
-              {modeLabel}
+              <span className="truncate font-semibold text-text-primary">{nameLabel}</span>
             </span>
-            <span className="font-semibold text-energy-cyan">
-              {fmtKw(hasResult ? totalServedKw : null)}
+            <span className="flex items-center justify-between gap-1 whitespace-nowrap font-mono text-[9px]">
+              <span
+                className={cn(
+                  'flex items-center gap-1 font-semibold',
+                  isNormal ? 'text-battery-green' : 'text-warning-amber'
+                )}
+              >
+                <span
+                  className={cn(
+                    'h-1.5 w-1.5 rounded-full',
+                    isNormal ? 'bg-battery-green' : 'bg-warning-amber',
+                    isEmergency && 'animate-pulse'
+                  )}
+                  aria-hidden="true"
+                />
+                {modeLabel}
+              </span>
+              <span className="font-semibold text-energy-cyan">
+                {fmtKw(hasResult ? totalServedKw : null)}
+              </span>
             </span>
-          </span>
-          {hasResult && <DispatchShareBar segments={segments} />}
-        </button>
-      </Html>
+            {hasResult && <DispatchShareBar segments={segments} />}
+          </button>
+        </Html>
+      )}
     </group>
   );
 }

@@ -4,27 +4,26 @@
 
 ## Current state
 
-- Power-Driven Night Illumination Across Sectors & Scenic Elements:
-  - Strict electrical constraint enforced: windows and lights only illuminate when the sector is powered (`hasPower: servedKw > 0.05`, connected, not unserved/disconnected, not on fire). Unpowered/délesté sectors stay completely dark.
-  - Primary School (`school-building.tsx`, `school-geometry.ts`): unblocked pediment round window; added warm belfry and entrance portico lanterns; classroom windows glow when powered.
-  - Water Station (`building-bodies.tsx`): illuminated water tank pinnacle beacon, pump house doorstep lantern, and floodlights.
-  - Market (`building-bodies.tsx`): warm hanging lanterns under all 6 stall canopies and dual festoon strings.
-  - Hilltop Wind Turbines (`wind-turbines.tsx`): flashing red aviation obstruction beacons, cyan hub LEDs, and base lighting.
-  - Lake Promenade Grille (`lake-grille.tsx`, `lake-grille-geometry.ts`): 2-draw-call curved protective grille with solar luminous bollards and floodlights casting reflections on lake water near the wind turbines.
-- Verification: 58 test files / 354 unit tests passing in `src/features/microgrid-3d`; zero TypeScript errors (`tsc --noEmit`).
+- In immersion mode (WebXR VR session, Fullscreen, or camera preset "Immersion"):
+  - Interactive in-air holographic beacon (`AirOptionBeacon` at `[0, 3.6, 9.5]`) suspended in front of the viewer.
+  - Clicking beacon or WebXR controller trigger toggles 3D tagged labels of all 11 village types.
+  - 11 village types: 6 sectors (Households, School, Water, Market, Clinic, Workshop) + 5 infrastructure/landmarks (Solar Array, BESS Battery, EMS Dispatch Hub, Wind Turbines, Lake Promenade).
+  - Each tag renders vertical laser stalk, base anchor dot and glow ring, and facing billboard card with category pill, title, and live metrics.
+  - WebXR controller raycast click support in `xr-hands.ts`.
+  - In-scene 2D DOM HTML overlays cleanly suppressed in immersion mode (`htmlPortal === null`).
+  - 100% key parity across `en.json`, `fr.json`, `mg.json` (`make check-i18n`).
+  - Verification: 60 test files / 361 tests passing in `src/features/microgrid-3d`; 14 test files / 76 tests passing in `src/features/simulation`; zero TypeScript errors (`tsc --noEmit`).
 
 ## Next
 
-- Visual review with user on dev server `http://localhost:3001`.
+- Ready for user testing and visual review on dev server `http://localhost:3001`.
 
 ## Files touched
 
-- `apps/web/src/features/microgrid-3d/ui/buildings.tsx`
-- `apps/web/src/features/microgrid-3d/ui/building-bodies.tsx`
-- `apps/web/src/features/microgrid-3d/ui/school-building.tsx`
-- `apps/web/src/features/microgrid-3d/ui/wind-turbines.tsx`
-- `apps/web/src/features/microgrid-3d/ui/lake-grille.tsx`
+- `apps/web/src/features/microgrid-3d/ui/immersion-labels.tsx`
+- `apps/web/src/features/microgrid-3d/utils/immersion-labels-texture.ts`
 - `apps/web/src/features/microgrid-3d/ui/village-canvas.tsx`
-- `apps/web/src/features/microgrid-3d/utils/school-geometry.ts`
-- `apps/web/src/features/microgrid-3d/utils/lake-grille-geometry.ts`
-- `apps/web/src/features/microgrid-3d/utils/__tests__/lake-grille-geometry.test.ts`
+- `apps/web/src/features/microgrid-3d/ui/camera-controller.tsx`
+- `apps/web/src/features/simulation/ui/village-viewport.tsx`
+- `apps/web/src/features/microgrid-3d/utils/xr-hands.ts`
+- `apps/web/src/messages/{en,fr,mg}.json`

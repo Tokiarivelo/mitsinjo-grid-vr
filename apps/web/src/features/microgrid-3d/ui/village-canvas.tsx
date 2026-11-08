@@ -68,6 +68,7 @@ import { QualityProbe } from './quality-probe';
 import { FireEffects } from './fire-effects';
 import { WeatherEffects } from './weather-effects';
 import { BakedContactShadows, ResumeOnVisible, ShadowBake } from './render-control';
+import { ImmersionLabels } from './immersion-labels';
 import { VillageScenePlaceholder } from './scene-placeholder';
 import { CanvasCreationBoundary } from './canvas-creation-boundary';
 
@@ -374,6 +375,8 @@ export interface VillageCanvasProps {
   rendererRef?: RefObject<WebGLRenderer | null>;
   /** An XR session is presenting: continuous loop, no post-processing, orbit off, VR viewpoint. */
   xrActive?: boolean;
+  /** Immersion mode active (VR or Fullscreen): renders interactive in-air option and 3D tagged labels. */
+  immersionActive?: boolean;
   className?: string;
 }
 
@@ -389,6 +392,7 @@ export function VillageCanvas({
   quality: qualityOverride,
   rendererRef,
   xrActive = false,
+  immersionActive = false,
   className,
 }: VillageCanvasProps) {
   const sceneQuality = useSceneQuality();
@@ -414,6 +418,7 @@ export function VillageCanvas({
   const [warmTarget, setWarmTarget] = useState<WarmupTarget | null>(null);
   const warm = useShaderWarmup(warmTarget);
   const high = quality === 'high';
+  const isImmersion = Boolean(xrActive || immersionActive || cameraPreset === 'immersion');
 
   const sectorStatuses = useMemo(() => {
     const map: Partial<Record<SectorId, SectorStateOverride>> = {};
@@ -463,6 +468,8 @@ export function VillageCanvas({
 
   // Fixed parent for in-scene HTML labels, so drei's <Html> never re-targets after mount.
   const htmlPortal = useRef<HTMLDivElement>(null);
+  // In immersion mode (VR or full-immersion view), suppress 2D DOM HTML overlays in favor of 3D spatial labels.
+  const activeHtmlPortal = isImmersion ? null : htmlPortal;
   // Off-screen canvas: stop the frame loop (no hidden 60 fps render while reading the page).
   const inView = useInView(htmlPortal);
   // Lost WebGL context → placeholder, then a fresh canvas (never a white box).
@@ -523,7 +530,12 @@ export function VillageCanvas({
     <div
       ref={htmlPortal}
       // `isolate`: drei labels use z-index up to 16 777 271; keep them under the HUD and the copilot terminal.
-      className={cn('relative isolate', className)}
+      className={cn(
+        'relative isolate',
+        isImmersion &&
+          '[&_.pointer-events-auto.select-none]:hidden [&>div:not(:first-child)]:pointer-events-none',
+        className
+      )}
       style={{ width: '100%', height: '100%' }}
     >
       {perfEnabled && perf && (
@@ -601,14 +613,14 @@ export function VillageCanvas({
             model={model.solar}
             nameLabel={tSim('solarArray')}
             outputLabel={`${tSim('liveOutput')} : ${fmtKw(model.solar.currentKw)}`}
-            htmlPortal={htmlPortal}
+            htmlPortal={activeHtmlPortal}
           />
           <BatteryUnit
             model={model.battery}
             statusLabels={batteryStatusLabels}
             socLabel={socLabel}
             nameLabel={tSim('bessBattery')}
-            htmlPortal={htmlPortal}
+            htmlPortal={activeHtmlPortal}
           />
           <DispatchControllerUnit
             model={model.controller}
@@ -619,7 +631,7 @@ export function VillageCanvas({
             hasResult={model.hasResult}
             onFocus={() => onSelectPreset?.('controller')}
             nameLabel={tDiagram('controller.shortTitle')}
-            htmlPortal={htmlPortal}
+            htmlPortal={activeHtmlPortal}
           />
           {model.hasResult && (
             <FeederTags
@@ -627,7 +639,7 @@ export function VillageCanvas({
               buildings={model.buildings}
               tones={feeders.tones}
               titles={feeders.titles}
-              htmlPortal={htmlPortal}
+              htmlPortal={activeHtmlPortal}
             />
           )}
           {perfEnabled && <SceneStatsProbe stats={stats} />}
@@ -644,7 +656,7 @@ export function VillageCanvas({
             tagOf={(m) => tSim('applianceBadgeTitle', { name: m.name, quantity: m.quantity })}
             priorityLabels={priorityLabels}
             aiBadgeLabel={aiInControl ? tDispatch('aiBadge') : undefined}
-            htmlPortal={htmlPortal}
+            htmlPortal={activeHtmlPortal}
             tier={quality}
             sectorStatuses={sectorStatuses}
           />
@@ -656,9 +668,21 @@ export function VillageCanvas({
             priorityLabels={priorityLabels}
             disconnectedLabel={tDiagram('status.disconnected')}
             aiBadgeLabel={aiInControl ? tDispatch('aiBadge') : undefined}
-            htmlPortal={htmlPortal}
+            htmlPortal={activeHtmlPortal}
             lampGlow={palette.lampGlow}
           />
+
+          {/* Immersion mode interactive in-air option & 3D tagged village type labels */}
+          {isImmersion && (
+            <ImmersionLabels
+              model={model}
+              selectedSector={selectedSector}
+              onSelectSector={onSelectSector}
+              sectorNames={sectorNames}
+              priorityLabels={priorityLabels}
+              xrActive={xrActive}
+            />
+          )}
 
           {/* No post-processing in XR: EffectComposer breaks stereo rendering. */}
           {!xrActive &&
