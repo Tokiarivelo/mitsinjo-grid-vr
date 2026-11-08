@@ -4,7 +4,7 @@ import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useFrame, useThree } from '@react-three/fiber';
 import type { SpatialTarget } from './spatial-projection';
-import { playLaserShootSound, playTargetHitSound } from './xr-audio-fx';
+import { playLaserShootSound, playScanRadarSound, playTargetHitSound } from './xr-audio-fx';
 
 export interface XRBlasterControllerProps {
   targets: SpatialTarget[];
@@ -12,6 +12,7 @@ export interface XRBlasterControllerProps {
   connectedIds: Set<string>;
   onHoverTarget: (id: string | null) => void;
   onShootTarget: (id: string) => void;
+  onTriggerScan?: () => void;
 }
 
 // Module-level reusable singletons to eliminate all heap allocations at 90 FPS
@@ -24,11 +25,17 @@ const _vTargetPos = new THREE.Vector3();
 const _vCurPos = new THREE.Vector3();
 const _FORWARD = new THREE.Vector3(0, 0, -1);
 
+const AIR_BUTTON_ID = 'spatial-air-button';
+const AIR_BUTTON_POS = new THREE.Vector3(0, 1.45, -1.2);
+const AIR_BUTTON_RADIUS = 0.38;
+
 /**
- * Real-time WebXR Blaster & Aiming Raycast Controller (VS-T4).
- * Tracks the primary VR controller (or desktop camera fallback in emulator mode),
- * casts aiming rays, illuminates hover target reticles, fires procedural laser bolts,
- * and triggers 3D model generation on impact.
+ * MultiPointer XR Blaster & Pointer Interaction Controller (VS-T4).
+ * Aligned with Meta IWSDK MultiPointer specifications:
+ * - Tracks primary & secondary WebXR controllers (controller 0 and 1).
+ * - Desktop mirror / mouse pointer forwarding fallback.
+ * - Dual targeting: Floating Air Button ("Scanner la pièce") and detected 3D targets.
+ * - Procedural laser ray beam, lock-on pips, shockwave bursts, and haptic feedback.
  */
 export const XRBlasterController = memo(function XRBlasterController({
   targets,
@@ -36,6 +43,7 @@ export const XRBlasterController = memo(function XRBlasterController({
   connectedIds: _connectedIds,
   onHoverTarget,
   onShootTarget,
+  onTriggerScan,
 }: XRBlasterControllerProps) {
   const { gl, camera } = useThree();
   const hoveredRef = useRef<string | null>(null);
@@ -54,11 +62,26 @@ export const XRBlasterController = memo(function XRBlasterController({
   // Shared shoot resolution function
   const triggerShot = useCallback(
     (origin: THREE.Vector3, direction: THREE.Vector3) => {
-      if (targets.length === 0) return;
-
       _raycaster.ray.origin.copy(origin);
       _raycaster.ray.direction.copy(direction);
       if (camera) _raycaster.camera = camera;
+
+      // 1. Test Air Button hit
+      const distToAirButton = _raycaster.ray.distanceToPoint(AIR_BUTTON_POS);
+      if (distToAirButton <= AIR_BUTTON_RADIUS && onTriggerScan) {
+        activeBlastRef.current = {
+          origin: origin.clone(),
+          targetPos: AIR_BUTTON_POS.clone(),
+          progress: 0,
+        };
+        playLaserShootSound();
+        playScanRadarSound();
+        onTriggerScan();
+        return;
+      }
+
+      // 2. Test detected appliance targets
+      if (targets.length === 0) return;
 
       let closestTarget: SpatialTarget | null = null;
       let closestDist = Infinity;
@@ -99,29 +122,39 @@ export const XRBlasterController = memo(function XRBlasterController({
         onShootTarget(closestTarget.id);
       }
     },
-    [camera, gl, targets, onShootTarget]
+    [camera, gl, targets, onShootTarget, onTriggerScan]
   );
 
-  // Setup WebXR Controller Target Ray & Trigger Listener
+  // Setup WebXR Controllers (Tracks both Controller 0 and Controller 1)
   useEffect(() => {
     if (!gl?.xr?.getController) return;
 
-    const controller = gl.xr.getController(0);
+    const c0 = gl.xr.getController(0);
+    const c1 = gl.xr.getController(1);
 
-    const onSelect = () => {
-      _tempMatrix.identity().extractRotation(controller.matrixWorld);
-      _vOrigin.setFromMatrixPosition(controller.matrixWorld);
+    const onSelect0 = () => {
+      _tempMatrix.identity().extractRotation(c0.matrixWorld);
+      _vOrigin.setFromMatrixPosition(c0.matrixWorld);
       _vDirection.copy(_FORWARD).applyMatrix4(_tempMatrix).normalize();
       triggerShot(_vOrigin, _vDirection);
     };
 
-    controller.addEventListener('selectstart', onSelect);
+    const onSelect1 = () => {
+      _tempMatrix.identity().extractRotation(c1.matrixWorld);
+      _vOrigin.setFromMatrixPosition(c1.matrixWorld);
+      _vDirection.copy(_FORWARD).applyMatrix4(_tempMatrix).normalize();
+      triggerShot(_vOrigin, _vDirection);
+    };
+
+    c0.addEventListener('selectstart', onSelect0);
+    c1.addEventListener('selectstart', onSelect1);
     return () => {
-      controller.removeEventListener('selectstart', onSelect);
+      c0.removeEventListener('selectstart', onSelect0);
+      c1.removeEventListener('selectstart', onSelect1);
     };
   }, [gl, triggerShot]);
 
-  // Desktop Pointer / Mouse click fallback
+  // Desktop Pointer / Canvas Mouse click fallback (IWSDK Canvas Pointer Events)
   useEffect(() => {
     const dom = gl.domElement;
     if (!dom) return;
@@ -193,14 +226,18 @@ export const XRBlasterController = memo(function XRBlasterController({
       }
     }
 
-    // 2. Track hover target and update aiming beam (WebXR Controller or Desktop Camera)
+    // 2. Track hover target and update aiming beam (WebXR Controller 0/1 or Desktop Camera)
     let hasAim = false;
     if (gl?.xr?.isPresenting) {
-      const controller = gl.xr.getController(0);
-      _tempMatrix.identity().extractRotation(controller.matrixWorld);
-      _vOrigin.setFromMatrixPosition(controller.matrixWorld);
-      _vDirection.copy(_FORWARD).applyMatrix4(_tempMatrix).normalize();
-      hasAim = true;
+      const c0 = gl.xr.getController(0);
+      const c1 = gl.xr.getController(1);
+      const activeCtrl = c0 && c0.matrixWorld.elements[15] !== 0 ? c0 : c1;
+      if (activeCtrl) {
+        _tempMatrix.identity().extractRotation(activeCtrl.matrixWorld);
+        _vOrigin.setFromMatrixPosition(activeCtrl.matrixWorld);
+        _vDirection.copy(_FORWARD).applyMatrix4(_tempMatrix).normalize();
+        hasAim = true;
+      }
     } else if (camera) {
       _vOrigin.copy(camera.position);
       camera.getWorldDirection(_vDirection);
@@ -216,6 +253,15 @@ export const XRBlasterController = memo(function XRBlasterController({
       let minDist = Infinity;
       _vHitEndpoint.copy(_vOrigin).addScaledVector(_vDirection, 2.5);
 
+      // 2a. Check Air Button hover
+      const distAirButton = _raycaster.ray.distanceToPoint(AIR_BUTTON_POS);
+      if (distAirButton <= AIR_BUTTON_RADIUS) {
+        currentHover = AIR_BUTTON_ID;
+        minDist = distAirButton;
+        _vHitEndpoint.copy(AIR_BUTTON_POS);
+      }
+
+      // 2b. Check targets hover
       for (const t of targets) {
         _vTargetPos.set(t.position[0], t.position[1], t.position[2]);
         const dist = _raycaster.ray.distanceToPoint(_vTargetPos);
@@ -240,7 +286,8 @@ export const XRBlasterController = memo(function XRBlasterController({
         attr.setXYZ(1, _vHitEndpoint.x, _vHitEndpoint.y, _vHitEndpoint.z);
         attr.needsUpdate = true;
       }
-      const beamColor = currentHover ? '#f59e0b' : '#38bdf8';
+      const beamColor =
+        currentHover === AIR_BUTTON_ID ? '#c084fc' : currentHover ? '#f59e0b' : '#38bdf8';
       (pointerObject.material as THREE.LineBasicMaterial).color.set(beamColor);
 
       if (pointerPipRef.current) {

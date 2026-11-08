@@ -14,6 +14,8 @@ export interface SpatialAirButtonProps {
   onTriggerScan: () => void;
   /** In-air 3D coordinates. Default: [0, 1.45, -1.2] */
   position?: [number, number, number];
+  /** External hover state driven by WebXR laser pointer raycast */
+  isHovered?: boolean;
 }
 
 /**
@@ -26,9 +28,11 @@ export const SpatialAirButton = memo(function SpatialAirButton({
   detectedCount,
   onTriggerScan,
   position = [0, 1.45, -1.2],
+  isHovered = false,
 }: SpatialAirButtonProps) {
   const t = useTranslations('features.visionInsert');
-  const [hovered, setHovered] = useState(false);
+  const [internalHovered, setInternalHovered] = useState(false);
+  const hovered = internalHovered || isHovered;
 
   const groupRef = useRef<THREE.Group>(null);
   const crystalRef = useRef<THREE.Mesh>(null);
@@ -97,17 +101,16 @@ export const SpatialAirButton = memo(function SpatialAirButton({
 
   return (
     <group ref={groupRef} position={position} name="spatial-air-button-group">
-      {/* Interactive Raycast Hitbox Capsule */}
+      {/* Interactive Raycast Hitbox Capsule (Transparent, fully hit-testable in R3F/WebXR) */}
       <mesh
-        visible={false}
         position={[0, 0, 0]}
         onPointerOver={(e) => {
           e.stopPropagation();
-          setHovered(true);
+          setInternalHovered(true);
         }}
         onPointerOut={(e) => {
           e.stopPropagation();
-          setHovered(false);
+          setInternalHovered(false);
         }}
         onClick={(e) => {
           e.stopPropagation();
@@ -116,7 +119,7 @@ export const SpatialAirButton = memo(function SpatialAirButton({
         }}
       >
         <boxGeometry args={[0.7, 0.45, 0.3]} />
-        <meshBasicMaterial />
+        <meshBasicMaterial transparent opacity={0} depthWrite={false} />
       </mesh>
 
       {/* Floating Holographic Crystal Header */}
@@ -129,26 +132,48 @@ export const SpatialAirButton = memo(function SpatialAirButton({
             emissiveIntensity={hovered || status === 'scanning' ? 1.4 : 0.7}
             roughness={0.2}
             metalness={0.8}
-            wireframe={status === 'scanning'}
           />
         </mesh>
 
+        {/* Concentric orbital rings */}
         <mesh ref={ring1Ref}>
-          <torusGeometry args={[0.07, 0.003, 8, 28]} />
-          <meshBasicMaterial color={accentColor} transparent opacity={0.7} />
+          <ringGeometry args={[0.065, 0.072, 32]} />
+          <meshBasicMaterial
+            color={accentColor}
+            transparent
+            opacity={0.6}
+            side={THREE.DoubleSide}
+          />
         </mesh>
-
         <mesh ref={ring2Ref}>
-          <torusGeometry args={[0.095, 0.003, 8, 28]} />
-          <meshBasicMaterial color={hovered ? '#ffffff' : accentColor} transparent opacity={0.5} />
+          <ringGeometry args={[0.088, 0.094, 32]} />
+          <meshBasicMaterial color="#38bdf8" transparent opacity={0.35} side={THREE.DoubleSide} />
         </mesh>
       </group>
 
-      {/* Facing 2D/3D Billboard Info Card */}
+      {/* Diegetic Billboard Holo Card */}
       <Billboard follow lockX={false} lockY={false} lockZ={false}>
-        <mesh position={[0, -0.06, 0]}>
-          <planeGeometry args={[0.56, 0.24]} />
-          <meshBasicMaterial map={texture} transparent side={THREE.DoubleSide} depthWrite={false} />
+        <mesh position={[0, 0, 0]}>
+          <planeGeometry args={[0.62, 0.38]} />
+          <meshBasicMaterial
+            map={texture}
+            transparent
+            opacity={0.96}
+            toneMapped={false}
+            side={THREE.DoubleSide}
+          />
+        </mesh>
+
+        {/* Outer glowing halo border */}
+        <mesh position={[0, 0, -0.005]}>
+          <planeGeometry args={[0.64, 0.4]} />
+          <meshBasicMaterial
+            color={accentColor}
+            transparent
+            opacity={hovered ? 0.35 : 0.12}
+            toneMapped={false}
+            side={THREE.DoubleSide}
+          />
         </mesh>
       </Billboard>
     </group>

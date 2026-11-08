@@ -198,6 +198,7 @@ export const VillageXRStudio = memo(function VillageXRStudio({
         detectedCount={targets.length}
         onTriggerScan={handleTriggerScan}
         position={[0, 1.45, -1.2]}
+        isHovered={hoveredTargetId === 'spatial-air-button'}
       />
 
       {/* 5. Diegetic Holographic Telemetry HUD (VS-T8) */}
@@ -238,6 +239,7 @@ export const VillageXRStudio = memo(function VillageXRStudio({
         connectedIds={connectedIds}
         onHoverTarget={setHoveredTargetId}
         onShootTarget={handleShootTarget}
+        onTriggerScan={handleTriggerScan}
       />
     </group>
   );
