@@ -16,6 +16,7 @@ import { XRBlasterController } from './xr-blaster-controller';
 import { playGridConnectSound, playGridDisconnectSound } from './xr-audio-fx';
 import { VillageSpatialHUD } from './village-spatial-hud';
 import { LiveWebcamBackdrop } from './live-webcam-backdrop';
+import { SpatialInteractionGuide } from './spatial-interaction-guide';
 
 export interface VillageXRStudioProps {
   detections: ApplianceDetection[];
@@ -192,7 +193,7 @@ export const VillageXRStudio = memo(function VillageXRStudio({
         <meshBasicMaterial color="#38bdf8" transparent opacity={0.25} />
       </mesh>
 
-      {/* 4. In-Air Interactive Spatial Button */}
+      {/* 4. In-Air Interactive Spatial Button & Diegetic Interaction Guide */}
       <SpatialAirButton
         status={status}
         detectedCount={targets.length}
@@ -200,6 +201,7 @@ export const VillageXRStudio = memo(function VillageXRStudio({
         position={[0, 1.45, -1.2]}
         isHovered={hoveredTargetId === 'spatial-air-button'}
       />
+      <SpatialInteractionGuide position={[0, 1.05, -1.2]} />
 
       {/* 5. Diegetic Holographic Telemetry HUD (VS-T8) */}
       <VillageSpatialHUD

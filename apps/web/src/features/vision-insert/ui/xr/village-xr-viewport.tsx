@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import type { WebGLRenderer } from 'three';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
-import { Box, Glasses, RefreshCw, Sparkles, X } from 'lucide-react';
+import { Box, Glasses, HelpCircle, RefreshCw, Sparkles, X } from 'lucide-react';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
@@ -138,6 +138,14 @@ export const VillageXRViewport = memo(function VillageXRViewport({
           <span className="hidden sm:inline-flex items-center gap-1 rounded-full border border-ai-violet/30 bg-ai-violet/10 px-2.5 py-1 text-xs font-medium text-ai-violet backdrop-blur-md">
             <Sparkles className="h-3 w-3" aria-hidden="true" />
             {t('studioBadge')}
+          </span>
+
+          <span
+            className="hidden md:inline-flex items-center gap-1.5 rounded-full border border-energy-cyan/30 bg-energy-cyan/10 px-2.5 py-1 text-xs font-medium text-energy-cyan backdrop-blur-md cursor-help"
+            title={`${t('vrInteractionHelpQuest')}\n${t('vrInteractionHelpIWER')}\n${t('vrInteractionHelpDesktop')}`}
+          >
+            <HelpCircle className="h-3.5 w-3.5" aria-hidden="true" />
+            <span>{xrActive ? t('vrInteractionGuideVR') : t('vrInteractionGuideDesktop')}</span>
           </span>
 
           <StatusBadge variant="simulated" size="sm" label={tCommon('simulatedData')} />

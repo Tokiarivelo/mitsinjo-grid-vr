@@ -3,6 +3,11 @@
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useFrame, useThree } from '@react-three/fiber';
+import {
+  createControllerGripModel,
+  createHandMesh,
+  HAND_JOINTS,
+} from '@/features/microgrid-3d/utils/xr-hands';
 import type { SpatialTarget } from './spatial-projection';
 import { playLaserShootSound, playScanRadarSound, playTargetHitSound } from './xr-audio-fx';
 
@@ -24,6 +29,7 @@ const _vHitEndpoint = new THREE.Vector3();
 const _vTargetPos = new THREE.Vector3();
 const _vCurPos = new THREE.Vector3();
 const _FORWARD = new THREE.Vector3(0, 0, -1);
+const _mouseVec = new THREE.Vector2();
 
 const AIR_BUTTON_ID = 'spatial-air-button';
 const AIR_BUTTON_POS = new THREE.Vector3(0, 1.45, -1.2);
@@ -45,8 +51,17 @@ export const XRBlasterController = memo(function XRBlasterController({
   onShootTarget,
   onTriggerScan,
 }: XRBlasterControllerProps) {
-  const { gl, camera } = useThree();
+  const { gl, camera, scene } = useThree();
   const hoveredRef = useRef<string | null>(null);
+  const mouseNdcRef = useRef<{ x: number; y: number } | null>(null);
+
+  const handsRef = useRef<
+    Array<{
+      group: THREE.Group & { joints?: Record<string, THREE.Group & { jointRadius?: number }> };
+      mesh: THREE.InstancedMesh;
+    }>
+  >([]);
+  const modelRefs = useRef<Array<{ parent: THREE.Object3D; child: THREE.Object3D }>>([]);
 
   // Imperative active blast tracking (zero React state updates in useFrame)
   const activeBlastRef = useRef<{
@@ -81,8 +96,6 @@ export const XRBlasterController = memo(function XRBlasterController({
       }
 
       // 2. Test detected appliance targets
-      if (targets.length === 0) return;
-
       let closestTarget: SpatialTarget | null = null;
       let closestDist = Infinity;
 
@@ -120,12 +133,35 @@ export const XRBlasterController = memo(function XRBlasterController({
         }
 
         onShootTarget(closestTarget.id);
+        return;
+      }
+
+      // 3. Fallback: Raycast scene children for interactive objects (HUD toggle, diegetic controls)
+      if (scene) {
+        let intersects: THREE.Intersection[] = [];
+        try {
+          intersects = _raycaster.intersectObjects(scene.children, true);
+        } catch {
+          intersects = [];
+        }
+        for (const hit of intersects) {
+          let curr: THREE.Object3D | null = hit.object;
+          while (curr) {
+            const handler = curr.userData?.onSelect || curr.userData?.onClick;
+            if (typeof handler === 'function') {
+              playLaserShootSound();
+              handler({ stopPropagation: () => {} });
+              return;
+            }
+            curr = curr.parent;
+          }
+        }
       }
     },
-    [camera, gl, targets, onShootTarget, onTriggerScan]
+    [camera, gl, targets, onShootTarget, onTriggerScan, scene]
   );
 
-  // Setup WebXR Controllers (Tracks both Controller 0 and Controller 1)
+  // Setup WebXR Controllers & Articulated Hands (Touch controllers + Hand tracking)
   useEffect(() => {
     if (!gl?.xr?.getController) return;
 
@@ -147,30 +183,84 @@ export const XRBlasterController = memo(function XRBlasterController({
     };
 
     c0.addEventListener('selectstart', onSelect0);
+    c0.addEventListener('select', onSelect0);
     c1.addEventListener('selectstart', onSelect1);
+    c1.addEventListener('select', onSelect1);
+
+    // Attach Hand Tracking meshes & Touch Controller Grip visuals
+    if (gl.xr.getHand && scene) {
+      for (let i = 0; i < 2; i++) {
+        // Articulated Hand tracking joints (25 joints)
+        const handGroup = gl.xr.getHand(i) as THREE.Group & {
+          joints?: Record<string, THREE.Group & { jointRadius?: number }>;
+        };
+        const handMesh = createHandMesh();
+        handGroup.add(handMesh);
+        scene.add(handGroup);
+        handsRef.current.push({ group: handGroup, mesh: handMesh });
+        modelRefs.current.push({ parent: handGroup, child: handMesh });
+
+        // Touch Controller 3D Model
+        const getGrip = (gl.xr as unknown as { getControllerGrip?: (idx: number) => THREE.Group })
+          .getControllerGrip;
+        if (typeof getGrip === 'function') {
+          const grip = getGrip.call(gl.xr, i);
+          const gripModel = createControllerGripModel();
+          grip.add(gripModel);
+          scene.add(grip);
+          modelRefs.current.push({ parent: grip, child: gripModel });
+        }
+      }
+    }
+
     return () => {
       c0.removeEventListener('selectstart', onSelect0);
+      c0.removeEventListener('select', onSelect0);
       c1.removeEventListener('selectstart', onSelect1);
-    };
-  }, [gl, triggerShot]);
+      c1.removeEventListener('select', onSelect1);
 
-  // Desktop Pointer / Canvas Mouse click fallback (IWSDK Canvas Pointer Events)
+      for (const { parent, child } of modelRefs.current) {
+        parent.remove(child);
+      }
+      for (const h of handsRef.current) {
+        if (scene) scene.remove(h.group);
+      }
+      handsRef.current = [];
+      modelRefs.current = [];
+    };
+  }, [gl, scene, triggerShot]);
+
+  // Desktop Mouse Cursor Aiming and Direct Clicking (Unprojects mouse NDC to 3D Ray)
   useEffect(() => {
     const dom = gl.domElement;
     if (!dom) return;
 
-    const onPointerDown = (e: MouseEvent) => {
-      if (gl.xr?.isPresenting) return;
-      if (e.button !== 0) return;
-      if (camera) {
-        _vOrigin.copy(camera.position);
-        camera.getWorldDirection(_vDirection);
-        triggerShot(_vOrigin, _vDirection);
-      }
+    const onPointerMove = (e: MouseEvent) => {
+      if (gl.xr?.isPresenting || !camera) return;
+      const rect = dom.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) return;
+      mouseNdcRef.current = {
+        x: ((e.clientX - rect.left) / rect.width) * 2 - 1,
+        y: -((e.clientY - rect.top) / rect.height) * 2 + 1,
+      };
     };
 
+    const onPointerDown = (e: MouseEvent) => {
+      if (gl.xr?.isPresenting) return;
+      if (e.button !== 0 || !camera) return;
+      const rect = dom.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) return;
+      const mouseX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      const mouseY = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      _mouseVec.set(mouseX, mouseY);
+      _raycaster.setFromCamera(_mouseVec, camera);
+      triggerShot(_raycaster.ray.origin, _raycaster.ray.direction);
+    };
+
+    dom.addEventListener('pointermove', onPointerMove);
     dom.addEventListener('pointerdown', onPointerDown);
     return () => {
+      dom.removeEventListener('pointermove', onPointerMove);
       dom.removeEventListener('pointerdown', onPointerDown);
     };
   }, [gl, camera, triggerShot]);
@@ -197,8 +287,36 @@ export const XRBlasterController = memo(function XRBlasterController({
     };
   }, [pointerObject]);
 
-  // Frame update for blaster projectile animations & continuous hover tracking
+  // Frame update for articulated hands, blaster projectile animations & continuous hover tracking
   useFrame((_, delta) => {
+    // 0. Update hand tracking joint matrices
+    if (handsRef.current.length > 0) {
+      const scaleTmp = new THREE.Vector3();
+      const defaultRadius = 0.009;
+      for (const h of handsRef.current) {
+        const joints = h.group.joints;
+        if (!joints || Object.keys(joints).length === 0) {
+          h.mesh.visible = false;
+          continue;
+        }
+        let activeCount = 0;
+        for (let j = 0; j < HAND_JOINTS.length; j++) {
+          const name = HAND_JOINTS[j];
+          if (!name) continue;
+          const joint = joints[name];
+          if (joint && joint.visible) {
+            scaleTmp.setScalar(joint.jointRadius || defaultRadius);
+            _tempMatrix.compose(joint.position, joint.quaternion, scaleTmp);
+            h.mesh.setMatrixAt(j, _tempMatrix);
+            activeCount++;
+          }
+        }
+        h.mesh.count = activeCount;
+        h.mesh.instanceMatrix.needsUpdate = true;
+        h.mesh.visible = activeCount > 0;
+      }
+    }
+
     // 1. Imperative animation of active projectile and impact shockwave (0 re-renders)
     if (activeBlastRef.current) {
       const b = activeBlastRef.current;
@@ -226,7 +344,7 @@ export const XRBlasterController = memo(function XRBlasterController({
       }
     }
 
-    // 2. Track hover target and update aiming beam (WebXR Controller 0/1 or Desktop Camera)
+    // 2. Track hover target and update aiming beam (WebXR Controller 0/1 or Desktop Mouse/Camera)
     let hasAim = false;
     if (gl?.xr?.isPresenting) {
       const c0 = gl.xr.getController(0);
@@ -239,8 +357,15 @@ export const XRBlasterController = memo(function XRBlasterController({
         hasAim = true;
       }
     } else if (camera) {
-      _vOrigin.copy(camera.position);
-      camera.getWorldDirection(_vDirection);
+      if (mouseNdcRef.current) {
+        _mouseVec.set(mouseNdcRef.current.x, mouseNdcRef.current.y);
+        _raycaster.setFromCamera(_mouseVec, camera);
+        _vOrigin.copy(_raycaster.ray.origin);
+        _vDirection.copy(_raycaster.ray.direction);
+      } else {
+        _vOrigin.copy(camera.position);
+        camera.getWorldDirection(_vDirection);
+      }
       hasAim = true;
     }
 

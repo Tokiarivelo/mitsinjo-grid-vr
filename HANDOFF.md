@@ -4,26 +4,28 @@
 
 ## Current state
 
-- Resolved WebGL context loss ("Web page caused context loss and was blocked"):
-  - Decoupled continuous 60-90fps `VideoTexture` (220-330 MB/s PCIe flood) from 3D cylinder screen; active backdrop uses HD panoramic room with 0 MB/s GPU transfer, completely eliminating driver watchdog resets (`BindToCurrentSequence failed`).
-  - Webcam stream runs cleanly via native hardware video overlay for PiP preview and on-demand AI snapshot capture (`CameraUtils.captureFrame`).
-  - Added bounded cache (`MAX_HUD_CACHE_SIZE = 8`) with `oldTex.dispose()` on eviction in `spatial-hud-texture.ts` to eliminate GPU VRAM texture leaks.
-  - Keyed `CanvasCreationBoundary` by `contextLoss.epoch` and added one-tap reload button in `VillageXRViewport` fallback view.
-  - Clarified Quest VR passthrough architecture vs desktop webcam projection per Meta WebXR documentation.
+- Complete WebXR Interaction System & Hand/Controller Visual Guidance on `/village`:
+  - Mounted 3D articulated hand tracking meshes (25 joints) and physical Touch controller grip models in `XRBlasterController`.
+  - Added real-time laser pointing rays and glowing reticle pips tracking user hands/controllers in VR and mouse cursor on desktop.
+  - Added desktop mouse NDC raycasting to allow direct aiming and clicking on all floating 3D buttons.
+  - Added diegetic in-air `<SpatialInteractionGuide />` floating beneath scan button with localized guidance for Quest VR and Desktop.
+  - Added top viewport interaction help badge with multi-platform command tooltip.
+  - Resolved WebGL context loss via VideoTexture decoupling and HUD bounded LRU cache (`MAX_HUD_CACHE_SIZE = 8`).
   - 100% key parity across `en.json`, `fr.json`, `mg.json` (`make check-i18n`).
-  - 0 TypeScript errors (`tsc --noEmit`), 41/41 vision-insert tests pass (288/288 tests).
+  - 0 TypeScript errors (`tsc --noEmit`), 42/42 vision-insert tests pass (289/289 tests).
 
 ## Next
 
-1. Reload tab (`Ctrl+F5` or `F5`) on `http://localhost:3001/village` to clear Chrome's origin context lock.
+1. Reload tab (`Ctrl+F5` or `F5`) on `http://localhost:3001/village` to test the new hand/controller laser pointers.
 2. Review scenarios V196–V203 in `test-scenarios/06-village.md`.
 3. VS-T9: 3D positional audio panner (`PannerNode` / `PositionalAudio`).
 
 ## Files touched
 
-- `apps/web/src/features/vision-insert/ui/xr/live-webcam-backdrop.tsx`
-- `apps/web/src/features/vision-insert/ui/xr/xr-camera-source.ts`
-- `apps/web/src/features/vision-insert/ui/xr/spatial-hud-texture.ts`
+- `apps/web/src/features/microgrid-3d/utils/xr-hands.ts`
+- `apps/web/src/features/vision-insert/ui/xr/xr-blaster-controller.tsx`
+- `apps/web/src/features/vision-insert/ui/xr/spatial-interaction-guide.tsx`
+- `apps/web/src/features/vision-insert/ui/xr/village-xr-studio.tsx`
 - `apps/web/src/features/vision-insert/ui/xr/village-xr-viewport.tsx`
-- `apps/web/src/features/vision-insert/ui/xr/__tests__/spatial-hud-texture.test.ts`
+- `apps/web/src/messages/{en,fr,mg}.json`
 - `HANDOFF.md`
