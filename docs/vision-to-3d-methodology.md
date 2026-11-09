@@ -630,4 +630,271 @@ Meta's Model API architecture is specifically optimized for high-iteration multi
 3. **Deterministic Convergence in $\le 3$ Iterations:**
    - Because the initial blueprint from `Muse Wonder 1.0` is grounded in analytical inverse photometry and harmonic noise formulas, the loop typically reaches $\Delta E^* < 8.0$ and 1 draw call within **2 to 3 refinement iterations**, minimizing token expenditure while guaranteeing human-grade visual fidelity.
 
+---
+
+## 10. Step-by-Step Implementation Checklist & Test Matrix
+
+This section establishes the operational protocol for engineering teams and autonomous agents implementing the Vision-to-3D pipeline. Each phase defines:
+1. **Concrete Deliverables & Tasks**
+2. **Assigned Meta Model**
+3. **Automated Vitest / Playwright Tests**
+4. **Binary Pass / Fail Acceptance Criteria**
+
+```mermaid
+flowchart TD
+    P0["Phase 0: Environment Pre-Flight\n(Meta API & Model Access)"] --> P1["Phase 1: Semantic Layer Stratification\n(SAM 3.1 Extraction)"]
+    P1 --> P2["Phase 2: Inverse Photometry & Blueprint\n(Muse Wonder 1.0 Parametrization)"]
+    P2 --> P3["Phase 3: Perspective Completion\n(Muse Image 1.0 Multi-View)"]
+    P3 --> P4["Phase 4: WebGL Instancing & Shaders\n(Muse Spark 1.3 Synthesis)"]
+    P4 --> P5["Phase 5: Headless WebGL Telemetry\n(Muse Glimmer / Playwright)"]
+    P5 --> P6["Phase 6: Perceptual Delta Audit\n(Muse Wonder 1.0 Convergence Gate)"]
+    P6 -->|"Pass (All Criteria Met)"| P7["Phase 7: Production Integration\n(Git, Typecheck & E2E)"]
+    P6 -->|"Fail (Delta > Threshold)"| P4
+```
+
+---
+
+### Phase 0: Environment Pre-Flight & Meta API Configuration
+
+- [ ] **Task 0.1:** Verify network connectivity and developer API credentials for Meta Model API (`https://api.meta.ai/v1/models`).
+- [ ] **Task 0.2:** Validate active model catalog aliases (`muse-wonder-1.0`, `sam-3.1`, `muse-spark-1.3`, `muse-image-1.0`, `Muse-Glimmer-30B`).
+- [ ] **Task 0.3:** Configure `.env.local` with `LLM_PROVIDER="meta"` and `META_API_KEY`.
+- [ ] **Task 0.4:** Set up fallback test fixtures for offline deterministic continuous integration (`LLM_PROVIDER="mock"`).
+
+#### Automated Tests for Phase 0:
+* **Test 0.A (Meta Provider Client & Auth):**
+  - **File:** `apps/web/src/server/copilot/__tests__/meta-provider.test.ts`
+  - **Command:** `pnpm --filter web test -- meta-provider.test.ts`
+  - **Assertion:** Expects `GET /api/copilot/models` to successfully enumerate active models and resolve standard OpenAI-compatible bearer auth headers.
+* **Test 0.B (Local Edge Glimmer Fallback):**
+  - **File:** `apps/web/src/server/copilot/__tests__/glimmer-provider.test.ts`
+  - **Command:** `pnpm --filter web test -- glimmer-provider.test.ts`
+  - **Assertion:** Asserts that local `Muse-Glimmer-30B` endpoint or mock provider handles tool calls when network connectivity is gated.
+
+---
+
+### Phase 1: Semantic Layer Stratification (`SAM 3.1`)
+
+- [ ] **Task 1.1:** Implement image ingestion pipeline supporting linear sRGB decoding and resolution normalization ($1920 \times 1080$).
+- [ ] **Task 1.2:** Issue text-guided segmentation prompt to `sam-3.1` to isolate:
+  - Background Sky Gradient (`sky_background`)
+  - Volumetric Cumulus Cloud Deck (`cumulus_deck`)
+  - Horizon Mountain Silhouettes (`horizon_terrain`)
+  - Celestial Illumination Disk (`sun_disk`)
+- [ ] **Task 1.3:** Extract binary alpha masks, 2D polygon contours, and bounding boxes $[y_{min}, x_{min}, y_{max}, x_{max}]$.
+- [ ] **Task 1.4:** Generate `SemanticStratificationManifest` adhering to Contract 1 schema.
+
+#### Automated Tests for Phase 1:
+* **Test 1.A (SAM Polygon & Mask Parser):**
+  - **File:** `apps/web/src/server/perception/__tests__/parse-sam.test.ts`
+  - **Command:** `pnpm --filter web test -- parse-sam.test.ts`
+  - **Assertion:** Validates parsing of polygon contour vectors, alpha thresholding $> 0.5$, and area coverage sanity checks.
+* **Test 1.B (Multi-Part Volumetric Layer Separation):**
+  - **File:** `apps/web/src/server/perception/__tests__/part-masks.test.ts`
+  - **Command:** `pnpm --filter web test -- part-masks.test.ts`
+  - **Assertion:** Guarantees zero overlap between primary celestial disk mask and horizon terrain mask ($IoU < 0.01$).
+
+---
+
+### Phase 2: Inverse Photometry & Parametric Blueprinting (`Muse Wonder 1.0`)
+
+- [ ] **Task 2.1:** Analyze segmented luminance zones to extract illumination vector $\vec{L}$ and shadow terminator softness.
+- [ ] **Task 2.2:** Compute daytime color vectors in linear CIELAB:
+  - $\vec{C}_{white} = [1.0, 1.0, 0.98]$ (Sunlit highlight)
+  - $\vec{C}_{shadow} = [0.48, 0.72, 0.98]$ (Azure crevice ambient bounce)
+  - Luminance safety floor $L^*_{floor} \ge 45$.
+- [ ] **Task 2.3:** Calculate 4-tier Pareto-stratified cloud scale distribution ($S \in [2.4, 16.5]$ with scale ratio $\ge 3.0\times$).
+- [ ] **Task 2.4:** Formulate 4 concentric radial shells ($R \in [15, 260]$) to eliminate azimuthal sky gaps.
+- [ ] **Task 2.5:** Generate `Parametric3DBlueprint` JSON adhering to Contract 3 schema.
+
+#### Automated Tests for Phase 2:
+* **Test 2.A (Celestial Trajectory & Vector Parity):**
+  - **File:** `apps/web/src/features/microgrid-3d/utils/__tests__/celestial.test.ts`
+  - **Command:** `pnpm --filter web test -- celestial.test.ts`
+  - **Assertion:** Tests solar vector $\vec{D}(\theta)$ for continuous altitude coverage $[3.5^\circ, 74^\circ]$, azimuth progression $[0, \pi]$, and strict single-vector parity across mesh, light, and uniforms.
+* **Test 2.B (Color Space & Zero-Black Invariant):**
+  - **File:** `apps/web/src/server/perception/__tests__/region-colors.test.ts`
+  - **Command:** `pnpm --filter web test -- region-colors.test.ts`
+  - **Assertion:** Asserts that daytime shadow crevice pixels satisfy $\min(\text{RGB}) \ge 0.40$ and CIELAB $L^* \ge 45$ (Zero black voids).
+
+---
+
+### Phase 3: Orthographic Projection & Perspective Completion (`Muse Image 1.0`)
+
+- [ ] **Task 3.1:** Submit multi-angle hallucination request to `muse-image-1.0` with the segmented cloud mask as reference guidance.
+- [ ] **Task 3.2:** Synthesize top-down satellite view ($\theta_{elev} = 90^\circ$) to measure lateral billow clustering and formation thickness.
+- [ ] **Task 3.3:** Synthesize cross-sectional side profile view ($\theta_{elev} = 0^\circ$) to verify vertical flat condensation base at altitude $Y_0$.
+- [ ] **Task 3.4:** Extract structural height-to-width ratio ($H / W \approx 0.62$) and crown whisp density.
+
+#### Automated Tests for Phase 3:
+* **Test 3.A (Multi-View Hallucination Synthesis):**
+  - **File:** `apps/web/src/server/perception/__tests__/views-generation.test.ts`
+  - **Command:** `pnpm --filter web test -- views-generation.test.ts`
+  - **Assertion:** Validates prompt formatting, view angle matrix generation, and image decoding without channel corruption.
+* **Test 3.B (Contour & Silhouette Boundary Matching):**
+  - **File:** `apps/web/src/server/perception/__tests__/outline.test.ts`
+  - **Command:** `pnpm --filter web test -- outline.test.ts`
+  - **Assertion:** Verifies contour continuity ($C^0$ closed boundary) and convexity index $\ge 0.75$.
+
+---
+
+### Phase 4: WebGL Instanced Mesh & GLSL Shader Synthesis (`Muse Spark 1.3`)
+
+- [ ] **Task 4.1:** Generate Three.js / React Three Fiber `InstancedMesh` with pre-allocated `Float32Array` instance matrix buffer:
+  - Budget: exactly 1 draw call, 0 runtime CPU memory allocations in `useFrame`.
+- [ ] **Task 4.2:** Implement GLSL vertex displacement shader:
+  - Harmonic 3D sinusoidal noise ($f_1 = 2.1, f_2 = 4.2, A = 0.085$) to eliminate polygonal facets and produce cauliflower billows.
+  - Analytical normal perturbation:
+    $$\vec{n}' = \text{normalize}\left(\vec{n} + \nabla \text{Noise}(p)\right)$$
+- [ ] **Task 4.3:** Implement GLSL fragment lighting shader:
+  - Half-Lambert wrapped diffuse with wrap parameter $w = 0.65$.
+  - Dual-hemisphere ambient bounce (sky azure downwelling, hazy ground bounce).
+  - Forward Mie translucency (subsurface scattering backlight glow).
+  - Fresnel silhouette silver lining halo.
+  - Hard daytime luminance safety floor ($L^* \ge 48$).
+- [ ] **Task 4.4:** Integrate smooth continuous celestial hour-angle progression ($h_{t+\Delta t} = h_t + v \cdot \Delta t$) with interactive scrub velocity.
+
+#### Automated Tests for Phase 4:
+* **Test 4.A (Cloud Instancing & Deterministic Layout):**
+  - **File:** `apps/web/src/features/microgrid-3d/utils/__tests__/weather-atmosphere.test.ts`
+  - **Command:** `pnpm --filter web test -- weather-atmosphere.test.ts`
+  - **Assertion:** Validates puff count ($N = \text{MAX\_BANKS} \times \text{PUFFS\_PER\_BANK}$), stratified scale variety ratio $> 3.0\times$, minimum clearance $> 8$, and radial depth spanning near ($< 140$) and far ($> 160$).
+* **Test 4.B (Shader Syntax & AST Static Verification):**
+  - **File:** `apps/web/src/server/perception/__tests__/spark-critic.test.ts`
+  - **Command:** `pnpm --filter web test -- spark-critic.test.ts`
+  - **Assertion:** Parses generated GLSL vertex and fragment shaders for uniform declaration parity, valid precision qualifiers, and absence of syntax errors.
+
+---
+
+### Phase 5: Headless Execution & Runtime WebGL Telemetry (`Muse Glimmer-30B` / Playwright)
+
+- [ ] **Task 5.1:** Launch automated headless browser script with ANGLE hardware acceleration:
+  ```bash
+  node scratch/test-orbit.mjs
+  ```
+- [ ] **Task 5.2:** Verify canvas context compilation on headless WebGL (SwiftShader / ANGLE).
+- [ ] **Task 5.3:** Extract real-time GPU runtime telemetry:
+  - `gl.info.render.calls` (Must equal exactly 1 for cloud layer).
+  - `gl.info.render.triangles` (Must remain within 160,000 budget).
+  - Frame time $\le 16.66\text{ ms}$ (60 FPS baseline).
+- [ ] **Task 5.4:** Photograph 4 canonical celestial lighting states:
+  - `06:00` (Dawn / East sunrise rim)
+  - `12:00` (Zenith noon highlight)
+  - `18:00` (Dusk / West sunset glow)
+  - `00:00` (Midnight starry sky with moonlight)
+- [ ] **Task 5.5:** Assemble `VerificationTelemetryAudit` JSON adhering to Contract 4 schema.
+
+#### Automated Tests for Phase 5:
+* **Test 5.A (Headless Multi-Angle Render Script):**
+  - **File:** `scratch/test-orbit.mjs`
+  - **Command:** `node scratch/test-orbit.mjs`
+  - **Assertion:** Exits with code 0; verifies canvas initialized without WebGL shader compilation warnings; generates 4 lossless PNG frames in `scratch/renders/`.
+* **Test 5.B (Runtime Frame-Rate & 0-Allocation Check):**
+  - **File:** `apps/web/src/features/autopilot/__tests__/autonomous-perf.test.ts`
+  - **Command:** `pnpm --filter web test -- autonomous-perf.test.ts`
+  - **Assertion:** Asserts loop execution time stays under 16ms per frame and produces zero heap allocation leaks.
+
+---
+
+### Phase 6: Perceptual Delta Auditing & Closed-Loop Convergence (`Muse Wonder 1.0`)
+
+- [ ] **Task 6.1:** Compute CIELAB color-space delta $\Delta E^*_{00}$ comparing the rendered 3D frames against the original reference image:
+  $$\Delta E^* = \sqrt{(\Delta L^*)^2 + (\Delta a^*)^2 + (\Delta b^*)^2}$$
+- [ ] **Task 6.2:** Calculate silhouette Intersection-over-Union ($IoU = \frac{|M_{3D} \cap M_{ref}|}{|M_{3D} \cup M_{ref}|}$).
+- [ ] **Task 6.3:** Check normal continuity and curvature variation (absence of flat facets: normal discontinuity $< 5^\circ$).
+- [ ] **Task 6.4:** Verify zero daylight black voids ($\min(\text{RGB}) \ge 0.40$).
+- [ ] **Task 6.5:** **Convergence Decision Gate:**
+  - If **ALL** criteria pass: emit `CONVERGED_PASS` and proceed to Phase 7.
+  - If **ANY** criterion fails: `Muse Wonder 1.0` computes parameter diff vector $\Delta \vec{P}$ and triggers targeted code refinement back to Phase 4.
+
+#### Automated Tests for Phase 6:
+* **Test 6.A (Silhouette IoU & Shape Fit):**
+  - **File:** `apps/web/src/server/perception/__tests__/silhouette-fit.test.ts`
+  - **Command:** `pnpm --filter web test -- silhouette-fit.test.ts`
+  - **Assertion:** Asserts silhouette IoU between projected 3D volume and reference mask exceeds $0.85$.
+* **Test 6.B (Photometric Color-Space Audit & Luminance Floor):**
+  - **File:** `apps/web/src/server/perception/__tests__/photo-audit.test.ts`
+  - **Command:** `pnpm --filter web test -- photo-audit.test.ts`
+  - **Assertion:** Asserts mean $\Delta E^* < 8.0$, 95th-percentile $\Delta E^* < 12.0$, and zero pixels below the daytime luminance floor.
+
+---
+
+### Phase 7: Production Integration & CI/CD Verification
+
+- [ ] **Task 7.1:** Execute full static TypeScript typecheck across all monorepo workspaces:
+  ```bash
+  pnpm turbo run typecheck
+  ```
+- [ ] **Task 7.2:** Execute complete Vitest test suite across all packages:
+  ```bash
+  pnpm turbo run test
+  ```
+- [ ] **Task 7.3:** Run end-to-end integration test suite with Playwright:
+  ```bash
+  pnpm --filter web test:e2e
+  ```
+- [ ] **Task 7.4:** Verify production Next.js build compilation:
+  ```bash
+  pnpm --filter web build
+  ```
+- [ ] **Task 7.5:** Commit code using conventional commits format (`feat(...)`, `docs(...)`) and push branch to origin:
+  ```bash
+  git commit -m "feat(3d): complete inverse procedural generation with Meta model loop"
+  git push origin <branch-name>
+  ```
+
+#### Automated Tests for Phase 7:
+* **Test 7.A (Full Monorepo Unit & Integration Suite):**
+  - **Command:** `pnpm turbo run test`
+  - **Assertion:** All packages (`@mitsinjo/engine`, `bridge`, `web`, `tests`) must report 100% test success with zero failures.
+* **Test 7.B (Zero TypeScript Compiler Errors):**
+  - **Command:** `pnpm turbo run typecheck`
+  - **Assertion:** Exits with code 0, 0 compiler diagnostics.
+* **Test 7.C (Deterministic End-to-End User Scenario):**
+  - **File:** `apps/web/e2e/demo-path.spec.ts`
+  - **Command:** `pnpm --filter web test:e2e`
+  - **Assertion:** Headless browser loads `/simulation`, navigates timeline, mounts 3D canvas, and verifies UI interactivity without console errors.
+
+---
+
+### Quick-Reference Execution Matrix
+
+| Phase | Core Objective | Meta Model | Automated Vitest / Shell Test Command | Hard Gate Acceptance Criteria |
+| :---: | :--- | :--- | :--- | :--- |
+| **0** | API & Auth Setup | `muse-spark-1.3` | `pnpm --filter web test -- meta-provider.test.ts` | Bearer auth valid, model catalog resolved |
+| **1** | Semantic Segmentation | `sam-3.1` | `pnpm --filter web test -- parse-sam.test.ts` | Mask alpha valid, boundary IoU $< 0.01$ overlap |
+| **2** | Photometric Blueprint | `muse-wonder-1.0` | `pnpm --filter web test -- celestial.test.ts region-colors.test.ts` | $\vec{D}(\theta)$ continuous, $L^*_{floor} \ge 45$ |
+| **3** | Multi-View Generation | `muse-image-1.0` | `pnpm --filter web test -- views-generation.test.ts` | 2 valid orthographic projections synthesized |
+| **4** | Instancing & Shaders | `muse-spark-1.3` | `pnpm --filter web test -- weather-atmosphere.test.ts spark-critic.test.ts` | Scale ratio $> 3.0\times$, 0 GLSL compile warnings |
+| **5** | Headless Telemetry | `Muse-Glimmer-30B` | `node scratch/test-orbit.mjs` | **Draw calls $== 1$**, 60 FPS, 0 WebGL errors |
+| **6** | Perceptual Delta Gate | `muse-wonder-1.0` | `pnpm --filter web test -- silhouette-fit.test.ts photo-audit.test.ts` | **$\Delta E^* < 8.0$**, IoU $\ge 0.85$, 0 black voids |
+| **7** | Production Deploy | All / CI | `pnpm turbo run test && pnpm turbo run typecheck` | 100% tests pass, 0 typecheck errors |
+
+---
+
+### Automated Self-Healing Protocol (Failure $\to$ Fix Mappings)
+
+When an automated test fails during any phase of execution, the system triggers targeted self-healing actions:
+
+```
+┌───────────────────────────────────────────────┬────────────────────────────────────────────────────────┐
+│ Detected Test Failure                         │ Automated Remediation Directive                        │
+├───────────────────────────────────────────────┼────────────────────────────────────────────────────────┤
+│ photo-audit.test.ts: min(RGB) < 0.40          │ In fragment shader: increase diffuse wrap factor w     │
+│ (Dark crevice asteroid detected)              │ by +0.10 and elevate vec3 floorAmbient to match sky.   │
+├───────────────────────────────────────────────┼────────────────────────────────────────────────────────┤
+│ test-orbit.mjs: gl.info.render.calls > 1      │ In component: replace multiple mesh children with a    │
+│ (Draw call budget exceeded)                   │ single unified InstancedMesh sharing one buffer.       │
+├───────────────────────────────────────────────┼────────────────────────────────────────────────────────┤
+│ spark-critic.test.ts: Facet jaggies detected   │ In vertex shader: add secondary harmonic noise octave  │
+│ (Normal discontinuity > 5°)                   │ sin(p.x * 4.2 + p.z * 3.8) * 0.038.                   │
+├───────────────────────────────────────────────┼────────────────────────────────────────────────────────┤
+│ weather-atmosphere.test.ts: scaleRatio < 3.0  │ In generator: re-stratify size selector to 38% baby    │
+│ (Lack of size variety across puffs)           │ puffs (S ∈ [2.4, 4.6]) and 10% grand towers (S > 13).  │
+├───────────────────────────────────────────────┼────────────────────────────────────────────────────────┤
+│ celestial.test.ts: trajectory jump > 0.05     │ In animation hook: switch from discrete hourly ticks   │
+│ (Shadow jitter during playback)               │ to continuous constant angular velocity integration.   │
+└───────────────────────────────────────────────┴────────────────────────────────────────────────────────┘
+```
+
 $$
