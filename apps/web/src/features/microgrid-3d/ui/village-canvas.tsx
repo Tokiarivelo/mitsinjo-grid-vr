@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { Environment } from '@react-three/drei';
+import type { WebGLRenderer } from 'three';
 import { SECTOR_IDS, type Priority, type SectorId } from '@mitsinjo/engine';
 import { useTranslations } from '@/lib/i18n';
 import { useSimulationStore } from '@/stores';
@@ -52,6 +53,7 @@ import { FireEffects } from './fire-effects';
 import { WeatherEffects } from './weather-effects';
 import { BakedContactShadows, ResumeOnVisible, ShadowBake } from './render-control';
 import { VillageScenePlaceholder } from './scene-placeholder';
+import { CanvasCreationBoundary } from './canvas-creation-boundary';
 
 export const SUNSET_HDRI_URL = '/3d/sunset_512.hdr';
 
@@ -125,6 +127,10 @@ export interface VillageCanvasProps {
   panMode?: boolean;
   /** Render tier override. Default: the shared tier from `useSceneQuality` (toggle + auto-downgrade). */
   quality?: SceneQuality;
+  /** Filled with the R3F renderer on mount: the VR button needs it to open the XR session. */
+  rendererRef?: RefObject<WebGLRenderer | null>;
+  /** An XR session is presenting: continuous loop, no post-processing, orbit off, VR viewpoint. */
+  xrActive?: boolean;
   className?: string;
 }
 
@@ -138,6 +144,8 @@ export function VillageCanvas({
   focusApplianceId = null,
   panMode = false,
   quality: qualityOverride,
+  rendererRef,
+  xrActive = false,
   className,
 }: VillageCanvasProps) {
   const sceneQuality = useSceneQuality();
@@ -274,6 +282,8 @@ export function VillageCanvas({
   );
   // Shadow casters are static: re-bake the sun shadow map only when light or data change.
   const shadowBakeKey = useMemo(() => [keyLightPos, model] as const, [keyLightPos, model]);
+  // XR renders the headset pose every frame; otherwise render on demand (never off-screen).
+  const frameloop = xrActive ? 'always' : inView ? 'demand' : 'never';
 
   return (
     <div
@@ -288,160 +298,171 @@ export function VillageCanvas({
         </div>
       )}
       {contextLoss.lost && <VillageScenePlaceholder className="absolute inset-0 z-10" />}
-      <Canvas
-        // Remount on tier change (shadow maps, MSAA and shaders differ) and after a lost context.
-        key={`${quality}-${contextLoss.epoch}`}
-        onCreated={({ gl, get, scene, camera }) => {
-          contextLoss.attach(gl.domElement, () => get().internal.active);
-          setWarmTarget({ gl, scene, camera });
-        }}
-        className={cn(
-          'transition-opacity duration-300 motion-reduce:transition-none',
-          warm ? 'opacity-100' : 'opacity-0'
-        )}
-        camera={{ position: [2, 10.5, 28], fov: 42, near: 0.5, far: 1400 }}
-        dpr={high ? [1, 1.5] : [1, 1.25]}
-        frameloop={inView ? 'demand' : 'never'}
-        shadows={high ? 'soft' : false}
-        gl={{ antialias: !high, powerPreference: 'high-performance' }}
-        style={{ background: palette.horizon }}
-      >
-        <fog
-          attach="fog"
-          args={[palette.fog, 48 * palette.fogScale, (high ? 210 : 170) * palette.fogScale]}
-        />
+      {/* Creation can throw when the browser blocks new contexts: placeholder + bounded retries. */}
+      <CanvasCreationBoundary key={contextLoss.epoch} onFail={contextLoss.reportCreationFailed}>
+        <Canvas
+          // Remount on tier change (shadow maps, MSAA and shaders differ) and after a lost context.
+          key={`${quality}-${contextLoss.epoch}`}
+          onCreated={({ gl, get, scene, camera }) => {
+            contextLoss.attach(gl.domElement, () => get().internal.active);
+            if (rendererRef) rendererRef.current = gl;
+            setWarmTarget({ gl, scene, camera });
+          }}
+          className={cn(
+            'transition-opacity duration-300 motion-reduce:transition-none',
+            warm ? 'opacity-100' : 'opacity-0'
+          )}
+          camera={{ position: [2, 10.5, 28], fov: 42, near: 0.5, far: 1400 }}
+          dpr={high ? [1, 1.5] : [1, 1.25]}
+          frameloop={frameloop}
+          shadows={high ? 'soft' : false}
+          gl={{
+            antialias: !high,
+            powerPreference: softwareGl ? 'default' : 'high-performance',
+            failIfMajorPerformanceCaveat: false,
+          }}
+          style={{ width: '100%', height: '100%', background: palette.horizon }}
+        >
+          <fog
+            attach="fog"
+            args={[palette.fog, 48 * palette.fogScale, (high ? 210 : 170) * palette.fogScale]}
+          />
 
-        <hemisphereLight args={[palette.hemiSky, palette.hemiGround, palette.hemiIntensity]} />
-        <directionalLight
-          position={keyLightPos}
-          color={palette.sun}
-          intensity={palette.keyIntensity}
-          castShadow={high}
-          shadow-mapSize={[2048, 2048]}
-          shadow-bias={-0.0004}
-          shadow-normalBias={0.09}
-          shadow-camera-left={-34}
-          shadow-camera-right={34}
-          shadow-camera-top={34}
-          shadow-camera-bottom={-34}
-          shadow-camera-near={10}
-          shadow-camera-far={160}
-        />
-        {/* Cool sky fill from the opposite side keeps shadows readable. */}
-        <directionalLight
-          position={[-40, 30, 40]}
-          color="#8fa3d9"
-          intensity={palette.hemiIntensity * 0.45}
-        />
+          <hemisphereLight args={[palette.hemiSky, palette.hemiGround, palette.hemiIntensity]} />
+          <directionalLight
+            position={keyLightPos}
+            color={palette.sun}
+            intensity={palette.keyIntensity}
+            castShadow={high}
+            shadow-mapSize={[2048, 2048]}
+            shadow-bias={-0.0004}
+            shadow-normalBias={0.09}
+            shadow-camera-left={-34}
+            shadow-camera-right={34}
+            shadow-camera-top={34}
+            shadow-camera-bottom={-34}
+            shadow-camera-near={10}
+            shadow-camera-far={160}
+          />
+          {/* Cool sky fill from the opposite side keeps shadows readable. */}
+          <directionalLight
+            position={[-40, 30, 40]}
+            color="#8fa3d9"
+            intensity={palette.hemiIntensity * 0.45}
+          />
 
-        <SkyBackdrop palette={palette} sunDirection={skySunDirection} detail={quality} />
-        <WeatherEffects
-          weather={model.weather}
-          isDaytime={model.isDaytime}
-          quality={quality}
-          animate={weatherMotion}
-        />
-        <FireEffects buildings={model.buildings} quality={quality} animate={weatherMotion} />
+          <SkyBackdrop palette={palette} sunDirection={skySunDirection} detail={quality} />
+          <WeatherEffects
+            weather={model.weather}
+            isDaytime={model.isDaytime}
+            quality={quality}
+            animate={weatherMotion}
+          />
+          <FireEffects buildings={model.buildings} quality={quality} animate={weatherMotion} />
 
-        <Suspense fallback={null}>
-          <Environment files={SUNSET_HDRI_URL} environmentIntensity={palette.envIntensity} />
-        </Suspense>
+          <Suspense fallback={null}>
+            <Environment files={SUNSET_HDRI_URL} environmentIntensity={palette.envIntensity} />
+          </Suspense>
 
-        <VillageTerrain quality={quality} />
-        <PlacedYards clearings={yards} paths={tracks} />
-        <Suspense fallback={null}>
-          <Vegetation quality={quality} clearings={treeClearings} />
-          <Vehicles />
-          {/* Inside the casters' Suspense so the first bake includes the loaded trees. */}
-          {high && <ShadowBake bakeKey={shadowBakeKey} />}
-        </Suspense>
-        <ResumeOnVisible />
+          <VillageTerrain quality={quality} />
+          <PlacedYards clearings={yards} paths={tracks} />
+          <Suspense fallback={null}>
+            <Vegetation quality={quality} clearings={treeClearings} />
+            <Vehicles />
+            {/* Inside the casters' Suspense so the first bake includes the loaded trees. */}
+            {high && <ShadowBake bakeKey={shadowBakeKey} />}
+          </Suspense>
+          <ResumeOnVisible />
 
-        <SolarArray
-          model={model.solar}
-          nameLabel={tSim('solarArray')}
-          outputLabel={`${tSim('liveOutput')} : ${fmtKw(model.solar.currentKw)}`}
-          htmlPortal={htmlPortal}
-        />
-        <BatteryUnit
-          model={model.battery}
-          statusLabels={batteryStatusLabels}
-          socLabel={socLabel}
-          nameLabel={tSim('bessBattery')}
-          htmlPortal={htmlPortal}
-        />
-        <DispatchControllerUnit
-          model={model.controller}
-          tones={feeders.tones}
-          totalServedKw={model.lines.batteryToBus.flowKw}
-          modeLabel={tDiagram(`controller.mode.${model.controller.mode}`)}
-          feederTitles={feeders.titles}
-          hasResult={model.hasResult}
-          onFocus={() => onSelectPreset?.('controller')}
-          nameLabel={tDiagram('controller.shortTitle')}
-          htmlPortal={htmlPortal}
-        />
-        {model.hasResult && (
-          <FeederTags
-            lines={model.lines.busToSectors}
-            buildings={model.buildings}
-            tones={feeders.tones}
-            titles={feeders.titles}
+          <SolarArray
+            model={model.solar}
+            nameLabel={tSim('solarArray')}
+            outputLabel={`${tSim('liveOutput')} : ${fmtKw(model.solar.currentKw)}`}
             htmlPortal={htmlPortal}
           />
-        )}
-        {perfEnabled && <SceneStatsProbe stats={stats} />}
-        <DistributionLines
-          lines={model.lines}
-          feeders={model.controller.feeders}
-          animate={animate}
-          lampGlow={palette.lampGlow}
-          halo={high}
-        />
-        <DraggableApplianceMarkers
-          markers={model.appliances}
-          selectedSector={selectedSector}
-          tagOf={(m) => tSim('applianceBadgeTitle', { name: m.name, quantity: m.quantity })}
-          priorityLabels={priorityLabels}
-          aiBadgeLabel={aiInControl ? tDispatch('aiBadge') : undefined}
-          htmlPortal={htmlPortal}
-          tier={quality}
-          sectorStatuses={sectorStatuses}
-        />
-        <VillageBuildings
-          buildings={model.buildings}
-          selectedSector={selectedSector}
-          onSelectSector={onSelectSector}
-          sectorNames={sectorNames}
-          priorityLabels={priorityLabels}
-          disconnectedLabel={tDiagram('status.disconnected')}
-          aiBadgeLabel={aiInControl ? tDispatch('aiBadge') : undefined}
-          htmlPortal={htmlPortal}
-          lampGlow={palette.lampGlow}
-        />
+          <BatteryUnit
+            model={model.battery}
+            statusLabels={batteryStatusLabels}
+            socLabel={socLabel}
+            nameLabel={tSim('bessBattery')}
+            htmlPortal={htmlPortal}
+          />
+          <DispatchControllerUnit
+            model={model.controller}
+            tones={feeders.tones}
+            totalServedKw={model.lines.batteryToBus.flowKw}
+            modeLabel={tDiagram(`controller.mode.${model.controller.mode}`)}
+            feederTitles={feeders.titles}
+            hasResult={model.hasResult}
+            onFocus={() => onSelectPreset?.('controller')}
+            nameLabel={tDiagram('controller.shortTitle')}
+            htmlPortal={htmlPortal}
+          />
+          {model.hasResult && (
+            <FeederTags
+              lines={model.lines.busToSectors}
+              buildings={model.buildings}
+              tones={feeders.tones}
+              titles={feeders.titles}
+              htmlPortal={htmlPortal}
+            />
+          )}
+          {perfEnabled && <SceneStatsProbe stats={stats} />}
+          <DistributionLines
+            lines={model.lines}
+            feeders={model.controller.feeders}
+            animate={animate}
+            lampGlow={palette.lampGlow}
+            halo={high}
+          />
+          <DraggableApplianceMarkers
+            markers={model.appliances}
+            selectedSector={selectedSector}
+            tagOf={(m) => tSim('applianceBadgeTitle', { name: m.name, quantity: m.quantity })}
+            priorityLabels={priorityLabels}
+            aiBadgeLabel={aiInControl ? tDispatch('aiBadge') : undefined}
+            htmlPortal={htmlPortal}
+            tier={quality}
+            sectorStatuses={sectorStatuses}
+          />
+          <VillageBuildings
+            buildings={model.buildings}
+            selectedSector={selectedSector}
+            onSelectSector={onSelectSector}
+            sectorNames={sectorNames}
+            priorityLabels={priorityLabels}
+            disconnectedLabel={tDiagram('status.disconnected')}
+            aiBadgeLabel={aiInControl ? tDispatch('aiBadge') : undefined}
+            htmlPortal={htmlPortal}
+            lampGlow={palette.lampGlow}
+          />
 
-        {high ? (
-          <>
-            <PostEffects />
-            {/* Probe only on screen: a paused loop would starve it and force a downgrade. */}
-            {onSlowDevice && inView && <QualityProbe onSlow={onSlowDevice} />}
-          </>
-        ) : (
-          // Low tier: one baked contact shadow instead of real-time shadow maps.
-          <BakedContactShadows />
-        )}
+          {/* No post-processing in XR: EffectComposer breaks stereo rendering. */}
+          {!xrActive &&
+            (high ? (
+              <>
+                <PostEffects />
+                {/* Probe only on screen: a paused loop would starve it and force a downgrade. */}
+                {onSlowDevice && inView && <QualityProbe onSlow={onSlowDevice} />}
+              </>
+            ) : (
+              // Low tier: one baked contact shadow instead of real-time shadow maps.
+              <BakedContactShadows />
+            ))}
 
-        <CameraController
-          preset={cameraPreset}
-          resetKey={cameraResetKey}
-          focusSector={selectedSector}
-          focusPoint={model.appliances.find((a) => a.id === focusApplianceId)?.position ?? null}
-          panMode={panMode}
-          autoRotate={!softwareGl}
-          reducedMotion={reducedMotion}
-          damping={high && !reducedMotion}
-        />
-      </Canvas>
+          <CameraController
+            preset={cameraPreset}
+            resetKey={cameraResetKey}
+            xrActive={xrActive}
+            focusSector={selectedSector}
+            focusPoint={model.appliances.find((a) => a.id === focusApplianceId)?.position ?? null}
+            panMode={panMode}
+            autoRotate={!softwareGl}
+            reducedMotion={reducedMotion}
+            damping={high && !reducedMotion}
+          />
+        </Canvas>
+      </CanvasCreationBoundary>
     </div>
   );
 }

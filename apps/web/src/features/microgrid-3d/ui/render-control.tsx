@@ -35,10 +35,11 @@ export function ShadowBake({ bakeKey }: { bakeKey: unknown }) {
  */
 export function ResumeOnVisible() {
   const frameloop = useThree((s) => s.frameloop);
+  const size = useThree((s) => s.size as { width: number; height: number } | undefined);
   const invalidate = useThree((s) => s.invalidate);
   useEffect(() => {
     if (frameloop !== 'never') invalidate();
-  }, [frameloop, invalidate]);
+  }, [frameloop, size?.width, size?.height, invalidate]);
   return null;
 }
 

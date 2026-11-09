@@ -81,6 +81,19 @@ describe('probeWebGL', () => {
     const f = fakeCanvas(null);
     expect(probeWebGL(() => f.canvas)).toEqual({ available: false, software: false });
   });
+
+  it('falls back to WebGL 1 on a fresh canvas when WebGL 2 returns null', () => {
+    vi.stubGlobal('WebGLRenderingContext', function () {});
+    let callCount = 0;
+    const canvas1 = fakeCanvas(null);
+    const canvas2 = fakeCanvas('ANGLE (NVIDIA GeForce)');
+    const canvases = [canvas1.canvas, canvas2.canvas];
+    const factory = () => canvases[callCount++] ?? canvas1.canvas;
+
+    expect(probeWebGL(factory)).toEqual({ available: true, software: false });
+    expect(callCount).toBe(2);
+    expect(canvas2.loseContext).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('getWebGLSupport (cached)', () => {

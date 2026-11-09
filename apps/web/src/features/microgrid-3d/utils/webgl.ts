@@ -23,9 +23,13 @@ export function probeWebGL(
 ): WebGLSupport {
   try {
     if (typeof window === 'undefined' || !window.WebGLRenderingContext) return NO_WEBGL;
-    const canvas = createCanvas();
-    const gl = (canvas.getContext('webgl2') ?? canvas.getContext('webgl')) as
-      WebGLRenderingContext | WebGL2RenderingContext | null;
+    let canvas = createCanvas();
+    let gl = canvas.getContext('webgl2') as WebGLRenderingContext | WebGL2RenderingContext | null;
+    if (!gl) {
+      canvas = createCanvas();
+      gl = (canvas.getContext('webgl') ??
+        canvas.getContext('experimental-webgl')) as WebGLRenderingContext | null;
+    }
     if (!gl) return NO_WEBGL;
     const info = gl.getExtension('WEBGL_debug_renderer_info');
     const name = String(gl.getParameter(info ? info.UNMASKED_RENDERER_WEBGL : gl.RENDERER) ?? '');

@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useMediaQuery } from '@/lib/use-media-query';
 import { useElementHeight } from '@/lib/use-element-height';
 import { GlassPanel } from '@/components/ui/glass-panel';
@@ -9,6 +9,7 @@ import {
   Box,
   Camera,
   Gauge,
+  Glasses,
   Hand,
   Maximize2,
   Minimize2,
@@ -22,6 +23,7 @@ import {
   SlidersHorizontal,
   X,
 } from 'lucide-react';
+import type { WebGLRenderer } from 'three';
 import { CopilotTerminal } from '@/features/copilot';
 import { FireAlertBanner, ReportFireControl, useActiveFires } from '@/features/fire-alert';
 import type { SectorId, SimulationInput, SimulationResult, WeatherId } from '@mitsinjo/engine';
@@ -40,6 +42,7 @@ import {
   GridDiagram,
   useFullscreen,
   useSceneQuality,
+  useWebXR,
   type CameraPreset,
   type SceneQuality,
 } from '@/features/microgrid-3d';
@@ -107,10 +110,23 @@ export function VillageViewport({
     supported: fullscreenSupported,
   } = useFullscreen(rootRef);
   const { quality, userChosen, setQuality } = useSceneQuality();
+  // VR session for the 3D canvas (filled by the canvas once its renderer mounts).
+  const rendererRef = useRef<WebGLRenderer | null>(null);
+  const xr = useWebXR(rendererRef);
+  const xrActive = xr.status === 'active';
+
+  const handleVREnter = useCallback(() => {
+    xr.enter();
+  }, [xr]);
+
+  const handleVRExit = useCallback(() => {
+    xr.exit();
+  }, [xr]);
+
   const [userViewMode, setUserViewMode] = useState<'3d' | 'schematic' | 'circuit' | null>(null);
   const viewMode = userViewMode ?? (hasWebGL ? '3d' : 'schematic');
   const [cameraPreset, setCameraPreset] = useState<CameraPreset>('village');
-  // Glass copilot terminal, only in full screen (3D, topology or circuit); open by default there.
+  // Glass copilot terminal and controls in full screen; closed in VR immersion.
   const [terminalOpen, setTerminalOpen] = useState(true);
   const [controlsOpen, setControlsOpen] = useState(true);
   const [dockCompact, setDockCompact] = useState(false);
@@ -118,10 +134,14 @@ export function VillageViewport({
   const { ref: dockRef, height: dockHeight } = useElementHeight();
   // Phones fit one glass panel at a time: opening one closes the other.
   const isWide = useMediaQuery('(min-width: 768px)');
-  const showTerminal = isFullscreen && terminalOpen;
+  const showTerminal = !xrActive && isFullscreen && terminalOpen;
   const showControls =
-    isFullscreen && Boolean(fullscreenControls) && controlsOpen && (isWide || !terminalOpen);
-  const showDock = isFullscreen && (isWide || (!showTerminal && !showControls));
+    !xrActive &&
+    isFullscreen &&
+    Boolean(fullscreenControls) &&
+    controlsOpen &&
+    (isWide || !terminalOpen);
+  const showDock = !xrActive && isFullscreen && (isWide || (!showTerminal && !showControls));
   const toggleTerminal = () => {
     if (!terminalOpen && !isWide) setControlsOpen(false);
     setTerminalOpen((open) => !open);
@@ -177,9 +197,10 @@ export function VillageViewport({
     <div
       ref={rootRef}
       className={cn(
-        'relative flex flex-col justify-between rounded-card bg-canvas-sunken border border-border overflow-hidden shadow-inner min-h-[360px] sm:min-h-[460px]',
-        isFullscreen && 'rounded-none border-0',
-        className
+        'relative flex flex-col justify-between rounded-card bg-canvas-sunken border border-border overflow-hidden shadow-inner',
+        isFullscreen
+          ? 'w-full h-full min-h-full rounded-none border-0'
+          : cn('min-h-[360px] sm:min-h-[460px]', className)
       )}
     >
       {/* Top Floating HUD bar */}
@@ -209,8 +230,8 @@ export function VillageViewport({
           </div>
         </div>
 
-        {/* Center: 3D Camera Presets & Reset (visible in 3D mode) */}
-        {viewMode === '3d' && hasWebGL && (
+        {/* Center: 3D Camera Presets & Reset (visible in 3D mode, hidden in VR where headset drives camera) */}
+        {viewMode === '3d' && hasWebGL && !xrActive && (
           <div className="flex items-center gap-1 p-0.5 rounded-control bg-surface-elevated/90 backdrop-blur border border-border pointer-events-auto shadow-xs overflow-x-auto max-w-full">
             <div className="flex items-center gap-1 px-1.5 text-[11px] font-mono text-text-muted border-r border-border pr-2 shrink-0">
               <Camera className="h-3 w-3 text-energy-cyan" aria-hidden="true" />
@@ -289,7 +310,14 @@ export function VillageViewport({
                 {tSim(labelKey)}
               </button>
             ))}
-            {fullscreenSupported && (
+            {(xr.status === 'supported' || xrActive) && (
+              <VRButton
+                active={xrActive}
+                error={xr.error}
+                onClick={xrActive ? handleVRExit : handleVREnter}
+              />
+            )}
+            {!xrActive && fullscreenSupported && (
               <FullscreenButton
                 isFullscreen={isFullscreen}
                 onToggle={toggleFullscreen}
@@ -338,25 +366,27 @@ export function VillageViewport({
         <ReportFireControl className="pointer-events-auto" />
 
         {/* Right: View Mode Toggle (3D vs 2D Topology vs Circuit) */}
-        <ViewModeToggle
-          label={tSim('viewModeLabel')}
-          value={viewMode}
-          onChange={setUserViewMode}
-          className="pointer-events-auto shadow-xs"
-          options={[
-            ...(hasWebGL
-              ? [
-                  {
-                    id: '3d' as const,
-                    label: tSim('view3d'),
-                    icon: <Box className="h-3 w-3" aria-hidden="true" />,
-                  },
-                ]
-              : []),
-            { id: 'schematic' as const, label: tSim('viewTopology') },
-            { id: 'circuit' as const, label: tSim('viewCircuit') },
-          ]}
-        />
+        {!xrActive && (
+          <ViewModeToggle
+            label={tSim('viewModeLabel')}
+            value={viewMode}
+            onChange={setUserViewMode}
+            className="pointer-events-auto shadow-xs"
+            options={[
+              ...(hasWebGL
+                ? [
+                    {
+                      id: '3d' as const,
+                      label: tSim('view3d'),
+                      icon: <Box className="h-3 w-3" aria-hidden="true" />,
+                    },
+                  ]
+                : []),
+              { id: 'schematic' as const, label: tSim('viewTopology') },
+              { id: 'circuit' as const, label: tSim('viewCircuit') },
+            ]}
+          />
+        )}
       </div>
 
       {/* Fire alarm in the view itself (also in full screen, where the page banner is hidden) */}
@@ -383,6 +413,8 @@ export function VillageViewport({
             cameraResetKey={cameraResetKey}
             focusApplianceId={focusApplianceId}
             panMode={panMode}
+            rendererRef={rendererRef}
+            xrActive={xrActive}
             className={cn(
               'w-full h-full absolute inset-0 transition-opacity',
               isModified && 'opacity-60'
@@ -403,7 +435,7 @@ export function VillageViewport({
             className={cn(
               // Wraps (no hidden scroll) so every inserted appliance stays in sight.
               'absolute bottom-9 left-3 right-3 z-10 hidden flex-wrap items-center gap-1.5 bg-surface/85 backdrop-blur p-1.5 rounded-control border border-border',
-              !isFullscreen && 'sm:flex'
+              !isFullscreen && !xrActive && 'sm:flex'
             )}
           >
             {sectorIds.map((id) => {
@@ -587,6 +619,36 @@ export function VillageViewport({
         <span className="font-mono text-[10px] text-energy-cyan">{tCommon('simulatedData')}</span>
       </div>
     </div>
+  );
+}
+
+function VRButton({
+  active,
+  error,
+  onClick,
+}: {
+  active: boolean;
+  error: string | null;
+  onClick: () => void;
+}) {
+  const tSim = useTranslations('features.simulation');
+  const label = active ? tSim('vrExit') : tSim('vrEnter');
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      aria-label={error ?? label}
+      title={error ?? label}
+      className={cn(
+        'p-1 rounded-control-sm transition-colors cursor-pointer',
+        active
+          ? 'bg-energy-cyan/20 text-energy-cyan'
+          : 'text-text-muted hover:text-text-primary hover:bg-surface'
+      )}
+    >
+      <Glasses className="h-3 w-3" aria-hidden="true" />
+    </button>
   );
 }
 

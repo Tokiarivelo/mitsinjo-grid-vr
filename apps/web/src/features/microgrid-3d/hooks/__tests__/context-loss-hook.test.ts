@@ -48,6 +48,16 @@ describe('useContextLoss', () => {
     expect(result.current.lost).toBe(true);
   });
 
+  it('recovers from a creation failure through the same remount cycle', () => {
+    vi.useFakeTimers();
+    const { result } = renderHook(() => useContextLoss());
+    act(() => result.current.reportCreationFailed());
+    expect(result.current.lost).toBe(true);
+
+    act(() => vi.advanceTimersByTime(CONTEXT_REMOUNT_MS));
+    expect(result.current).toMatchObject({ lost: false, epoch: 1 });
+  });
+
   it('stops listening to the old canvas once a new one is attached', () => {
     const { result } = renderHook(() => useContextLoss());
     const old = liveCanvas();

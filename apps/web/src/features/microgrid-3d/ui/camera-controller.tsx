@@ -40,6 +40,12 @@ export const CAMERA_PRESETS: Record<CameraPreset, { position: Vec3; target: Vec3
   },
 };
 
+/** VR entry viewpoint: a standing-scale overlook of the whole diorama. */
+export const XR_VIEWPOINT: { position: Vec3; target: Vec3 } = {
+  position: [0, 20, 30],
+  target: [0, 1, -4],
+};
+
 const UP = new THREE.Vector3(0, 1, 0);
 
 export interface CameraControllerProps {
@@ -60,6 +66,8 @@ export interface CameraControllerProps {
    * it decays, which at very low fps (weak GPU, software GL) means minutes of rendering.
    */
   damping?: boolean;
+  /** An XR session is presenting: orbit input off, camera on `XR_VIEWPOINT`. */
+  xrActive?: boolean;
 }
 
 export function CameraController({
@@ -71,8 +79,10 @@ export function CameraController({
   autoRotate = true,
   reducedMotion = false,
   damping = true,
+  xrActive = false,
 }: CameraControllerProps) {
   const camera = useThree((s) => s.camera);
+  const scene = useThree((s) => s.scene);
   const invalidate = useThree((s) => s.invalidate);
   const controlsRef = useRef<ComponentRef<typeof OrbitControls>>(null);
 
@@ -111,7 +121,8 @@ export function CameraController({
       orbitAfterTween.current = orbit && !reducedMotion;
 
       // First placement is instant (nothing to animate from); later moves tween.
-      if (reducedMotion || !hasMounted.current) {
+      // Mid-XR calls also snap (the headset pose overwrites them on the next frame).
+      if (reducedMotion || xrActive || !hasMounted.current) {
         snapToTarget();
       } else {
         isTransitioning.current = true;
@@ -121,7 +132,7 @@ export function CameraController({
       // frameloop="demand": render the jump, or start the tween loop.
       invalidate();
     },
-    [reducedMotion, invalidate, snapToTarget]
+    [reducedMotion, xrActive, invalidate, snapToTarget]
   );
 
   useEffect(() => {
@@ -135,21 +146,69 @@ export function CameraController({
     : focusSector
       ? `s:${focusSector}`
       : null;
+  const moveToFocusTarget = useCallback(
+    (key: string | null) => {
+      if (key?.startsWith('p:')) {
+        const p = key.slice(2).split(',').map(Number) as Vec3;
+        moveTo(focusCameraFor(p, APPLIANCE_FOCUS_SCALE), autoRotate);
+      } else if (key) {
+        moveTo(focusCameraFor(SECTOR_POSITIONS[key.slice(2) as SectorId]), autoRotate);
+      } else {
+        moveTo(CAMERA_PRESETS[presetRef.current] ?? CAMERA_PRESETS.village, false);
+      }
+    },
+    [autoRotate, moveTo]
+  );
   useEffect(() => {
     const previous = prevFocus.current;
     prevFocus.current = focusKey;
-    if (focusKey?.startsWith('p:')) {
-      const p = focusKey.slice(2).split(',').map(Number) as Vec3;
-      moveTo(focusCameraFor(p, APPLIANCE_FOCUS_SCALE), autoRotate);
-    } else if (focusKey) {
-      moveTo(focusCameraFor(SECTOR_POSITIONS[focusKey.slice(2) as SectorId]), autoRotate);
-    } else if (previous) {
-      moveTo(CAMERA_PRESETS[presetRef.current] ?? CAMERA_PRESETS.village, false);
+    if (focusKey || previous) moveToFocusTarget(focusKey);
+  }, [focusKey, moveToFocusTarget]);
+
+  // XR session: the headset pose overwrites camera.position/quaternion every frame,
+  // so a camera snap can't place the viewpoint — parent the camera to a rig group
+  // at XR_VIEWPOINT on entry (the pose then applies relative to it), detach on exit.
+  // Declared last so it wins over the preset/focus effects re-run by the `moveTo` change.
+  const wasXrActive = useRef(false);
+  const xrRig = useRef<THREE.Group | null>(null);
+  const xrPrevParent = useRef<THREE.Object3D | null>(null);
+  useEffect(() => {
+    if (!xrActive) {
+      if (wasXrActive.current) {
+        wasXrActive.current = false;
+        const rig = xrRig.current;
+        xrRig.current = null;
+        if (rig) {
+          (xrPrevParent.current ?? scene).attach(camera);
+          scene.remove(rig);
+        }
+        moveToFocusTarget(focusKey);
+      }
+      return;
     }
-  }, [focusKey, autoRotate, moveTo]);
+    wasXrActive.current = true;
+    if (xrRig.current) return; // StrictMode double-invoke / focus change mid-session.
+    const rig = new THREE.Group();
+    rig.position.set(...XR_VIEWPOINT.position);
+    // Camera-convention orientation: Matrix4.lookAt aims -Z at the target.
+    rig.quaternion.setFromRotationMatrix(
+      new THREE.Matrix4().lookAt(
+        new THREE.Vector3(...XR_VIEWPOINT.position),
+        new THREE.Vector3(...XR_VIEWPOINT.target),
+        UP
+      )
+    );
+    scene.add(rig);
+    xrPrevParent.current = camera.parent;
+    rig.attach(camera); // keep the 2D world transform, then hand over to the headset
+    camera.position.set(0, 0, 0);
+    camera.quaternion.identity();
+    xrRig.current = rig;
+    invalidate();
+  }, [xrActive, focusKey, moveTo, moveToFocusTarget, camera, scene, invalidate]);
 
   useFrame((state, delta) => {
-    if (reducedMotion) return;
+    if (reducedMotion || xrActive) return;
 
     if (isTransitioning.current) {
       state.invalidate();
@@ -191,6 +250,7 @@ export function CameraController({
   return (
     <OrbitControls
       ref={controlsRef}
+      enabled={!xrActive}
       enableDamping={damping}
       dampingFactor={0.05}
       maxPolarAngle={Math.PI / 2.15}
