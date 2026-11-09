@@ -76,4 +76,23 @@ describe('spatial-hud-texture (VS-T8)', () => {
     expect(texture).toBeDefined();
     expect(texture.image).toBeDefined();
   });
+
+  it('evicts and disposes oldest texture when cache exceeds MAX_HUD_CACHE_SIZE', () => {
+    _resetSpatialHUDTextureCache();
+    const textures: Array<{ dispose: ReturnType<typeof vi.fn> }> = [];
+
+    for (let i = 0; i < 10; i++) {
+      const spec: SpatialHUDTextureSpec = {
+        ...baseSpec,
+        batterySocPct: 80 + i,
+      };
+      const tex = getSpatialHUDTexture(spec);
+      vi.spyOn(tex, 'dispose');
+      textures.push(tex as unknown as { dispose: ReturnType<typeof vi.fn> });
+    }
+
+    // First textures should have been evicted and disposed
+    expect(textures[0]!.dispose).toHaveBeenCalled();
+    expect(textures[1]!.dispose).toHaveBeenCalled();
+  });
 });

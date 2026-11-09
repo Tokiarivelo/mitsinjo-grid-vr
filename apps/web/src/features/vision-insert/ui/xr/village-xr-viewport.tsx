@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import type { WebGLRenderer } from 'three';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
-import { Box, Glasses, Sparkles, X } from 'lucide-react';
+import { Box, Glasses, RefreshCw, Sparkles, X } from 'lucide-react';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
@@ -82,14 +82,28 @@ export const VillageXRViewport = memo(function VillageXRViewport({
         </div>
         <h3 className="text-base font-semibold text-text-primary">{tSim('webglUnavailable')}</h3>
         <p className="max-w-md text-xs text-text-muted mt-1 mb-6">{t('vrWebglUnavailable')}</p>
-        <button
-          type="button"
-          onClick={onExitVR}
-          className="flex items-center gap-1.5 rounded-xl border border-border bg-slate-900/80 hover:bg-slate-800 px-4 py-2 text-xs font-medium text-text-primary transition-colors cursor-pointer"
-        >
-          <X className="h-4 w-4" aria-hidden="true" />
-          <span>{t('vrExit')}</span>
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => {
+              if (typeof window !== 'undefined') {
+                window.location.reload();
+              }
+            }}
+            className="flex items-center gap-1.5 rounded-xl border border-energy-cyan/40 bg-energy-cyan/20 hover:bg-energy-cyan/30 px-4 py-2 text-xs font-semibold text-energy-cyan transition-colors cursor-pointer"
+          >
+            <RefreshCw className="h-4 w-4" aria-hidden="true" />
+            <span>{t('retry')}</span>
+          </button>
+          <button
+            type="button"
+            onClick={onExitVR}
+            className="flex items-center gap-1.5 rounded-xl border border-border bg-slate-900/80 hover:bg-slate-800 px-4 py-2 text-xs font-medium text-text-primary transition-colors cursor-pointer"
+          >
+            <X className="h-4 w-4" aria-hidden="true" />
+            <span>{t('vrExit')}</span>
+          </button>
+        </div>
       </div>
     );
   }
@@ -142,31 +156,26 @@ export const VillageXRViewport = memo(function VillageXRViewport({
       </div>
 
       {/* WebXR Canvas */}
-      <CanvasCreationBoundary onFail={() => setCanvasFailed(true)}>
+      <CanvasCreationBoundary
+        key={contextLoss.epoch}
+        onFail={() => {
+          setCanvasFailed(true);
+          contextLoss.reportCreationFailed();
+        }}
+      >
         <Canvas
-          key={`xr-canvas-${contextLoss.epoch}`}
           frameloop="always"
           shadows={false}
           dpr={[1, 1.5]}
           gl={(defaults) => {
             installWebGLContextSafetyPolyfill();
-            try {
-              return new THREE.WebGLRenderer({
-                ...defaults,
-                powerPreference: 'default',
-                failIfMajorPerformanceCaveat: false,
-                antialias: false,
-                alpha: true,
-              });
-            } catch {
-              return new THREE.WebGLRenderer({
-                canvas: defaults.canvas,
-                powerPreference: 'default',
-                failIfMajorPerformanceCaveat: false,
-                antialias: false,
-                alpha: true,
-              });
-            }
+            return new THREE.WebGLRenderer({
+              ...defaults,
+              powerPreference: 'default',
+              failIfMajorPerformanceCaveat: false,
+              antialias: false,
+              alpha: true,
+            });
           }}
           camera={{ position: [0, 1.5, 1.6], fov: 60 }}
           onCreated={handleCreated}

@@ -37,11 +37,14 @@ export const LiveWebcamBackdrop = memo(function LiveWebcamBackdrop({
 
   const [cameraState, setCameraState] = useState<CameraState>('inactive');
   const [isStreamingLive, setIsStreamingLive] = useState(false);
-  const [videoTexture, setVideoTexture] = useState<THREE.VideoTexture | null>(null);
 
   const cameraSourceRef = useRef<XRCameraSource | null>(null);
 
-  // Preload HD sample room texture immediately so operator never sees a black screen
+  // Preload HD sample room texture immediately so operator never sees a black screen.
+  // Using panoramic studio room for 3D curved cylinder backdrop:
+  // 1. Eliminates circular/barrel distortion seen when stretching a 2D webcam onto a cylinder.
+  // 2. Eliminates 220-330 MB/s PCIe bus video texture upload flood that triggers driver context loss.
+  // 3. Live camera feed remains active for picture-in-picture preview & on-demand AI snapshot capture.
   const roomTexture = useMemo(() => {
     const loader = new THREE.TextureLoader();
     const tex = loader.load(SAMPLE_ROOM_SRC);
@@ -52,6 +55,12 @@ export const LiveWebcamBackdrop = memo(function LiveWebcamBackdrop({
     tex.wrapT = THREE.ClampToEdgeWrapping;
     return tex;
   }, []);
+
+  useEffect(() => {
+    return () => {
+      roomTexture.dispose();
+    };
+  }, [roomTexture]);
 
   // Initialize Camera Source aligned with Meta IWSDK Chapter 13
   useEffect(() => {
@@ -69,8 +78,6 @@ export const LiveWebcamBackdrop = memo(function LiveWebcamBackdrop({
         setCameraState(state);
         if (state === 'error' || state === 'inactive') {
           setIsStreamingLive(false);
-        } else if (state === 'active' && cameraSource.texture) {
-          setVideoTexture(cameraSource.texture);
         }
       }
     );
@@ -81,8 +88,6 @@ export const LiveWebcamBackdrop = memo(function LiveWebcamBackdrop({
       if (!isMounted) return;
       if (!success) {
         setCameraState('error');
-      } else if (cameraSource.texture) {
-        setVideoTexture(cameraSource.texture);
       }
     });
 
@@ -123,10 +128,10 @@ export const LiveWebcamBackdrop = memo(function LiveWebcamBackdrop({
   }, [onRegisterCapture]);
 
   const isLive = cameraState === 'active' && isStreamingLive;
-  const activeTexture = isLive && videoTexture ? videoTexture : roomTexture;
+  const activeTexture = roomTexture;
 
   const pillText = isLive
-    ? `● ${t('vrLiveWebcam').toUpperCase()} // 720p`
+    ? `● ${t('vrLiveWebcam').toUpperCase()} // READY`
     : cameraState === 'starting'
       ? `⟳ STARTING CAMERA…`
       : `⟳ ${t('vrVirtualRoom').toUpperCase()}`;

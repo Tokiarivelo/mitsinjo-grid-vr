@@ -230,16 +230,12 @@ export class XRCameraSource {
 
       await video.play().catch(() => {});
 
-      // Create Three.js VideoTexture
-      const texture = new THREE.VideoTexture(video);
-      texture.colorSpace = THREE.SRGBColorSpace;
-      texture.minFilter = THREE.LinearFilter;
-      texture.magFilter = THREE.LinearFilter;
-      texture.generateMipmaps = false;
-      texture.wrapS = THREE.ClampToEdgeWrapping;
-      texture.wrapT = THREE.ClampToEdgeWrapping;
-
-      this.texture = texture;
+      // We intentionally do NOT create an automatic continuous THREE.VideoTexture here.
+      // Continuous 60-90fps VideoTexture uploads (texSubImage2D of 1280x720 video frames)
+      // floods the GPU command buffer (220-330 MB/s) causing driver watchdog resets
+      // and WebGL context loss on Linux Optimus dual-GPU setups.
+      // Frame snapshots are captured on-demand via CameraUtils.captureFrame(videoElement).
+      this.texture = null;
       this.setState('active');
       return true;
     } catch (err) {

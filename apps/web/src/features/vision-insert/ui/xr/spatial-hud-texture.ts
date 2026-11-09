@@ -19,6 +19,7 @@ export interface SpatialHUDTextureSpec {
   isHovered: boolean;
 }
 
+export const MAX_HUD_CACHE_SIZE = 8;
 const textureCache = new Map<string, THREE.CanvasTexture>();
 
 export function drawRoundedRect(
@@ -282,11 +283,25 @@ export function getSpatialHUDTexture(spec: SpatialHUDTextureSpec): THREE.CanvasT
   texture.minFilter = THREE.LinearFilter;
   texture.magFilter = THREE.LinearFilter;
   texture.needsUpdate = true;
+
+  // Evict oldest texture and dispose GPU memory to prevent WebGL context exhaustion
+  if (textureCache.size >= MAX_HUD_CACHE_SIZE) {
+    const oldestKey = textureCache.keys().next().value;
+    if (oldestKey) {
+      const oldTex = textureCache.get(oldestKey);
+      oldTex?.dispose();
+      textureCache.delete(oldestKey);
+    }
+  }
+
   textureCache.set(key, texture);
   return texture;
 }
 
-/** Clear cache helper for unit tests */
+/** Clear cache helper for unit tests and unmounts */
 export function _resetSpatialHUDTextureCache(): void {
+  for (const t of textureCache.values()) {
+    t.dispose();
+  }
   textureCache.clear();
 }
