@@ -3,6 +3,7 @@ import type { WebGLRenderer } from 'three';
 import {
   XR_IMMERSIVE_VR,
   XR_SESSION_INIT,
+  disableIWERFrameClear,
   isImmersiveVRSupported,
   startImmersiveVRSession,
 } from '../xr-session';
@@ -130,5 +131,23 @@ describe('startImmersiveVRSession', () => {
     endListener?.();
     expect(canvas.style.width).toBe('800px');
     expect(canvas.style.height).toBe('600px');
+  });
+
+  it('disableIWERFrameClear sets device.frameClearEnabled to false', () => {
+    const sym = Symbol('@iwer/xr-session');
+    const mockSession = {
+      [sym]: {
+        device: {
+          frameClearEnabled: true,
+        },
+      },
+    };
+    disableIWERFrameClear(mockSession);
+    expect(mockSession[sym].device.frameClearEnabled).toBe(false);
+
+    // Safe with arbitrary objects / primitives
+    expect(() => disableIWERFrameClear(null)).not.toThrow();
+    expect(() => disableIWERFrameClear(undefined)).not.toThrow();
+    expect(() => disableIWERFrameClear({})).not.toThrow();
   });
 });

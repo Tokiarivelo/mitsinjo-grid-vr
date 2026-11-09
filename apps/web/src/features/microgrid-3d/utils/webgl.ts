@@ -81,35 +81,57 @@ export function resetWebGLSupportForTests() {
  * This polyfill safely returns non-null fallback values when the context is lost.
  */
 let safetyInstalled = false;
-export function installWebGLContextSafetyPolyfill() {
-  if (safetyInstalled || typeof window === 'undefined') return;
-  safetyInstalled = true;
-
-  const patchContext = (proto: {
-    getParameter?: (pname: number) => unknown;
-    isContextLost?: () => boolean;
-  }) => {
+export function installWebGLContextSafetyPolyfill(targetProto?: unknown) {
+  const patchContext = (proto: any) => {
     if (!proto || typeof proto.getParameter !== 'function') return;
     const originalGetParameter = proto.getParameter;
     proto.getParameter = function (this: { isContextLost?: () => boolean }, pname: number) {
-      const res = originalGetParameter.call(this, pname);
-      if (res === null || (typeof this.isContextLost === 'function' && this.isContextLost())) {
-        // COLOR_CLEAR_VALUE = 0x0c22 (3106)
-        if (pname === 0x0c22) {
-          return new Float32Array([0, 0, 0, 0]);
-        }
-        // DEPTH_CLEAR_VALUE = 0x0b73 (2931)
-        if (pname === 0x0b73) {
-          return 1.0;
-        }
-        // STENCIL_CLEAR_VALUE = 0x0b93 (2963)
-        if (pname === 0x0b93) {
-          return 0;
-        }
+      if (typeof this.isContextLost === 'function' && this.isContextLost()) {
+        if (pname === 0x0c22) return new Float32Array([0, 0, 0, 0]);
+        if (pname === 0x0b73) return 1.0;
+        if (pname === 0x0b93) return 0;
+        return null;
+      }
+      let res: unknown = null;
+      try {
+        res = originalGetParameter.call(this, pname);
+      } catch {
+        res = null;
+      }
+      if (res === null) {
+        if (pname === 0x0c22) return new Float32Array([0, 0, 0, 0]);
+        if (pname === 0x0b73) return 1.0;
+        if (pname === 0x0b93) return 0;
       }
       return res;
     };
+
+    const originalClearColor = proto.clearColor;
+    if (typeof originalClearColor === 'function') {
+      proto.clearColor = function (
+        this: { isContextLost?: () => boolean },
+        r: number,
+        g: number,
+        b: number,
+        a: number
+      ) {
+        if (typeof this.isContextLost === 'function' && this.isContextLost()) return;
+        try {
+          return originalClearColor.call(this, r ?? 0, g ?? 0, b ?? 0, a ?? 0);
+        } catch {
+          // Swallow clear errors on lost WebGL context to prevent infinite RAF crash loops
+        }
+      };
+    }
   };
+
+  if (targetProto) {
+    patchContext(targetProto);
+    return;
+  }
+
+  if (safetyInstalled || typeof window === 'undefined') return;
+  safetyInstalled = true;
 
   if (typeof WebGLRenderingContext !== 'undefined') {
     patchContext(WebGLRenderingContext.prototype);
@@ -117,4 +139,9 @@ export function installWebGLContextSafetyPolyfill() {
   if (typeof WebGL2RenderingContext !== 'undefined') {
     patchContext(WebGL2RenderingContext.prototype);
   }
+}
+
+// Auto-install immediately on client load
+if (typeof window !== 'undefined') {
+  installWebGLContextSafetyPolyfill();
 }

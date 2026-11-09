@@ -1,6 +1,7 @@
 import { afterEach, describe, it, expect, vi } from 'vitest';
 import {
   getWebGLSupport,
+  installWebGLContextSafetyPolyfill,
   isSoftwareRenderer,
   isSoftwareRendererName,
   isWebGLAvailable,
@@ -109,5 +110,38 @@ describe('getWebGLSupport (cached)', () => {
     expect(f.getContext).toHaveBeenCalledTimes(1);
     expect(getWebGLSupport()).toBe(getWebGLSupport());
     create.mockRestore();
+  });
+
+  describe('installWebGLContextSafetyPolyfill', () => {
+    it('returns non-null fallbacks when getParameter is called on lost context', () => {
+      class MockWebGLContext {
+        isLost = true;
+        isContextLost() {
+          return this.isLost;
+        }
+        getParameter(_pname: number) {
+          return null;
+        }
+        clearColor(_r: number, _g: number, _b: number, _a: number) {}
+      }
+
+      vi.stubGlobal('WebGLRenderingContext', MockWebGLContext);
+      installWebGLContextSafetyPolyfill(MockWebGLContext.prototype);
+
+      const ctx = new MockWebGLContext();
+      // COLOR_CLEAR_VALUE (0x0c22) returns Float32Array
+      const color = ctx.getParameter(0x0c22) as unknown as Float32Array;
+      expect(color).toBeInstanceOf(Float32Array);
+      expect(color[0]).toBe(0);
+
+      // DEPTH_CLEAR_VALUE (0x0b73) returns 1.0
+      expect(ctx.getParameter(0x0b73)).toBe(1.0);
+
+      // STENCIL_CLEAR_VALUE (0x0b93) returns 0
+      expect(ctx.getParameter(0x0b93)).toBe(0);
+
+      // clearColor does not throw on lost context
+      expect(() => ctx.clearColor(0, 0, 0, 0)).not.toThrow();
+    });
   });
 });
