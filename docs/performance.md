@@ -103,6 +103,10 @@ them after mount (re-targeting races React root unmounts and can leave a label e
   Rounded boxes (PR-1.2): 300 triangles each, plain 12-triangle box under 0.005 radius; spheres 18 × 12 (396 triangles, PR-1.3);
   ≤ 5 k triangles per object. Surface maps (PR-1.4): 128² normal + roughness + shade per used material,
   generated in JS on first use (~1 ms each) and cached for the session.
+- /village VR studio (WebXR): no extra render target in the eye pass (no `ContactShadows` on spawned
+  models, no post-processing) so fixed foveation and MSAA stay on (Meta WebXR perf guidance). Blaster beams,
+  pips and blast FX are Three objects built once and mutated in `useFrame`; hand joints are one
+  `InstancedMesh` per hand, packed by `updateHandMesh`.
 - Charts in a hidden tab are not mounted (Recharts can't measure a `display:none` parent).
 
 ## 6. Loading & navigation

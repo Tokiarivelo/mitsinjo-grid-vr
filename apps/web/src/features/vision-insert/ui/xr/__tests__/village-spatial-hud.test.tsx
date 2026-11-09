@@ -12,7 +12,7 @@ vi.mock('../spatial-hud-texture', () => ({
 }));
 
 describe('VillageSpatialHUD (VS-T8)', () => {
-  it('renders holographic telemetry HUD and toggles expand/minimize on click', () => {
+  it('renders holographic telemetry HUD with hover feedback', () => {
     const { container } = render(
       <I18nProvider>
         <VillageSpatialHUD
@@ -40,10 +40,8 @@ describe('VillageSpatialHUD (VS-T8)', () => {
       fireEvent.pointerOut(interactiveMesh!);
     });
 
-    // Toggle expand/minimize
-    act(() => {
-      fireEvent.click(interactiveMesh!);
-    });
+    // Expand/minimize goes through userData.onSelect, fired by XRBlasterController
+    // (see its HUD fallback test). No R3F onClick: both fired on one click and cancelled out.
 
     expect(group).toBeTruthy();
   });

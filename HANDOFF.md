@@ -1,28 +1,39 @@
 # HANDOFF — read first, overwrite at end of session (≤40 lines)
 
-**Updated:** 2026-11-09 · **By:** Antigravity · **Branch:** feat/vr-village-spatial-shoot
+**Updated:** 2026-11-09 · **By:** Claude Code · **Branch:** fix/vr-village-xr-shoot-verify
 
 ## Current state
 
-- Implemented comprehensive dual-controller and hand-tracking interactions across 3D scene on `/village`:
-  - Controllers 0 & 1: Both registered in `scene`, dual independent laser aiming beams (`pointer0` & `pointer1`), reticle lock-on, trigger dispatch (`selectstart`/`select`), and direct-touch proximity.
-  - Hand Tracking: Direct touch detection with index fingertip (`AIR_BUTTON_POS` and targets), far interaction pinch gesture detection (thumb & index tip $< 3.2\text{cm}$), hand pointing ray.
-  - Surrounding Space: Transparent raycast colliders and `userData.onSelect`/`onClick` attached to `HoloDetectionTarget` and `VillageSpatialHUD`.
-  - Desktop mouse fallback preserved without overriding in-VR controller/hand tracking.
-  - Added dedicated test suite `xr-blaster-controller.test.tsx` (8/8 tests pass).
-- 100% key parity across `en.json`, `fr.json`, `mg.json` (`make check-i18n`).
-- 0 TypeScript errors (`tsc --noEmit`), 43/43 vision-insert test files pass (297/297 tests).
+- /village VR verified in the IWER emulator (Quest 3) with a fake webcam (sample room): controllers, hands, mouse.
+- New (VS-T11): shoot an object **in the webcam video** → it turns into 3D. Before any scan, the shot starts the scan
+  and resolves to the object under the shot once detections arrive. 2nd shot connects it to the microgrid.
+- `webcam-screen.ts` = single geometry for the curved video screen (bottom edge on the floor); targets are laid on
+  their object in the video, models pop out along the line of sight (1.6 m, ≤ 0.9 m).
+- `XRBlasterController` is the only input source: `selectstart` only; hands use the system ray + native pinch;
+  R3F `onClick` removed from air button, targets and HUD (each click fired twice before).
+- Panels moved below eye level at ~1 m (`xr-layout.ts`); hands = cyan spheres, `updateHandMesh` shared with /simulation.
+- `make vr-probe` (scripted emulator check, 4 PASS) and `make dev-stop` (kills turbo/pnpm/next group; next-server alone respawns).
+- Dev only: `window.__IWER_DEVICE__` exposes IWER's remote API (same as the IWER MCP, which failed: port 8723 busy).
 
 ## Next
 
-1. Hard-refresh browser (`Ctrl+F5`) on `http://localhost:3001/village` and test both controllers, hands (direct touch & pinch), and surrounding space targets.
-2. Review scenarios V196–V203 in `test-scenarios/06-village.md`.
-3. VS-T9: 3D positional audio panner (`PannerNode` / `PositionalAudio`).
+1. Real Quest: check comfort of panel heights and spawn size; tune `xr-layout.ts` / `spawnDistance`.
+2. Pre-existing static text in headset: HUD battery state (« Charge / Décharge / Équilibré ») and webcam pill
+   (« 720p LIVE », « STARTING CAMERA… ») → i18n keys.
+3. VS-T9 spatial audio; foveation / frame-rate settings in `xr-session.ts` (see `/vr-immersion` skill).
 
 ## Files touched
 
-- `apps/web/src/features/vision-insert/ui/xr/xr-blaster-controller.tsx`
-- `apps/web/src/features/vision-insert/ui/xr/holo-detection-target.tsx`
-- `apps/web/src/features/vision-insert/ui/xr/village-spatial-hud.tsx`
-- `apps/web/src/features/vision-insert/ui/xr/__tests__/xr-blaster-controller.test.tsx`
-- `HANDOFF.md`
+- `apps/web/src/features/vision-insert/ui/xr/`: `webcam-screen.ts` (new), `xr-layout.ts` (new), `spatial-projection.ts`,
+  `xr-blaster-controller.tsx`, `village-xr-studio.tsx`, `live-webcam-backdrop.tsx`, `holo-detection-target.tsx`,
+  `spatial-air-button.tsx`, `village-spatial-hud.tsx`, `spawned-object-3d.tsx` + tests (`webcam-screen`, `village-xr-studio` new)
+- `apps/web/src/features/microgrid-3d/utils/xr-hands.ts`, `dev-xr-emulator.ts` (+ test)
+- `apps/web/src/messages/{en,fr,mg}.json` (`vrHudEventMaterialized`, `vrHudEventNoObject`)
+- `apps/web/scripts/vr-village-probe.mjs`, `scripts/dev-stop.sh`, `Makefile`, `README.md`
+- Docs: `vr-village-spatial-detection.md`, `vr-testing-guide.md`, `performance.md`, `tasks/VR-village-spatial-shoot.md`,
+  `.claude/skills/vr-immersion/SKILL.md`
+
+## Decisions
+
+- Targets follow the video, not a free arc: what you aim at in the image is what you hit.
+- No `ContactShadows` on spawned models in XR (extra render target breaks FFR/MSAA, Meta guidance).

@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, useCallback, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAppLocale, useTranslations } from '@/lib/i18n';
 import { localLabel, type ApplianceDetection } from '@/lib/vision';
 import { defaultArchetype, kitToRecipe, type ObjectKit } from '@/lib/object-kit';
@@ -12,11 +12,13 @@ import { projectDetectionsTo3D, type SpatialTarget } from './spatial-projection'
 import { SpatialAirButton } from './spatial-air-button';
 import { HoloDetectionTarget } from './holo-detection-target';
 import { SpawnedObject3D } from './spawned-object-3d';
-import { XRBlasterController } from './xr-blaster-controller';
+import { AIR_BUTTON_ID, XRBlasterController } from './xr-blaster-controller';
 import { playGridConnectSound, playGridDisconnectSound } from './xr-audio-fx';
 import { VillageSpatialHUD } from './village-spatial-hud';
 import { LiveWebcamBackdrop } from './live-webcam-backdrop';
 import { SpatialInteractionGuide } from './spatial-interaction-guide';
+import { pickTargetAtUv } from './webcam-screen';
+import { AIR_BUTTON_POSITION, INTERACTION_GUIDE_POSITION } from './xr-layout';
 
 export interface VillageXRStudioProps {
   detections: ApplianceDetection[];
@@ -46,6 +48,8 @@ export const VillageXRStudio = memo(function VillageXRStudio({
   const [recentEvent, setRecentEvent] = useState<string | null>(null);
   const eventTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const captureFnRef = useRef<(() => string | null) | null>(null);
+  /** A shot at the video before any detection: resolved once the scan it started ends. */
+  const pendingShotRef = useRef<{ u: number; v: number; sawScan: boolean } | null>(null);
 
   const notifyEvent = useCallback((msg: string) => {
     if (eventTimerRef.current) clearTimeout(eventTimerRef.current);
@@ -83,23 +87,21 @@ export const VillageXRStudio = memo(function VillageXRStudio({
   const handleShootTarget = useCallback(
     (id: string) => {
       // 1. If not yet materialized, first laser shot materializes procedural 3D model
+      const target = targets.find((t) => t.id === id);
+      if (!target) return;
+      const title = localLabel(target.detection, locale) || target.detection.label;
+
       if (!materializedIds.has(id)) {
-        setMaterializedIds((prev) => {
-          const next = new Set(prev);
-          next.add(id);
-          return next;
-        });
+        setMaterializedIds((prev) => new Set(prev).add(id));
+        notifyEvent(t('vrHudEventMaterialized', { name: title }));
         onSelectAppliance?.(id);
         return;
       }
 
       // 2. If already materialized, subsequent shot toggles microgrid connection
-      const target = targets.find((t) => t.id === id);
-      if (!target) return;
 
       const applianceId = applianceIdFor(photo, id);
       const isConnected = connectedIds.has(id);
-      const title = localLabel(target.detection, locale) || target.detection.label;
       const draft = aiDraft(target.detection, title);
       const watts = draft.watts ?? 150;
 
@@ -122,9 +124,9 @@ export const VillageXRStudio = memo(function VillageXRStudio({
           const fallbackKit: ObjectKit = {
             archetype,
             proportions: {
-              w: target.dimensions[0],
-              h: target.dimensions[1],
-              d: target.dimensions[2],
+              w: target.spawnDimensions[0],
+              h: target.spawnDimensions[1],
+              d: target.spawnDimensions[2],
             },
             colors: { main: '#78909c', secondary: '#37474f', accent: '#00bcd4' },
             materials: { main: 'metal', secondary: 'glass', accent: 'plastic' },
@@ -156,6 +158,34 @@ export const VillageXRStudio = memo(function VillageXRStudio({
       onSelectAppliance,
     ]
   );
+
+  /** Shot at the webcam video outside every detection box. */
+  const handleShootScreen = useCallback(
+    (u: number, v: number) => {
+      if (targets.length > 0 && !isScanning) {
+        notifyEvent(t('vrHudEventNoObject'));
+        return;
+      }
+      // Nothing detected yet: scan this frame, then turn the object under the shot into 3D.
+      pendingShotRef.current = { u, v, sawScan: isScanning };
+      if (!isScanning) handleTriggerScan();
+    },
+    [targets.length, isScanning, notifyEvent, t, handleTriggerScan]
+  );
+
+  useEffect(() => {
+    const pending = pendingShotRef.current;
+    if (!pending) return;
+    if (isScanning) {
+      pending.sawScan = true;
+      return;
+    }
+    if (!pending.sawScan) return;
+    pendingShotRef.current = null;
+    const hit = pickTargetAtUv(targets, pending.u, pending.v);
+    if (hit) handleShootTarget(hit.id);
+    else notifyEvent(t('vrHudEventNoObject'));
+  }, [isScanning, targets, handleShootTarget, notifyEvent, t]);
 
   const status = isScanning ? 'scanning' : targets.length > 0 ? 'detected' : 'idle';
 
@@ -197,18 +227,13 @@ export const VillageXRStudio = memo(function VillageXRStudio({
       <SpatialAirButton
         status={status}
         detectedCount={targets.length}
-        onTriggerScan={handleTriggerScan}
-        position={[0, 1.45, -1.2]}
-        isHovered={hoveredTargetId === 'spatial-air-button'}
+        position={AIR_BUTTON_POSITION}
+        isHovered={hoveredTargetId === AIR_BUTTON_ID}
       />
-      <SpatialInteractionGuide position={[0, 1.05, -1.2]} />
+      <SpatialInteractionGuide position={INTERACTION_GUIDE_POSITION} />
 
       {/* 5. Diegetic Holographic Telemetry HUD (VS-T8) */}
-      <VillageSpatialHUD
-        position={[-0.95, 1.55, -1.2]}
-        rotation={[0.05, 0.45, 0]}
-        recentEvent={recentEvent}
-      />
+      <VillageSpatialHUD recentEvent={recentEvent} />
 
       {/* 6. Holographic Detection Targets */}
       {targets.map((target) => (
@@ -218,8 +243,6 @@ export const VillageXRStudio = memo(function VillageXRStudio({
           hovered={hoveredTargetId === target.id}
           isMaterialized={materializedIds.has(target.id)}
           isConnected={connectedIds.has(target.id)}
-          onHoverChange={(id, hovered) => setHoveredTargetId(hovered ? id : null)}
-          onShootTarget={handleShootTarget}
         />
       ))}
 
@@ -237,11 +260,10 @@ export const VillageXRStudio = memo(function VillageXRStudio({
       {/* 6. XR Blaster Controller Raycasting & Particle Effects */}
       <XRBlasterController
         targets={targets}
-        materializedIds={materializedIds}
-        connectedIds={connectedIds}
         onHoverTarget={setHoveredTargetId}
         onShootTarget={handleShootTarget}
         onTriggerScan={handleTriggerScan}
+        onShootScreen={handleShootScreen}
       />
     </group>
   );

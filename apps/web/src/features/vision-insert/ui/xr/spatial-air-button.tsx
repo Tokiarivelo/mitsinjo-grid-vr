@@ -1,18 +1,17 @@
 'use client';
 
-import { memo, useMemo, useRef, useState } from 'react';
+import { memo, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
 import { Billboard } from '@react-three/drei';
 import { useTranslations } from '@/lib/i18n';
 import { getSpatialAirButtonTexture } from './spatial-air-button-texture';
-import { playScanRadarSound } from './xr-audio-fx';
+import { AIR_BUTTON_POSITION } from './xr-layout';
 
 export interface SpatialAirButtonProps {
   status: 'idle' | 'scanning' | 'detected';
   detectedCount: number;
-  onTriggerScan: () => void;
-  /** In-air 3D coordinates. Default: [0, 1.45, -1.2] */
+  /** In-air 3D coordinates. Default: AIR_BUTTON_POSITION. */
   position?: [number, number, number];
   /** External hover state driven by WebXR laser pointer raycast */
   isHovered?: boolean;
@@ -21,18 +20,16 @@ export interface SpatialAirButtonProps {
 /**
  * 3D Floating Interactive Option in the air (Spatial Air Beacon & Action Button).
  * Placed in front of the user at eye level in the virtual room.
- * Responds to WebXR controller laser raycast and mouse clicks in desktop emulator.
+ * Pressed through XRBlasterController (laser, pinch, fingertip or mouse), the single input source.
  */
 export const SpatialAirButton = memo(function SpatialAirButton({
   status,
   detectedCount,
-  onTriggerScan,
-  position = [0, 1.45, -1.2],
+  position = AIR_BUTTON_POSITION,
   isHovered = false,
 }: SpatialAirButtonProps) {
   const t = useTranslations('features.visionInsert');
-  const [internalHovered, setInternalHovered] = useState(false);
-  const hovered = internalHovered || isHovered;
+  const hovered = isHovered;
 
   const groupRef = useRef<THREE.Group>(null);
   const crystalRef = useRef<THREE.Mesh>(null);
@@ -101,37 +98,6 @@ export const SpatialAirButton = memo(function SpatialAirButton({
 
   return (
     <group ref={groupRef} position={position} name="spatial-air-button-group">
-      {/* Interactive Raycast Hitbox Capsule (Transparent, fully hit-testable in R3F/WebXR) */}
-      <mesh
-        position={[0, 0, 0]}
-        userData={{
-          onSelect: () => {
-            playScanRadarSound();
-            onTriggerScan();
-          },
-          onClick: () => {
-            playScanRadarSound();
-            onTriggerScan();
-          },
-        }}
-        onPointerOver={(e) => {
-          e.stopPropagation();
-          setInternalHovered(true);
-        }}
-        onPointerOut={(e) => {
-          e.stopPropagation();
-          setInternalHovered(false);
-        }}
-        onClick={(e) => {
-          e.stopPropagation();
-          playScanRadarSound();
-          onTriggerScan();
-        }}
-      >
-        <boxGeometry args={[0.85, 0.55, 0.35]} />
-        <meshBasicMaterial transparent opacity={0.001} depthWrite={false} />
-      </mesh>
-
       {/* Floating Holographic Crystal Header */}
       <group position={[0, 0.16, 0]}>
         <mesh ref={crystalRef}>

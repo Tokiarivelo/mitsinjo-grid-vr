@@ -321,6 +321,12 @@ make dev
 # Run development server with deterministic offline mock LLM
 make dev-mock
 
+# Stop the dev server on $PORT for good (killing next-server alone: next dev respawns it)
+make dev-stop
+
+# /village VR check in the IWER emulator: shoot objects in a fake-webcam video (dev server running, ffmpeg)
+make vr-probe
+
 # Apply pending Neon migrations (also automatic on the app's first DB call; no DATABASE_URL → no-op)
 make db-migrate
 

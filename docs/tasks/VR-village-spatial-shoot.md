@@ -138,6 +138,16 @@
 - [x] Tests unitaires Vitest pour le backdrop webcam et la gestion du flux.
 - [x] **Done when :** En immersion VR, la webcam affiche le flux vidéo en direct devant l'utilisateur, l'espace 360° est entouré d'une atmosphère studio sans aucun vide noir, et le scan s'effectue directement sur l'image vue.
 
+### VS-T11 : Tir direct sur les objets de la vidéo webcam (alignement, entrées, confort)
+
+- [x] Géométrie partagée de l'écran webcam (`webcam-screen.ts`) : bord bas au sol, point 3D d'un pixel, pixel visé par un rayon.
+- [x] Cibles posées sur l'objet vu dans la vidéo ; modèle 3D qui sort de l'image vers l'utilisateur (≤ 0,9 m).
+- [x] Tir sur la vidéo sans scan préalable → scan → l'objet sous le tir devient 3D (un seul geste).
+- [x] Une seule source d'entrée (`XRBlasterController`) : `selectstart` seulement, pincement natif des mains, plus de double tir souris / gâchette / pincement.
+- [x] Panneaux sous la ligne des yeux à ~1 m (`xr-layout.ts`) ; mains en sphères cyan, index compactés (`updateHandMesh`).
+- [x] `make vr-probe` : vérification dans l'émulateur IWER (manettes + mains + webcam simulée).
+- [x] **Done when :** dans l'émulateur, viser le frigo de la vidéo et tirer le transforme en 3D ; un 2ᵉ tir le raccorde ; pincement main et manette gauche fonctionnent.
+
 ---
 
 ## Exit criteria

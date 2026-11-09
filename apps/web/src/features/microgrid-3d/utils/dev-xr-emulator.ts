@@ -15,6 +15,9 @@ export async function installDevXREmulator(): Promise<boolean> {
     // force the emulated runtime over it. Only called when native immersive-vr is
     // unsupported, so a real headset runtime is never clobbered.
     device.installRuntime({ forceInstall: true });
+    // Dev-only handle so e2e scripts can drive headset, controllers and hands
+    // through IWER's remote API (`device.remote.dispatch`), like the IWER MCP does.
+    (window as Window & { __IWER_DEVICE__?: unknown }).__IWER_DEVICE__ = device;
     try {
       // The overlay needs WebGL; the emulated runtime works without it.
       const { DevUI } = await import('@iwer/devui');

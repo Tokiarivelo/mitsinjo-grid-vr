@@ -3,7 +3,6 @@
 import { memo, useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
-import { ContactShadows } from '@react-three/drei';
 import { defaultArchetype, kitToRecipe, type ObjectKit } from '@/lib/object-kit';
 import { fitRecipe } from '@/lib/object-shape';
 import { recipeMesh } from '../../utils/object-geometry';
@@ -21,7 +20,8 @@ export interface SpawnedObject3DProps {
 
 /**
  * 3D Procedural Appliance Materialized in-situ in the WebXR room.
- * Extrudes from 0 to 1 scale with elastic bounce, renders real materials and contact shadows.
+ * Extrudes from 0 to 1 scale with elastic bounce. No ContactShadows: its per-frame render
+ * target would break fixed foveation and MSAA in the headset (Meta WebXR perf guidance).
  */
 export const SpawnedObject3D = memo(function SpawnedObject3D({
   target,
@@ -29,7 +29,8 @@ export const SpawnedObject3D = memo(function SpawnedObject3D({
 }: SpawnedObject3DProps) {
   const groupRef = useRef<THREE.Group>(null);
   const scaleRef = useRef(0);
-  const { detection, position, dimensions } = target;
+  // Pops out of the webcam video toward the viewer, at a comfortable size.
+  const { detection, spawnPosition: position, spawnDimensions: dimensions } = target;
 
   const activeRecipe = useMemo(() => {
     const archetype = defaultArchetype(detection.category, detection.scenery, detection.label);
@@ -80,15 +81,6 @@ export const SpawnedObject3D = memo(function SpawnedObject3D({
     <group ref={groupRef} position={position} name={`spawned-object-${target.id}`}>
       {/* 3D Multi-material Model */}
       <mesh geometry={geometry} material={materials} castShadow receiveShadow />
-
-      {/* Ground Contact Shadow beneath the object */}
-      <ContactShadows
-        position={[0, -dimensions[1] / 2, 0]}
-        opacity={0.65}
-        scale={Math.max(dimensions[0], dimensions[2]) * 2.0}
-        blur={1.8}
-        far={1.2}
-      />
 
       {/* Energy connection aura ring at base (Green when connected, Cyan when idle) */}
       <mesh position={[0, -dimensions[1] / 2 + 0.01, 0]} rotation={[-Math.PI / 2, 0, 0]}>

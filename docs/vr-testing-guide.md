@@ -79,6 +79,12 @@ redondante mais compatible).
 | S122 | Casque HTTPS : session immersive, sortie geste → bouton de retour |
 | S123 | Build prod + extension navigateur : session émulée OK             |
 
+## /village : vérification scriptée dans l'émulateur
+
+`make vr-probe` (serveur dev lancé, ffmpeg) : webcam simulée = pièce d'exemple, IWER piloté via
+`window.__IWER_DEVICE__.remote.dispatch` (dev seulement, même API que l'IWER MCP) — manettes, mains,
+tir sur les objets de la vidéo. Détails : `docs/vr-village-spatial-detection.md` §6.
+
 ## Tests automatiques (déjà verts)
 
 22 tests VR (7 fichiers), `make check` vert (2135/2135 au total) :

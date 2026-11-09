@@ -958,6 +958,8 @@
       "vrHudExpand": "Expand",
       "vrHudEventConnected": "+{watts} W · {name} connected",
       "vrHudEventDisconnected": "−{watts} W · {name} disconnected",
+      "vrHudEventMaterialized": "3D model created · {name}",
+      "vrHudEventNoObject": "No object detected at this spot",
       "vrHudNetSurplus": "Surplus +{kw} kW",
       "vrHudNetDeficit": "Deficit -{kw} kW",
       "vrHudNetBalanced": "Grid Balanced",

@@ -958,6 +958,8 @@
       "vrHudExpand": "Ahabeo",
       "vrHudEventConnected": "+{watts} W · {name} nampifandraisina",
       "vrHudEventDisconnected": "−{watts} W · {name} nesorina",
+      "vrHudEventMaterialized": "Modely 3D vita · {name}",
+      "vrHudEventNoObject": "Tsy misy zavatra hita eto",
       "vrHudNetSurplus": "Ambim-bava +{kw} kW",
       "vrHudNetDeficit": "Tsy ampy -{kw} kW",
       "vrHudNetBalanced": "Milamina ny tambajotra",
