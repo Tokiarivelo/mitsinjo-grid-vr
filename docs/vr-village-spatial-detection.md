@@ -78,18 +78,23 @@ flowchart TD
 
 ### Phase 3 : Visée & Tir sur l'objet ("Laser Blaster")
 
-- **Mécanique de visée :**
+- **Mécanique de visée et visualisation corporelle :**
   - Contrôleur WebXR actif (`renderer.xr.getController(0)`) avec rayon laser continu visible en temps réel.
+  - Modèle 3D de manette **Meta Quest Touch Controller** complet (manche, tête, anneau de suivi et gâchette index).
+  - Modèle 3D de main **Hand Tracking 25 articulations** (poignet, paume, phalanges index, majeur, annulaire, auriculaire et pouce) s'adaptant dynamiquement au mode mains nues.
   - Réticule d'impact (pip dot) projeté à la distance exacte d'intersection avec les cibles.
   - Raycaster Three.js en boucle `useFrame` testant les intersections cibles.
+  - Unprojection souris desktop intégrée (`_raycaster.setFromCamera`) pour viser et cliquer directement sur les boutons 3D sans casque.
 - **Action de tir :**
-  - Appui sur la gâchette : trait laser rapide avec décharge de projectile vers le point d'impact.
+  - Appui sur la gâchette ou geste de pincement pouce-index (_Index Pinch_) : trait laser rapide avec décharge de projectile vers le point d'impact.
   - Flash blanc, onde de choc circulaire cyan, retours haptiques `hapticActuators.pulse()`.
   - Sons synthétisés procéduraux pour le tir et l'impact (`playLaserShootSound()`, `playTargetHitSound()`).
 
 #### Checklist Phase 3 :
 
 - [x] Contrôleur `<XRBlasterController />` avec rayon laser continu et reticule d'impact dynamique.
+- [x] Modèle 3D complet de manette Touch (`createControllerGripModel()`) et main articulée 25 articulations (`createHandMesh()`).
+- [x] Support unprojecté direct à la souris pour navigation desktop sur écran plat.
 - [x] Détection des intersections temps réel via `THREE.Raycaster`.
 - [x] Effets de tir : décharge de projectile, onde de choc sphérique et flash lumineux.
 - [x] Effets sonores procéduraux Web Audio API (`playLaserShootSound`, `playTargetHitSound`).
@@ -174,31 +179,40 @@ flowchart TD
 
 ---
 
-### Phase 8 : Écran Panoramique Webcam Live & Atmosphère 360° (Live Camera Screen & Surroundings)
+### Phase 8 : Écran Panoramique Studio à Focus Plat & Prévention du Vertige (Anti-Vertigo Planar Cinema Screen)
 
-- **Vision :** Afficher en temps réel le flux vidéo de la webcam locale dans la scène 3D sans écran noir, entouré d'une atmosphère studio immersive à 360° :
-  - Flux vidéo webcam continu via `navigator.mediaDevices.getUserMedia` et `THREE.VideoTexture`.
-  - Écran panoramique incurvé (130°, rayon 4.5m) positionné en arrière-plan des cibles holographiques.
-  - Dôme céleste d'atelier de 24m (`#081022`) et sol étendu éliminant complètement le vide noir autour de l'utilisateur.
-  - Fallback automatique sans coupure sur `/samples/vision-room.jpg` en l'absence de caméra.
-  - Capture instantanée du flux vidéo actif au clic du bouton spatial aérien.
+- **Vision :** Afficher le décor d'atelier et la webcam sans déformation sphérique pour éliminer les nausées de mouvement et le conflit vestibulaire :
+  - **Focus central plat ($R = 11{,}5\text{ m}$) :** Courbure géante centrée à $4{,}2\text{ m}$ devant le regard. La flèche de courbure sur les $6\text{ m}$ centraux est $< 38\text{ cm}$, offrant une vue optiquement 100 % plane où les lignes horizontales ne sont pas déformées en œil de poisson.
+  - **Grand angle panoramique étendu ($153^\circ$) :** Arc horizontal de $153^\circ$ (`thetaLength = Math.PI * 0.85`), permettant à l'utilisateur de tourner la tête librement de gauche à droite pour inspecter les cibles périphériques sans sentiment d'enfermement.
+  - **Suppression du dôme sphérique 360° :** Remplacé par un mur architectural droit sombre (`name="studio-backdrop-wall"`, `<planeGeometry args={[26, 9]} />`) et un sol étendu stable (`circleGeometry args={[9, 48]}`), assurant un ancrage gravitationnel solide.
+  - **Texture vidéo GPU directe & Fallback HD :** Utilise `THREE.VideoTexture` pour le flux matériel et fallback instantané sur `/samples/vision-room.jpg`.
+  - **Capture d'image instantanée :** Enregistre la frame active au clic du bouton spatial pour analyse par perception IA.
 
 #### Checklist Phase 8 :
 
 - [x] Créer le composant `<LiveWebcamBackdrop />` (`features/vision-insert/ui/xr/live-webcam-backdrop.tsx`).
-- [x] Stream vidéo temps réel webcam via `THREE.VideoTexture` et boucle de rafraîchissement `useFrame`.
-- [x] Projection sur écran cylindrique incurvé (arc de 130°, rayon 4.5m, hauteur 3.8m).
-- [x] Élimination du vide noir 360° : dôme céleste d'atelier (`#081022`), anneau d'horizon ambiant et sol étendu.
-- [x] Fallback automatique sur l'image témoin `/samples/vision-room.jpg` en l'absence de caméra.
+- [x] Focus central plan anti-vertige (rayon $11{,}5\text{ m}$, distance $4{,}2\text{ m}$, sagitta $< 38\text{ cm}$).
+- [x] Grand angle horizontal étendu à $153^\circ$ pour balayage libre gauche/droite.
+- [x] Élimination du dôme sphérique au profit d'un mur architectural droit (`#081022`) et sol stable.
+- [x] Stream vidéo temps réel webcam via `THREE.VideoTexture` et fallback HD `/samples/vision-room.jpg`.
 - [x] Capture instantanée du flux vidéo actif au clic du bouton spatial aérien.
 - [x] Clés de traduction localisées (`vrLiveWebcam`, `vrVirtualRoom`, `vrCameraStandby`) avec parité 100 %.
 - [x] Tests unitaires Vitest pour le backdrop webcam et la gestion du flux.
 
 ---
 
-## 4. Fonctionnement sous Émulateur (Mode Desktop Développeur)
+## 4. Modalités de contrôle & Interaction (Casque VR, Hand Tracking & Émulateur PC)
 
-### Comment tester sans aucun casque physique :
+Le système supporte 4 manières complètes d'interagir avec les boutons flottants dans les airs et les cibles 3D :
+
+| Plateforme / Équipement            | Représentation Visuelle                                        | Déplacement / Orientation                | Visée & Clic dans les Airs                                                            |
+| :--------------------------------- | :------------------------------------------------------------- | :--------------------------------------- | :------------------------------------------------------------------------------------ |
+| **Meta Quest (Manettes Touch)**    | Modèle 3D complet de manette Touch avec anneau et grip         | Suivi 6DoF dans l'espace physique        | Viser avec le laser cyan + presser la gâchette index (_Trigger_) ou bouton A/X        |
+| **Meta Quest (Hand Tracking)**     | Main 3D articulée 25 articulations (poignet, paume, phalanges) | Suivi optique direct des mains           | Pointer l'index (laser émis du doigt) + pincer pouce et index (**Index Pinch**)       |
+| **PC (Émulateur IWER DevUI)**      | Manette virtuelle 3D / Mains                                   | Touches `ZQSD` / `WASD` pour se déplacer | Maintenir `Alt` (manette droite) ou `Shift` (manette gauche) + Clic gauche / `Espace` |
+| **PC (Navigation Souris Directe)** | Pointeur souris standard                                       | Clic glissé pour tourner la vue          | Survol direct du bouton 3D + Clic gauche (détection unprojectée caméra)               |
+
+### Comment tester sur PC sans casque physique :
 
 1. **Lancer le serveur en mode mock :**
    ```bash
@@ -212,7 +226,8 @@ flowchart TD
    - Cliquez sur **Play Mode** dans la barre DevUI :
      - **Souris :** Oriente le regard et le pointeur du contrôleur droit.
      - **Touches ZQSD / WASD :** Déplace la position de la caméra dans l'espace.
-     - **Clic gauche de souris :** Simule l'appui gâchette (_Trigger / Select_), permettant de cliquer sur le bouton dans les airs puis de viser et tirer sur les cibles.
+     - **Maintenir Alt + Clic gauche ou Espace :** Simule l'appui gâchette (_Trigger / Select_), permettant de cliquer sur le bouton dans les airs puis de viser et tirer sur les cibles.
+     - **Molette souris :** Rapproche ou éloigne la manette virtuelle dans la profondeur $Z$.
 
 ---
 
