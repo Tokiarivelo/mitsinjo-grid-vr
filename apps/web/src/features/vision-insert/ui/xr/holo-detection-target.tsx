@@ -96,7 +96,10 @@ export const HoloDetectionTarget = memo(function HoloDetectionTarget({
     <group ref={groupRef} position={position} name={`holo-target-${id}`}>
       {/* Interactive Click & Raycast Collider (Active before and after materialization) */}
       <mesh
-        visible={false}
+        userData={{
+          onSelect: () => onShootTarget(id),
+          onClick: () => onShootTarget(id),
+        }}
         onPointerOver={(e) => {
           e.stopPropagation();
           onHoverChange(id, true);
@@ -111,7 +114,7 @@ export const HoloDetectionTarget = memo(function HoloDetectionTarget({
         }}
       >
         <sphereGeometry args={[hitRadius * 1.35, 12, 12]} />
-        <meshBasicMaterial />
+        <meshBasicMaterial transparent opacity={0.001} depthWrite={false} />
       </mesh>
 
       {/* Hologram Box Wireframe (visible prior to materialization) */}

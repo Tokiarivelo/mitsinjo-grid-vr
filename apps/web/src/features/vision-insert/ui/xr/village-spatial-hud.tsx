@@ -120,6 +120,10 @@ export const VillageSpatialHUD = memo(function VillageSpatialHUD({
       {/* Interactive HUD Surface Plane */}
       <mesh
         ref={meshRef}
+        userData={{
+          onSelect: () => setIsExpanded((prev) => !prev),
+          onClick: () => setIsExpanded((prev) => !prev),
+        }}
         onPointerOver={(e) => {
           e.stopPropagation();
           setIsHovered(true);
