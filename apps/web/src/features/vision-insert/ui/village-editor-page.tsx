@@ -1,9 +1,11 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
+import type { WebGLRenderer } from 'three';
 import {
   Box,
   ChevronRight,
+  Glasses,
   Grid3X3,
   ImagePlus,
   Plug,
@@ -12,6 +14,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { StatusBadge } from '@/components/ui/status-badge';
+import { useWebXR, useWebGLAvailable } from '@/features/microgrid-3d';
 import { GridSchematicPreview } from '@/features/overview';
 import { selectActiveResult, selectInput, selectTimeIndex, useSimulationStore } from '@/stores';
 import { readAsDataUrl } from '@/lib/files';
@@ -29,6 +32,7 @@ import { ApplianceList } from './appliance-list';
 import { DetectionCanvas } from './detection-canvas';
 import { ObjectShapePanel } from './object-shape-panel';
 import { SelectedAppliance } from './selected-appliance';
+import { VillageXRViewport } from './xr';
 
 /** Photos the vision route accepts. */
 const PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
@@ -45,6 +49,22 @@ export function VillageEditorPage() {
   const t = useTranslations('features.visionInsert');
   const tCommon = useTranslations('common');
   const fileRef = useRef<HTMLInputElement>(null);
+  // VR session for the 3D room (filled once the WebGL renderer mounts).
+  const rendererRef = useRef<WebGLRenderer | null>(null);
+  const xr = useWebXR(rendererRef);
+  const xrActive = xr.status === 'active';
+  const hasWebGL = useWebGLAvailable();
+  const [vrViewOpen, setVrViewOpen] = useState(false);
+
+  // Synchronize when the WebXR session ends (via DevUI exit icon, headset gesture, etc.)
+  const prevXrActiveRef = useRef(xrActive);
+  useEffect(() => {
+    if (prevXrActiveRef.current && !xrActive) {
+      setVrViewOpen(false);
+    }
+    prevXrActiveRef.current = xrActive;
+  }, [xrActive]);
+
   // Photo, objects, 2D and 3D stay when the operator visits another page and comes back.
   const [imageUrl, setImageUrl] = useKeptState<string | null>(VILLAGE_SCOPE, 'photo', null);
   const [badType, setBadType] = useState(false);
@@ -156,6 +176,37 @@ export function VillageEditorPage() {
     }
   };
 
+  const captureLiveOrSample = async () => {
+    if (typeof navigator !== 'undefined' && navigator.mediaDevices?.getUserMedia) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'environment' },
+        });
+        const video = document.createElement('video');
+        video.srcObject = stream;
+        video.playsInline = true;
+        await video.play();
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth || 1280;
+        canvas.height = video.videoHeight || 720;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          stream.getTracks().forEach((track) => track.stop());
+          const capturedUrl = canvas.toDataURL('image/jpeg', 0.85);
+          if (capturedUrl && capturedUrl.length > 100) {
+            setImageUrl(capturedUrl);
+            return;
+          }
+        }
+        stream.getTracks().forEach((track) => track.stop());
+      } catch {
+        // Fallback to sample photo if webcam denied, unavailable, or in test
+      }
+    }
+    await loadSample();
+  };
+
   const onDrop = (e: DragEvent<HTMLElement>) => {
     e.preventDefault();
     setDragging(false);
@@ -201,6 +252,33 @@ export function VillageEditorPage() {
               </span>
             </div>
           )}
+
+          {hasWebGL && (xr.status === 'supported' || xrActive || vrViewOpen) && (
+            <button
+              type="button"
+              onClick={() => {
+                if (xrActive) {
+                  xr.exit();
+                  setVrViewOpen(false);
+                } else {
+                  setVrViewOpen((open) => !open);
+                }
+              }}
+              aria-pressed={xrActive || vrViewOpen}
+              aria-label={xr.error ?? (xrActive || vrViewOpen ? t('vrExit') : t('vrEnter'))}
+              title={xr.error ?? (xrActive || vrViewOpen ? t('vrExit') : t('vrEnter'))}
+              className={cn(
+                'inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-all cursor-pointer',
+                xrActive || vrViewOpen
+                  ? 'border-energy-cyan bg-energy-cyan/20 text-energy-cyan shadow-xs'
+                  : 'border-border bg-surface text-text-secondary hover:text-text-primary hover:border-energy-cyan/50'
+              )}
+            >
+              <Glasses className="h-4 w-4" aria-hidden="true" />
+              <span>{xrActive || vrViewOpen ? t('vrExit') : t('vrEnter')}</span>
+            </button>
+          )}
+
           <StatusBadge variant="simulated" size="sm" label={tCommon('simulatedData')} />
         </div>
       </section>
@@ -218,7 +296,30 @@ export function VillageEditorPage() {
         }}
       />
 
-      {!imageUrl ? (
+      {xrActive || vrViewOpen ? (
+        <VillageXRViewport
+          detections={vision.detections}
+          isScanning={vision.status === 'loading' || vision.status === 'refining'}
+          onTriggerScan={(capturedUrl) => {
+            if (capturedUrl) {
+              setImageUrl(capturedUrl);
+            } else if (!imageUrl) {
+              void captureLiveOrSample();
+            } else {
+              void vision.retry();
+            }
+          }}
+          onSelectAppliance={onSelectObject}
+          rendererRef={rendererRef}
+          xrActive={xrActive}
+          onEnterVR={xr.enter}
+          photoKey={photo || 'studio-sample'}
+          onExitVR={() => {
+            if (xrActive) xr.exit();
+            setVrViewOpen(false);
+          }}
+        />
+      ) : !imageUrl ? (
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_440px] xl:grid-cols-[minmax(0,1fr)_480px]">
           <div className="flex flex-col gap-5">
             <section

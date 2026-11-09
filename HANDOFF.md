@@ -1,29 +1,28 @@
 # HANDOFF — read first, overwrite at end of session (≤40 lines)
 
-**Updated:** 2026-11-08 · **By:** Antigravity · **Branch:** feat/realistic-clouds
+**Updated:** 2026-11-09 · **By:** Antigravity · **Branch:** feat/vr-village-spatial-shoot
 
 ## Current state
 
-- In immersion mode (WebXR VR session, Fullscreen, or camera preset "Immersion"):
-  - Interactive in-air holographic beacon (`AirOptionBeacon` at `[0, 3.6, 9.5]`) suspended in front of the viewer.
-  - Clicking beacon or WebXR controller trigger toggles 3D tagged labels of all 11 village types.
-  - 11 village types: 6 sectors (Households, School, Water, Market, Clinic, Workshop) + 5 infrastructure/landmarks (Solar Array, BESS Battery, EMS Dispatch Hub, Wind Turbines, Lake Promenade).
-  - Each tag renders vertical laser stalk, base anchor dot and glow ring, and facing billboard card with category pill, title, and live metrics.
-  - WebXR controller raycast click support in `xr-hands.ts` with `raycaster.camera` configured for `LineSegments2`.
-  - In-scene 2D DOM HTML overlays cleanly suppressed in immersion mode (`htmlPortal === null`).
-  - 100% key parity across `en.json`, `fr.json`, `mg.json` (`make check-i18n`).
-  - Verification: 60 test files / 362 tests passing in `src/features/microgrid-3d`; 14 test files / 76 tests passing in `src/features/simulation`; zero TypeScript errors (`tsc --noEmit`).
+- Implemented comprehensive dual-controller and hand-tracking interactions across 3D scene on `/village`:
+  - Controllers 0 & 1: Both registered in `scene`, dual independent laser aiming beams (`pointer0` & `pointer1`), reticle lock-on, trigger dispatch (`selectstart`/`select`), and direct-touch proximity.
+  - Hand Tracking: Direct touch detection with index fingertip (`AIR_BUTTON_POS` and targets), far interaction pinch gesture detection (thumb & index tip $< 3.2\text{cm}$), hand pointing ray.
+  - Surrounding Space: Transparent raycast colliders and `userData.onSelect`/`onClick` attached to `HoloDetectionTarget` and `VillageSpatialHUD`.
+  - Desktop mouse fallback preserved without overriding in-VR controller/hand tracking.
+  - Added dedicated test suite `xr-blaster-controller.test.tsx` (8/8 tests pass).
+- 100% key parity across `en.json`, `fr.json`, `mg.json` (`make check-i18n`).
+- 0 TypeScript errors (`tsc --noEmit`), 43/43 vision-insert test files pass (297/297 tests).
 
 ## Next
 
-- Ready for user testing and visual review on dev server `http://localhost:3001`.
+1. Hard-refresh browser (`Ctrl+F5`) on `http://localhost:3001/village` and test both controllers, hands (direct touch & pinch), and surrounding space targets.
+2. Review scenarios V196–V203 in `test-scenarios/06-village.md`.
+3. VS-T9: 3D positional audio panner (`PannerNode` / `PositionalAudio`).
 
 ## Files touched
 
-- `apps/web/src/features/microgrid-3d/ui/immersion-labels.tsx`
-- `apps/web/src/features/microgrid-3d/utils/immersion-labels-texture.ts`
-- `apps/web/src/features/microgrid-3d/ui/village-canvas.tsx`
-- `apps/web/src/features/microgrid-3d/ui/camera-controller.tsx`
-- `apps/web/src/features/simulation/ui/village-viewport.tsx`
-- `apps/web/src/features/microgrid-3d/utils/xr-hands.ts`
-- `apps/web/src/messages/{en,fr,mg}.json`
+- `apps/web/src/features/vision-insert/ui/xr/xr-blaster-controller.tsx`
+- `apps/web/src/features/vision-insert/ui/xr/holo-detection-target.tsx`
+- `apps/web/src/features/vision-insert/ui/xr/village-spatial-hud.tsx`
+- `apps/web/src/features/vision-insert/ui/xr/__tests__/xr-blaster-controller.test.tsx`
+- `HANDOFF.md`

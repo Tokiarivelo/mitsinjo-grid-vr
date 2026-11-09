@@ -52,7 +52,7 @@ function roofMaterial(finish: RoofFinish): THREE.MeshStandardMaterial {
     }
     mat = new THREE.MeshStandardMaterial({
       vertexColors: finish !== 'bipv',
-      color: finish === 'bipv' ? '#ffffff' : undefined,
+      ...(finish === 'bipv' ? { color: '#ffffff' } : {}),
       map: tex,
       bumpMap: tex,
       bumpScale: finish === 'bipv' ? 0.2 : 0.45,

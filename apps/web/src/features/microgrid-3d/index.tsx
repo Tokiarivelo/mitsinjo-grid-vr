@@ -11,6 +11,8 @@ export { useReducedMotion } from './hooks/use-reduced-motion';
 export { useFullscreen } from './hooks/use-fullscreen';
 export { useSceneQuality, type SceneQuality } from './hooks/use-scene-quality';
 export { useWebXR, type WebXRStatus } from './hooks/use-webxr';
+export { useContextLoss, type ContextLoss } from './hooks/use-context-loss';
+export { disableIWERFrameClear } from './utils/xr-session';
 export { VillageScenePlaceholder };
 export { GridDiagram, type GridDiagramProps } from './ui/grid-diagram';
 export {

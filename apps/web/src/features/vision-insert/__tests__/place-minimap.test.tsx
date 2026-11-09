@@ -56,14 +56,14 @@ describe('PlaceMinimap (PP-T4, PI-T9)', () => {
 
   it('keyboard: arrows move the cursor (announced), Enter places', () => {
     const { map, onPlace } = setup();
-    // Cursor starts on the sector building: water (−8, 2).
+    // Cursor starts on the sector building: water (−10.5, 0.5).
     fireEvent.keyDown(map, { key: 'ArrowRight' });
-    expect(screen.getByText('Cursor: -6.0, 2.0')).toBeTruthy();
+    expect(screen.getByText('Cursor: -8.5, 0.5')).toBeTruthy();
     fireEvent.keyDown(map, { key: 'ArrowDown', shiftKey: true });
-    expect(screen.getByText('Cursor: -6.0, 12.0')).toBeTruthy();
+    expect(screen.getByText('Cursor: -8.5, 10.5')).toBeTruthy();
     expect(onPlace).not.toHaveBeenCalled();
     fireEvent.keyDown(map, { key: 'Enter' });
-    expect(onPlace).toHaveBeenCalledWith({ x: -6, z: 12 });
+    expect(onPlace).toHaveBeenCalledWith({ x: -8.5, z: 10.5 });
   });
 
   it('draws placed objects (not its own) and warns when the cursor is on an obstacle (PI-T3)', () => {

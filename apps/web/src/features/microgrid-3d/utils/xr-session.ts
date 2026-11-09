@@ -24,6 +24,33 @@ export async function isImmersiveVRSupported(
 }
 
 /**
+ * Disables IWER emulator's redundant clearColor frame clear.
+ * In Meta's Immersive Web Emulator extension, onDeviceFrame attempts:
+ *   const currentClearColor = context.getParameter(context.COLOR_CLEAR_VALUE);
+ *   context.clearColor(currentClearColor[0], ...);
+ * When the WebGL context is lost or undergoing GPU recovery, getParameter returns null,
+ * causing an unhandled TypeError: Cannot read properties of null (reading '0')
+ * that loops indefinitely on every requestAnimationFrame.
+ * Setting device.frameClearEnabled = false safely bypasses this code block in IWER.
+ */
+export function disableIWERFrameClear(session: XRSession | unknown) {
+  if (!session || typeof session !== 'object') return;
+  try {
+    const symbols = Object.getOwnPropertySymbols(session);
+    for (const sym of symbols) {
+      if (String(sym).includes('session')) {
+        const internal = (session as Record<symbol, any>)[sym];
+        if (internal?.device && 'frameClearEnabled' in internal.device) {
+          internal.device.frameClearEnabled = false;
+        }
+      }
+    }
+  } catch {
+    // Non-critical safety helper
+  }
+}
+
+/**
  * Open an `immersive-vr` session on `renderer`. Must run in a user gesture.
  * Rejects when WebXR is missing or the user / runtime refuses the session.
  */
@@ -45,6 +72,7 @@ export async function startImmersiveVRSession(renderer: XRSessionRenderer): Prom
   }
 
   const session = await xr.requestSession(XR_IMMERSIVE_VR, XR_SESSION_INIT);
+  disableIWERFrameClear(session);
   await renderer.xr.setSession(session);
 
   // In presentation / dev emulation (IWER), ensure the canvas fills 100% of the

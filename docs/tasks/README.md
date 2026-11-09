@@ -34,7 +34,7 @@ Meta feature and carries external-API risk; 3D is local work and easy to time-bo
 | —   | PT Studio look (ink, softbox light, clearcoat, warm-up) + object tag like buildings   | `PT-studio-look.md`           | 🟡 PT-11 done                    |
 | 10  | PD 3-min demo video (rules, capture, voice, edit) — closes P9-T5                      | `PD-demo-video.md`            | ✅ (deadline Nov 4)              |
 | —   | VR View the village in VR (WebXR, desktop emulation without a headset)                | `VR-village-view.md`          | ✅ code (live S119–S123 pending) |
-| —   | VR-S Village VR spatial shoot (floating button, vision scan, laser blaster, 3D spawn) | `VR-village-spatial-shoot.md` | ❌ planned                       |
+| —   | VR-S Village VR spatial shoot (floating button, vision scan, laser blaster, 3D spawn) | `VR-village-spatial-shoot.md` | ✅ done (VS-T1–VS-T8, VS-T10)    |
 
 ## Cut order if late
 

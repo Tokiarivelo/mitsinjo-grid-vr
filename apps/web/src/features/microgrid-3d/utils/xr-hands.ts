@@ -40,7 +40,7 @@ export interface XRHandsHandle {
  * Creates visual representation for Touch/Quest VR controller grip body.
  * Modeled at 1:1 scale for natural hand placement in grip space.
  */
-function createControllerGripModel(): THREE.Group {
+export function createControllerGripModel(): THREE.Group {
   const group = new THREE.Group();
   group.name = 'controller-grip-visual';
 
@@ -100,7 +100,7 @@ function createControllerGripModel(): THREE.Group {
  * Creates visual representation for Touch/Quest VR directional laser pointer.
  * Extends forward along -Z in target ray space.
  */
-function createLaserRayModel(): THREE.Group {
+export function createLaserRayModel(): THREE.Group {
   const group = new THREE.Group();
   group.name = 'controller-laser-ray';
 
@@ -127,7 +127,7 @@ function createLaserRayModel(): THREE.Group {
 /**
  * Creates 25 articulated joint spheres for realistic hand tracking.
  */
-function createHandMesh(): THREE.InstancedMesh {
+export function createHandMesh(): THREE.InstancedMesh {
   const geo = new THREE.SphereGeometry(1, 10, 10);
   const mat = new THREE.MeshStandardMaterial({
     color: '#e2e8f0',

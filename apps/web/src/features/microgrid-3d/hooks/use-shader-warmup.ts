@@ -31,6 +31,16 @@ export function useShaderWarmup(
       setReady(true);
     };
     const id = window.setTimeout(finish, timeoutMs);
+    const handleError = (e: ErrorEvent) => {
+      if (typeof e.message === 'string' && e.message.includes('isReady')) {
+        e.preventDefault();
+        finish();
+      }
+    };
+    if (typeof window !== 'undefined') {
+      window.addEventListener('error', handleError);
+    }
+
     let compiling: Promise<unknown> | undefined;
     try {
       compiling = target.gl.compileAsync?.(target.scene, target.camera);
@@ -42,6 +52,9 @@ export function useShaderWarmup(
     return () => {
       done = true;
       window.clearTimeout(id);
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('error', handleError);
+      }
     };
   }, [target, timeoutMs]);
   return ready;

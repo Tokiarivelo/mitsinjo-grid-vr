@@ -564,7 +564,7 @@ export function VillageCanvas({
           shadows={high ? 'soft' : false}
           gl={{
             antialias: !high,
-            powerPreference: softwareGl ? 'default' : 'high-performance',
+            powerPreference: 'default',
             failIfMajorPerformanceCaveat: false,
           }}
           style={{ width: '100%', height: '100%', background: palette.horizon }}

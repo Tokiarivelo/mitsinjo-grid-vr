@@ -157,19 +157,111 @@ Baladez-vous dans les différents quartiers du village pour comparer leur statut
 
 ## 5. Tableau récapitulatif des commandes
 
-| Action souhaitée                 | Sur PC (Clavier / DevUI)                                           | Sur Casque VR (Meta Quest)                 |
-| :------------------------------- | :----------------------------------------------------------------- | :----------------------------------------- |
-| **Passer en vrai plein écran**   | Bouton « Plein écran » HUD + touche `F11`                          | Automatique à 360° dans le casque          |
-| **Lancer la session VR**         | Clic sur le bouton « Voir en VR » (lunettes)                       | Clic sur « Voir en VR » dans Quest Browser |
-| **Marcher / Avancer / Reculer**  | Touches **`Z` / `S`** (AZERTY) ou **`W` / `S`** (QWERTY) / Flèches | Pousser / tirer le joystick gauche         |
-| **Pas latéraux (gauche/droite)** | Touches **`Q` / `D`** (AZERTY) ou **`A` / `D`** (QWERTY)           | Déplacer le joystick gauche latéralement   |
-| **Courir / Accélérer**           | Maintenir **`Shift`**                                              | Pousser le joystick à fond                 |
-| **Tourner le regard**            | Déplacer la souris (clic gauche maintenu)                          | Tourner la tête librement à 360°           |
-| **Quitter l'immersion VR**       | Clic sur **« Quitter la VR »**                                     | Bouton Oculus/Meta ou bouton Quitter       |
+| Action souhaitée                    | Sur PC (Clavier / DevUI)                                           | Sur Casque VR (Meta Quest)                   |
+| :---------------------------------- | :----------------------------------------------------------------- | :------------------------------------------- |
+| **Passer en vrai plein écran**      | Bouton « Plein écran » HUD + touche `F11`                          | Automatique à 360° dans le casque            |
+| **Lancer la session VR**            | Clic sur le bouton « Voir en VR » (lunettes)                       | Clic sur « Voir en VR » dans Quest Browser   |
+| **Marcher / Avancer / Reculer**     | Touches **`Z` / `S`** (AZERTY) ou **`W` / `S`** (QWERTY) / Flèches | Pousser / tirer le joystick gauche           |
+| **Pas latéraux (gauche/droite)**    | Touches **`Q` / `D`** (AZERTY) ou **`A` / `D`** (QWERTY)           | Déplacer le joystick gauche latéralement     |
+| **Courir / Accélérer**              | Maintenir **`Shift`**                                              | Pousser le joystick à fond                   |
+| **Tourner le regard**               | Déplacer la souris (clic gauche maintenu)                          | Tourner la tête librement à 360°             |
+| **Viser un bouton / cible 3D**      | Survol direct à la souris OU visée laser IWER                      | Viser avec le faisceau laser cyan            |
+| **Cliquer sur un bouton en l'air**  | Clic gauche souris OU `Alt` + Clic / `Espace` (IWER)               | Gâchette Index (Manette) ou Pincement (Main) |
+| **Tirer sur une cible / Raccorder** | Clic gauche souris OU gâchette IWER                                | Gâchette Index (Manette) ou Pincement (Main) |
+| **Quitter l'immersion VR**          | Clic sur **« Quitter la VR »**                                     | Bouton Oculus/Meta ou bouton Quitter         |
 
 ---
 
-## 6. Dépannage rapide (FAQ)
+## 6. Interaction avec les boutons flottants dans les airs & Détection spatiale (`/village`)
+
+Dans l'atelier immersif de détection spatiale (`/village`), l'interface utilisateur est entièrement **diégétique 3D** (flottante dans l'espace physique virtuel sans balise 2D HTML bloquée par le casque).
+
+Voici les **4 modalités de contrôle** supportées selon votre équipement :
+
+### 1. Meta Quest avec Manettes Touch (Touch Controllers)
+
+- **Représentation visuelle :** La manette Touch droite/gauche apparaît dans votre main virtuelle sous forme d'un modèle 3D précis (anneau de suivi infrarouge, manche ergonomique, boutons primaires).
+- **Visée :** Un faisceau laser continu cyan étincelant pointe depuis la tête de la manette vers l'avant, avec un réticule d'impact lumineux au point d'intersection.
+- **Action de clic / Tir :** Pressez la **gâchette d'index** (_Index Trigger_) ou appuyez sur le **bouton A** (manette droite) / **bouton X** (manette gauche).
+- **Retour sensoriel :** Une impulsion haptique vibrante (`gamepad.hapticActuators`) et un effet sonore spatialisé confirment l'activation.
+
+### 2. Meta Quest avec Suivi des Mains (Hand Tracking / Mains nues)
+
+- **Représentation visuelle :** Vos mains physiques réelles sont transposées dans la scène grâce à un squelette 3D articulé de **25 articulations** (poignet, paume, phalanges index, majeur, annulaire, auriculaire et pouce).
+- **Visée :** Tendez votre index vers le bouton ou la cible flottante. Le faisceau laser cyan s'étire précisément depuis le bout de votre index.
+- **Action de clic / Tir (Geste de pincement - Index Pinch) :** Joignez l'extrémité de votre pouce et de votre index dans les airs. Le geste est instantanément reconnu comme un `selectstart` WebXR et déclenche le scan ou le tir laser.
+
+### 3. Navigateur PC avec l'Émulateur Meta Quest (IWER / DevUI)
+
+#### A. Comment activer et basculer entre le mode Mains et le mode Manettes
+
+- **Barre d'outils DevUI en haut de l'écran :**
+  - Cliquez sur l'icône **`(✋) / (🎮)`** au centre de la barre d'outils pour basculer d'un clic entre le mode **Suivi des Mains** (_Hand Tracking_) et le mode **Manettes Touch** (_Touch Controllers_).
+  - En mode mains : les panneaux d'outils aux coins s'intitulent `Hand [L]` et `Hand [R]`, et vous voyez les mains articulées à 25 jointures.
+  - En mode manettes : les panneaux d'outils s'intitulent `Controller [L]` et `Controller [R]` avec les boutons A, B, X, Y, la gâchette `Trig` et le joystick `Stick`.
+
+#### B. Comment orienter et déplacer les contrôleurs virtuels sur PC
+
+- **Manette droite (`Controller [R]`) :** Maintenez la touche **`Alt`** (ou `Option` sur Mac) du clavier enfoncée tout en déplaçant votre souris. La manette droite s'oriente immédiatement et suit vos mouvements.
+- **Manette gauche (`Controller [L]`) :** Maintenez la touche **`Shift`** du clavier enfoncée tout en déplaçant votre souris.
+- **Profondeur avant / arrière (Axe Z) :** Tout en maintenant `Alt` ou `Shift`, faites rouler la **molette de votre souris** pour approcher ou éloigner la manette.
+- **Actionner la gâchette (Tir / Clic) :** Tout en maintenant `Alt` ou `Shift`, effectuez un **clic gauche** ou appuyez sur la touche **`Espace`**.
+- **Contrôles directs dans le panneau 2D :** Vous pouvez aussi cliquer directement sur le curseur **`Trig`** ou sur le bouton **`A: press`** dans la boîte `Controller [R]` en bas à droite de votre écran.
+
+> [!NOTE]
+> **Pourquoi `Alt` peut ne pas répondre sous Linux (Ubuntu / GNOME) :**  
+> Sous Linux, la combinaison `Alt + Clic` est souvent interceptée par le système d'exploitation pour déplacer les fenêtres du bureau. Si c'est votre cas, ne vous embêtez pas avec les touches `Alt`/`Shift` : utilisez directement le **Mode Souris Direct** ci-dessous !
+
+### 4. Navigateur PC en Vue Directe à la Souris (Recommandé sur PC / Linux)
+
+Pour tester immédiatement sans aucune combinaison de touches ni conflit système :
+
+- **Visée directe :** Déplacez simplement le curseur standard de votre souris sur le bouton spatial flottant au centre (_« Scanner la pièce et détecter »_) ou sur n'importe quel appareil 3D.
+- **Rétroaction visuelle :** Le bouton passe immédiatement en surbrillance d'énergie violette/cyan, le faisceau laser s'aligne et le réticule d'impact lumineux se verrouille sur la cible.
+- **Clic direct :** Un **simple clic gauche** sur le bouton flottant déclenche immédiatement le scan radar et la détection d'appareils, sans avoir besoin de manipuler les manettes virtuelles de l'émulateur.
+
+---
+
+## 7. Confort visuel et prévention du vertige : Écran panoramique à focus plat (`/village`)
+
+### Pourquoi la vue sphérique provoquait-elle des vertiges ?
+
+Lors des premières itérations de l'immersion webcam, la projection du décor s'appuyait sur un dôme sphérique complet à 360° (`sphereGeometry`) ou sur un cylindre refermé à petit rayon ($R = 4{,}8\text{ m}$, arc de $270^\circ$).  
+Cette géométrie générait deux effets néfastes majeurs pour le système vestibulaire humain :
+
+1. **Distorsion en œil de poisson (_Fish-Eye Warping_) :** Les lignes horizontales droites de la pièce physique (bureau, murs, sol) étaient artificiellement courbées vers le haut ou le bas dès que la tête bougeait.
+2. **Accélération angulaire non linéaire :** Lorsqu'un utilisateur tournait la tête, les pixels périphériques défilaient à une vitesse angulaire différente de celle du centre, créant un conflit neurosensoriel immédiat entre ce que voient les yeux et ce que ressent l'oreille interne (nausée cinétique ou _VR sickness_).
+
+### La solution : Écran de cinéma panoramique à focus plat & grand angle
+
+L'architecture du composant `<LiveWebcamBackdrop />` a été entièrement refondue pour éliminer tout vertige :
+
+```
+             Zone centrale plate (sagitta < 38 cm sur 6 m de large)
+                     [ - - - - - - - ÉCRAN - - - - - - - ]
+                               \               /
+                                \  Arc 153°   /
+                                 \           /
+                                  \         /
+                                   \       /
+                                    [  O  ]   <-- Opérateur à Z = 0
+                                 Distance 4.2m
+                                Rayon R = 11.5m
+```
+
+1. **Focus central parfaitement plat ($R = 11{,}5\text{ m}$) :**
+   - Le cylindre de projection possède un rayon de courbure géant de **11,5 mètres**, avec un centre reculé de telle sorte que le devant de l'écran se situe à **4,2 mètres** devant vos yeux.
+   - Sur les **6 mètres de largeur centrale** de votre champ de vision, la flèche de courbure (sagitta) est inférieure à **38 cm**. Pour l'œil humain, cette zone est optiquement **100 % plane** : les lignes d'horizon restent parfaitement droites, éliminant toute sensation de tangage ou d'écrasement.
+2. **Grand angle horizontal élargi ($153^\circ$) :**
+   - L'écran s'étend sur un arc horizontal de **$153^\circ$** (`thetaLength = Math.PI * 0.85`), offrant une vision périphérique continue d'un bout à l'autre sans déformation.
+   - L'opérateur peut tourner la tête librement de gauche à droite pour inspecter les cibles 3D latérales avec un repère spatial panoramique stable.
+3. **Suppression du dôme sphérique d'enfermement :**
+   - Le dôme sphérique à 360° est remplacé par un mur architectural droit sombre (`name="studio-backdrop-wall"`, `<planeGeometry args={[26, 9]} />`) et une plateforme circulaire au sol (`circleGeometry args={[9, 48]}`).
+   - Le sol virtuel reste solidement ancré sous vos pieds, prévenant toute perte d'équilibre.
+
+---
+
+## 8. Dépannage rapide (FAQ)
 
 | Problème rencontré                                          | Explication                                                                                           | Action corrective                                                                                                                                        |
 | :---------------------------------------------------------- | :---------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------- |
