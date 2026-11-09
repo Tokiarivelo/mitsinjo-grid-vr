@@ -30,21 +30,19 @@ const SAMPLE_ROOM_SRC = '/samples/vision-room.jpg';
 export const LiveWebcamBackdrop = memo(function LiveWebcamBackdrop({
   onRegisterCapture,
   radius = 11.5,
-  height = 6.8,
+  height = 5.2,
   distance = 4.2,
 }: LiveWebcamBackdropProps) {
   const t = useTranslations('features.visionInsert');
 
   const [cameraState, setCameraState] = useState<CameraState>('inactive');
   const [isStreamingLive, setIsStreamingLive] = useState(false);
+  const [videoTexture, setVideoTexture] = useState<THREE.VideoTexture | null>(null);
 
   const cameraSourceRef = useRef<XRCameraSource | null>(null);
+  const screenMaterialRef = useRef<THREE.MeshBasicMaterial | null>(null);
 
-  // Preload HD sample room texture immediately so operator never sees a black screen.
-  // Using panoramic studio room for 3D curved cylinder backdrop:
-  // 1. Eliminates circular/barrel distortion seen when stretching a 2D webcam onto a cylinder.
-  // 2. Eliminates 220-330 MB/s PCIe bus video texture upload flood that triggers driver context loss.
-  // 3. Live camera feed remains active for picture-in-picture preview & on-demand AI snapshot capture.
+  // Preload HD sample room texture immediately as initial / fallback studio view
   const roomTexture = useMemo(() => {
     const loader = new THREE.TextureLoader();
     const tex = loader.load(SAMPLE_ROOM_SRC);
@@ -78,6 +76,7 @@ export const LiveWebcamBackdrop = memo(function LiveWebcamBackdrop({
         setCameraState(state);
         if (state === 'error' || state === 'inactive') {
           setIsStreamingLive(false);
+          setVideoTexture(null);
         }
       }
     );
@@ -88,6 +87,8 @@ export const LiveWebcamBackdrop = memo(function LiveWebcamBackdrop({
       if (!isMounted) return;
       if (!success) {
         setCameraState('error');
+      } else if (cameraSource.texture) {
+        setVideoTexture(cameraSource.texture);
       }
     });
 
@@ -95,18 +96,24 @@ export const LiveWebcamBackdrop = memo(function LiveWebcamBackdrop({
       isMounted = false;
       cameraSource.stop();
       cameraSourceRef.current = null;
+      setVideoTexture(null);
     };
   }, []);
 
-  // Frame tick: detect when camera video frames actually begin playing
+  // Frame tick: update hardware video texture on each new video frame
   useFrame(() => {
     const source = cameraSourceRef.current;
     const video = source?.videoElement;
 
     if (source && source.state === 'active' && video) {
+      source.updateTexture();
+
       if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && video.currentTime > 0) {
         if (!isStreamingLive) {
           setIsStreamingLive(true);
+        }
+        if (!videoTexture && source.texture) {
+          setVideoTexture(source.texture);
         }
       }
     }
@@ -127,11 +134,19 @@ export const LiveWebcamBackdrop = memo(function LiveWebcamBackdrop({
     onRegisterCapture(captureCurrentFrame);
   }, [onRegisterCapture]);
 
-  const isLive = cameraState === 'active' && isStreamingLive;
-  const activeTexture = roomTexture;
+  const isLive = cameraState === 'active' && isStreamingLive && !!videoTexture;
+  const activeTexture = isLive && videoTexture ? videoTexture : roomTexture;
+
+  // Ensure material binds the active texture immediately upon state transition
+  useEffect(() => {
+    if (screenMaterialRef.current) {
+      screenMaterialRef.current.map = activeTexture;
+      screenMaterialRef.current.needsUpdate = true;
+    }
+  }, [activeTexture]);
 
   const pillText = isLive
-    ? `● ${t('vrLiveWebcam').toUpperCase()} // READY`
+    ? `● ${t('vrLiveWebcam').toUpperCase()} // 720p LIVE`
     : cameraState === 'starting'
       ? `⟳ STARTING CAMERA…`
       : `⟳ ${t('vrVirtualRoom').toUpperCase()}`;
@@ -162,11 +177,11 @@ export const LiveWebcamBackdrop = memo(function LiveWebcamBackdrop({
     };
   }, [isLive, cameraState, pillText]);
 
-  // Calculate expansive planar panoramic projection arc:
-  // Large curvature radius (11.5m) centered with screen front at -4.2m creates a flat,
-  // natural perspective in the center (zero vertigo/fish-eye) while covering an expansive
-  // 153° horizontal aperture allowing the operator to look freely from left to right.
-  const thetaLength = Math.PI * 0.85;
+  // Calculate planar panoramic cinema arc with true 16:9 video aspect ratio:
+  // With height = 5.2m and radius = 11.5m, arc width = 5.2 * (16/9) = 9.24m (thetaLength ~ 0.803 rad / 46°).
+  // At distance 4.2m, this subtends ~108° of direct FOV, filling the user's forward vision with
+  // natural 16:9 human proportions (zero horizontal stretch) and flat central focus (sagitta < 40cm).
+  const thetaLength = (height * (16 / 9)) / radius;
   const thetaStart = Math.PI - thetaLength / 2;
   const cylinderCenterZ = radius - distance;
 
@@ -186,18 +201,23 @@ export const LiveWebcamBackdrop = memo(function LiveWebcamBackdrop({
             thetaLength,
           ]}
         />
-        <meshBasicMaterial map={activeTexture} side={THREE.DoubleSide} toneMapped={false} />
+        <meshBasicMaterial
+          ref={screenMaterialRef}
+          map={activeTexture}
+          side={THREE.DoubleSide}
+          toneMapped={false}
+        />
       </mesh>
 
       {/* 2. Flat Architectural Backdrop Wall (Eliminates vertigo-inducing 360° spherical dome) */}
       <mesh position={[0, 1.5, -distance - 0.4]} name="studio-backdrop-wall">
-        <planeGeometry args={[26, 9]} />
+        <planeGeometry args={[28, 10]} />
         <meshBasicMaterial color="#081022" side={THREE.DoubleSide} toneMapped={false} />
       </mesh>
 
       {/* 3. Studio Floor Platform & Spatial Orienting Rings (Stable grounding plane) */}
       <mesh position={[0, -0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <circleGeometry args={[9, 48]} />
+        <circleGeometry args={[11, 48]} />
         <meshBasicMaterial color="#0b1329" side={THREE.DoubleSide} toneMapped={false} />
       </mesh>
 
