@@ -33,7 +33,7 @@ const _mouseVec = new THREE.Vector2();
 
 const AIR_BUTTON_ID = 'spatial-air-button';
 const AIR_BUTTON_POS = new THREE.Vector3(0, 1.45, -1.2);
-const AIR_BUTTON_RADIUS = 0.38;
+const AIR_BUTTON_RADIUS = 0.55;
 
 /**
  * MultiPointer XR Blaster & Pointer Interaction Controller (VS-T4).
@@ -61,6 +61,7 @@ export const XRBlasterController = memo(function XRBlasterController({
       mesh: THREE.InstancedMesh;
     }>
   >([]);
+  const gripsRef = useRef<THREE.Object3D[]>([]);
   const modelRefs = useRef<Array<{ parent: THREE.Object3D; child: THREE.Object3D }>>([]);
 
   // Imperative active blast tracking (zero React state updates in useFrame)
@@ -206,8 +207,10 @@ export const XRBlasterController = memo(function XRBlasterController({
         if (typeof getGrip === 'function') {
           const grip = getGrip.call(gl.xr, i);
           const gripModel = createControllerGripModel();
+          gripModel.visible = false;
           grip.add(gripModel);
           scene.add(grip);
+          gripsRef.current.push(gripModel);
           modelRefs.current.push({ parent: grip, child: gripModel });
         }
       }
@@ -226,6 +229,7 @@ export const XRBlasterController = memo(function XRBlasterController({
         if (scene) scene.remove(h.group);
       }
       handsRef.current = [];
+      gripsRef.current = [];
       modelRefs.current = [];
     };
   }, [gl, scene, triggerShot]);
@@ -236,7 +240,7 @@ export const XRBlasterController = memo(function XRBlasterController({
     if (!dom) return;
 
     const onPointerMove = (e: MouseEvent) => {
-      if (gl.xr?.isPresenting || !camera) return;
+      if (!camera) return;
       const rect = dom.getBoundingClientRect();
       if (rect.width <= 0 || rect.height <= 0) return;
       mouseNdcRef.current = {
@@ -246,7 +250,6 @@ export const XRBlasterController = memo(function XRBlasterController({
     };
 
     const onPointerDown = (e: MouseEvent) => {
-      if (gl.xr?.isPresenting) return;
       if (e.button !== 0 || !camera) return;
       const rect = dom.getBoundingClientRect();
       if (rect.width <= 0 || rect.height <= 0) return;
@@ -289,7 +292,8 @@ export const XRBlasterController = memo(function XRBlasterController({
 
   // Frame update for articulated hands, blaster projectile animations & continuous hover tracking
   useFrame((_, delta) => {
-    // 0. Update hand tracking joint matrices
+    // 0. Update hand tracking joint matrices & mutually exclude controller grip models
+    let anyHandActive = false;
     if (handsRef.current.length > 0) {
       const scaleTmp = new THREE.Vector3();
       const defaultRadius = 0.009;
@@ -313,8 +317,16 @@ export const XRBlasterController = memo(function XRBlasterController({
         }
         h.mesh.count = activeCount;
         h.mesh.instanceMatrix.needsUpdate = true;
-        h.mesh.visible = activeCount > 0;
+        const isThisHandActive = activeCount > 0 && !!gl.xr?.isPresenting;
+        h.mesh.visible = isThisHandActive;
+        if (isThisHandActive) anyHandActive = true;
       }
+    }
+
+    // Hide controller grip models when Hand Tracking is active or when not presenting in VR
+    const isPresenting = !!gl.xr?.isPresenting;
+    for (const gripModel of gripsRef.current) {
+      gripModel.visible = isPresenting && !anyHandActive;
     }
 
     // 1. Imperative animation of active projectile and impact shockwave (0 re-renders)
@@ -344,9 +356,15 @@ export const XRBlasterController = memo(function XRBlasterController({
       }
     }
 
-    // 2. Track hover target and update aiming beam (WebXR Controller 0/1 or Desktop Mouse/Camera)
+    // 2. Track hover target and update aiming beam (Desktop Mouse or WebXR Controller 0/1)
     let hasAim = false;
-    if (gl?.xr?.isPresenting) {
+    if (mouseNdcRef.current && camera) {
+      _mouseVec.set(mouseNdcRef.current.x, mouseNdcRef.current.y);
+      _raycaster.setFromCamera(_mouseVec, camera);
+      _vOrigin.copy(_raycaster.ray.origin);
+      _vDirection.copy(_raycaster.ray.direction);
+      hasAim = true;
+    } else if (gl?.xr?.isPresenting) {
       const c0 = gl.xr.getController(0);
       const c1 = gl.xr.getController(1);
       const activeCtrl = c0 && c0.matrixWorld.elements[15] !== 0 ? c0 : c1;
@@ -357,15 +375,8 @@ export const XRBlasterController = memo(function XRBlasterController({
         hasAim = true;
       }
     } else if (camera) {
-      if (mouseNdcRef.current) {
-        _mouseVec.set(mouseNdcRef.current.x, mouseNdcRef.current.y);
-        _raycaster.setFromCamera(_mouseVec, camera);
-        _vOrigin.copy(_raycaster.ray.origin);
-        _vDirection.copy(_raycaster.ray.direction);
-      } else {
-        _vOrigin.copy(camera.position);
-        camera.getWorldDirection(_vDirection);
-      }
+      _vOrigin.copy(camera.position);
+      camera.getWorldDirection(_vDirection);
       hasAim = true;
     }
 

@@ -104,6 +104,16 @@ export const SpatialAirButton = memo(function SpatialAirButton({
       {/* Interactive Raycast Hitbox Capsule (Transparent, fully hit-testable in R3F/WebXR) */}
       <mesh
         position={[0, 0, 0]}
+        userData={{
+          onSelect: () => {
+            playScanRadarSound();
+            onTriggerScan();
+          },
+          onClick: () => {
+            playScanRadarSound();
+            onTriggerScan();
+          },
+        }}
         onPointerOver={(e) => {
           e.stopPropagation();
           setInternalHovered(true);
@@ -118,8 +128,8 @@ export const SpatialAirButton = memo(function SpatialAirButton({
           onTriggerScan();
         }}
       >
-        <boxGeometry args={[0.7, 0.45, 0.3]} />
-        <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+        <boxGeometry args={[0.85, 0.55, 0.35]} />
+        <meshBasicMaterial transparent opacity={0.001} depthWrite={false} />
       </mesh>
 
       {/* Floating Holographic Crystal Header */}

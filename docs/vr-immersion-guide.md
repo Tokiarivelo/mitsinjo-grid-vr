@@ -193,18 +193,32 @@ Voici les **4 modalités de contrôle** supportées selon votre équipement :
 
 ### 3. Navigateur PC avec l'Émulateur Meta Quest (IWER / DevUI)
 
-- **Activation :** Ouvrez `/village` sur PC (l'émulateur Meta IWER 2.8.0 s'initialise automatiquement en mode développement). Cliquez sur **« Voir en VR »**.
-- **Contrôle de la manette émulée :**
-  - Maintenez la touche **`Alt`** du clavier pour orienter la **manette droite** avec votre souris.
-  - Maintenez la touche **`Shift`** du clavier pour orienter la **manette gauche**.
-  - Utilisez la **molette de la souris** pour avancer ou reculer la manette le long de l'axe de profondeur $Z$.
-- **Action de clic / Tir :** Effectuez un **clic gauche de souris** ou appuyez sur la touche **`Espace`** pendant que le laser cible le bouton flottant « Scanner la pièce » ou une cible holographique.
+#### A. Comment activer et basculer entre le mode Mains et le mode Manettes
 
-### 4. Navigateur PC en Vue 3D classique (Hors VR ou Souris directe)
+- **Barre d'outils DevUI en haut de l'écran :**
+  - Cliquez sur l'icône **`(✋) / (🎮)`** au centre de la barre d'outils pour basculer d'un clic entre le mode **Suivi des Mains** (_Hand Tracking_) et le mode **Manettes Touch** (_Touch Controllers_).
+  - En mode mains : les panneaux d'outils aux coins s'intitulent `Hand [L]` et `Hand [R]`, et vous voyez les mains articulées à 25 jointures.
+  - En mode manettes : les panneaux d'outils s'intitulent `Controller [L]` et `Controller [R]` avec les boutons A, B, X, Y, la gâchette `Trig` et le joystick `Stick`.
 
-- **Visée directe à la souris :** Même sans casque VR ni manipulation des touches de manette IWER, déplacez simplement votre curseur de souris sur le bouton spatial flottant ou les cibles 3D.
-- **Rétroaction immédiate :** Un raycaster unprojecte automatiquement la position de votre curseur depuis la caméra, mettant le bouton en surbrillance d'énergie.
-- **Action de clic :** Un simple **clic gauche** sur le bouton flottant dans les airs lance immédiatement la détection visuelle.
+#### B. Comment orienter et déplacer les contrôleurs virtuels sur PC
+
+- **Manette droite (`Controller [R]`) :** Maintenez la touche **`Alt`** (ou `Option` sur Mac) du clavier enfoncée tout en déplaçant votre souris. La manette droite s'oriente immédiatement et suit vos mouvements.
+- **Manette gauche (`Controller [L]`) :** Maintenez la touche **`Shift`** du clavier enfoncée tout en déplaçant votre souris.
+- **Profondeur avant / arrière (Axe Z) :** Tout en maintenant `Alt` ou `Shift`, faites rouler la **molette de votre souris** pour approcher ou éloigner la manette.
+- **Actionner la gâchette (Tir / Clic) :** Tout en maintenant `Alt` ou `Shift`, effectuez un **clic gauche** ou appuyez sur la touche **`Espace`**.
+- **Contrôles directs dans le panneau 2D :** Vous pouvez aussi cliquer directement sur le curseur **`Trig`** ou sur le bouton **`A: press`** dans la boîte `Controller [R]` en bas à droite de votre écran.
+
+> [!NOTE]
+> **Pourquoi `Alt` peut ne pas répondre sous Linux (Ubuntu / GNOME) :**  
+> Sous Linux, la combinaison `Alt + Clic` est souvent interceptée par le système d'exploitation pour déplacer les fenêtres du bureau. Si c'est votre cas, ne vous embêtez pas avec les touches `Alt`/`Shift` : utilisez directement le **Mode Souris Direct** ci-dessous !
+
+### 4. Navigateur PC en Vue Directe à la Souris (Recommandé sur PC / Linux)
+
+Pour tester immédiatement sans aucune combinaison de touches ni conflit système :
+
+- **Visée directe :** Déplacez simplement le curseur standard de votre souris sur le bouton spatial flottant au centre (_« Scanner la pièce et détecter »_) ou sur n'importe quel appareil 3D.
+- **Rétroaction visuelle :** Le bouton passe immédiatement en surbrillance d'énergie violette/cyan, le faisceau laser s'aligne et le réticule d'impact lumineux se verrouille sur la cible.
+- **Clic direct :** Un **simple clic gauche** sur le bouton flottant déclenche immédiatement le scan radar et la détection d'appareils, sans avoir besoin de manipuler les manettes virtuelles de l'émulateur.
 
 ---
 

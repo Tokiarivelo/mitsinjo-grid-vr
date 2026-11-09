@@ -221,13 +221,16 @@ Le système supporte 4 manières complètes d'interagir avec les boutons flottan
 2. **Accéder à `/village` :**
    - Le script `installDevXREmulator()` s'exécute automatiquement en environnement `development` dès qu'aucun casque n'est branché.
    - Le bouton VR (« Voir en VR » avec l'icône lunettes) devient actif dans l'en-tête.
-3. **Dans la session émulée :**
-   - L'overlay **Meta IWER DevUI** s'affiche en surimpression sur l'écran.
-   - Cliquez sur **Play Mode** dans la barre DevUI :
-     - **Souris :** Oriente le regard et le pointeur du contrôleur droit.
-     - **Touches ZQSD / WASD :** Déplace la position de la caméra dans l'espace.
-     - **Maintenir Alt + Clic gauche ou Espace :** Simule l'appui gâchette (_Trigger / Select_), permettant de cliquer sur le bouton dans les airs puis de viser et tirer sur les cibles.
-     - **Molette souris :** Rapproche ou éloigne la manette virtuelle dans la profondeur $Z$.
+3. **Méthode 1 — Le Clic Direct à la Souris (Le plus simple, recommandé sur Linux/PC) :**
+   - Déplacez simplement votre curseur de souris sur le bouton flottant au centre (_« Scanner la pièce et détecter »_).
+   - Le bouton s'allume en surbrillance d'énergie violette et le réticule d'impact se verrouille dessus.
+   - Faites un **simple clic gauche** pour lancer le scan radar et faire apparaître les cibles 3D !
+4. **Méthode 2 — Simuler les contrôleurs physiques dans l'émulateur DevUI :**
+   - Cliquez sur l'icône **`(✋) / (🎮)`** dans la barre d'outils supérieure pour basculer entre mode Mains et mode Manettes.
+   - **Manette droite :** Maintenez la touche **`Alt`** (ou `Option`) et bougez votre souris pour viser. Clic gauche ou `Espace` pour actionner la gâchette.
+   - **Manette gauche :** Maintenez la touche **`Shift`** et bougez votre souris.
+   - **Profondeur Z :** Tournez la molette de la souris tout en maintenant `Alt`.
+   - _(Note : Sous Linux GNOME, si la touche `Alt` est interceptée par votre gestionnaire de fenêtres, utilisez la Méthode 1 ou les boutons du panneau 2D `Controller [R]` en bas à droite)._
 
 ---
 
