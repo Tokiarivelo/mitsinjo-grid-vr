@@ -927,6 +927,7 @@
       "vrEnter": "View in VR immersion",
       "vrExit": "Exit VR immersion",
       "vrUnsupported": "WebXR unsupported in this browser",
+      "vrWebglUnavailable": "WebGL 3D context could not be initialized on your graphics device. Try updating GPU drivers or launching with hardware acceleration.",
       "vrAirButtonTitle": "Scan Room & Detect",
       "vrAirButtonSubtitle": "Aim and trigger to scan",
       "vrAirButtonScanning": "Scanning objects in real time…",

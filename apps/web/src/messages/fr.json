@@ -927,6 +927,7 @@
       "vrEnter": "Voir en immersion VR",
       "vrExit": "Quitter l'immersion VR",
       "vrUnsupported": "WebXR non supporté sur ce navigateur",
+      "vrWebglUnavailable": "Le contexte 3D WebGL n'a pas pu être initialisé sur votre processeur graphique. Essayez de mettre à jour vos pilotes GPU ou d'activer l'accélération matérielle.",
       "vrAirButtonTitle": "Scanner la pièce et détecter",
       "vrAirButtonSubtitle": "Visez et tirez pour scanner",
       "vrAirButtonScanning": "Analyse des objets en temps réel…",

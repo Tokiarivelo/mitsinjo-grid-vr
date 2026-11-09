@@ -14,7 +14,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { StatusBadge } from '@/components/ui/status-badge';
-import { useWebXR } from '@/features/microgrid-3d';
+import { useWebXR, useWebGLAvailable } from '@/features/microgrid-3d';
 import { GridSchematicPreview } from '@/features/overview';
 import { selectActiveResult, selectInput, selectTimeIndex, useSimulationStore } from '@/stores';
 import { readAsDataUrl } from '@/lib/files';
@@ -53,6 +53,7 @@ export function VillageEditorPage() {
   const rendererRef = useRef<WebGLRenderer | null>(null);
   const xr = useWebXR(rendererRef);
   const xrActive = xr.status === 'active';
+  const hasWebGL = useWebGLAvailable();
   const [vrViewOpen, setVrViewOpen] = useState(false);
 
   // Synchronize when the WebXR session ends (via DevUI exit icon, headset gesture, etc.)
@@ -252,7 +253,7 @@ export function VillageEditorPage() {
             </div>
           )}
 
-          {(xr.status === 'supported' || xrActive || vrViewOpen) && (
+          {hasWebGL && (xr.status === 'supported' || xrActive || vrViewOpen) && (
             <button
               type="button"
               onClick={() => {

@@ -1,15 +1,17 @@
 'use client';
 
-import { memo, useCallback, useRef, type RefObject } from 'react';
+import { memo, useCallback, useRef, useState, type RefObject } from 'react';
+import * as THREE from 'three';
 import type { WebGLRenderer } from 'three';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
-import { Glasses, Sparkles, X } from 'lucide-react';
+import { Box, Glasses, Sparkles, X } from 'lucide-react';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import type { ApplianceDetection } from '@/lib/vision';
 import { CanvasCreationBoundary } from '@/features/microgrid-3d/ui/canvas-creation-boundary';
+import { useWebGLAvailable } from '@/features/microgrid-3d';
 import { VillageXRStudio } from './village-xr-studio';
 
 export interface VillageXRViewportProps {
@@ -43,7 +45,10 @@ export const VillageXRViewport = memo(function VillageXRViewport({
 }: VillageXRViewportProps) {
   const t = useTranslations('features.visionInsert');
   const tCommon = useTranslations('common');
+  const tSim = useTranslations('features.simulation');
 
+  const hasWebGL = useWebGLAvailable();
+  const [canvasFailed, setCanvasFailed] = useState(false);
   const hasAutoEnteredRef = useRef(false);
 
   // Trigger enter session once renderer is ready on initial mount
@@ -59,6 +64,29 @@ export const VillageXRViewport = memo(function VillageXRViewport({
     },
     [rendererRef, xrActive, onEnterVR]
   );
+
+  if (!hasWebGL || canvasFailed) {
+    return (
+      <div
+        className="relative w-full h-[600px] md:h-[700px] xl:h-[760px] rounded-3xl overflow-hidden border border-border/80 bg-slate-950 shadow-xl flex flex-col items-center justify-center p-6 text-center"
+        data-testid="village-xr-viewport"
+      >
+        <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-solar-amber/30 bg-solar-amber/10 text-solar-amber shadow-sm mb-4">
+          <Box className="h-8 w-8" aria-hidden="true" />
+        </div>
+        <h3 className="text-base font-semibold text-text-primary">{tSim('webglUnavailable')}</h3>
+        <p className="max-w-md text-xs text-text-muted mt-1 mb-6">{t('vrWebglUnavailable')}</p>
+        <button
+          type="button"
+          onClick={onExitVR}
+          className="flex items-center gap-1.5 rounded-xl border border-border bg-slate-900/80 hover:bg-slate-800 px-4 py-2 text-xs font-medium text-text-primary transition-colors cursor-pointer"
+        >
+          <X className="h-4 w-4" aria-hidden="true" />
+          <span>{t('vrExit')}</span>
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -108,15 +136,29 @@ export const VillageXRViewport = memo(function VillageXRViewport({
       </div>
 
       {/* WebXR Canvas */}
-      <CanvasCreationBoundary onFail={() => undefined}>
+      <CanvasCreationBoundary onFail={() => setCanvasFailed(true)}>
         <Canvas
           frameloop="always"
           shadows={false}
           dpr={[1, 1.5]}
-          gl={{
-            powerPreference: 'high-performance',
-            antialias: false,
-            alpha: true,
+          gl={(defaults) => {
+            try {
+              return new THREE.WebGLRenderer({
+                ...defaults,
+                powerPreference: 'default',
+                failIfMajorPerformanceCaveat: false,
+                antialias: false,
+                alpha: true,
+              });
+            } catch {
+              return new THREE.WebGLRenderer({
+                canvas: defaults.canvas,
+                powerPreference: 'default',
+                failIfMajorPerformanceCaveat: false,
+                antialias: false,
+                alpha: true,
+              });
+            }
           }}
           camera={{ position: [0, 1.5, 1.6], fov: 60 }}
           onCreated={handleCreated}
