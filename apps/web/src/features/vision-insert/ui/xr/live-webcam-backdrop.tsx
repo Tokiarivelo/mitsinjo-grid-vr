@@ -29,9 +29,9 @@ const SAMPLE_ROOM_SRC = '/samples/vision-room.jpg';
  */
 export const LiveWebcamBackdrop = memo(function LiveWebcamBackdrop({
   onRegisterCapture,
-  radius = 11.5,
-  height = 5.2,
-  distance = 4.2,
+  radius = 8.5,
+  height = 5.6,
+  distance = 2.6,
 }: LiveWebcamBackdropProps) {
   const t = useTranslations('features.visionInsert');
 
@@ -177,17 +177,17 @@ export const LiveWebcamBackdrop = memo(function LiveWebcamBackdrop({
     };
   }, [isLive, cameraState, pillText]);
 
-  // Calculate planar panoramic cinema arc with true 16:9 video aspect ratio:
-  // With height = 5.2m and radius = 11.5m, arc width = 5.2 * (16/9) = 9.24m (thetaLength ~ 0.803 rad / 46°).
-  // At distance 4.2m, this subtends ~108° of direct FOV, filling the user's forward vision with
-  // natural 16:9 human proportions (zero horizontal stretch) and flat central focus (sagitta < 40cm).
+  // Calculate immersive zoomed cinema arc with true 16:9 video aspect ratio:
+  // With height = 5.6m and radius = 8.5m at distance = 2.6m, arc width = 5.6 * (16/9) = 9.95m (thetaLength ~ 1.17 rad / 67°).
+  // At distance 2.6m, this subtends ~125° of direct horizontal FOV and 94° vertical, filling the user's view
+  // with a large, crisp, zoomed-in cinema display having natural 16:9 proportions and flat central focus (sagitta < 24cm).
   const thetaLength = (height * (16 / 9)) / radius;
   const thetaStart = Math.PI - thetaLength / 2;
   const cylinderCenterZ = radius - distance;
 
   return (
     <group name="live-webcam-backdrop-root">
-      {/* 1. Wide-Angle Planar Panoramic Studio Screen (Flat central focus, wide horizontal span, unmirrored interior projection) */}
+      {/* 1. Zoomed-In Planar Panoramic Cinema Screen (Flat central focus, wide horizontal span, unmirrored interior projection) */}
       <mesh position={[0, 1.5, cylinderCenterZ]} scale={[-1, 1, 1]} name="curved-webcam-screen">
         <cylinderGeometry
           args={[
@@ -210,36 +210,36 @@ export const LiveWebcamBackdrop = memo(function LiveWebcamBackdrop({
       </mesh>
 
       {/* 2. Flat Architectural Backdrop Wall (Eliminates vertigo-inducing 360° spherical dome) */}
-      <mesh position={[0, 1.5, -distance - 0.4]} name="studio-backdrop-wall">
-        <planeGeometry args={[28, 10]} />
+      <mesh position={[0, 1.5, -distance - 0.3]} name="studio-backdrop-wall">
+        <planeGeometry args={[26, 12]} />
         <meshBasicMaterial color="#081022" side={THREE.DoubleSide} toneMapped={false} />
       </mesh>
 
       {/* 3. Studio Floor Platform & Spatial Orienting Rings (Stable grounding plane) */}
       <mesh position={[0, -0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <circleGeometry args={[11, 48]} />
+        <circleGeometry args={[9, 48]} />
         <meshBasicMaterial color="#0b1329" side={THREE.DoubleSide} toneMapped={false} />
       </mesh>
 
-      <mesh position={[0, 0.01, -1.5]} rotation={[-Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[2.0, 2.05, 64]} />
+      <mesh position={[0, 0.01, -1.2]} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[1.6, 1.65, 64]} />
         <meshBasicMaterial color="#38bdf8" transparent opacity={0.35} side={THREE.DoubleSide} />
       </mesh>
 
-      <mesh position={[0, 0.01, -1.5]} rotation={[-Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[3.8, 3.85, 64]} />
+      <mesh position={[0, 0.01, -1.2]} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[2.8, 2.85, 64]} />
         <meshBasicMaterial color="#0284c7" transparent opacity={0.25} side={THREE.DoubleSide} />
       </mesh>
 
       {/* 4. Ceiling Orienting Ring */}
-      <mesh position={[0, 5.2, -1.5]} rotation={[Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[3.8, 3.85, 64]} />
+      <mesh position={[0, 4.6, -1.2]} rotation={[Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[2.8, 2.85, 64]} />
         <meshBasicMaterial color="#0284c7" transparent opacity={0.15} side={THREE.DoubleSide} />
       </mesh>
 
       {/* 5. Live Camera Status Pill in front of the operator */}
       {pillTexture && (
-        <group position={[0, 2.8, -2.5]}>
+        <group position={[0, 2.35, -1.8]}>
           <mesh>
             <planeGeometry args={[0.7, 0.12]} />
             <meshBasicMaterial

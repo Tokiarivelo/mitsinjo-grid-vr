@@ -1,11 +1,11 @@
 'use client';
 
-import { memo, useCallback, useRef, useState, type RefObject } from 'react';
+import { memo, useCallback, useRef, useState, type ComponentRef, type RefObject } from 'react';
 import * as THREE from 'three';
 import type { WebGLRenderer } from 'three';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
-import { Box, Glasses, HelpCircle, RefreshCw, Sparkles, X } from 'lucide-react';
+import { Box, Glasses, HelpCircle, RefreshCw, Sparkles, X, ZoomIn, ZoomOut } from 'lucide-react';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
@@ -55,6 +55,21 @@ export const VillageXRViewport = memo(function VillageXRViewport({
   const contextLoss = useContextLoss();
   const [canvasFailed, setCanvasFailed] = useState(false);
   const hasAutoEnteredRef = useRef(false);
+  const controlsRef = useRef<ComponentRef<typeof OrbitControls> | null>(null);
+
+  const handleZoomIn = useCallback(() => {
+    if (controlsRef.current) {
+      controlsRef.current.dollyIn(1.2);
+      controlsRef.current.update();
+    }
+  }, []);
+
+  const handleZoomOut = useCallback(() => {
+    if (controlsRef.current) {
+      controlsRef.current.dollyOut(1.2);
+      controlsRef.current.update();
+    }
+  }, []);
 
   // Trigger enter session once renderer is ready on initial mount
   const handleCreated = useCallback(
@@ -149,6 +164,30 @@ export const VillageXRViewport = memo(function VillageXRViewport({
           </span>
 
           <StatusBadge variant="simulated" size="sm" label={tCommon('simulatedData')} />
+
+          {/* Desktop Zoom Controls */}
+          {!xrActive && (
+            <div className="hidden sm:flex items-center gap-0.5 rounded-xl border border-border/80 bg-slate-900/80 p-0.5 backdrop-blur-md">
+              <button
+                type="button"
+                onClick={handleZoomIn}
+                className="p-1 rounded-lg text-text-muted hover:text-energy-cyan hover:bg-energy-cyan/15 transition-colors cursor-pointer"
+                aria-label={tCommon('zoomIn')}
+                title={tCommon('zoomIn')}
+              >
+                <ZoomIn className="h-3.5 w-3.5" aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                onClick={handleZoomOut}
+                className="p-1 rounded-lg text-text-muted hover:text-energy-cyan hover:bg-energy-cyan/15 transition-colors cursor-pointer"
+                aria-label={tCommon('zoomOut')}
+                title={tCommon('zoomOut')}
+              >
+                <ZoomOut className="h-3.5 w-3.5" aria-hidden="true" />
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Exit VR Button */}
@@ -185,18 +224,19 @@ export const VillageXRViewport = memo(function VillageXRViewport({
               alpha: true,
             });
           }}
-          camera={{ position: [0, 1.5, 1.6], fov: 60 }}
+          camera={{ position: [0, 1.45, 0.35], fov: 65 }}
           onCreated={handleCreated}
           className="w-full h-full"
         >
           {/* Orbit controls for desktop preview when not presenting in headset */}
           {!xrActive && (
             <OrbitControls
+              ref={controlsRef}
               enableDamping
               maxPolarAngle={Math.PI / 2 + 0.1}
-              minDistance={0.8}
-              maxDistance={5.0}
-              target={[0, 1.2, -1.2]}
+              minDistance={0.3}
+              maxDistance={3.5}
+              target={[0, 1.35, -1.3]}
             />
           )}
 
