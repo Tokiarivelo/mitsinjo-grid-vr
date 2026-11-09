@@ -70,3 +70,51 @@ export function isSoftwareRenderer(): boolean {
 export function resetWebGLSupportForTests() {
   cache = null;
 }
+
+/**
+ * Installs a safety wrapper on WebGLRenderingContext and WebGL2RenderingContext getParameter.
+ * When a WebGL context is lost (e.g. driver reset, Optimus GPU switch, or memory pressure),
+ * standard WebGL returns `null` for parameters like COLOR_CLEAR_VALUE.
+ * Certain third-party extensions/emulators (e.g., Meta Immersive Web Emulator iwe.min.js onDeviceFrame)
+ * assume COLOR_CLEAR_VALUE is always a non-null 4-element array and crash in an infinite RAF loop with
+ * `TypeError: Cannot read properties of null (reading '0')`.
+ * This polyfill safely returns non-null fallback values when the context is lost.
+ */
+let safetyInstalled = false;
+export function installWebGLContextSafetyPolyfill() {
+  if (safetyInstalled || typeof window === 'undefined') return;
+  safetyInstalled = true;
+
+  const patchContext = (proto: {
+    getParameter?: (pname: number) => unknown;
+    isContextLost?: () => boolean;
+  }) => {
+    if (!proto || typeof proto.getParameter !== 'function') return;
+    const originalGetParameter = proto.getParameter;
+    proto.getParameter = function (this: { isContextLost?: () => boolean }, pname: number) {
+      const res = originalGetParameter.call(this, pname);
+      if (res === null || (typeof this.isContextLost === 'function' && this.isContextLost())) {
+        // COLOR_CLEAR_VALUE = 0x0c22 (3106)
+        if (pname === 0x0c22) {
+          return new Float32Array([0, 0, 0, 0]);
+        }
+        // DEPTH_CLEAR_VALUE = 0x0b73 (2931)
+        if (pname === 0x0b73) {
+          return 1.0;
+        }
+        // STENCIL_CLEAR_VALUE = 0x0b93 (2963)
+        if (pname === 0x0b93) {
+          return 0;
+        }
+      }
+      return res;
+    };
+  };
+
+  if (typeof WebGLRenderingContext !== 'undefined') {
+    patchContext(WebGLRenderingContext.prototype);
+  }
+  if (typeof WebGL2RenderingContext !== 'undefined') {
+    patchContext(WebGL2RenderingContext.prototype);
+  }
+}

@@ -4,7 +4,7 @@ import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
 import { useTranslations } from '@/lib/i18n';
-import { XRCameraSource, type CameraState } from './xr-camera-source';
+import { CameraUtils, XRCameraSource, type CameraState } from './xr-camera-source';
 
 export interface LiveWebcamBackdropProps {
   /** Optional callback to register the frame capture function with the parent scene. */
@@ -20,11 +20,11 @@ const SAMPLE_ROOM_SRC = '/samples/vision-room.jpg';
 /**
  * Meta IWSDK-aligned Live Camera & Studio Surroundings (Chapter 13: Camera Access).
  * Displays real-time webcam video stream across a panoramic curved screen centered at eye level:
- * - High-speed 2D Canvas bridge texture: draws video frames directly into WebGL canvas texture,
- *   bypassing browser-specific VideoTexture hardware decoding stalls on Linux.
- * - Hardware-synchronized throttling: only uploads when video.currentTime changes (~30fps),
- *   completely eliminating GPU memory saturation and crashes.
- * - Instant HD sample room preloaded on canvas: zero black screen from frame 0.
+ * - Direct GPU-accelerated VideoTexture: binds hardware video stream without CPU 2D canvas blits,
+ *   preventing Linux Optimus dual-GPU memory exhaustion and WebGL context loss.
+ * - Zero-black-screen resilience: Instant HD sample studio room is active from frame 0
+ *   while the camera permission is checked and stream initializes.
+ * - StrictMode safe: texture handles remain stable across React 19 mount/remount cycles.
  * - Full-height panoramic cylindrical projection (8.5m height, 270° arc, unmirrored interior scale)
  *   and enclosing 360° studio dome covering the entire field of view.
  */
@@ -37,58 +37,25 @@ export const LiveWebcamBackdrop = memo(function LiveWebcamBackdrop({
 
   const [cameraState, setCameraState] = useState<CameraState>('inactive');
   const [isStreamingLive, setIsStreamingLive] = useState(false);
+  const [videoTexture, setVideoTexture] = useState<THREE.VideoTexture | null>(null);
 
   const cameraSourceRef = useRef<XRCameraSource | null>(null);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const canvasCtxRef = useRef<CanvasRenderingContext2D | null>(null);
-  const canvasTextureRef = useRef<THREE.CanvasTexture | null>(null);
-  const lastDrawTimeRef = useRef<number>(0);
-  const hasDecodedFirstFrameRef = useRef<boolean>(false);
 
-  // Initialize Canvas Texture with sample room immediately, then connect CameraSource
-  const canvasTexture = useMemo(() => {
-    const canvas = document.createElement('canvas');
-    canvas.width = 1280;
-    canvas.height = 720;
-    canvasRef.current = canvas;
-
-    const ctx = canvas.getContext('2d');
-    canvasCtxRef.current = ctx;
-
-    // Fill initial canvas with dark studio tone while sample loads
-    if (ctx) {
-      ctx.fillStyle = '#0f172a';
-      ctx.fillRect(0, 0, 1280, 720);
-    }
-
-    const tex = new THREE.CanvasTexture(canvas);
+  // Preload HD sample room texture immediately so operator never sees a black screen
+  const roomTexture = useMemo(() => {
+    const loader = new THREE.TextureLoader();
+    const tex = loader.load(SAMPLE_ROOM_SRC);
     tex.colorSpace = THREE.SRGBColorSpace;
     tex.minFilter = THREE.LinearFilter;
     tex.magFilter = THREE.LinearFilter;
-    tex.generateMipmaps = false;
     tex.wrapS = THREE.ClampToEdgeWrapping;
     tex.wrapT = THREE.ClampToEdgeWrapping;
-    canvasTextureRef.current = tex;
-
-    // Preload sample image immediately to ensure zero black screen
-    const sampleImg = new Image();
-    sampleImg.crossOrigin = 'anonymous';
-    sampleImg.src = SAMPLE_ROOM_SRC;
-    sampleImg.onload = () => {
-      if (!hasDecodedFirstFrameRef.current && ctx) {
-        ctx.drawImage(sampleImg, 0, 0, 1280, 720);
-        tex.needsUpdate = true;
-      }
-    };
-
     return tex;
   }, []);
 
   // Initialize Camera Source aligned with Meta IWSDK Chapter 13
   useEffect(() => {
     let isMounted = true;
-    hasDecodedFirstFrameRef.current = false;
-    lastDrawTimeRef.current = 0;
 
     const cameraSource = new XRCameraSource(
       {
@@ -102,6 +69,8 @@ export const LiveWebcamBackdrop = memo(function LiveWebcamBackdrop({
         setCameraState(state);
         if (state === 'error' || state === 'inactive') {
           setIsStreamingLive(false);
+        } else if (state === 'active' && cameraSource.texture) {
+          setVideoTexture(cameraSource.texture);
         }
       }
     );
@@ -112,6 +81,8 @@ export const LiveWebcamBackdrop = memo(function LiveWebcamBackdrop({
       if (!isMounted) return;
       if (!success) {
         setCameraState('error');
+      } else if (cameraSource.texture) {
+        setVideoTexture(cameraSource.texture);
       }
     });
 
@@ -119,30 +90,18 @@ export const LiveWebcamBackdrop = memo(function LiveWebcamBackdrop({
       isMounted = false;
       cameraSource.stop();
       cameraSourceRef.current = null;
-      if (canvasTextureRef.current) {
-        canvasTextureRef.current.dispose();
-      }
     };
   }, []);
 
-  // Frame tick: update canvas texture at smooth 30fps (~0.033s interval) to prevent GPU saturation
-  useFrame((state) => {
+  // Frame tick: detect when camera video frames actually begin playing
+  useFrame(() => {
     const source = cameraSourceRef.current;
     const video = source?.videoElement;
-    const ctx = canvasCtxRef.current;
-    const tex = canvasTextureRef.current;
 
-    if (source && source.state === 'active' && video && ctx && tex) {
-      const now = state.clock.elapsedTime;
-      if (now - lastDrawTimeRef.current >= 0.033) {
-        lastDrawTimeRef.current = now;
-        if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
-          hasDecodedFirstFrameRef.current = true;
-          ctx.drawImage(video, 0, 0, 1280, 720);
-          tex.needsUpdate = true;
-          if (!isStreamingLive) {
-            setIsStreamingLive(true);
-          }
+    if (source && source.state === 'active' && video) {
+      if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && video.currentTime > 0) {
+        if (!isStreamingLive) {
+          setIsStreamingLive(true);
         }
       }
     }
@@ -153,8 +112,9 @@ export const LiveWebcamBackdrop = memo(function LiveWebcamBackdrop({
     if (!onRegisterCapture) return;
 
     const captureCurrentFrame = (): string | null => {
-      if (canvasRef.current) {
-        return canvasRef.current.toDataURL('image/jpeg', 0.88);
+      const source = cameraSourceRef.current;
+      if (source?.videoElement && source.hasRealFrames) {
+        return CameraUtils.captureFrame(source.videoElement);
       }
       return null;
     };
@@ -163,6 +123,7 @@ export const LiveWebcamBackdrop = memo(function LiveWebcamBackdrop({
   }, [onRegisterCapture]);
 
   const isLive = cameraState === 'active' && isStreamingLive;
+  const activeTexture = isLive && videoTexture ? videoTexture : roomTexture;
 
   const pillText = isLive
     ? `● ${t('vrLiveWebcam').toUpperCase()} // 720p`
@@ -170,7 +131,9 @@ export const LiveWebcamBackdrop = memo(function LiveWebcamBackdrop({
       ? `⟳ STARTING CAMERA…`
       : `⟳ ${t('vrVirtualRoom').toUpperCase()}`;
 
-  const pillTexture = useMemo(() => {
+  const [pillTexture, setPillTexture] = useState<THREE.CanvasTexture | null>(null);
+
+  useEffect(() => {
     const canvas = document.createElement('canvas');
     canvas.width = 380;
     canvas.height = 70;
@@ -184,7 +147,14 @@ export const LiveWebcamBackdrop = memo(function LiveWebcamBackdrop({
     }
     const tex = new THREE.CanvasTexture(canvas);
     tex.colorSpace = THREE.SRGBColorSpace;
-    return tex;
+    setPillTexture((prev) => {
+      prev?.dispose();
+      return tex;
+    });
+
+    return () => {
+      tex.dispose();
+    };
   }, [isLive, cameraState, pillText]);
 
   // Calculate cylindrical projection arc:
@@ -208,7 +178,7 @@ export const LiveWebcamBackdrop = memo(function LiveWebcamBackdrop({
             thetaLength,
           ]}
         />
-        <meshBasicMaterial map={canvasTexture} side={THREE.DoubleSide} toneMapped={false} />
+        <meshBasicMaterial map={activeTexture} side={THREE.DoubleSide} toneMapped={false} />
       </mesh>
 
       {/* 2. Soft Studio Atmosphere Dome (Wraps remaining space so no black void exists) */}
@@ -240,27 +210,29 @@ export const LiveWebcamBackdrop = memo(function LiveWebcamBackdrop({
       </mesh>
 
       {/* 5. Live Camera Status Pill in front of the operator */}
-      <group position={[0, 2.8, -2.5]}>
-        <mesh>
-          <planeGeometry args={[0.7, 0.12]} />
-          <meshBasicMaterial
-            color={isLive ? '#064e3b' : cameraState === 'starting' ? '#78350f' : '#0c4a6e'}
-            transparent
-            opacity={0.88}
-            side={THREE.DoubleSide}
-          />
-        </mesh>
-        <mesh position={[0, 0, 0.005]}>
-          <planeGeometry args={[0.68, 0.11]} />
-          <meshBasicMaterial
-            map={pillTexture}
-            transparent
-            opacity={0.98}
-            side={THREE.DoubleSide}
-            toneMapped={false}
-          />
-        </mesh>
-      </group>
+      {pillTexture && (
+        <group position={[0, 2.8, -2.5]}>
+          <mesh>
+            <planeGeometry args={[0.7, 0.12]} />
+            <meshBasicMaterial
+              color={isLive ? '#064e3b' : cameraState === 'starting' ? '#78350f' : '#0c4a6e'}
+              transparent
+              opacity={0.88}
+              side={THREE.DoubleSide}
+            />
+          </mesh>
+          <mesh position={[0, 0, 0.005]}>
+            <planeGeometry args={[0.68, 0.11]} />
+            <meshBasicMaterial
+              map={pillTexture}
+              transparent
+              opacity={0.98}
+              side={THREE.DoubleSide}
+              toneMapped={false}
+            />
+          </mesh>
+        </group>
+      )}
     </group>
   );
 });

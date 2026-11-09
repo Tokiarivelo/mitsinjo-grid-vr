@@ -11,7 +11,11 @@ import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import type { ApplianceDetection } from '@/lib/vision';
 import { CanvasCreationBoundary } from '@/features/microgrid-3d/ui/canvas-creation-boundary';
-import { useWebGLAvailable } from '@/features/microgrid-3d';
+import {
+  useWebGLAvailable,
+  useContextLoss,
+  installWebGLContextSafetyPolyfill,
+} from '@/features/microgrid-3d';
 import { VillageXRStudio } from './village-xr-studio';
 
 export interface VillageXRViewportProps {
@@ -48,6 +52,7 @@ export const VillageXRViewport = memo(function VillageXRViewport({
   const tSim = useTranslations('features.simulation');
 
   const hasWebGL = useWebGLAvailable();
+  const contextLoss = useContextLoss();
   const [canvasFailed, setCanvasFailed] = useState(false);
   const hasAutoEnteredRef = useRef(false);
 
@@ -57,15 +62,16 @@ export const VillageXRViewport = memo(function VillageXRViewport({
       if (rendererRef) {
         (rendererRef as { current: WebGLRenderer | null }).current = gl;
       }
+      contextLoss.attach(gl.domElement);
       if (!hasAutoEnteredRef.current && !xrActive && onEnterVR) {
         hasAutoEnteredRef.current = true;
         onEnterVR();
       }
     },
-    [rendererRef, xrActive, onEnterVR]
+    [rendererRef, xrActive, onEnterVR, contextLoss]
   );
 
-  if (!hasWebGL || canvasFailed) {
+  if (!hasWebGL || canvasFailed || contextLoss.lost) {
     return (
       <div
         className="relative w-full h-[600px] md:h-[700px] xl:h-[760px] rounded-3xl overflow-hidden border border-border/80 bg-slate-950 shadow-xl flex flex-col items-center justify-center p-6 text-center"
@@ -138,10 +144,12 @@ export const VillageXRViewport = memo(function VillageXRViewport({
       {/* WebXR Canvas */}
       <CanvasCreationBoundary onFail={() => setCanvasFailed(true)}>
         <Canvas
+          key={`xr-canvas-${contextLoss.epoch}`}
           frameloop="always"
           shadows={false}
           dpr={[1, 1.5]}
           gl={(defaults) => {
+            installWebGLContextSafetyPolyfill();
             try {
               return new THREE.WebGLRenderer({
                 ...defaults,

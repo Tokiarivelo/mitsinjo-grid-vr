@@ -188,6 +188,8 @@ export class XRCameraSource {
 
       // Create video element and attach to DOM inside visible viewport so Chrome compositor
       // executes requestVideoFrameCallback and hardware video decoding without throttling.
+      // Opacity is set to 0.85 (above Chromium's 0.05 power-saver occlusion threshold)
+      // so the browser video pipeline continues decoding frames smoothly during WebXR.
       const video = document.createElement('video');
       video.srcObject = stream;
       video.autoplay = true;
@@ -195,11 +197,19 @@ export class XRCameraSource {
       video.playsInline = true;
       video.setAttribute('playsinline', '');
       video.setAttribute('webkit-playsinline', '');
+      video.setAttribute('data-testid', 'xr-camera-preview-video');
       video.style.cssText =
-        'position:fixed;bottom:8px;right:8px;width:160px;height:90px;opacity:0.02;pointer-events:none;z-index:9999;border-radius:6px;overflow:hidden;';
+        'position:fixed;bottom:12px;right:12px;width:160px;height:90px;opacity:0.85;pointer-events:none;z-index:9999;border-radius:8px;border:1px solid rgba(56,189,248,0.4);box-shadow:0 4px 16px rgba(0,0,0,0.5);object-fit:cover;overflow:hidden;';
       document.body.appendChild(video);
 
       this.videoElement = video;
+
+      // Track live frame delivery via timeupdate
+      video.addEventListener('timeupdate', () => {
+        if (video.currentTime > 0) {
+          this.hasRealFrames = true;
+        }
+      });
 
       // Wait for stream to deliver first frame
       await new Promise<void>((resolve) => {

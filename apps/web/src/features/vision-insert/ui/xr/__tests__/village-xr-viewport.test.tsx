@@ -2,9 +2,16 @@ import { render, fireEvent, act } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '@/lib/i18n';
 
-const webglState = vi.hoisted(() => ({ available: true }));
+const webglState = vi.hoisted(() => ({ available: true, lost: false }));
 vi.mock('@/features/microgrid-3d', () => ({
   useWebGLAvailable: () => webglState.available,
+  useContextLoss: () => ({
+    lost: webglState.lost,
+    epoch: 0,
+    attach: vi.fn(),
+    reportCreationFailed: vi.fn(),
+  }),
+  installWebGLContextSafetyPolyfill: vi.fn(),
 }));
 
 import { VillageXRViewport } from '../village-xr-viewport';
