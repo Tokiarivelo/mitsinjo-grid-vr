@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { mulberry32 } from './noise';
 
 /**
@@ -52,7 +52,7 @@ export interface CanopyTreeGeometry {
   trunk: THREE.BufferGeometry;
 }
 
-export function createCanopyTree(variant: CanopyVariant, detail = 1): CanopyTreeGeometry {
+export function createCanopyTree(variant: CanopyVariant, detail = 2): CanopyTreeGeometry {
   const spec = SPECS[variant];
   const rand = mulberry32(spec.seed);
   const blobs: THREE.BufferGeometry[] = [];
@@ -69,16 +69,17 @@ export function createCanopyTree(variant: CanopyVariant, detail = 1): CanopyTree
     );
     blobs.push(g);
   }
-  // IcosahedronGeometry is already non-indexed.
   const merged = mergeGeometries(blobs);
   blobs.forEach((b) => b.dispose());
   if (!merged) throw new Error('canopy merge failed');
-  merged.computeVertexNormals();
-  merged.computeBoundingBox();
-  const box = merged.boundingBox as THREE.Box3;
+  const smoothed = mergeVertices(merged, 0.001);
+  merged.dispose();
+  smoothed.computeVertexNormals();
+  smoothed.computeBoundingBox();
+  const box = smoothed.boundingBox as THREE.Box3;
 
   // Vertical shade: underside 55 % brightness → crown 100 %.
-  const pos = merged.getAttribute('position');
+  const pos = smoothed.getAttribute('position');
   const colors = new Float32Array(pos.count * 3);
   for (let i = 0; i < pos.count; i++) {
     const t = (pos.getY(i) - box.min.y) / Math.max(1e-6, box.max.y - box.min.y);
@@ -87,10 +88,11 @@ export function createCanopyTree(variant: CanopyVariant, detail = 1): CanopyTree
     colors[i * 3 + 1] = v;
     colors[i * 3 + 2] = v;
   }
-  merged.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  smoothed.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
-  // Open-ended: the base sits in the ground and the top inside the canopy (half the triangles).
-  const trunk = new THREE.CylinderGeometry(0.035, 0.06, spec.trunkH + 0.1, 6, 1, true);
+  // Smooth trunk: 12 radial segments with smooth normals
+  const trunk = new THREE.CylinderGeometry(0.035, 0.06, spec.trunkH + 0.1, 12, 2, true);
   trunk.translate(0, (spec.trunkH + 0.1) / 2, 0);
-  return { foliage: merged, trunk };
+  trunk.computeVertexNormals();
+  return { foliage: smoothed, trunk };
 }

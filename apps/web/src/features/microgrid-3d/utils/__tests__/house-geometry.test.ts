@@ -57,4 +57,59 @@ describe('buildHouseCluster', () => {
     expect(size.z).toBeCloseTo(2);
     expect(size.x).toBeCloseTo(1.6);
   });
+
+  it('supports modern eco-pavilions with gable roofs and terrace deck furniture', () => {
+    const cluster = buildHouseCluster([
+      house({
+        roofStyle: 'gable',
+        deckFurniture: true,
+        slatCladding: true,
+      }),
+    ]);
+
+    expect(cluster.roofs).toBeInstanceOf(THREE.BufferGeometry);
+    expect(cluster.windows).toBeInstanceOf(THREE.BufferGeometry);
+    expect(cluster.trim).toBeInstanceOf(THREE.BufferGeometry);
+    expect(cluster.verandas).toBeInstanceOf(THREE.BufferGeometry);
+
+    cluster.roofs.computeBoundingBox();
+    const roofBounds = cluster.roofs.boundingBox!;
+    // Roof sits atop walls
+    expect(roofBounds.max.y).toBeGreaterThan(1.15);
+  });
+
+  it('supports classic cottages with chimney, arched dormer, and front gabled porch', () => {
+    const cluster = buildHouseCluster([
+      house({
+        roofStyle: 'gable',
+        cottage: true,
+      }),
+    ]);
+
+    expect(houseClusterDrawCalls([house({ cottage: true })])).toBe(5);
+    expect(cluster.roofs).toBeInstanceOf(THREE.BufferGeometry);
+    expect(cluster.windows).toBeInstanceOf(THREE.BufferGeometry);
+    expect(cluster.trim).toBeInstanceOf(THREE.BufferGeometry);
+    expect(cluster.verandas).toBeInstanceOf(THREE.BufferGeometry);
+
+    // Walls include front and back triangular gables sealing the gap up to the roof peak
+    cluster.walls.computeBoundingBox();
+    const wallBounds = cluster.walls.boundingBox!;
+    // Base is 0.12, wallHeight 1.15, roofHeight 0.75 -> peak is 0.12 + 1.15 + 0.75 = 2.02
+    expect(wallBounds.max.y).toBeCloseTo(0.12 + 1.15 + 0.75, 2);
+
+    cluster.trim.computeBoundingBox();
+    const trimBounds = cluster.trim.boundingBox!;
+    // Chimney sits higher than wallHeight (1.15)
+    expect(trimBounds.max.y).toBeGreaterThan(1.5);
+
+    // Windows layer contains front, attic, door and side window glass
+    cluster.windows.computeBoundingBox();
+    const winBounds = cluster.windows.boundingBox!;
+    expect(cluster.windows.getAttribute('position').count).toBeGreaterThan(0);
+    // Front window glass sits proud of front wall (depth / 2 = 1.6 / 2 = 0.8)
+    expect(winBounds.max.z).toBeGreaterThan(0.8);
+    // Attic window glass sits high up on the front gable
+    expect(winBounds.max.y).toBeGreaterThan(1.15);
+  });
 });

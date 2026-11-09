@@ -68,7 +68,7 @@ describe('VillageViewport VR button (VR-T3)', () => {
       },
     });
 
-    const { container } = renderViewport();
+    renderViewport();
     const button = await screen.findByRole('button', { name: 'View in VR' });
     // Mount mock renderer so xr.enter proceeds
     if (seen.rendererRef && typeof seen.rendererRef === 'object' && 'current' in seen.rendererRef) {

@@ -154,6 +154,33 @@ export function DistributionLines({
           />
         ))}
       </Instances>
+      {/* Ceramic bell insulators on the crossarms */}
+      <Instances limit={Math.max(1, mappedPoles.length * 2)} name="pole-insulators">
+        <cylinderGeometry args={[0.02, 0.035, 0.06, 6]} />
+        <meshStandardMaterial color="#50b8b8" roughness={0.2} metalness={0.6} />
+        {mappedPoles.flatMap((p, i) => {
+          const rot = (i * 1.3) % Math.PI;
+          const cos = Math.cos(rot);
+          const sin = Math.sin(rot);
+          const y = POLE_HEIGHT + 0.11;
+          return [
+            <Instance key={`ins-l-${i}`} position={[p.x - 0.32 * cos, y, p.z + 0.32 * sin]} />,
+            <Instance key={`ins-r-${i}`} position={[p.x + 0.32 * cos, y, p.z - 0.32 * sin]} />,
+          ];
+        })}
+      </Instances>
+      {/* Street lamp protective metal hood fixture */}
+      <Instances limit={Math.max(1, mappedPoles.length)} name="pole-lamp-hoods">
+        <coneGeometry args={[0.13, 0.06, 8, 1, true]} />
+        <meshStandardMaterial color="#334155" roughness={0.6} metalness={0.4} />
+        {mappedPoles.map((p, i) => (
+          <Instance
+            key={i}
+            position={[p.x, POLE_HEIGHT - 0.31, p.z + 0.12]}
+            rotation={[Math.PI, 0, 0]}
+          />
+        ))}
+      </Instances>
       <Instances limit={Math.max(1, mappedPoles.length)} name="pole-lamps">
         <sphereGeometry args={[0.07, 8, 6]} />
         <meshBasicMaterial toneMapped={false} />

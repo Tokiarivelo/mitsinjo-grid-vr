@@ -23,7 +23,7 @@ export interface SolarArrayProps {
   model: SolarSceneModel;
   nameLabel?: string;
   outputLabel?: string;
-  htmlPortal?: RefObject<HTMLElement | null>;
+  htmlPortal?: RefObject<HTMLElement | null> | null;
 }
 
 export function SolarArray({
@@ -130,36 +130,62 @@ export function SolarArray({
 
       {/* 3. Solar Inverter Station Cabinet */}
       <group position={[3.9, 0, 3.7]}>
-        <mesh position={[0, 0.75, 0]}>
-          <boxGeometry args={[0.8, 1.5, 0.6]} />
-          <meshStandardMaterial color="#475569" roughness={0.5} metalness={0.5} />
+        {/* Concrete equipment pad */}
+        <mesh position={[0, 0.06, 0]} receiveShadow>
+          <boxGeometry args={[1.1, 0.12, 0.9]} />
+          <meshStandardMaterial color="#8b929a" roughness={0.9} />
         </mesh>
-        <mesh position={[0, 1.1, 0.31]}>
-          <sphereGeometry args={[0.06, 8, 8]} />
-          <meshBasicMaterial color={isGenerating ? TOKEN_HEX.solarAmber : TOKEN_HEX.idle} />
+        {/* Main industrial enclosure */}
+        <mesh position={[0, 0.81, 0]} castShadow receiveShadow>
+          <boxGeometry args={[0.82, 1.38, 0.62]} />
+          <meshStandardMaterial color="#3e4c59" roughness={0.45} metalness={0.55} />
+        </mesh>
+        {/* Cooling louver ventilation grilles */}
+        <mesh position={[0, 0.65, 0.32]}>
+          <planeGeometry args={[0.55, 0.35]} />
+          <meshStandardMaterial color="#1e293b" roughness={0.8} />
+        </mesh>
+        {/* Cable conduits entering the ground */}
+        <mesh position={[-0.2, 0.2, 0.32]}>
+          <cylinderGeometry args={[0.025, 0.025, 0.4, 6]} />
+          <meshStandardMaterial color="#64748b" metalness={0.7} roughness={0.3} />
+        </mesh>
+        <mesh position={[0.2, 0.2, 0.32]}>
+          <cylinderGeometry args={[0.025, 0.025, 0.4, 6]} />
+          <meshStandardMaterial color="#64748b" metalness={0.7} roughness={0.3} />
+        </mesh>
+        {/* Status beacon indicator */}
+        <mesh position={[0, 1.25, 0.32]}>
+          <sphereGeometry args={[0.055, 8, 8]} />
+          <meshBasicMaterial
+            color={isGenerating ? TOKEN_HEX.solarAmber : TOKEN_HEX.idle}
+            toneMapped={false}
+          />
         </mesh>
       </group>
 
       {/* 5. In-Scene Floating 3D Telemetry Badge */}
-      <Html
-        position={[0, 3.4, 0]}
-        center
-        distanceFactor={18}
-        portal={htmlPortal as RefObject<HTMLElement>}
-        className="pointer-events-auto select-none"
-      >
-        <div className="flex items-center gap-2 px-3 py-1.5 rounded-full shadow-xl backdrop-blur-md bg-surface/90 border border-border text-[11px] font-sans text-text-primary transition-all whitespace-nowrap">
-          <div className="w-5 h-5 rounded-full bg-solar-amber/20 flex items-center justify-center shrink-0 border border-solar-amber/40">
-            <Sun className="w-3.5 h-3.5 text-solar-amber" aria-hidden="true" />
+      {htmlPortal !== null && (
+        <Html
+          position={[0, 3.4, 0]}
+          center
+          distanceFactor={18}
+          portal={htmlPortal as RefObject<HTMLElement>}
+          className="pointer-events-auto select-none"
+        >
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full shadow-xl backdrop-blur-md bg-surface/90 border border-border text-[11px] font-sans text-text-primary transition-all whitespace-nowrap">
+            <div className="w-5 h-5 rounded-full bg-solar-amber/20 flex items-center justify-center shrink-0 border border-solar-amber/40">
+              <Sun className="w-3.5 h-3.5 text-solar-amber" aria-hidden="true" />
+            </div>
+            <div className="flex flex-col leading-tight">
+              <span className="font-semibold text-text-primary text-[11px]">{nameLabel}</span>
+              <span className="font-mono text-[10px] text-solar-amber font-medium">
+                {outputLabel ?? `Production : ${fmtKw(currentKw)}`}
+              </span>
+            </div>
           </div>
-          <div className="flex flex-col leading-tight">
-            <span className="font-semibold text-text-primary text-[11px]">{nameLabel}</span>
-            <span className="font-mono text-[10px] text-solar-amber font-medium">
-              {outputLabel ?? `Production : ${fmtKw(currentKw)}`}
-            </span>
-          </div>
-        </div>
-      </Html>
+        </Html>
+      )}
     </group>
   );
 }

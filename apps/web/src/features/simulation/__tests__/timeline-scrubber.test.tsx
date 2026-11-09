@@ -42,4 +42,18 @@ describe('TimelineScrubber compact mode', () => {
     const expand = screen.getByRole('button', { name: 'Expand the timeline' });
     expect(expand).toHaveAttribute('aria-expanded', 'false');
   });
+
+  it('renders playback speed select and calls onPlaybackSpeedChange on user selection', () => {
+    const onPlaybackSpeedChange = vi.fn();
+    render(<TimelineScrubber {...props({ playbackSpeed: 1, onPlaybackSpeedChange })} />);
+    const select = screen.getByRole('combobox', { name: 'Playback speed' });
+    expect(select).toBeInTheDocument();
+    expect(select).toHaveValue('1');
+
+    fireEvent.change(select, { target: { value: '0.5' } });
+    expect(onPlaybackSpeedChange).toHaveBeenCalledWith(0.5);
+
+    fireEvent.change(select, { target: { value: '0.25' } });
+    expect(onPlaybackSpeedChange).toHaveBeenCalledWith(0.25);
+  });
 });

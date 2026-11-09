@@ -17,10 +17,10 @@ const baseAppliance: Appliance = {
 
 describe('Appliance derivations & poles (PI-T7)', () => {
   it('re-uses routeCable with poles spaced <= 4.5 scene units', () => {
-    // Appliance placed 16m away from the water building
+    // Appliance placed 16m away from the water building (westwards)
     const bPos = SECTOR_POSITIONS.water;
     const markers = applianceMarkers(
-      [{ ...baseAppliance, position: { x: bPos[0] + 16, z: bPos[2] } }],
+      [{ ...baseAppliance, position: { x: bPos[0] - 16, z: bPos[2] } }],
       SECTOR_POSITIONS,
       12
     );

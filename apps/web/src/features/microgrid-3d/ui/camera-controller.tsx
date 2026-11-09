@@ -12,6 +12,8 @@ import {
   type Vec3,
 } from '../utils/camera-focus';
 import { SECTOR_POSITIONS } from '../utils/to-scene-model';
+import { terrainHeight } from '../utils/landscape';
+import { setupXRHandsAndControllers, type XRHandsHandle } from '../utils/xr-hands';
 import * as THREE from 'three';
 import type { CameraPreset } from '../types';
 
@@ -38,12 +40,20 @@ export const CAMERA_PRESETS: Record<CameraPreset, { position: Vec3; target: Vec3
     position: [14, 13, 16],
     target: [4, 1, -2],
   },
+  // Standing at 1:1 human scale on the village entrance path (Immersion mode viewpoint).
+  immersion: {
+    position: [0, 1.8, 14],
+    target: [0, 1.8, 0],
+  },
 };
 
-/** VR entry viewpoint: a standing-scale overlook of the whole diorama. */
+/** Human eye level above ground (1.8m). */
+export const EYE_HEIGHT = 1.8;
+
+/** VR entry viewpoint: standing on the entrance path facing the village at 1:1 human scale. */
 export const XR_VIEWPOINT: { position: Vec3; target: Vec3 } = {
-  position: [0, 20, 30],
-  target: [0, 1, -4],
+  position: [0, EYE_HEIGHT, 14],
+  target: [0, EYE_HEIGHT, 0],
 };
 
 const UP = new THREE.Vector3(0, 1, 0);
@@ -83,6 +93,7 @@ export function CameraController({
 }: CameraControllerProps) {
   const camera = useThree((s) => s.camera);
   const scene = useThree((s) => s.scene);
+  const gl = useThree((s) => s.gl);
   const invalidate = useThree((s) => s.invalidate);
   const controlsRef = useRef<ComponentRef<typeof OrbitControls>>(null);
 
@@ -97,6 +108,38 @@ export function CameraController({
   const presetRef = useRef(preset);
   const prevFocus = useRef<string | null>(null);
   const orbitOffset = useRef(new THREE.Vector3());
+
+  // XR locomotion vectors & keyboard input
+  const xrMoveDir = useRef(new THREE.Vector3());
+  const xrCamFwd = useRef(new THREE.Vector3());
+  const xrCamRight = useRef(new THREE.Vector3());
+  const xrKeysDown = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!xrActive) {
+      xrKeysDown.current.clear();
+      return;
+    }
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      xrKeysDown.current.add(e.code);
+    };
+    const onKeyUp = (e: KeyboardEvent) => {
+      xrKeysDown.current.delete(e.code);
+    };
+    const onBlur = () => {
+      xrKeysDown.current.clear();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+    window.addEventListener('blur', onBlur);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
+      window.removeEventListener('blur', onBlur);
+      xrKeysDown.current.clear();
+    };
+  }, [xrActive]);
 
   const startOrbit = useCallback(() => {
     isOrbiting.current = orbitAfterTween.current;
@@ -172,10 +215,15 @@ export function CameraController({
   const wasXrActive = useRef(false);
   const xrRig = useRef<THREE.Group | null>(null);
   const xrPrevParent = useRef<THREE.Object3D | null>(null);
+  const xrHandsHandle = useRef<XRHandsHandle | null>(null);
+  const hasFloorTracking = useRef(false);
   useEffect(() => {
     if (!xrActive) {
       if (wasXrActive.current) {
         wasXrActive.current = false;
+        hasFloorTracking.current = false;
+        xrHandsHandle.current?.dispose();
+        xrHandsHandle.current = null;
         const rig = xrRig.current;
         xrRig.current = null;
         if (rig) {
@@ -190,25 +238,131 @@ export function CameraController({
     if (xrRig.current) return; // StrictMode double-invoke / focus change mid-session.
     const rig = new THREE.Group();
     rig.position.set(...XR_VIEWPOINT.position);
-    // Camera-convention orientation: Matrix4.lookAt aims -Z at the target.
-    rig.quaternion.setFromRotationMatrix(
-      new THREE.Matrix4().lookAt(
-        new THREE.Vector3(...XR_VIEWPOINT.position),
-        new THREE.Vector3(...XR_VIEWPOINT.target),
-        UP
-      )
-    );
+    // Align rig yaw only with target on the horizontal plane (XZ).
+    // NEVER pitch or roll the XR rig: tilting the rig's Y-axis causes
+    // headset yaw to induce artificial visual roll, triggering severe motion sickness.
+    const dx = XR_VIEWPOINT.target[0] - XR_VIEWPOINT.position[0];
+    const dz = XR_VIEWPOINT.target[2] - XR_VIEWPOINT.position[2];
+    const yaw = Math.atan2(-dx, -dz);
+    rig.quaternion.setFromAxisAngle(UP, yaw);
     scene.add(rig);
     xrPrevParent.current = camera.parent;
     rig.attach(camera); // keep the 2D world transform, then hand over to the headset
     camera.position.set(0, 0, 0);
     camera.quaternion.identity();
     xrRig.current = rig;
+
+    // Attach articulated hands and controller pointers inside the rig
+    xrHandsHandle.current = setupXRHandsAndControllers(rig, gl, scene, camera);
+
     invalidate();
-  }, [xrActive, focusKey, moveTo, moveToFocusTarget, camera, scene, invalidate]);
+  }, [xrActive, focusKey, moveTo, moveToFocusTarget, camera, scene, gl, invalidate]);
 
   useFrame((state, delta) => {
-    if (reducedMotion || xrActive) return;
+    if (xrActive) {
+      xrHandsHandle.current?.update();
+      const rig = xrRig.current;
+      if (!rig) return;
+
+      let moveX = 0;
+      let moveZ = 0;
+      let turnYaw = 0;
+      let isRunning = false;
+
+      // 1. Keyboard controls (WASD / ZQSD / Arrows)
+      const keys = xrKeysDown.current;
+      if (keys.has('KeyW') || keys.has('KeyZ') || keys.has('ArrowUp')) moveZ -= 1;
+      if (keys.has('KeyS') || keys.has('ArrowDown')) moveZ += 1;
+      if (keys.has('KeyA') || keys.has('KeyQ') || keys.has('ArrowLeft')) moveX -= 1;
+      if (keys.has('KeyD') || keys.has('ArrowRight')) moveX += 1;
+      if (keys.has('ShiftLeft') || keys.has('ShiftRight')) isRunning = true;
+
+      // 2. WebXR Gamepad / Thumbsticks (Oculus Touch & IWER DevUI)
+      const session = state.gl.xr?.getSession?.();
+      if (session) {
+        for (const source of session.inputSources) {
+          const gp = source.gamepad;
+          if (!gp) continue;
+
+          let stickX = 0;
+          let stickY = 0;
+          if (gp.axes.length >= 4) {
+            const ax = gp.axes[2] ?? 0;
+            const ay = gp.axes[3] ?? 0;
+            stickX = Math.abs(ax) > 0.15 ? ax : 0;
+            stickY = Math.abs(ay) > 0.15 ? ay : 0;
+          } else if (gp.axes.length >= 2) {
+            const ax = gp.axes[0] ?? 0;
+            const ay = gp.axes[1] ?? 0;
+            stickX = Math.abs(ax) > 0.15 ? ax : 0;
+            stickY = Math.abs(ay) > 0.15 ? ay : 0;
+          }
+
+          if (source.handedness === 'left') {
+            if (stickX !== 0) moveX += stickX;
+            if (stickY !== 0) moveZ += stickY;
+          } else if (source.handedness === 'right') {
+            if (stickX !== 0) turnYaw -= stickX;
+          } else {
+            if (stickX !== 0) moveX += stickX;
+            if (stickY !== 0) moveZ += stickY;
+          }
+        }
+      }
+
+      // 3. Smooth turn (right stick) - maintains pure yaw (pitch/roll remain 0)
+      if (turnYaw !== 0) {
+        state.invalidate();
+        const turnSpeed = 1.8; // rad/s
+        rig.rotation.y += turnYaw * turnSpeed * Math.min(delta, 0.1);
+      }
+
+      // 4. Locomotion along horizontal camera direction
+      if (moveX !== 0 || moveZ !== 0) {
+        state.invalidate();
+        camera.getWorldDirection(xrCamFwd.current);
+        xrCamFwd.current.y = 0;
+        xrCamFwd.current.normalize();
+
+        xrCamRight.current.crossVectors(xrCamFwd.current, UP).normalize();
+
+        xrMoveDir.current.set(0, 0, 0);
+        if (moveZ !== 0) xrMoveDir.current.addScaledVector(xrCamFwd.current, -moveZ);
+        if (moveX !== 0) xrMoveDir.current.addScaledVector(xrCamRight.current, moveX);
+        if (xrMoveDir.current.lengthSq() > 0) {
+          xrMoveDir.current.normalize();
+        }
+
+        const baseSpeed = isRunning ? 6.0 : 3.0; // m/s
+        const step = baseSpeed * Math.min(delta, 0.1);
+        rig.position.addScaledVector(xrMoveDir.current, step);
+
+        // Clamp inside village terrain bounds
+        const dist = Math.hypot(rig.position.x, rig.position.z);
+        if (dist > 65) {
+          rig.position.x *= 65 / dist;
+          rig.position.z *= 65 / dist;
+        }
+      }
+
+      // Always maintain standing eye height above terrain relief
+      // Auto-detects if a real headset runtime provides physical floor height (camera.position.y > 0.5)
+      if (camera.position.y > 0.5) {
+        hasFloorTracking.current = true;
+      }
+      const groundY = terrainHeight(rig.position.x, rig.position.z);
+      const eyeOffset = hasFloorTracking.current ? 0 : EYE_HEIGHT;
+      rig.position.y = groundY + eyeOffset;
+
+      // Absolute safety floor clamp: eye height can NEVER sink beneath ground level + 0.35m
+      const eyeWorldY = rig.position.y + camera.position.y;
+      if (eyeWorldY < groundY + 0.35) {
+        rig.position.y = groundY + 0.35 - camera.position.y;
+      }
+      return;
+    }
+
+    if (reducedMotion) return;
 
     if (isTransitioning.current) {
       state.invalidate();
@@ -254,7 +408,7 @@ export function CameraController({
       enableDamping={damping}
       dampingFactor={0.05}
       maxPolarAngle={Math.PI / 2.15}
-      minDistance={panMode ? 3 : 6}
+      minDistance={panMode ? 2.5 : 4}
       maxDistance={70}
       // Pan along the ground (not the screen) so the view never dives under the terrain.
       screenSpacePanning={false}

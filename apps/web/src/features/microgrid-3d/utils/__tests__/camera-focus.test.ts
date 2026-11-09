@@ -16,7 +16,7 @@ describe('camera focus framing', () => {
     expect(position).toEqual([9 + FOCUS_OFFSET[0], FOCUS_OFFSET[1], -1 + FOCUS_OFFSET[2]]);
   });
 
-  it('stays inside the orbit zoom range (6–70) for every sector', () => {
+  it('stays inside the orbit zoom range (4–70) for every sector', () => {
     for (const pos of Object.values(SECTOR_POSITIONS)) {
       const { position, target } = focusCameraFor(pos);
       const d = Math.hypot(
@@ -24,7 +24,7 @@ describe('camera focus framing', () => {
         position[1] - target[1],
         position[2] - target[2]
       );
-      expect(d).toBeGreaterThan(6);
+      expect(d).toBeGreaterThan(4);
       expect(d).toBeLessThan(70);
     }
   });
@@ -37,7 +37,7 @@ describe('camera focus framing', () => {
 });
 
 describe('appliance focus framing', () => {
-  it('comes closer to a small object but stays past the orbit minimum (6)', () => {
+  it('comes closer to a small object but stays past the orbit minimum (4)', () => {
     const building = focusCameraFor([4, 0, 2]);
     const small = focusCameraFor([4, 0, 2], APPLIANCE_FOCUS_SCALE);
     const dist = (f: typeof small) =>
@@ -47,6 +47,6 @@ describe('appliance focus framing', () => {
         f.position[2] - f.target[2]
       );
     expect(dist(small)).toBeLessThan(dist(building));
-    expect(dist(small)).toBeGreaterThan(6);
+    expect(dist(small)).toBeGreaterThan(4);
   });
 });

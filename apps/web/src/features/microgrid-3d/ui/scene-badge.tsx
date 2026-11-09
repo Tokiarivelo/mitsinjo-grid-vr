@@ -23,7 +23,7 @@ export const badgeY = (beacon: number): number => beacon + BADGE_ABOVE_BEACON;
 export interface SceneBadgeProps {
   /** World position of the badge anchor. */
   position: [number, number, number];
-  htmlPortal?: RefObject<HTMLElement | null>;
+  htmlPortal?: RefObject<HTMLElement | null> | null;
   zIndexRange?: [number, number];
   /** Screen scale; a small object passes its camera focus scale so it reads like a focused building. */
   distanceFactor?: number;
@@ -70,6 +70,8 @@ export const SceneBadge = memo(function SceneBadge({
   onClick,
   dataId,
 }: SceneBadgeProps) {
+  if (htmlPortal === null) return null;
+
   return (
     <Html
       position={position}

@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { WeatherId } from '@mitsinjo/engine';
+import type { SkyPalette } from '../utils/sky-palette';
 import {
   WEATHER_ATMOSPHERE,
   WEATHER_HEX,
@@ -20,14 +21,45 @@ export interface WeatherEffectsProps {
   quality: 'high' | 'low';
   /** False under reduced motion or without a GPU: clouds and rain stay still, no lightning. */
   animate: boolean;
+  palette?: SkyPalette;
+  sunDirection?: [number, number, number];
+  timeIndex?: number;
+  /** Optional external ref to smoothly update cloud sun direction & lighting in useFrame. */
+  cloudUniformsRef?: React.MutableRefObject<{
+    uSunDir: THREE.IUniform<THREE.Vector3>;
+    uSunColor: THREE.IUniform<THREE.Color>;
+    uSkyColor: THREE.IUniform<THREE.Color>;
+    uGroundColor: THREE.IUniform<THREE.Color>;
+    uSunGlow: THREE.IUniform<THREE.Color>;
+  } | null>;
 }
 
 /** Clouds, rain and storm lightning for the day's weather. Visual only, never data. */
-export function WeatherEffects({ weather, isDaytime, quality, animate }: WeatherEffectsProps) {
+export function WeatherEffects({
+  weather,
+  isDaytime,
+  quality,
+  animate,
+  palette,
+  sunDirection,
+  timeIndex,
+  cloudUniformsRef,
+}: WeatherEffectsProps) {
   const atmo = WEATHER_ATMOSPHERE[weather];
   return (
     <group name="weather-effects">
-      <CloudLayer cover={atmo.cloudCover} darkness={atmo.cloudDarkness} animate={animate} />
+      <CloudLayer
+        cover={atmo.cloudCover}
+        darkness={atmo.cloudDarkness}
+        animate={animate}
+        palette={palette}
+        sunDirection={sunDirection}
+        quality={quality}
+        isDaytime={isDaytime}
+        hasLightning={atmo.lightning}
+        timeIndex={timeIndex}
+        cloudUniformsRef={cloudUniformsRef}
+      />
       {atmo.rain > 0 && (
         <Rain
           count={rainDropCount(atmo.rain, quality)}
@@ -43,28 +75,228 @@ export function WeatherEffects({ weather, isDaytime, quality, animate }: Weather
 
 /* ------------------------------------------------------------------ clouds */
 
+const CLOUD_VERTEX = /* glsl */ `
+varying vec3 vWorldPosition;
+varying vec3 vWorldNormal;
+varying vec3 vLocalPosition;
+
+#include <common>
+#include <fog_pars_vertex>
+
+void main() {
+  // Procedural organic cumulus billow deformation:
+  // Displaces spherical vertices with 3D harmonic sine/cosine lobes,
+  // creating soft, billowing cauliflower-like cumulus bumps (zero facets, completely organic)
+  vec3 p = position * 2.3;
+  float bump = sin(p.x * 2.1 + p.y * 1.8) * cos(p.z * 2.2 + p.y * 1.4) * 0.085;
+  bump += sin(p.x * 4.2 + p.z * 3.8) * 0.038;
+  vec3 displacedPos = position + normal * bump;
+
+  vec3 displacedNormal = normalize(normal + vec3(
+    cos(p.x * 2.1) * 0.08,
+    sin(p.y * 1.8) * 0.08,
+    -sin(p.z * 2.2) * 0.08
+  ));
+
+  vLocalPosition = displacedPos;
+
+  #ifdef USE_INSTANCING
+    vec4 worldPos = modelMatrix * instanceMatrix * vec4(displacedPos, 1.0);
+    mat3 m = mat3(instanceMatrix);
+    // Smooth instance normal: normalize column lengths of scale matrix
+    vec3 scaleSq = vec3(dot(m[0], m[0]), dot(m[1], m[1]), dot(m[2], m[2]));
+    vec3 invScaleNormal = displacedNormal / sqrt(max(scaleSq, vec3(0.0001)));
+    vec3 transformedNormal = m * invScaleNormal;
+    vWorldNormal = normalize((modelMatrix * vec4(transformedNormal, 0.0)).xyz);
+  #else
+    vec4 worldPos = modelMatrix * vec4(displacedPos, 1.0);
+    vWorldNormal = normalize((modelMatrix * vec4(displacedNormal, 0.0)).xyz);
+  #endif
+
+  vWorldPosition = worldPos.xyz;
+  vec4 mvPosition = viewMatrix * worldPos;
+  gl_Position = projectionMatrix * mvPosition;
+
+  #include <fog_vertex>
+}
+`;
+
+const CLOUD_FRAGMENT = /* glsl */ `
+uniform vec3 uSunDir;
+uniform vec3 uSunColor;
+uniform vec3 uSkyColor;
+uniform vec3 uGroundColor;
+uniform vec3 uSunGlow;
+uniform vec3 uCloudBase;
+uniform vec3 uCloudShadow;
+uniform float uDarkness;
+uniform float uLightning;
+
+varying vec3 vWorldPosition;
+varying vec3 vWorldNormal;
+varying vec3 vLocalPosition;
+
+#include <common>
+#include <fog_pars_fragment>
+
+void main() {
+  vec3 N = normalize(vWorldNormal);
+  vec3 V = normalize(cameraPosition - vWorldPosition);
+  vec3 L = normalize(uSunDir);
+
+  // Soft wrapped diffuse: wraps sunlight smoothly around the curved billowing surface,
+  // preventing any harsh black shadow cutoffs
+  float NdotL = dot(N, L);
+  float wrap = 0.65;
+  float diff = clamp((NdotL + wrap) / (1.0 + wrap), 0.0, 1.0);
+  diff = smoothstep(0.03, 0.97, diff);
+
+  // Atmospheric ambient bounce: in the sky, ambient light is vibrant sky blue from above
+  // and soft haze/horizon bounce from below
+  float up = clamp(N.y * 0.5 + 0.5, 0.0, 1.0);
+  vec3 ambientSky = mix(vec3(0.55, 0.78, 1.0), uSkyColor, 0.45);
+  vec3 ambientGround = mix(vec3(0.75, 0.88, 1.0), uGroundColor, 0.12);
+  vec3 ambientLight = mix(ambientGround, ambientSky, up);
+
+  // Vertical fluffiness & crevice gradient: tops are pure bright white, undersides
+  // catch rich luminous sky-blue ambient shadow (matches Image 2 reference)
+  float heightT = clamp((vLocalPosition.y + 0.95) / 1.9, 0.0, 1.0);
+  vec3 baseShade = mix(uCloudShadow, uCloudBase, heightT * 0.55 + 0.45);
+
+  // Direct sun vs ambient shade
+  vec3 litColor = uCloudBase * (uSunColor * 1.1 + vec3(0.18));
+  vec3 shadeColor = baseShade * ambientLight;
+  vec3 color = mix(shadeColor, litColor, diff);
+
+  // Subsurface scattering / forward translucent glow when backlit by the sun
+  float forward = clamp(dot(V, -L), 0.0, 1.0);
+  vec3 sss = uSunColor * pow(forward, 2.5) * 0.65;
+  color += sss;
+
+  // Silver lining / rim halo along silhouettes
+  float sunFacing = max(0.0, dot(L, -V));
+  float fresnel = pow(1.0 - max(0.0, dot(N, V)), 2.6);
+  float rim = fresnel * (0.4 + 0.6 * pow(sunFacing, 2.0));
+  color += mix(uSunGlow, vec3(1.0), 0.5) * rim * (1.0 - uDarkness * 0.6);
+
+  // Luminous sky floor guarantee: clouds are never murky dark rocks in daytime
+  float dayFactor = clamp(uSunDir.y * 3.0 + 0.2, 0.0, 1.0);
+  vec3 minSkyFloor = vec3(0.48, 0.72, 0.98) * dayFactor * (1.0 - uDarkness * 0.75);
+  color = max(color, minSkyFloor);
+
+  // Weather darkness (storm / rainy)
+  if (uDarkness > 0.0) {
+    vec3 stormTone = mix(vec3(0.28, 0.31, 0.38), vec3(0.50, 0.54, 0.62), diff);
+    color = mix(color, stormTone, uDarkness * 0.85);
+  }
+
+  // Lightning flash illumination during storms
+  if (uLightning > 0.0) {
+    color = mix(color, vec3(1.3, 1.35, 1.5), uLightning * 0.8);
+  }
+
+  gl_FragColor = vec4(color, 1.0);
+
+  #include <fog_fragment>
+  #include <tonemapping_fragment>
+  #include <colorspace_fragment>
+}
+`;
+
+interface CloudShaderUniforms {
+  [key: string]: THREE.IUniform;
+  fogColor: THREE.IUniform<THREE.Color>;
+  fogNear: THREE.IUniform<number>;
+  fogFar: THREE.IUniform<number>;
+  fogDensity: THREE.IUniform<number>;
+  uSunDir: THREE.IUniform<THREE.Vector3>;
+  uSunColor: THREE.IUniform<THREE.Color>;
+  uSkyColor: THREE.IUniform<THREE.Color>;
+  uGroundColor: THREE.IUniform<THREE.Color>;
+  uSunGlow: THREE.IUniform<THREE.Color>;
+  uCloudBase: THREE.IUniform<THREE.Color>;
+  uCloudShadow: THREE.IUniform<THREE.Color>;
+  uDarkness: THREE.IUniform<number>;
+  uLightning: THREE.IUniform<number>;
+}
+
 function CloudLayer({
   cover,
   darkness,
   animate,
+  palette,
+  sunDirection,
+  quality,
+  isDaytime,
+  hasLightning,
+  cloudUniformsRef,
 }: {
   cover: number;
   darkness: number;
   animate: boolean;
+  palette?: SkyPalette;
+  sunDirection?: [number, number, number];
+  quality: 'high' | 'low';
+  isDaytime: boolean;
+  hasLightning: boolean;
+  timeIndex?: number;
+  cloudUniformsRef?: React.MutableRefObject<{
+    uSunDir: THREE.IUniform<THREE.Vector3>;
+    uSunColor: THREE.IUniform<THREE.Color>;
+    uSkyColor: THREE.IUniform<THREE.Color>;
+    uGroundColor: THREE.IUniform<THREE.Color>;
+    uSunGlow: THREE.IUniform<THREE.Color>;
+  } | null>;
 }) {
   const groupRef = useRef<THREE.Group>(null);
   const meshRef = useRef<THREE.InstancedMesh>(null);
+  const driftRef = useRef(0);
   const invalidate = useThree((s) => s.invalidate);
   const requestFrame = useAmbientFrame();
   const puffs = useMemo(() => cloudPuffs(cover), [cover]);
-  const color = useMemo(
-    () =>
-      new THREE.Color(WEATHER_HEX.cloudLight).lerp(
-        new THREE.Color(WEATHER_HEX.cloudDark),
-        darkness
-      ),
-    [darkness]
+
+  const uniforms = useMemo<CloudShaderUniforms>(
+    () => ({
+      ...THREE.UniformsUtils.clone(THREE.UniformsLib.fog),
+      uSunDir: { value: new THREE.Vector3(0, 1, 0) },
+      uSunColor: { value: new THREE.Color() },
+      uSkyColor: { value: new THREE.Color() },
+      uGroundColor: { value: new THREE.Color() },
+      uSunGlow: { value: new THREE.Color() },
+      uCloudBase: { value: new THREE.Color(WEATHER_HEX.cloudLight) },
+      uCloudShadow: { value: new THREE.Color(WEATHER_HEX.cloudShadow) },
+      uDarkness: { value: 0 },
+      uLightning: { value: 0 },
+    }),
+    []
   );
+
+  if (cloudUniformsRef) {
+    cloudUniformsRef.current = uniforms;
+  }
+
+  useLayoutEffect(() => {
+    if (sunDirection) {
+      uniforms.uSunDir.value.set(...sunDirection).normalize();
+    } else {
+      uniforms.uSunDir.value.set(0.4, 0.8, -0.4).normalize();
+    }
+    if (palette) {
+      uniforms.uSunColor.value.set(palette.sun);
+      uniforms.uSkyColor.value.set(palette.hemiSky);
+      uniforms.uGroundColor.value.set(palette.hemiGround);
+      uniforms.uSunGlow.value.set(palette.sunGlow);
+    } else {
+      uniforms.uSunColor.value.set(isDaytime ? '#fff4e0' : '#9db4ff');
+      uniforms.uSkyColor.value.set(isDaytime ? '#9fb2df' : '#3b4a8a');
+      uniforms.uGroundColor.value.set(isDaytime ? '#6b533e' : '#0b1210');
+      uniforms.uSunGlow.value.set(isDaytime ? '#ffd08a' : '#2a3260');
+    }
+    uniforms.uCloudBase.value.set(WEATHER_HEX.cloudLight);
+    uniforms.uCloudShadow.value.set(WEATHER_HEX.cloudShadow);
+    uniforms.uDarkness.value = darkness;
+    invalidate();
+  }, [uniforms, palette, sunDirection, isDaytime, darkness, invalidate]);
 
   useLayoutEffect(() => {
     const mesh = meshRef.current;
@@ -84,10 +316,19 @@ function CloudLayer({
     if (animate) invalidate();
   }, [animate, invalidate]);
 
-  useFrame((_, delta) => {
-    if (!animate || !groupRef.current) return;
-    // Slow drift across the sky.
-    groupRef.current.rotation.y += delta * 0.006;
+  useFrame((state, delta) => {
+    if (!animate) return;
+    driftRef.current += delta * 0.018;
+    if (groupRef.current) {
+      // Peaceful continuous 360° cloud drift across the sky dome
+      groupRef.current.rotation.y = driftRef.current;
+      // Gentle subtle breeze floating
+      groupRef.current.position.y = Math.sin(state.clock.elapsedTime * 0.3) * 0.6;
+      groupRef.current.position.x = Math.sin(state.clock.elapsedTime * 0.18) * 1.2;
+    }
+    if (hasLightning) {
+      uniforms.uLightning.value = lightningFlash(state.clock.elapsedTime);
+    }
     requestFrame();
   });
 
@@ -96,14 +337,24 @@ function CloudLayer({
   return (
     <group ref={groupRef}>
       <instancedMesh
-        key={puffs.length}
+        key={`${puffs.length}-${quality}`}
         ref={meshRef}
         args={[undefined, undefined, puffs.length]}
         frustumCulled={false}
         name="weather-clouds"
       >
-        <icosahedronGeometry args={[1, 1]} />
-        <meshLambertMaterial color={color} flatShading />
+        <sphereGeometry
+          key={quality}
+          args={[1, quality === 'high' ? 32 : 20, quality === 'high' ? 24 : 14]}
+        />
+        <shaderMaterial
+          fog
+          depthWrite
+          depthTest
+          uniforms={uniforms}
+          vertexShader={CLOUD_VERTEX}
+          fragmentShader={CLOUD_FRAGMENT}
+        />
       </instancedMesh>
     </group>
   );

@@ -30,7 +30,7 @@ export interface FeederTagsProps {
   buildings: Record<SectorId, BuildingSceneModel>;
   tones: Record<SectorId, StatusColor>;
   titles: Record<SectorId, string>;
-  htmlPortal?: RefObject<HTMLElement | null>;
+  htmlPortal?: RefObject<HTMLElement | null> | null;
 }
 
 /** One chip per connected feeder: the kW the EMS controller sends down that cable. */
@@ -44,6 +44,8 @@ export function FeederTags({ lines, buildings, tones, titles, htmlPortal }: Feed
     }
     return out;
   }, [lines]);
+
+  if (htmlPortal === null) return null;
 
   return (
     <group name="feeder-tags">

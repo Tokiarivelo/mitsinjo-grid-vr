@@ -1,10 +1,19 @@
 'use client';
 
-import { Suspense, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
-import { Canvas } from '@react-three/fiber';
+import {
+  Suspense,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type RefObject,
+} from 'react';
+import { Canvas, useFrame } from '@react-three/fiber';
 import { Environment } from '@react-three/drei';
+import * as THREE from 'three';
 import type { WebGLRenderer } from 'three';
-import { SECTOR_IDS, type Priority, type SectorId } from '@mitsinjo/engine';
+import { SECTOR_IDS, type Priority, type SectorId, type WeatherId } from '@mitsinjo/engine';
 import { useTranslations } from '@/lib/i18n';
 import { useSimulationStore } from '@/stores';
 import { fmtKw } from '@/lib/format';
@@ -27,9 +36,14 @@ import { useFeederLabels } from '../hooks/use-feeder-labels';
 import { useSceneQuality, type SceneQuality } from '../hooks/use-scene-quality';
 import { isSoftwareRenderer } from '../utils/webgl';
 import { createSceneStats, sampleSceneStats, type SceneStatsSample } from '../utils/scene-stats';
-import { applyOvercast, skyPalette } from '../utils/sky-palette';
+import { applyOvercast, skyPalette, type SkyPalette } from '../utils/sky-palette';
 import { WEATHER_ATMOSPHERE } from '../utils/weather-atmosphere';
-import { SUN_AZIMUTH_RAD } from '../utils/landscape';
+import {
+  moonCoordinates,
+  nightFactor,
+  shortestHourDelta,
+  sunCoordinates,
+} from '../utils/celestial';
 import type { SectorStateOverride } from '../utils/placed-models-geometry';
 import { usePlacedClearings } from '../hooks/use-site-zones';
 import { accessPathClearings, accessPaths } from '../utils/access-paths';
@@ -44,14 +58,17 @@ import { ApplianceMarkers, MarkerDragGhost } from './appliance-markers';
 import { DistributionLines } from './distribution-lines';
 import { VillageBuildings } from './buildings';
 import { CameraController } from './camera-controller';
-import { SkyBackdrop } from './sky-backdrop';
+import { SkyBackdrop, SKY_RADIUS } from './sky-backdrop';
 import { Vegetation } from './vegetation';
+import { WindTurbines } from './wind-turbines';
+import { LakeGrille } from './lake-grille';
 import { Vehicles } from './vehicles';
 import { PostEffects } from './post-effects';
 import { QualityProbe } from './quality-probe';
 import { FireEffects } from './fire-effects';
 import { WeatherEffects } from './weather-effects';
 import { BakedContactShadows, ResumeOnVisible, ShadowBake } from './render-control';
+import { ImmersionLabels } from './immersion-labels';
 import { VillageScenePlaceholder } from './scene-placeholder';
 import { CanvasCreationBoundary } from './canvas-creation-boundary';
 
@@ -77,7 +94,7 @@ function DraggableApplianceMarkers({
   tagOf: (m: ApplianceMarkerSceneModel) => string;
   priorityLabels?: Record<Priority, string>;
   aiBadgeLabel?: string | undefined;
-  htmlPortal?: RefObject<HTMLElement | null>;
+  htmlPortal?: RefObject<HTMLElement | null> | null;
   tier?: 'high' | 'low';
   sectorStatuses?: Partial<Record<SectorId, SectorStateOverride>>;
 }) {
@@ -107,6 +124,233 @@ function DraggableApplianceMarkers({
 }
 
 const KEY_LIGHT_DISTANCE = 70;
+
+interface CelestialLightingProps {
+  timeIndex: number;
+  isDaytime: boolean;
+  weather: WeatherId;
+  palette: SkyPalette;
+  quality: 'high' | 'low';
+  weatherMotion: boolean;
+  nightProgress: number;
+}
+
+/**
+ * Physical celestial lighting and sky orchestrator (06:00 to 18:00 day arc, 18:00 to 06:00 night arc):
+ * - Sun sweeps from side (+X) at 06:00 -> overhead above camera (+Y, +Z) at 12:00 -> behind camera (+Z) at 18:00.
+ * - Key light follows the exact same unit vector so shadows physically reflect the sun's trajectory.
+ * - In useFrame, smoothly glides the sun and shadows at 60 FPS without React re-renders or allocations.
+ */
+function CelestialLighting({
+  timeIndex,
+  isDaytime,
+  weather,
+  palette,
+  quality,
+  weatherMotion,
+  nightProgress,
+}: CelestialLightingProps) {
+  const keyLightRef = useRef<THREE.DirectionalLight>(null);
+  const fillLightRef = useRef<THREE.DirectionalLight>(null);
+  const hemiLightRef = useRef<THREE.HemisphereLight>(null);
+  const sunGroupRef = useRef<THREE.Group>(null);
+  const moonGroupRef = useRef<THREE.Group>(null);
+  const skyUniformsRef = useRef<{
+    uZenith: THREE.IUniform<THREE.Color>;
+    uHorizon: THREE.IUniform<THREE.Color>;
+    uGlow: THREE.IUniform<THREE.Color>;
+    uSunDir: THREE.IUniform<THREE.Vector3>;
+  } | null>(null);
+  const cloudUniformsRef = useRef<{
+    uSunDir: THREE.IUniform<THREE.Vector3>;
+    uSunColor: THREE.IUniform<THREE.Color>;
+    uSkyColor: THREE.IUniform<THREE.Color>;
+    uGroundColor: THREE.IUniform<THREE.Color>;
+    uSunGlow: THREE.IUniform<THREE.Color>;
+  } | null>(null);
+  const currentHourRef = useRef(timeIndex);
+
+  const isPlaying = useSimulationStore((s) => s.isPlaying);
+  const playbackSpeed = useSimulationStore((s) => s.playbackSpeed);
+
+  const sun = useMemo(() => sunCoordinates(timeIndex), [timeIndex]);
+  const moon = useMemo(() => moonCoordinates(timeIndex), [timeIndex]);
+  const activeDirection = isDaytime ? sun.keyDirection : moon.keyDirection;
+  const initialKeyLightPos = useMemo<[number, number, number]>(
+    () => [
+      activeDirection[0] * KEY_LIGHT_DISTANCE,
+      activeDirection[1] * KEY_LIGHT_DISTANCE,
+      activeDirection[2] * KEY_LIGHT_DISTANCE,
+    ],
+    [activeDirection]
+  );
+
+  useLayoutEffect(() => {
+    if (keyLightRef.current) {
+      keyLightRef.current.position.set(...initialKeyLightPos);
+    }
+  }, [initialKeyLightPos]);
+
+  useFrame((state, delta) => {
+    if (!weatherMotion) return;
+    const dt = Math.min(delta, 0.1);
+
+    if (isPlaying) {
+      // Continuous constant-speed rotation matching playback speed (2.0 hrs/sec at 1x)
+      const speedMult = typeof playbackSpeed === 'number' && playbackSpeed > 0 ? playbackSpeed : 1;
+      const hoursPerSec = speedMult * 2.0; // 500ms base tick = 2.0 hrs/sec
+      currentHourRef.current = (((currentHourRef.current + dt * hoursPerSec) % 24) + 24) % 24;
+
+      // Soft sync against store timeIndex to avoid accumulated drift
+      const drift = shortestHourDelta(currentHourRef.current, timeIndex);
+      if (Math.abs(drift) > 1.5) {
+        currentHourRef.current = timeIndex;
+      } else if (Math.abs(drift) > 0.05) {
+        currentHourRef.current += drift * dt * 2.0;
+      }
+    } else {
+      // Manual scrub or pause: silky smooth exponential ease-out to target hour
+      const diff = shortestHourDelta(currentHourRef.current, timeIndex);
+      if (Math.abs(diff) > 0.0005) {
+        const step = diff * (1 - Math.exp(-dt * 12.0));
+        currentHourRef.current = (((currentHourRef.current + step) % 24) + 24) % 24;
+      } else {
+        currentHourRef.current = timeIndex;
+      }
+    }
+
+    const curHour = currentHourRef.current;
+    const curIsDay = curHour >= 6 && curHour <= 18;
+    const celestial = curIsDay ? sunCoordinates(curHour) : moonCoordinates(curHour);
+    const [dx, dy, dz] = celestial.direction;
+
+    // Update light position matching physical trajectory
+    if (keyLightRef.current) {
+      keyLightRef.current.position.set(
+        dx * KEY_LIGHT_DISTANCE,
+        dy * KEY_LIGHT_DISTANCE,
+        dz * KEY_LIGHT_DISTANCE
+      );
+    }
+
+    // Update sun disc position smoothly
+    if (curIsDay && sunGroupRef.current) {
+      sunGroupRef.current.position.set(
+        dx * SKY_RADIUS * 0.9,
+        dy * SKY_RADIUS * 0.9,
+        dz * SKY_RADIUS * 0.9
+      );
+    }
+
+    // Update moon disc position smoothly
+    if (!curIsDay && moonGroupRef.current) {
+      moonGroupRef.current.position.set(
+        dx * SKY_RADIUS * 0.88,
+        dy * SKY_RADIUS * 0.88,
+        dz * SKY_RADIUS * 0.88
+      );
+    }
+
+    // Compute dynamic, continuous color progression (sunrise -> midday -> sunset -> night)
+    const curElevation = curIsDay ? Math.sin(((curHour - 6) / 12) * Math.PI) : 0;
+    const curPalette = applyOvercast(
+      skyPalette(curElevation, curIsDay),
+      WEATHER_ATMOSPHERE[weather].overcast,
+      curIsDay
+    );
+
+    // Smoothly update light colors & intensities
+    if (keyLightRef.current) {
+      keyLightRef.current.color.set(curPalette.sun);
+      keyLightRef.current.intensity = curPalette.keyIntensity;
+    }
+    if (hemiLightRef.current) {
+      hemiLightRef.current.color.set(curPalette.hemiSky);
+      hemiLightRef.current.groundColor.set(curPalette.hemiGround);
+      hemiLightRef.current.intensity = curPalette.hemiIntensity;
+    }
+    if (fillLightRef.current) {
+      fillLightRef.current.intensity = curPalette.hemiIntensity * 0.45;
+    }
+
+    // Smoothly update sky & cloud uniforms
+    if (skyUniformsRef.current) {
+      skyUniformsRef.current.uSunDir.value.set(dx, dy, dz);
+      skyUniformsRef.current.uZenith.value.set(curPalette.zenith);
+      skyUniformsRef.current.uHorizon.value.set(curPalette.horizon);
+      skyUniformsRef.current.uGlow.value.set(curPalette.sunGlow);
+    }
+    if (cloudUniformsRef.current) {
+      cloudUniformsRef.current.uSunDir.value.set(dx, dy, dz);
+      cloudUniformsRef.current.uSunColor.value.set(curPalette.sun);
+      cloudUniformsRef.current.uSkyColor.value.set(curPalette.hemiSky);
+      cloudUniformsRef.current.uGroundColor.value.set(curPalette.hemiGround);
+      cloudUniformsRef.current.uSunGlow.value.set(curPalette.sunGlow);
+    }
+
+    const diff = shortestHourDelta(currentHourRef.current, timeIndex);
+    if (isPlaying || Math.abs(diff) > 0.0005) {
+      // 60 FPS real-time smooth shadow updates while in motion
+      state.gl.shadowMap.needsUpdate = true;
+      state.invalidate();
+    }
+  });
+
+  return (
+    <>
+      <hemisphereLight
+        ref={hemiLightRef}
+        args={[palette.hemiSky, palette.hemiGround, palette.hemiIntensity]}
+      />
+      <directionalLight
+        ref={keyLightRef}
+        color={palette.sun}
+        intensity={palette.keyIntensity}
+        castShadow={quality === 'high'}
+        shadow-mapSize={[2048, 2048]}
+        shadow-bias={-0.0004}
+        shadow-normalBias={0.09}
+        shadow-camera-left={-34}
+        shadow-camera-right={34}
+        shadow-camera-top={34}
+        shadow-camera-bottom={-34}
+        shadow-camera-near={10}
+        shadow-camera-far={160}
+      />
+      {/* Cool sky fill from the opposite side keeps shadows readable. */}
+      <directionalLight
+        ref={fillLightRef}
+        position={[-40, 30, 40]}
+        color="#8fa3d9"
+        intensity={palette.hemiIntensity * 0.45}
+      />
+
+      <SkyBackdrop
+        palette={palette}
+        sunDirection={sun.displayDirection}
+        moonDirection={moon.displayDirection}
+        isDaytime={isDaytime}
+        nightProgress={nightProgress}
+        detail={quality}
+        animate={weatherMotion}
+        sunGroupRef={sunGroupRef}
+        moonGroupRef={moonGroupRef}
+        skyUniformsRef={skyUniformsRef}
+      />
+      <WeatherEffects
+        weather={weather}
+        isDaytime={isDaytime}
+        quality={quality}
+        animate={weatherMotion}
+        palette={palette}
+        sunDirection={isDaytime ? sun.displayDirection : moon.displayDirection}
+        timeIndex={timeIndex}
+        cloudUniformsRef={cloudUniformsRef}
+      />
+    </>
+  );
+}
+
 /** Trees are cleared a bit past the yard so their canopies don't hang over it. */
 const TREE_CANOPY_MARGIN = 0.8;
 /** Smallest drawn yard (scene units): the red ground must show around a small object. */
@@ -131,6 +375,8 @@ export interface VillageCanvasProps {
   rendererRef?: RefObject<WebGLRenderer | null>;
   /** An XR session is presenting: continuous loop, no post-processing, orbit off, VR viewpoint. */
   xrActive?: boolean;
+  /** Immersion mode active (VR or Fullscreen): renders interactive in-air option and 3D tagged labels. */
+  immersionActive?: boolean;
   className?: string;
 }
 
@@ -146,6 +392,7 @@ export function VillageCanvas({
   quality: qualityOverride,
   rendererRef,
   xrActive = false,
+  immersionActive = false,
   className,
 }: VillageCanvasProps) {
   const sceneQuality = useSceneQuality();
@@ -171,6 +418,7 @@ export function VillageCanvas({
   const [warmTarget, setWarmTarget] = useState<WarmupTarget | null>(null);
   const warm = useShaderWarmup(warmTarget);
   const high = quality === 'high';
+  const isImmersion = Boolean(xrActive || immersionActive || cameraPreset === 'immersion');
 
   const sectorStatuses = useMemo(() => {
     const map: Partial<Record<SectorId, SectorStateOverride>> = {};
@@ -220,6 +468,8 @@ export function VillageCanvas({
 
   // Fixed parent for in-scene HTML labels, so drei's <Html> never re-targets after mount.
   const htmlPortal = useRef<HTMLDivElement>(null);
+  // In immersion mode (VR or full-immersion view), suppress 2D DOM HTML overlays in favor of 3D spatial labels.
+  const activeHtmlPortal = isImmersion ? null : htmlPortal;
   // Off-screen canvas: stop the frame loop (no hidden 60 fps render while reading the page).
   const inView = useInView(htmlPortal);
   // Lost WebGL context → placeholder, then a fresh canvas (never a white box).
@@ -255,30 +505,21 @@ export function VillageCanvas({
   );
   // Clouds drift and rain falls whenever motion is allowed (even on a modified run).
   const weatherMotion = !reducedMotion && !softwareGl;
-  const sunDirection = useMemo<[number, number, number]>(() => {
-    const alt = (palette.sunAltitudeDeg * Math.PI) / 180;
-    return [
-      Math.cos(alt) * Math.sin(SUN_AZIMUTH_RAD),
-      Math.sin(alt),
-      -Math.cos(alt) * Math.cos(SUN_AZIMUTH_RAD),
-    ];
-  }, [palette.sunAltitudeDeg]);
-  // Visible sun / sky glow: low on the horizon so the sunset reads in frame.
-  const skySunDirection = useMemo<[number, number, number]>(() => {
-    const alt = (palette.sunDisplayAltitudeDeg * Math.PI) / 180;
-    return [
-      Math.cos(alt) * Math.sin(SUN_AZIMUTH_RAD),
-      Math.sin(alt),
-      -Math.cos(alt) * Math.cos(SUN_AZIMUTH_RAD),
-    ];
-  }, [palette.sunDisplayAltitudeDeg]);
+
+  // Celestial trajectory: Sun arcs 0° to 180° by day, Moon arcs 0° to 180° by night.
+  const sun = useMemo(() => sunCoordinates(model.timeIndex), [model.timeIndex]);
+  const moon = useMemo(() => moonCoordinates(model.timeIndex), [model.timeIndex]);
+  const nightProgress = useMemo(() => nightFactor(model.timeIndex), [model.timeIndex]);
+
+  // Active key light: sun by day, moon by night (matches shadow casting to visible orb).
+  const activeKeyDirection = model.isDaytime ? sun.keyDirection : moon.keyDirection;
   const keyLightPos = useMemo<[number, number, number]>(
     () => [
-      sunDirection[0] * KEY_LIGHT_DISTANCE,
-      sunDirection[1] * KEY_LIGHT_DISTANCE,
-      sunDirection[2] * KEY_LIGHT_DISTANCE,
+      activeKeyDirection[0] * KEY_LIGHT_DISTANCE,
+      activeKeyDirection[1] * KEY_LIGHT_DISTANCE,
+      activeKeyDirection[2] * KEY_LIGHT_DISTANCE,
     ],
-    [sunDirection]
+    [activeKeyDirection]
   );
   // Shadow casters are static: re-bake the sun shadow map only when light or data change.
   const shadowBakeKey = useMemo(() => [keyLightPos, model] as const, [keyLightPos, model]);
@@ -289,7 +530,12 @@ export function VillageCanvas({
     <div
       ref={htmlPortal}
       // `isolate`: drei labels use z-index up to 16 777 271; keep them under the HUD and the copilot terminal.
-      className={cn('relative isolate', className)}
+      className={cn(
+        'relative isolate',
+        isImmersion &&
+          '[&_.pointer-events-auto.select-none]:hidden [&>div:not(:first-child)]:pointer-events-none',
+        className
+      )}
       style={{ width: '100%', height: '100%' }}
     >
       {perfEnabled && perf && (
@@ -329,34 +575,14 @@ export function VillageCanvas({
           />
 
           <hemisphereLight args={[palette.hemiSky, palette.hemiGround, palette.hemiIntensity]} />
-          <directionalLight
-            position={keyLightPos}
-            color={palette.sun}
-            intensity={palette.keyIntensity}
-            castShadow={high}
-            shadow-mapSize={[2048, 2048]}
-            shadow-bias={-0.0004}
-            shadow-normalBias={0.09}
-            shadow-camera-left={-34}
-            shadow-camera-right={34}
-            shadow-camera-top={34}
-            shadow-camera-bottom={-34}
-            shadow-camera-near={10}
-            shadow-camera-far={160}
-          />
-          {/* Cool sky fill from the opposite side keeps shadows readable. */}
-          <directionalLight
-            position={[-40, 30, 40]}
-            color="#8fa3d9"
-            intensity={palette.hemiIntensity * 0.45}
-          />
-
-          <SkyBackdrop palette={palette} sunDirection={skySunDirection} detail={quality} />
-          <WeatherEffects
-            weather={model.weather}
+          <CelestialLighting
+            timeIndex={model.timeIndex}
             isDaytime={model.isDaytime}
+            weather={model.weather}
+            palette={palette}
             quality={quality}
-            animate={weatherMotion}
+            weatherMotion={weatherMotion}
+            nightProgress={nightProgress}
           />
           <FireEffects buildings={model.buildings} quality={quality} animate={weatherMotion} />
 
@@ -368,6 +594,15 @@ export function VillageCanvas({
           <PlacedYards clearings={yards} paths={tracks} />
           <Suspense fallback={null}>
             <Vegetation quality={quality} clearings={treeClearings} />
+            <WindTurbines lampGlow={palette.lampGlow} />
+            <LakeGrille
+              lampGlow={palette.lampGlow}
+              hasPower={
+                model.battery.socPct > 5 ||
+                model.solar.currentKw > 0.1 ||
+                Object.values(model.buildings).some((b) => b.servedKw > 0.05)
+              }
+            />
             <Vehicles />
             {/* Inside the casters' Suspense so the first bake includes the loaded trees. */}
             {high && <ShadowBake bakeKey={shadowBakeKey} />}
@@ -378,14 +613,14 @@ export function VillageCanvas({
             model={model.solar}
             nameLabel={tSim('solarArray')}
             outputLabel={`${tSim('liveOutput')} : ${fmtKw(model.solar.currentKw)}`}
-            htmlPortal={htmlPortal}
+            htmlPortal={activeHtmlPortal}
           />
           <BatteryUnit
             model={model.battery}
             statusLabels={batteryStatusLabels}
             socLabel={socLabel}
             nameLabel={tSim('bessBattery')}
-            htmlPortal={htmlPortal}
+            htmlPortal={activeHtmlPortal}
           />
           <DispatchControllerUnit
             model={model.controller}
@@ -396,7 +631,7 @@ export function VillageCanvas({
             hasResult={model.hasResult}
             onFocus={() => onSelectPreset?.('controller')}
             nameLabel={tDiagram('controller.shortTitle')}
-            htmlPortal={htmlPortal}
+            htmlPortal={activeHtmlPortal}
           />
           {model.hasResult && (
             <FeederTags
@@ -404,7 +639,7 @@ export function VillageCanvas({
               buildings={model.buildings}
               tones={feeders.tones}
               titles={feeders.titles}
-              htmlPortal={htmlPortal}
+              htmlPortal={activeHtmlPortal}
             />
           )}
           {perfEnabled && <SceneStatsProbe stats={stats} />}
@@ -421,7 +656,7 @@ export function VillageCanvas({
             tagOf={(m) => tSim('applianceBadgeTitle', { name: m.name, quantity: m.quantity })}
             priorityLabels={priorityLabels}
             aiBadgeLabel={aiInControl ? tDispatch('aiBadge') : undefined}
-            htmlPortal={htmlPortal}
+            htmlPortal={activeHtmlPortal}
             tier={quality}
             sectorStatuses={sectorStatuses}
           />
@@ -433,9 +668,21 @@ export function VillageCanvas({
             priorityLabels={priorityLabels}
             disconnectedLabel={tDiagram('status.disconnected')}
             aiBadgeLabel={aiInControl ? tDispatch('aiBadge') : undefined}
-            htmlPortal={htmlPortal}
+            htmlPortal={activeHtmlPortal}
             lampGlow={palette.lampGlow}
           />
+
+          {/* Immersion mode interactive in-air option & 3D tagged village type labels */}
+          {isImmersion && (
+            <ImmersionLabels
+              model={model}
+              selectedSector={selectedSector}
+              onSelectSector={onSelectSector}
+              sectorNames={sectorNames}
+              priorityLabels={priorityLabels}
+              xrActive={xrActive}
+            />
+          )}
 
           {/* No post-processing in XR: EffectComposer breaks stereo rendering. */}
           {!xrActive &&

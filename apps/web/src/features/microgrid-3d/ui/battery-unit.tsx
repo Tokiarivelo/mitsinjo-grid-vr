@@ -19,7 +19,7 @@ export interface BatteryUnitProps {
   socLabel: (pct: string) => string;
   nameLabel?: string;
   /** Stable DOM parent for the label (see VillageCanvas). */
-  htmlPortal?: RefObject<HTMLElement | null>;
+  htmlPortal?: RefObject<HTMLElement | null> | null;
 }
 
 /** Fence sides: [x, z, length, rotationY], leaves a gate gap at the front. */
@@ -162,33 +162,37 @@ export function BatteryUnit({
       </mesh>
 
       {/* 6. In-Scene Floating 3D Telemetry Badge */}
-      <Html
-        position={[0, 3.4, 0]}
-        center
-        distanceFactor={18}
-        portal={htmlPortal as RefObject<HTMLElement>}
-        className="pointer-events-auto select-none"
-      >
-        <div className="flex items-center gap-2 px-3 py-1.5 rounded-full shadow-xl backdrop-blur-md bg-surface/90 border border-border text-[11px] font-sans text-text-primary transition-all whitespace-nowrap">
-          <div className="w-5 h-5 rounded-full bg-battery-green/20 flex items-center justify-center shrink-0 border border-battery-green/40">
-            <Battery className="w-3.5 h-3.5 text-battery-green" aria-hidden="true" />
-          </div>
-          <div className="flex flex-col leading-tight">
-            <span className="font-semibold text-text-primary text-[11px]">{nameLabel}</span>
-            <div className="flex items-center gap-1.5 font-mono text-[10px]">
-              <span
-                className={cn(
-                  'w-1.5 h-1.5 rounded-full shrink-0',
-                  BATTERY_STATUS_BG_CLASS[statusColor]
-                )}
-                aria-hidden="true"
-              />
-              <span className="text-battery-green font-medium">{socLabel(fmtPct(socPct, 0))}</span>
-              <span className="text-text-muted">· {statusLabels[statusColor]}</span>
+      {htmlPortal !== null && (
+        <Html
+          position={[0, 3.4, 0]}
+          center
+          distanceFactor={18}
+          portal={htmlPortal as RefObject<HTMLElement>}
+          className="pointer-events-auto select-none"
+        >
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full shadow-xl backdrop-blur-md bg-surface/90 border border-border text-[11px] font-sans text-text-primary transition-all whitespace-nowrap">
+            <div className="w-5 h-5 rounded-full bg-battery-green/20 flex items-center justify-center shrink-0 border border-battery-green/40">
+              <Battery className="w-3.5 h-3.5 text-battery-green" aria-hidden="true" />
+            </div>
+            <div className="flex flex-col leading-tight">
+              <span className="font-semibold text-text-primary text-[11px]">{nameLabel}</span>
+              <div className="flex items-center gap-1.5 font-mono text-[10px]">
+                <span
+                  className={cn(
+                    'w-1.5 h-1.5 rounded-full shrink-0',
+                    BATTERY_STATUS_BG_CLASS[statusColor]
+                  )}
+                  aria-hidden="true"
+                />
+                <span className="text-battery-green font-medium">
+                  {socLabel(fmtPct(socPct, 0))}
+                </span>
+                <span className="text-text-muted">· {statusLabels[statusColor]}</span>
+              </div>
             </div>
           </div>
-        </div>
-      </Html>
+        </Html>
+      )}
     </group>
   );
 }

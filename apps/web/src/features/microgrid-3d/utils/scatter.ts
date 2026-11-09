@@ -70,10 +70,10 @@ export function scatterVegetation({
     const z = Math.sin(angle) * r;
     const density = fbm2d(x * 0.06, z * 0.06, 11);
     // Thin the forest in the camera foreground (south of the village) so it never hides it.
-    const foreground = z > 10 && Math.abs(x) < 34 ? 0.35 : 1;
+    const foreground = z > 6 && Math.abs(x) < 28 ? 0.08 : z > 10 && Math.abs(x) < 34 ? 0.35 : 1;
     if (rand() > (0.15 + density * 1.1) * foreground) continue;
     if (isBlocked(x, z, 0.4)) continue;
-    const isPalm = rand() < 0.14;
+    const isPalm = z > 6 && Math.abs(x) < 28 ? false : rand() < 0.14;
     const model = isPalm ? pick(PALM_MODELS, rand()) : pick(BROADLEAF_MODELS, rand());
     items.push({
       model,
@@ -96,8 +96,19 @@ export function scatterVegetation({
     if (Math.hypot(x, z) > FLAT_RADIUS + 2) continue;
     if (isBlocked(x, z, 0.3)) continue;
     const roll = rand();
-    const kind: NatureKind =
-      roll < 0.3 ? 'palm' : roll < 0.72 ? 'bush' : roll < 0.92 ? 'broadleaf' : 'rock';
+    // Relieve camera foreground corridor (z > 2.0 && Math.abs(x) < 18): keep open with low bushes/rocks
+    const isForegroundViewCorridor = z > 2.0 && Math.abs(x) < 18;
+    const kind: NatureKind = isForegroundViewCorridor
+      ? roll < 0.65
+        ? 'bush'
+        : 'rock'
+      : roll < 0.3
+        ? 'palm'
+        : roll < 0.72
+          ? 'bush'
+          : roll < 0.92
+            ? 'broadleaf'
+            : 'rock';
     const model =
       kind === 'palm'
         ? pick(PALM_MODELS, rand())

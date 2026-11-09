@@ -63,6 +63,7 @@ describe('startImmersiveVRSession', () => {
     expect(renderer.xr.enabled).toBe(true);
     expect(requestSession).toHaveBeenCalledWith(XR_IMMERSIVE_VR, XR_SESSION_INIT);
     expect(XR_SESSION_INIT.optionalFeatures).toContain('local-floor');
+    expect(XR_SESSION_INIT.optionalFeatures).toContain('hand-tracking');
     expect(setSession).toHaveBeenCalledWith(session);
   });
 

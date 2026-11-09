@@ -155,3 +155,103 @@ export function paddyTexture(): THREE.Texture {
     }
   });
 }
+
+/** Leaf vein pattern for natural foliage relief. */
+export function leafVeinTexture(): THREE.Texture {
+  return make('leaf-vein', 64, 64, (g) => {
+    g.fillStyle = '#808080';
+    g.fillRect(0, 0, 64, 64);
+    // Central midrib
+    g.strokeStyle = '#a0a0a0';
+    g.lineWidth = 2;
+    g.beginPath();
+    g.moveTo(32, 0);
+    g.lineTo(32, 64);
+    g.stroke();
+    // Angled lateral veins
+    g.strokeStyle = '#909090';
+    g.lineWidth = 1;
+    for (let y = 4; y < 64; y += 8) {
+      g.beginPath();
+      g.moveTo(32, y);
+      g.lineTo(0, y + 12);
+      g.moveTo(32, y);
+      g.lineTo(64, y + 12);
+      g.stroke();
+    }
+  });
+}
+
+/** Architectural vertical timber battens (cedar / honey slats with dark shadow gaps). */
+export function timberSlatTexture(): THREE.Texture {
+  return make('timber-slat', 128, 128, (g) => {
+    // Warm honey / golden cedar base
+    g.fillStyle = '#c48849';
+    g.fillRect(0, 0, 128, 128);
+    // Vertical wood grain fibers
+    const rand = mulberry32(0x82b49);
+    for (let x = 0; x < 128; x++) {
+      const v = 0.92 + 0.16 * rand();
+      g.fillStyle = `rgba(0,0,0,${0.08 * (1 - v)})`;
+      g.fillRect(x, 0, 1, 128);
+    }
+    // Vertical shadow joints every 16px (slats of width 14px, gap of 2px)
+    for (let x = 0; x < 128; x += 16) {
+      g.fillStyle = '#261b12';
+      g.fillRect(x, 0, 2, 128);
+      // Highlight on the left edge of next slat
+      g.fillStyle = 'rgba(255,230,190,0.22)';
+      g.fillRect(x + 2, 0, 1, 128);
+    }
+  });
+}
+
+/** Architectural horizontal timber battens (cedar / honey slats with dark shadow gaps). */
+export function horizontalTimberSlatTexture(): THREE.Texture {
+  return make('horizontal-timber-slat', 128, 128, (g) => {
+    // Warm honey / golden cedar base
+    g.fillStyle = '#be8347';
+    g.fillRect(0, 0, 128, 128);
+    // Horizontal wood grain fibers
+    const rand = mulberry32(0x9a3e1);
+    for (let y = 0; y < 128; y++) {
+      const v = 0.92 + 0.16 * rand();
+      g.fillStyle = `rgba(0,0,0,${0.08 * (1 - v)})`;
+      g.fillRect(0, y, 128, 1);
+    }
+    // Horizontal shadow joints every 16px (slats of height 14px, gap of 2px)
+    for (let y = 0; y < 128; y += 16) {
+      g.fillStyle = '#261b12';
+      g.fillRect(0, y, 128, 2);
+      // Highlight on the top edge of next slat
+      g.fillStyle = 'rgba(255,230,190,0.22)';
+      g.fillRect(0, y + 2, 128, 1);
+    }
+  });
+}
+
+/** BIPV full-roof solar photovoltaic glass tiles for modern eco-pavilions. */
+export function bipvRoofTexture(): THREE.Texture {
+  return make('bipv-roof', 128, 128, (g) => {
+    // Dark frame / backsheet
+    g.fillStyle = '#0f1722';
+    g.fillRect(0, 0, 128, 128);
+    // Silicon wafer cells with antireflective blue coating
+    const cols = 8;
+    const rows = 8;
+    const cw = 128 / cols;
+    const ch = 128 / rows;
+    for (let i = 0; i < cols; i++) {
+      for (let j = 0; j < rows; j++) {
+        // Deep monocrystalline navy blue with subtle wafer variation
+        const b = 52 + ((i * 5 + j * 11) % 14);
+        g.fillStyle = `rgb(16, 28, ${b})`;
+        g.fillRect(i * cw + 1, j * ch + 1, cw - 2, ch - 2);
+        // Fine silver busbar lines
+        g.fillStyle = 'rgba(200, 225, 250, 0.32)';
+        g.fillRect(i * cw + 1, j * ch + ch * 0.33, cw - 2, 0.6);
+        g.fillRect(i * cw + 1, j * ch + ch * 0.66, cw - 2, 0.6);
+      }
+    }
+  });
+}

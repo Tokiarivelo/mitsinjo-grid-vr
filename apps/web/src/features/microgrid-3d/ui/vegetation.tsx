@@ -2,6 +2,7 @@
 
 import { useLayoutEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
+import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { useGLTF } from '@react-three/drei';
 import {
   clearingItemScale,
@@ -12,6 +13,16 @@ import {
 } from '../utils/scatter';
 import type { SceneQuality } from '../hooks/use-scene-quality';
 import { CANOPY_VARIANTS, createCanopyTree, type CanopyVariant } from '../utils/canopy-tree';
+import {
+  PROCEDURAL_PALM_VARIANTS,
+  createProceduralPalm,
+  type ProceduralPalmVariant,
+} from '../utils/procedural-palm';
+import {
+  PROCEDURAL_SHRUB_VARIANTS,
+  createProceduralShrub,
+  type ProceduralShrubVariant,
+} from '../utils/procedural-shrub';
 import { toFloatGeometry } from '../utils/float-geometry';
 import type { KeepOutZone } from '../utils/landscape';
 
@@ -37,18 +48,22 @@ interface ModelPart {
 
 const LEAF_MAT = new THREE.MeshStandardMaterial({
   color: '#ffffff',
-  roughness: 0.82,
-  metalness: 0,
+  roughness: 0.62,
+  metalness: 0.04,
 });
-const BARK_MAT = new THREE.MeshStandardMaterial({ color: '#6b4a32', roughness: 0.9 });
-const ROCK_MAT = new THREE.MeshStandardMaterial({ color: '#8a8276', roughness: 0.92 });
+const BARK_MAT = new THREE.MeshStandardMaterial({
+  color: '#593e28',
+  roughness: 0.85,
+  metalness: 0.05,
+});
+const ROCK_MAT = new THREE.MeshStandardMaterial({ color: '#827a6e', roughness: 0.9 });
 /** Procedural canopies carry a vertex shade (dark underside); GLB foliage has no colors. */
 const CANOPY_MAT = new THREE.MeshStandardMaterial({
   color: '#ffffff',
   vertexColors: true,
-  roughness: 0.85,
-  metalness: 0,
-  flatShading: true,
+  roughness: 0.68,
+  metalness: 0.02,
+  flatShading: false,
 });
 const MATERIAL_BY_ROLE: Record<PartRole, THREE.Material> = {
   leaf: LEAF_MAT,
@@ -96,6 +111,34 @@ function canopyParts(variant: CanopyVariant, detail: number): ModelPart[] {
   return parts;
 }
 
+const palmCache = new Map<string, ModelPart[]>();
+function palmParts(variant: ProceduralPalmVariant, detail: number): ModelPart[] {
+  const key = `${variant}:${detail}`;
+  const hit = palmCache.get(key);
+  if (hit) return hit;
+  const { foliage, trunk } = createProceduralPalm(variant, detail);
+  const parts: ModelPart[] = [
+    { geometry: foliage, role: 'leaf' },
+    { geometry: trunk, role: 'bark' },
+  ];
+  palmCache.set(key, parts);
+  return parts;
+}
+
+const shrubCache = new Map<string, ModelPart[]>();
+function shrubParts(variant: ProceduralShrubVariant, detail: number): ModelPart[] {
+  const key = `${variant}:${detail}`;
+  const hit = shrubCache.get(key);
+  if (hit) return hit;
+  const { foliage, stem } = createProceduralShrub(variant, detail);
+  const parts: ModelPart[] = [
+    { geometry: foliage, role: 'leaf' },
+    { geometry: stem, role: 'bark' },
+  ];
+  shrubCache.set(key, parts);
+  return parts;
+}
+
 /** Bake each model's meshes into base-at-origin geometries, tagged by role. */
 function extractParts(scene: THREE.Object3D, name: string, kind: NatureKind): ModelPart[] {
   const node = scene.getObjectByName(name);
@@ -106,7 +149,12 @@ function extractParts(scene: THREE.Object3D, name: string, kind: NatureKind): Mo
   node.traverse((o) => {
     const mesh = o as THREE.Mesh;
     if (!mesh.isMesh) return;
-    const geometry = toFloatGeometry(mesh.geometry);
+    let geometry = toFloatGeometry(mesh.geometry);
+    // Smooth Kenney geometries: weld duplicate vertices and compute smooth vertex normals
+    if (kind === 'palm' || kind === 'bush' || kind === 'broadleaf') {
+      geometry = mergeVertices(geometry, 0.005);
+      geometry.computeVertexNormals();
+    }
     geometry.applyMatrix4(mesh.matrixWorld);
     geometry.computeBoundingBox();
     if (geometry.boundingBox) box.union(geometry.boundingBox);
@@ -116,7 +164,6 @@ function extractParts(scene: THREE.Object3D, name: string, kind: NatureKind): Mo
   const center = box.getCenter(new THREE.Vector3());
   for (const p of parts) {
     p.geometry.translate(-center.x, -box.min.y, -center.z);
-    // Kenney meshes are quantized; normals stay faceted (low-poly look).
   }
   return parts;
 }
@@ -198,10 +245,14 @@ export function Vegetation({ quality = 'high', clearings }: VegetationProps) {
     // A model always maps to one kind (see scatter), so the first item's kind holds.
     return [...byKey.entries()].map(([key, { model, near, items: list }]) => {
       const kind = list[0]?.kind ?? 'broadleaf';
-      const detail = quality === 'high' && near ? 1 : 0;
+      const detail = quality === 'high' && near ? 2 : 1;
       const parts = (CANOPY_VARIANTS as readonly string[]).includes(model)
         ? canopyParts(model as CanopyVariant, detail)
-        : extractParts(scene, model, kind);
+        : (PROCEDURAL_PALM_VARIANTS as readonly string[]).includes(model)
+          ? palmParts(model as ProceduralPalmVariant, detail)
+          : (PROCEDURAL_SHRUB_VARIANTS as readonly string[]).includes(model)
+            ? shrubParts(model as ProceduralShrubVariant, detail)
+            : extractParts(scene, model, kind);
       return { key, kind, items: list, parts, castShadow: quality === 'high' && near };
     });
   }, [scene, quality]);

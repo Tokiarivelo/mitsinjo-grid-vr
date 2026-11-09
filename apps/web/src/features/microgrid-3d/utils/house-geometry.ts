@@ -1,6 +1,11 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { createHipRoofGeometry } from './hip-roof';
+import {
+  createGableRoofGeometry,
+  createGableWallGeometry,
+  createCottageRoofGeometry,
+} from './gable-roof';
 import { mergeParts, type Part } from './merge-parts';
 
 /** One house of a cluster. Colors are sRGB hex; position/rotation place it in the cluster. */
@@ -18,6 +23,16 @@ export interface HouseSpec {
   veranda?: boolean;
   position?: [number, number, number];
   rotationY?: number;
+  /** Architectural roof profile: 'gable' for modern eco-pavilions, 'hip' for traditional 4-slope. */
+  roofStyle?: 'hip' | 'gable';
+  /** Asymmetrical ridge offset along Z (negative shifts ridge backwards, expanding the front solar roof slope). */
+  ridgeZOffset?: number;
+  /** Outdoor terrace patio furniture (timber dining table + benches + stone curb). */
+  deckFurniture?: boolean;
+  /** Vertical timber slat battens (claire-voie) on the facade flanking panoramic glass. */
+  slatCladding?: boolean;
+  /** Charming cottage architecture (Image 1): chimney, arched attic window, gabled entrance porch with steps and railings. */
+  cottage?: boolean;
 }
 
 /**
@@ -35,7 +50,7 @@ export interface HouseClusterGeometry {
 /** Number of meshes (draw calls) a cluster renders. */
 export function houseClusterDrawCalls(houses: readonly HouseSpec[]): number {
   if (houses.length === 0) return 0;
-  return houses.some((h) => h.veranda) ? 5 : 4;
+  return houses.some((h) => h.veranda || h.deckFurniture || h.cottage) ? 5 : 4;
 }
 
 const tmpColor = new THREE.Color();
@@ -59,6 +74,94 @@ function placement(h: HouseSpec): THREE.Matrix4 {
 }
 
 function windowParts(h: HouseSpec): Part[] {
+  // 1. Classic Cottage Architecture (Image 1): Multi-pane sash windows & arched attic window
+  if (h.cottage) {
+    const parts: Part[] = [];
+    const winW = Math.min(0.48, h.width * 0.24);
+    const winH = h.wallHeight * 0.44;
+    const winY = 0.12 + winH / 2 + 0.15;
+    const doorH = h.wallHeight * 0.68;
+    const doorW = 0.44;
+    const lowerDoorH = doorH * 0.58;
+    const doorGlassH = doorH - lowerDoorH - 0.05;
+    const doorGlassW = doorW - 0.08;
+    const doorGlassY = 0.12 + lowerDoorH + 0.025 + doorGlassH / 2;
+
+    // Front arched attic dormer window at the gable peak
+    parts.push({
+      shape: { kind: 'box', size: [0.32, 0.24, 0.016] },
+      position: [0, h.wallHeight + 0.12 + h.roofHeight * 0.48, h.depth / 2 + 0.02],
+    });
+
+    // Front door glass upper panels
+    parts.push({
+      shape: { kind: 'box', size: [doorGlassW, doorGlassH, 0.016] },
+      position: [0, doorGlassY, h.depth / 2 + 0.02],
+    });
+
+    // Front multi-pane sash windows flanking the entrance
+    const frontX = h.width * 0.32;
+    for (const side of [-1, 1]) {
+      parts.push({
+        shape: { kind: 'box', size: [winW, winH, 0.016] },
+        position: [side * frontX, winY, h.depth / 2 + 0.02],
+      });
+    }
+
+    // Side multi-pane windows
+    for (const side of [-1, 1]) {
+      parts.push({
+        shape: { kind: 'box', size: [0.016, winH, winW] },
+        position: [side * (h.width / 2 + 0.02), winY, 0],
+      });
+    }
+
+    // Rear window
+    parts.push({
+      shape: { kind: 'box', size: [winW, winH, 0.016] },
+      position: [0, winY, -h.depth / 2 - 0.02],
+    });
+
+    return parts;
+  }
+
+  // 2. Modern Eco-Pavilion (Gable / Saltbox): Floor-to-ceiling panoramic sliding glass doors
+  if (h.roofStyle === 'gable') {
+    const parts: Part[] = [];
+    const panoW = h.width * 0.54;
+    const panoH = h.wallHeight * 0.78;
+    const panoY = 0.12 + panoH / 2;
+    const panoX = -h.width * 0.08;
+    const panoZ = h.depth / 2 + 0.02;
+
+    // Front panoramic sliding glass
+    parts.push({
+      shape: { kind: 'box', size: [panoW, panoH, 0.012] },
+      position: [panoX, panoY, panoZ],
+    });
+
+    // Side floor-to-ceiling picture window facing the surrounding nature
+    const sideW = Math.min(1.1, h.depth * 0.52);
+    const sideH = h.wallHeight * 0.72;
+    const sideY = 0.12 + sideH / 2;
+    parts.push({
+      shape: { kind: 'box', size: [0.012, sideH, sideW] },
+      position: [h.width / 2 + 0.02, sideY, 0],
+    });
+
+    // Back clerestory / window
+    const backW = Math.min(0.9, h.width * 0.45);
+    const backH = h.wallHeight * 0.38;
+    const backY = h.wallHeight * 0.62 + 0.12;
+    parts.push({
+      shape: { kind: 'box', size: [backW, backH, 0.012] },
+      position: [0, backY, -h.depth / 2 - 0.02],
+    });
+
+    return parts;
+  }
+
+  // 2. Traditional Hip Roof Windows
   const n = Math.max(1, h.windowsPerSide ?? 2);
   const winW = Math.min(0.42, (h.width * 0.6) / n);
   const winH = h.wallHeight * 0.38;
@@ -67,39 +170,638 @@ function windowParts(h: HouseSpec): Part[] {
   const xs = Array.from({ length: n }, (_, i) =>
     n === 1 ? 0 : -usable / 2 + (usable / (n - 1)) * i
   );
+  const doorW = 0.36;
+  const doorX = n > 1 ? 0 : h.width * 0.28;
   const parts: Part[] = [];
   for (const side of [1, -1]) {
     for (const x of xs) {
+      if (side === 1 && Math.abs(x - doorX) < (winW + doorW) / 2) continue;
       parts.push({
-        shape: { kind: 'plane', size: [winW, winH] },
-        position: [x, winY, side * (h.depth / 2 + 0.012)],
-        rotation: [0, side === 1 ? 0 : Math.PI, 0],
+        shape: { kind: 'box', size: [winW, winH, 0.012] },
+        position: [x, winY, side * (h.depth / 2 + 0.02)],
       });
     }
     parts.push({
-      shape: { kind: 'plane', size: [winW, winH] },
-      position: [side * (h.width / 2 + 0.012), winY, 0],
-      rotation: [0, (side * Math.PI) / 2, 0],
+      shape: { kind: 'box', size: [0.012, winH, winW] },
+      position: [side * (h.width / 2 + 0.02), winY, 0],
     });
   }
   return parts;
 }
 
 function trimParts(h: HouseSpec): Part[] {
+  // 1. Classic Cottage Architectural Trim (Image 1): Chimney, arched dormer, window sills & muntins
+  if (h.cottage) {
+    const parts: Part[] = [];
+    const winW = Math.min(0.48, h.width * 0.24);
+    const winH = h.wallHeight * 0.44;
+    const winY = 0.12 + winH / 2 + 0.15;
+    const doorW = 0.44;
+    const doorH = h.wallHeight * 0.68;
+    const doorY = 0.12 + doorH / 2;
+    const border = 0.035;
+    const frameD = 0.024;
+    const wallFrontZ = h.depth / 2;
+    const frameZ = wallFrontZ + frameD / 2;
+
+    // Foundation plinth band
+    parts.push({
+      shape: { kind: 'box', size: [h.width + 0.18, 0.12, h.depth + 0.18] },
+      position: [0, 0.06, 0],
+    });
+
+    // Masonry Roof Chimney on right roof slope
+    const chimX = h.width * 0.26;
+    const chimZ = -h.depth * 0.12;
+    const chimH = h.roofHeight * 0.95;
+    const chimY = h.wallHeight + 0.12 + h.roofHeight * 0.42;
+    parts.push(
+      {
+        shape: { kind: 'box', size: [0.32, chimH, 0.32] },
+        position: [chimX, chimY, chimZ],
+      },
+      {
+        shape: { kind: 'box', size: [0.38, 0.06, 0.38] },
+        position: [chimX, chimY + chimH / 2, chimZ],
+      },
+      {
+        shape: { kind: 'box', size: [0.22, 0.05, 0.22] },
+        position: [chimX, chimY + chimH / 2 + 0.04, chimZ],
+      }
+    );
+
+    // Arched attic dormer window surround, sill & muntins
+    const atticW = 0.32;
+    const atticH = 0.24;
+    const atticY = h.wallHeight + 0.12 + h.roofHeight * 0.48;
+    parts.push(
+      // Top header
+      {
+        shape: { kind: 'box', size: [atticW + border * 2, border, frameD] },
+        position: [0, atticY + atticH / 2 + border / 2, frameZ],
+      },
+      // Bottom rail
+      {
+        shape: { kind: 'box', size: [atticW + border * 2, border, frameD] },
+        position: [0, atticY - atticH / 2 - border / 2, frameZ],
+      },
+      // Left jamb
+      {
+        shape: { kind: 'box', size: [border, atticH, frameD] },
+        position: [-atticW / 2 - border / 2, atticY, frameZ],
+      },
+      // Right jamb
+      {
+        shape: { kind: 'box', size: [border, atticH, frameD] },
+        position: [atticW / 2 + border / 2, atticY, frameZ],
+      },
+      // Projecting sill
+      {
+        shape: { kind: 'box', size: [atticW + border * 2 + 0.08, 0.035, frameD + 0.025] },
+        position: [0, atticY - atticH / 2 - border - 0.012, wallFrontZ + (frameD + 0.025) / 2],
+      },
+      // Cross muntins across attic glass
+      {
+        shape: { kind: 'box', size: [atticW, 0.018, 0.012] },
+        position: [0, atticY, wallFrontZ + 0.025],
+      },
+      {
+        shape: { kind: 'box', size: [0.018, atticH, 0.012] },
+        position: [0, atticY, wallFrontZ + 0.025],
+      }
+    );
+
+    // Front door frame, lower panel, handle & upper muntins
+    const lowerDoorH = doorH * 0.58;
+    const doorGlassH = doorH - lowerDoorH - 0.05;
+    const doorGlassW = doorW - 0.08;
+    const doorGlassY = 0.12 + lowerDoorH + 0.025 + doorGlassH / 2;
+    parts.push(
+      // Top lintel
+      {
+        shape: { kind: 'box', size: [doorW + border * 2, border, frameD] },
+        position: [0, doorY + doorH / 2 + border / 2, frameZ],
+      },
+      // Left door jamb
+      {
+        shape: { kind: 'box', size: [border, doorH, frameD] },
+        position: [-doorW / 2 - border / 2, doorY, frameZ],
+      },
+      // Right door jamb
+      {
+        shape: { kind: 'box', size: [border, doorH, frameD] },
+        position: [doorW / 2 + border / 2, doorY, frameZ],
+      },
+      // Lower solid wood door panel
+      {
+        shape: { kind: 'box', size: [doorW - 0.01, lowerDoorH, 0.02] },
+        position: [0, 0.12 + lowerDoorH / 2, wallFrontZ + 0.01],
+      },
+      // Center divider rail between lower door and upper window
+      {
+        shape: { kind: 'box', size: [doorW, 0.035, 0.025] },
+        position: [0, 0.12 + lowerDoorH, wallFrontZ + 0.015],
+      },
+      // Door handle
+      {
+        shape: { kind: 'box', size: [0.02, 0.12, 0.025] },
+        position: [doorW * 0.35, 0.12 + doorH * 0.48, wallFrontZ + 0.025],
+      },
+      // Cross muntins on door upper glass
+      {
+        shape: { kind: 'box', size: [doorGlassW, 0.015, 0.012] },
+        position: [0, doorGlassY, wallFrontZ + 0.025],
+      },
+      {
+        shape: { kind: 'box', size: [0.015, doorGlassH, 0.012] },
+        position: [0, doorGlassY, wallFrontZ + 0.025],
+      }
+    );
+
+    // Front multi-pane window frames, sills & muntins (flanking door)
+    const frontX = h.width * 0.32;
+    for (const side of [-1, 1]) {
+      const fx = side * frontX;
+      parts.push(
+        // Top header
+        {
+          shape: { kind: 'box', size: [winW + border * 2, border, frameD] },
+          position: [fx, winY + winH / 2 + border / 2, frameZ],
+        },
+        // Bottom rail
+        {
+          shape: { kind: 'box', size: [winW + border * 2, border, frameD] },
+          position: [fx, winY - winH / 2 - border / 2, frameZ],
+        },
+        // Left jamb
+        {
+          shape: { kind: 'box', size: [border, winH, frameD] },
+          position: [fx - winW / 2 - border / 2, winY, frameZ],
+        },
+        // Right jamb
+        {
+          shape: { kind: 'box', size: [border, winH, frameD] },
+          position: [fx + winW / 2 + border / 2, winY, frameZ],
+        },
+        // Projecting window sill (appui de fenêtre)
+        {
+          shape: { kind: 'box', size: [winW + border * 2 + 0.08, 0.035, frameD + 0.025] },
+          position: [fx, winY - winH / 2 - border - 0.012, wallFrontZ + (frameD + 0.025) / 2],
+        },
+        // Cross muntins across the window opening
+        {
+          shape: { kind: 'box', size: [winW, 0.018, 0.012] },
+          position: [fx, winY, wallFrontZ + 0.025],
+        },
+        {
+          shape: { kind: 'box', size: [0.018, winH, 0.012] },
+          position: [fx, winY, wallFrontZ + 0.025],
+        }
+      );
+    }
+
+    // Side multi-pane window frames, sills & muntins
+    for (const side of [-1, 1]) {
+      const sideWallX = side * (h.width / 2);
+      const sideFrameX = sideWallX + side * (frameD / 2);
+      parts.push(
+        // Top header
+        {
+          shape: { kind: 'box', size: [frameD, border, winW + border * 2] },
+          position: [sideFrameX, winY + winH / 2 + border / 2, 0],
+        },
+        // Bottom rail
+        {
+          shape: { kind: 'box', size: [frameD, border, winW + border * 2] },
+          position: [sideFrameX, winY - winH / 2 - border / 2, 0],
+        },
+        // Front jamb
+        {
+          shape: { kind: 'box', size: [frameD, winH, border] },
+          position: [sideFrameX, winY, winW / 2 + border / 2],
+        },
+        // Back jamb
+        {
+          shape: { kind: 'box', size: [frameD, winH, border] },
+          position: [sideFrameX, winY, -winW / 2 - border / 2],
+        },
+        // Projecting sill
+        {
+          shape: { kind: 'box', size: [frameD + 0.025, 0.035, winW + border * 2 + 0.08] },
+          position: [
+            sideWallX + side * ((frameD + 0.025) / 2),
+            winY - winH / 2 - border - 0.012,
+            0,
+          ],
+        },
+        // Cross muntins
+        {
+          shape: { kind: 'box', size: [0.012, 0.018, winW] },
+          position: [sideWallX + side * 0.025, winY, 0],
+        },
+        {
+          shape: { kind: 'box', size: [0.012, winH, 0.018] },
+          position: [sideWallX + side * 0.025, winY, 0],
+        }
+      );
+    }
+
+    // Rear multi-pane window frames, sills & muntins
+    const wallBackZ = -h.depth / 2;
+    const backFrameZ = wallBackZ - frameD / 2;
+    parts.push(
+      // Top header
+      {
+        shape: { kind: 'box', size: [winW + border * 2, border, frameD] },
+        position: [0, winY + winH / 2 + border / 2, backFrameZ],
+      },
+      // Bottom rail
+      {
+        shape: { kind: 'box', size: [winW + border * 2, border, frameD] },
+        position: [0, winY - winH / 2 - border / 2, backFrameZ],
+      },
+      // Left jamb
+      {
+        shape: { kind: 'box', size: [border, winH, frameD] },
+        position: [-winW / 2 - border / 2, winY, backFrameZ],
+      },
+      // Right jamb
+      {
+        shape: { kind: 'box', size: [border, winH, frameD] },
+        position: [winW / 2 + border / 2, winY, backFrameZ],
+      },
+      // Projecting sill
+      {
+        shape: { kind: 'box', size: [winW + border * 2 + 0.08, 0.035, frameD + 0.025] },
+        position: [0, winY - winH / 2 - border - 0.012, wallBackZ - (frameD + 0.025) / 2],
+      },
+      // Cross muntins
+      {
+        shape: { kind: 'box', size: [winW, 0.018, 0.012] },
+        position: [0, winY, wallBackZ - 0.025],
+      },
+      {
+        shape: { kind: 'box', size: [0.018, winH, 0.012] },
+        position: [0, winY, wallBackZ - 0.025],
+      }
+    );
+
+    return parts;
+  }
+
+  // 2. Modern Eco-Pavilion Architectural Trim & Slat Battens
+  if (h.roofStyle === 'gable') {
+    const panoW = h.width * 0.54;
+    const panoH = h.wallHeight * 0.78;
+    const panoY = 0.12 + panoH / 2;
+    const panoX = -h.width * 0.08;
+    const panoZ = h.depth / 2 + 0.014;
+
+    const parts: Part[] = [
+      // Base plinth foundation band
+      {
+        shape: { kind: 'box', size: [h.width + 0.18, 0.12, h.depth + 0.18] },
+        position: [0, 0.06, 0],
+      },
+      // Panoramic glass charcoal frame header
+      {
+        shape: { kind: 'box', size: [panoW + 0.07, 0.038, 0.035] },
+        position: [panoX, panoY + panoH / 2 + 0.015, panoZ + 0.008],
+      },
+      // Floor threshold runner
+      {
+        shape: { kind: 'box', size: [panoW + 0.07, 0.025, 0.045] },
+        position: [panoX, 0.12, panoZ + 0.008],
+      },
+      // Left vertical frame jamb
+      {
+        shape: { kind: 'box', size: [0.035, panoH, 0.035] },
+        position: [panoX - panoW / 2 - 0.015, panoY, panoZ + 0.008],
+      },
+      // Right vertical frame jamb
+      {
+        shape: { kind: 'box', size: [0.035, panoH, 0.035] },
+        position: [panoX + panoW / 2 + 0.015, panoY, panoZ + 0.008],
+      },
+      // Center sliding division mullion
+      {
+        shape: { kind: 'box', size: [0.03, panoH, 0.038] },
+        position: [panoX, panoY, panoZ + 0.008],
+      },
+      // Minimalist vertical pull handle on sliding leaf
+      {
+        shape: { kind: 'box', size: [0.02, 0.22, 0.032] },
+        position: [panoX + 0.04, panoY, panoZ + 0.024],
+      },
+      // Side window frame
+      {
+        shape: { kind: 'box', size: [0.035, 0.035, Math.min(1.1, h.depth * 0.52) + 0.07] },
+        position: [h.width / 2 + 0.014, 0.12 + h.wallHeight * 0.72 + 0.015, 0],
+      },
+      {
+        shape: { kind: 'box', size: [0.035, 0.025, Math.min(1.1, h.depth * 0.52) + 0.07] },
+        position: [h.width / 2 + 0.014, 0.12, 0],
+      },
+      // Architectural fascia rakes along gable edges (dark trim defining roof silhouette)
+      {
+        shape: { kind: 'box', size: [h.width + 0.36, 0.05, 0.04] },
+        position: [0, h.wallHeight + 0.1, -h.depth / 2 - 0.16],
+      },
+    ];
+
+    // Vertical 3D cedar timber battens (claire-voie) flanking the sliding door
+    if (h.slatCladding !== false) {
+      const slatW = 0.032;
+      const slatD = 0.025;
+      const slatH = h.wallHeight * 0.88;
+      const slatY = 0.12 + slatH / 2;
+      const startX = panoX + panoW / 2 + 0.08;
+      const endX = h.width / 2 - 0.05;
+      const count = Math.max(2, Math.floor((endX - startX) / 0.11));
+      for (let s = 0; s < count; s++) {
+        const sx = startX + (s / (count - 1)) * (endX - startX);
+        parts.push({
+          shape: { kind: 'box', size: [slatW, slatH, slatD] },
+          position: [sx, slatY, panoZ + 0.01],
+        });
+      }
+    }
+
+    return parts;
+  }
+
+  // 2. Traditional Hip Roof Trim
   const n = h.windowsPerSide ?? 2;
-  return [
+  const doorW = 0.36;
+  const doorH = h.wallHeight * 0.62;
+  const doorX = n > 1 ? 0 : h.width * 0.28;
+  const doorZ = h.depth / 2 + 0.014;
+  const doorY = 0.12 + doorH / 2;
+
+  const parts: Part[] = [
+    // Foundation plinth band
     {
       shape: { kind: 'box', size: [h.width + 0.16, 0.12, h.depth + 0.16] },
       position: [0, 0.06, 0],
     },
+    // Door leaf
     {
-      shape: { kind: 'plane', size: [0.34, h.wallHeight * 0.62] },
-      position: [n > 1 ? 0 : h.width * 0.28, 0.12 + h.wallHeight * 0.33, h.depth / 2 + 0.014],
+      shape: { kind: 'plane', size: [doorW, doorH] },
+      position: [doorX, doorY, doorZ],
+    },
+    // Door frame: top lintel
+    {
+      shape: { kind: 'box', size: [doorW + 0.07, 0.035, 0.03] },
+      position: [doorX, doorY + doorH / 2 + 0.015, doorZ + 0.008],
+    },
+    // Door frame: left post
+    {
+      shape: { kind: 'box', size: [0.035, doorH, 0.03] },
+      position: [doorX - doorW / 2 - 0.015, doorY, doorZ + 0.008],
+    },
+    // Door frame: right post
+    {
+      shape: { kind: 'box', size: [0.035, doorH, 0.03] },
+      position: [doorX + doorW / 2 + 0.015, doorY, doorZ + 0.008],
+    },
+    // Door handle
+    {
+      shape: { kind: 'box', size: [0.02, 0.07, 0.025] },
+      position: [doorX + doorW * 0.32, doorY, doorZ + 0.02],
     },
   ];
+
+  // Architectural window frames, mullions, and projecting sills
+  const winW = Math.min(0.42, (h.width * 0.6) / n);
+  const winH = h.wallHeight * 0.38;
+  const winY = h.wallHeight * 0.58 + 0.12;
+  const usable = h.width * 0.72;
+  const xs = Array.from({ length: n }, (_, i) =>
+    n === 1 ? 0 : -usable / 2 + (usable / (n - 1)) * i
+  );
+
+  for (const side of [1, -1]) {
+    // Front & back windows
+    for (const x of xs) {
+      if (side === 1 && Math.abs(x - doorX) < (winW + doorW) / 2) continue;
+      const z = side * (h.depth / 2 + 0.018);
+      // Top frame header
+      parts.push({
+        shape: { kind: 'box', size: [winW + 0.05, 0.03, 0.028] },
+        position: [x, winY + winH / 2 + 0.014, z],
+      });
+      // Bottom frame sill support
+      parts.push({
+        shape: { kind: 'box', size: [winW + 0.05, 0.03, 0.028] },
+        position: [x, winY - winH / 2 - 0.014, z],
+      });
+      // Left vertical jamb
+      parts.push({
+        shape: { kind: 'box', size: [0.028, winH, 0.028] },
+        position: [x - winW / 2 - 0.014, winY, z],
+      });
+      // Right vertical jamb
+      parts.push({
+        shape: { kind: 'box', size: [0.028, winH, 0.028] },
+        position: [x + winW / 2 + 0.014, winY, z],
+      });
+      // Center vertical mullion bar
+      parts.push({
+        shape: { kind: 'box', size: [0.02, winH, 0.024] },
+        position: [x, winY, z],
+      });
+      // Protruding window sill (appui de fenêtre)
+      parts.push({
+        shape: { kind: 'box', size: [winW + 0.09, 0.03, 0.05] },
+        position: [x, winY - winH / 2 - 0.028, z + side * 0.012],
+      });
+    }
+
+    // Side windows (left & right facades)
+    const sideX = side * (h.width / 2 + 0.018);
+    // Top frame header
+    parts.push({
+      shape: { kind: 'box', size: [0.028, 0.03, winW + 0.05] },
+      position: [sideX, winY + winH / 2 + 0.014, 0],
+    });
+    // Bottom frame
+    parts.push({
+      shape: { kind: 'box', size: [0.028, 0.03, winW + 0.05] },
+      position: [sideX, winY - winH / 2 - 0.014, 0],
+    });
+    // Side jambs
+    parts.push({
+      shape: { kind: 'box', size: [0.028, winH, 0.028] },
+      position: [sideX, winY, -winW / 2 - 0.014],
+    });
+    parts.push({
+      shape: { kind: 'box', size: [0.028, winH, 0.028] },
+      position: [sideX, winY, winW / 2 + 0.014],
+    });
+    // Center mullion
+    parts.push({
+      shape: { kind: 'box', size: [0.024, winH, 0.02] },
+      position: [sideX, winY, 0],
+    });
+    // Protruding side sill
+    parts.push({
+      shape: { kind: 'box', size: [0.05, 0.03, winW + 0.09] },
+      position: [sideX + side * 0.012, winY - winH / 2 - 0.028, 0],
+    });
+  }
+
+  return parts;
 }
 
 function verandaParts(h: HouseSpec): Part[] {
+  // 1. Classic Cottage Front Entrance Porch with Gabled Canopy, Steps & Railings (Image 1)
+  if (h.cottage) {
+    const porchW = 0.78;
+    const porchD = 0.65;
+    const porchZ = h.depth / 2 + porchD / 2;
+    const porchH = h.wallHeight * 0.74;
+    const parts: Part[] = [
+      // Porch landing deck platform
+      { shape: { kind: 'box', size: [porchW, 0.12, porchD] }, position: [0, 0.06, porchZ] },
+      // Stairway step 1
+      {
+        shape: { kind: 'box', size: [porchW + 0.08, 0.05, 0.22] },
+        position: [0, 0.025, porchZ + porchD / 2 + 0.32],
+      },
+      // Stairway step 2
+      {
+        shape: { kind: 'box', size: [porchW + 0.04, 0.05, 0.22] },
+        position: [0, 0.065, porchZ + porchD / 2 + 0.15],
+      },
+      // Porch front columns supporting the canopy
+      {
+        shape: { kind: 'box', size: [0.05, porchH, 0.05] },
+        position: [-porchW / 2 + 0.04, porchH / 2 + 0.12, porchZ + porchD / 2 - 0.04],
+      },
+      {
+        shape: { kind: 'box', size: [0.05, porchH, 0.05] },
+        position: [porchW / 2 - 0.04, porchH / 2 + 0.12, porchZ + porchD / 2 - 0.04],
+      },
+      // Gabled canopy roof over porch (left & right slopes)
+      {
+        shape: { kind: 'box', size: [0.48, 0.04, porchD + 0.15] },
+        position: [-0.18, porchH + 0.22, porchZ],
+        rotation: [0, 0, 0.55],
+      },
+      {
+        shape: { kind: 'box', size: [0.48, 0.04, porchD + 0.15] },
+        position: [0.18, porchH + 0.22, porchZ],
+        rotation: [0, 0, -0.55],
+      },
+      // Porch triangular pediment front
+      {
+        shape: { kind: 'box', size: [porchW * 0.72, 0.22, 0.03] },
+        position: [0, porchH + 0.18, porchZ + porchD / 2],
+      },
+      // Left side railing & balusters
+      {
+        shape: { kind: 'box', size: [0.03, 0.03, porchD - 0.08] },
+        position: [-porchW / 2 + 0.04, 0.32, porchZ],
+      },
+      {
+        shape: { kind: 'box', size: [0.02, 0.2, 0.02] },
+        position: [-porchW / 2 + 0.04, 0.22, porchZ - 0.12],
+      },
+      {
+        shape: { kind: 'box', size: [0.02, 0.2, 0.02] },
+        position: [-porchW / 2 + 0.04, 0.22, porchZ + 0.12],
+      },
+      // Right side railing & balusters
+      {
+        shape: { kind: 'box', size: [0.03, 0.03, porchD - 0.08] },
+        position: [porchW / 2 - 0.04, 0.32, porchZ],
+      },
+      {
+        shape: { kind: 'box', size: [0.02, 0.2, 0.02] },
+        position: [porchW / 2 - 0.04, 0.22, porchZ - 0.12],
+      },
+      {
+        shape: { kind: 'box', size: [0.02, 0.2, 0.02] },
+        position: [porchW / 2 - 0.04, 0.22, porchZ + 0.12],
+      },
+    ];
+    return parts;
+  }
+
+  // 2. Modern Eco-Pavilion Raised Timber Deck with Outdoor Picnic Table & Benches
+  if (h.deckFurniture) {
+    const deckW = h.width + 0.45;
+    const deckD = 1.25;
+    const deckH = 0.12;
+    const deckZ = h.depth / 2 + deckD / 2;
+    const parts: Part[] = [
+      // Raised solid timber terrace deck platform
+      {
+        shape: { kind: 'box', size: [deckW, deckH, deckD] },
+        position: [0, deckH / 2, deckZ],
+      },
+      // Low stone retaining curb around the terrace perimeter
+      {
+        shape: { kind: 'box', size: [deckW + 0.12, 0.14, 0.1] },
+        position: [0, 0.07, deckZ + deckD / 2 + 0.05],
+      },
+      {
+        shape: { kind: 'box', size: [0.1, 0.14, deckD] },
+        position: [-deckW / 2 - 0.05, 0.07, deckZ],
+      },
+      {
+        shape: { kind: 'box', size: [0.1, 0.14, deckD] },
+        position: [deckW / 2 + 0.05, 0.07, deckZ],
+      },
+    ];
+
+    // Modern solid wood picnic table on the terrace
+    const tableX = h.width * 0.22;
+    const tableZ = deckZ;
+    const tableW = 0.68;
+    const tableD = 0.38;
+    const tableH = 0.44;
+    // Table top
+    parts.push({
+      shape: { kind: 'box', size: [tableW, 0.035, tableD] },
+      position: [tableX, deckH + tableH, tableZ],
+    });
+    // Table legs
+    for (const lx of [-tableW * 0.38, tableW * 0.38]) {
+      parts.push({
+        shape: { kind: 'box', size: [0.04, tableH, tableD * 0.8] },
+        position: [tableX + lx, deckH + tableH / 2, tableZ],
+      });
+    }
+
+    // Matching wooden bench seats on both sides of the table
+    for (const bSign of [-1, 1]) {
+      const bZ = tableZ + bSign * 0.28;
+      const bH = 0.26;
+      // Bench top
+      parts.push({
+        shape: { kind: 'box', size: [tableW * 0.95, 0.03, 0.16] },
+        position: [tableX, deckH + bH, bZ],
+      });
+      // Bench leg supports
+      for (const lx of [-tableW * 0.35, tableW * 0.35]) {
+        parts.push({
+          shape: { kind: 'box', size: [0.035, bH, 0.12] },
+          position: [tableX + lx, deckH + bH / 2, bZ],
+        });
+      }
+    }
+
+    // Front corner veranda post supporting the roof overhang
+    parts.push({
+      shape: { kind: 'box', size: [0.07, h.wallHeight + 0.15, 0.07] },
+      position: [-h.width / 2 + 0.06, (h.wallHeight + 0.15) / 2, deckZ + deckD / 2 - 0.08],
+    });
+
+    return parts;
+  }
+
+  // 2. Traditional Veranda with Posts
   const n = Math.max(2, Math.round(h.width / 1.3)) + 1;
   const parts: Part[] = [
     {
@@ -136,21 +838,62 @@ export function buildHouseCluster(houses: readonly HouseSpec[]): HouseClusterGeo
   for (const h of houses) {
     const m = placement(h);
     const overhang = h.overhang ?? 0.32;
+    const hasVeranda = Boolean(h.veranda || h.deckFurniture || h.cottage);
 
     trim.push(mergeParts(trimParts(h)).applyMatrix4(m));
     windows.push(mergeParts(windowParts(h)).applyMatrix4(m));
 
-    const wall = new THREE.BoxGeometry(h.width, h.wallHeight, h.depth).toNonIndexed();
-    wall.translate(0, h.wallHeight / 2 + 0.12, 0);
-    walls.push(paint(wall, h.wallColor).applyMatrix4(m));
+    const wallParts: THREE.BufferGeometry[] = [];
+    const wallBase = new THREE.BoxGeometry(h.width, h.wallHeight, h.depth).toNonIndexed();
+    wallBase.translate(0, h.wallHeight / 2 + 0.12, 0);
+    wallParts.push(wallBase);
+
+    if (h.cottage) {
+      // Front triangular gable wall at +depth/2 (sealed under front gable)
+      const frontGable = createGableWallGeometry(h.width, h.roofHeight, 0.08).toNonIndexed();
+      frontGable.translate(0, h.wallHeight + 0.12, h.depth / 2 - 0.04);
+      wallParts.push(frontGable);
+
+      // Back triangular gable wall at -depth/2 (sealed under back gable)
+      const backGable = createGableWallGeometry(h.width, h.roofHeight, 0.08).toNonIndexed();
+      backGable.translate(0, h.wallHeight + 0.12, -h.depth / 2 + 0.04);
+      wallParts.push(backGable);
+    } else if (h.roofStyle === 'gable') {
+      // Left triangular gable wall at -width/2
+      const leftGable = createGableWallGeometry(h.depth, h.roofHeight, 0.08).toNonIndexed();
+      leftGable.rotateY(Math.PI / 2);
+      leftGable.translate(-h.width / 2 + 0.04, h.wallHeight + 0.12, 0);
+      wallParts.push(leftGable);
+
+      // Right triangular gable wall at +width/2
+      const rightGable = createGableWallGeometry(h.depth, h.roofHeight, 0.08).toNonIndexed();
+      rightGable.rotateY(-Math.PI / 2);
+      rightGable.translate(h.width / 2 - 0.04, h.wallHeight + 0.12, 0);
+      wallParts.push(rightGable);
+    }
+
+    const mergedWall = mergeGeometries(wallParts);
+    wallParts.forEach((g) => g.dispose());
+    walls.push(paint(mergedWall!, h.wallColor).applyMatrix4(m));
 
     const roofW = h.width + overhang * 2;
     const roofD = h.depth + overhang * 2 + (h.veranda ? 0.9 : 0);
-    const roof = createHipRoofGeometry(roofW, roofD, h.roofHeight);
-    roof.translate(0, h.wallHeight + 0.1, h.veranda ? 0.45 : 0);
+
+    let roof: THREE.BufferGeometry;
+    if (h.cottage) {
+      roof = createCottageRoofGeometry(h.width, h.depth, h.roofHeight, overhang);
+      roof.translate(0, h.wallHeight + 0.12, 0);
+    } else if (h.roofStyle === 'gable') {
+      const ridgeZ = h.ridgeZOffset ?? (h.veranda ? -0.25 : h.deckFurniture ? -0.15 : 0);
+      roof = createGableRoofGeometry(roofW, roofD, h.roofHeight, 0, ridgeZ);
+      roof.translate(0, h.wallHeight + 0.12, h.veranda ? 0.45 : 0);
+    } else {
+      roof = createHipRoofGeometry(roofW, roofD, h.roofHeight);
+      roof.translate(0, h.wallHeight + 0.12, 0);
+    }
     roofs.push(paint(roof, h.roofColor).applyMatrix4(m));
 
-    if (h.veranda) verandas.push(mergeParts(verandaParts(h)).applyMatrix4(m));
+    if (hasVeranda) verandas.push(mergeParts(verandaParts(h)).applyMatrix4(m));
   }
 
   return {
