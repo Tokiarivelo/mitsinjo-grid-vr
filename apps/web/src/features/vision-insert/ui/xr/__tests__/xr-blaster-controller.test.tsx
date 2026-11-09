@@ -4,8 +4,9 @@ import * as THREE from 'three';
 import type { SpatialTarget } from '../spatial-projection';
 import { projectDetectionsTo3D } from '../spatial-projection';
 import { screenPoint } from '../webcam-screen';
-import { AIR_BUTTON_POSITION } from '../xr-layout';
-import { XRBlasterController } from '../xr-blaster-controller';
+import { AIR_BUTTON_POSITION, miniatureSlot } from '../xr-layout';
+import { XRBlasterController, type MiniatureHandle } from '../xr-blaster-controller';
+import { createTurntable } from '../turntable';
 
 vi.mock('../xr-audio-fx', () => ({
   playLaserShootSound: vi.fn(),
@@ -61,9 +62,11 @@ const [fridge] = projectDetectionsTo3D([
 ]) as [SpatialTarget];
 const fridgeOnVideo = screenPoint(0.21, 0.55);
 
-function setup(targets: SpatialTarget[] = [fridge]) {
+function setup(targets: SpatialTarget[] = [fridge], miniatures: MiniatureHandle[] = []) {
   const props = {
     targets,
+    miniatures,
+    onTapMiniature: vi.fn(),
     onHoverTarget: vi.fn(),
     onShootTarget: vi.fn(),
     onTriggerScan: vi.fn(),
@@ -206,5 +209,76 @@ describe('XRBlasterController (VS-T4)', () => {
     controller1.visible = false;
     act(() => frame?.({}, 0.016));
     expect(onHoverTarget).toHaveBeenLastCalledWith('fridge');
+  });
+
+  describe('3D miniatures (hold to rotate, tap to connect)', () => {
+    const mini = (): MiniatureHandle => ({
+      id: 'fridge',
+      position: miniatureSlot(0),
+      turntable: createTurntable(),
+    });
+
+    it('a held trigger grabs the miniature instead of shooting, and turning the controller rotates it', () => {
+      const m = mini();
+      const { onShootTarget, onTapMiniature } = setup([fridge], [m]);
+      gl.xr.isPresenting = true;
+      controller0.visible = true;
+      aim(controller0, m.position);
+      act(() => controller0.dispatchEvent({ type: 'selectstart' } as never));
+      expect(m.turntable.heldBy).toBe(0);
+      expect(onShootTarget).not.toHaveBeenCalled();
+
+      // Turn the ray 0.2 m to the right of the miniature.
+      const [x, y, z] = m.position;
+      aim(controller0, [x + 0.2, y, z]);
+      act(() => frame?.({}, 0.016));
+      expect(m.turntable.yaw).toBeGreaterThan(0.3);
+
+      act(() => controller0.dispatchEvent({ type: 'selectend' } as never));
+      expect(m.turntable.heldBy).toBeNull();
+      expect(onTapMiniature).not.toHaveBeenCalled(); // a drag, not a tap
+    });
+
+    it('a quick tap on the miniature connects it', () => {
+      const m = mini();
+      const { onTapMiniature, onShootTarget } = setup([fridge], [m]);
+      aim(controller1, m.position);
+      act(() => {
+        controller1.dispatchEvent({ type: 'selectstart' } as never);
+        controller1.dispatchEvent({ type: 'selectend' } as never);
+      });
+      expect(onTapMiniature).toHaveBeenCalledWith('fridge');
+      expect(onShootTarget).not.toHaveBeenCalled();
+    });
+
+    it('a pinch right on the miniature (ray origin inside it) grabs it too', () => {
+      const m = mini();
+      setup([fridge], [m]);
+      const [x, y, z] = m.position;
+      aim(controller0, [x, y, z - 1], new THREE.Vector3(x, y, z + 0.05));
+      act(() => controller0.dispatchEvent({ type: 'selectstart' } as never));
+      expect(m.turntable.heldBy).toBe(0);
+    });
+
+    it('the mouse drags the miniature round', () => {
+      const m = mini();
+      setup([fridge], [m]);
+      camera.lookAt(...m.position);
+      camera.updateMatrixWorld(true);
+      const canvas = gl.domElement;
+      // jsdom's PointerEvent drops clientX: dispatch MouseEvents under the pointer names.
+      const send = (type: string, clientX = 0) =>
+        canvas.dispatchEvent(new MouseEvent(type, { clientX, clientY: 300, button: 0 }));
+      act(() => {
+        send('pointerdown', 400);
+      });
+      expect(m.turntable.heldBy).toBe('mouse');
+      act(() => {
+        send('pointermove', 460);
+        send('pointerup');
+      });
+      expect(m.turntable.yaw).toBeCloseTo(60 * 0.012, 2);
+      expect(m.turntable.heldBy).toBeNull();
+    });
   });
 });

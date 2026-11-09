@@ -160,3 +160,11 @@
 - [x] Tirer sur un modèle 3D matérialisé le raccorde ou le déconnecte du microgrid avec câble d'énergie 3D dynamique.
 - [x] Quitter la session VR restaure proprement la page 2D sans fuite de contexte WebGL ni erreur console.
 - [x] `make check-i18n` passe à 100 % et les tests unitaires sont verts.
+
+### VS-T12 : Miniature 3D tournante et manipulable devant l'utilisateur
+
+- [x] Le modèle tiré vole de la vidéo vers un socle à ~0,55 m, sous les yeux (`miniatureSlot`), en miniature de 22 cm.
+- [x] Rotation automatique (`turntable.ts`), arrêtée en main et 1,5 s après le relâcher.
+- [x] Saisie au select maintenu (gâchette, pincement, clic) ; mouvement de la manette / main / souris → rotation.
+- [x] Tap sur la miniature = raccorder / déconnecter ; `make vr-probe` raccorde le frigo par sa miniature.
+- [x] **Done when :** dans l'émulateur, frigo, ventilateur et TV deviennent des miniatures devant soi qui tournent ; tap sur le frigo le raccorde.

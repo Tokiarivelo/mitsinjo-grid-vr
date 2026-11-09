@@ -958,7 +958,7 @@
       "vrHudExpand": "Agrandir",
       "vrHudEventConnected": "+{watts} W · {name} raccordé",
       "vrHudEventDisconnected": "−{watts} W · {name} déconnecté",
-      "vrHudEventMaterialized": "Modèle 3D créé · {name}",
+      "vrHudEventMaterialized": "{name} en 3D · maintenir pour tourner, toucher pour raccorder",
       "vrHudEventNoObject": "Aucun objet détecté à cet endroit",
       "vrHudNetSurplus": "Surplus +{kw} kW",
       "vrHudNetDeficit": "Déficit -{kw} kW",

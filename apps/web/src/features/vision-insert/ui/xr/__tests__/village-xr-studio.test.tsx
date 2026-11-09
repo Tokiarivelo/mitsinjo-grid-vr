@@ -87,4 +87,18 @@ describe('VillageXRStudio — shoot an object in the webcam video', () => {
     act(() => blaster.props!.onShootTarget('fridge'));
     expect(onSelectAppliance).toHaveBeenCalledWith('fridge');
   });
+
+  it('gives the shot object a miniature in reach, and a tap on it connects', () => {
+    const { rerender, view, onSelectAppliance } = setup();
+    rerender(view([fridge], false));
+    expect(blaster.props!.miniatures).toEqual([]);
+
+    act(() => blaster.props!.onShootTarget('fridge'));
+    const [mini] = blaster.props!.miniatures!;
+    expect(mini?.id).toBe('fridge');
+    expect(Math.hypot(mini!.position[0], mini!.position[2])).toBeLessThan(0.7);
+
+    act(() => blaster.props!.onTapMiniature!('fridge'));
+    expect(onSelectAppliance).toHaveBeenCalledTimes(2); // materialize, then connect
+  });
 });

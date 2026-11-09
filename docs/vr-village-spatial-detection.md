@@ -111,17 +111,23 @@ flowchart TD
 
 - **Appel de génération :**
   - Génération de géométrie procédurale via `recipeMesh` / `silhouetteMesh` (`object-geometry.ts`) à l'échelle de la scène.
-- **Séquence d'apparition animée (Spawn Sequence) :**
-  - $0\text{s} \rightarrow 0.3\text{s}$ : Implosion de la cible filaire.
-  - $0.3\text{s} \rightarrow 0.8\text{s}$ : Matérialisation des arêtes d'encre verte/cyan.
-  - $0.8\text{s} \rightarrow 1.4\text{s}$ : Extrusion du volume plein avec rebond élastique (`spring scale`).
-  - $1.4\text{s}+$ : Textures PBR, ombres de contact au sol (`ContactShadows`), anneau d'aura d'énergie.
+- **Miniature 3D à portée de main (VS-T12) :**
+  - Le modèle sort de l'objet dans la vidéo et vole en 0,7 s jusqu'à un socle devant l'utilisateur
+    (`miniatureSlot` dans `xr-layout.ts` : ~0,55 m, sous les yeux, à droite puis à gauche, 6 par rangée).
+  - Miniature de 22 cm (plus grand côté, proportions gardées), anneau de socle cyan / vert si raccordée.
+  - Elle tourne seule (`turntable.ts`, ~12 s par tour) ; pas d'ombre de contact (cible de rendu en plus = FFR/MSAA cassés).
+- **Manipulation (spécs « grab » Meta : objet laissé en place, cinématique, un seul geste « select ») :**
+  - Gâchette, pincement ou clic **maintenu** sur la miniature → prise ; tourner / déplacer la manette ou la main
+    (ou glisser la souris) la fait tourner (lacet + inclinaison ≤ 60°) ; relâcher → elle reprend sa rotation après 1,5 s.
+  - **Tap** (relâché sans rotation, < 0,15 rad, en moins de 1,2 s) → raccorde / déconnecte l'appareil.
+  - Un pincement la main posée sur la miniature (origine du rayon dedans) la saisit aussi.
 
 #### Checklist Phase 4 :
 
 - [x] Composant `<SpawnedObject3D />` liant les recettes d'archetypes (`ObjectRecipe`).
 - [x] Séquence temporelle élastique de matérialisation in-situ.
-- [x] Anneau d'aura émissif à la base et ombres de contact au sol.
+- [x] Anneau d'aura émissif au socle (plus d'ombres de contact en XR).
+- [x] Miniature tournante à portée de main, saisie et rotation manette / main / souris, tap = raccorder.
 - [x] Maintien de l'ancrage spatial et interaction continue avec le blaster.
 - [x] Tests de rendu et de mise à l'échelle pour objets multiples.
 
@@ -248,13 +254,14 @@ Le système supporte 4 manières complètes d'interagir avec les boutons flottan
 | `spatial-air-button.tsx`        | Bouton 3D flottant avec pulsation lumineuse et texture interactive pour scanner.                   | [x]  |
 | `spatial-air-button-texture.ts` | Générateur de texture canvas 2D haute résolution pour le bouton de scan spatial.                   | [x]  |
 | `webcam-screen.ts`              | Géométrie de l'écran webcam : point 3D d'un pixel, pixel visé par un rayon, cible sous un pixel.   | [x]  |
-| `xr-layout.ts`                  | Positions des panneaux dans le casque (bouton, guide, HUD, pastille caméra).                       | [x]  |
+| `xr-layout.ts`                  | Positions des panneaux dans le casque (bouton, guide, HUD, pastille caméra, socles miniatures).    | [x]  |
 | `spatial-projection.ts`         | Algorithme de projection des boîtes 2D normalisées en coordonnées sphériques/arc 3D.               | [x]  |
 | `holo-detection-target.tsx`     | Cible holographique 3D réactive au tir, avec texture billboard et mode raccordement.               | [x]  |
 | `holo-target-texture.ts`        | Générateur de texture canvas pour les cibles de détection et statuts de raccordement réseau.       | [x]  |
 | `xr-blaster-controller.tsx`     | Rayon laser continu, réticule d'impact, raycast d'intersections et décharges de tir à la gâchette. | [x]  |
 | `xr-audio-fx.ts`                | Synthétiseur procédural Web Audio API (tir, impact, radar, connexion/déconnexion réseau).          | [x]  |
-| `spawned-object-3d.tsx`         | Rendu 3D de l'équipement matérialisé avec séquence d'extrusion élastique et aura d'énergie.        | [x]  |
+| `spawned-object-3d.tsx`         | Miniature 3D : vol depuis la vidéo vers son socle, rotation auto, agrandie au survol / en main.    | [x]  |
+| `turntable.ts`                  | État de rotation d'une miniature : rotation auto, prise, rotation, tap ou glissé au relâcher.      | [x]  |
 | `power-connection-beam.tsx`     | Conduit d'énergie 3D courbe en tube Catmull-Rom reliant l'appareil au microgrid du village.        | [x]  |
 | `village-spatial-hud.tsx`       | Tableau de bord télémétrique holographique flottant (Batterie, Solaire, Demande, Alertes).         | [x]  |
 | `spatial-hud-texture.ts`        | Générateur de texture canvas pour le tableau de bord holographique dans les airs.                  | [x]  |

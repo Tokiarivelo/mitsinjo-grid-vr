@@ -1,8 +1,9 @@
 // /village VR probe: drives the dev IWER emulator (Quest 3) like the IWER MCP does, through
 // `window.__IWER_DEVICE__.remote.dispatch`, with the sample room fed as a fake webcam.
 // Checks: session starts; a controller shot at the fridge in the video (no scan yet) starts ONE
-// scan and turns it into 3D; a 2nd shot connects it; a hand pinch at the fan and the left
-// controller at the TV turn those into 3D. Screenshots in <outDir>/vr-*.png.
+// scan and turns it into a spinning 3D miniature in reach; a tap on the miniature connects it;
+// a hand pinch at the fan and the left controller at the TV add their miniatures.
+// Screenshots in <outDir>/vr-*.png.
 // Usage: node scripts/vr-village-probe.mjs <baseUrl> <outDir>   (dev server must run; needs ffmpeg)
 import { chromium } from '@playwright/test';
 import { execFileSync } from 'node:child_process';
@@ -50,6 +51,12 @@ function screenPoint(u, v) {
     z: cz + G.radius * Math.cos(th),
   };
 }
+// First miniature pedestal: mirror of miniatureSlot(0) in xr-layout.ts.
+const MINI_0 = {
+  x: Math.sin((18 * Math.PI) / 180) * 0.55,
+  y: 1.28,
+  z: -Math.cos((18 * Math.PI) / 180) * 0.55,
+};
 // Object centres in the sample room (mock detector boxes).
 const FRIDGE = screenPoint(0.2137, 0.5506);
 const FAN = screenPoint(0.787, 0.631);
@@ -116,17 +123,18 @@ try {
   while (scansDone === 0 && Date.now() - t0 < 120000) await sleep(1000);
   await sleep(3000);
   await shot('2-fridge-3d');
-  await rc('select', { device: 'controller-right' });
-  await sleep(2500);
+  await sleep(1200);
+  await shot('2b-fridge-spinning');
+  await fire('controller-right', MINI_0, { x: 0.25, y: 1.3, z: 0 });
   await shot('3-fridge-connected');
   check('one scan only (no double fire)', scans === 1);
 
   await rc('set_input_mode', { mode: 'hand' });
-  await fire('hand-right', FAN, { x: 0.2, y: 1.3, z: -0.35 });
+  await fire('hand-right', FAN, { x: 0.2, y: 1.3, z: 0 });
   await shot('4-hand-fan-3d');
 
   await rc('set_input_mode', { mode: 'controller' });
-  await fire('controller-left', TV, { x: -0.2, y: 1.3, z: -0.3 });
+  await fire('controller-left', TV, { x: -0.2, y: 1.3, z: 0 });
   await shot('5-tv-3d');
   check('no page errors', errors.length === 0);
   if (errors.length) console.log(errors.slice(0, 10).join('\n'));

@@ -9,54 +9,67 @@ import { recipeMesh } from '../../utils/object-geometry';
 import { surfaceMaterial, SURFACES, type Surface } from '../../utils/surface-look';
 import type { SpatialTarget } from './spatial-projection';
 import { PowerConnectionBeam } from './power-connection-beam';
+import { spinTurntable, type Turntable } from './turntable';
+import { MINIATURE_SIZE } from './xr-layout';
+
+type Vec3 = [number, number, number];
 
 export interface SpawnedObject3DProps {
   target: SpatialTarget;
-  /** Spawn animation progress [0..1] */
-  spawnProgress?: number;
+  /** Pedestal position of the miniature, within the viewer's reach. */
+  slot: Vec3;
+  /** Rotation state, shared with the input controller that rotates it. */
+  turntable: Turntable;
+  hovered?: boolean;
   /** Whether the appliance is actively connected to the village microgrid */
   isConnected?: boolean;
 }
 
+const FLY_IN_SECONDS = 0.7;
+const PEDESTAL_RADIUS = MINIATURE_SIZE * 0.62;
+
 /**
- * 3D Procedural Appliance Materialized in-situ in the WebXR room.
- * Extrudes from 0 to 1 scale with elastic bounce. No ContactShadows: its per-frame render
- * target would break fixed foveation and MSAA in the headset (Meta WebXR perf guidance).
+ * 3D miniature of a shot object: flies out of the webcam video onto a pedestal in front of
+ * the viewer, spins on its own, and turns with the viewer's hold (see `turntable.ts`).
+ * No ContactShadows: its per-frame render target would break fixed foveation and MSAA in the
+ * headset (Meta WebXR perf guidance).
  */
 export const SpawnedObject3D = memo(function SpawnedObject3D({
   target,
+  slot,
+  turntable,
+  hovered = false,
   isConnected = false,
 }: SpawnedObject3DProps) {
-  const groupRef = useRef<THREE.Group>(null);
-  const scaleRef = useRef(0);
-  // Pops out of the webcam video toward the viewer, at a comfortable size.
-  const { detection, spawnPosition: position, spawnDimensions: dimensions } = target;
+  const rootRef = useRef<THREE.Group>(null);
+  const modelRef = useRef<THREE.Group>(null);
+  const flyRef = useRef(0);
+  const { detection, spawnPosition, spawnDimensions } = target;
+  const from = useMemo(() => new THREE.Vector3(...spawnPosition), [spawnPosition]);
+  const to = useMemo(() => new THREE.Vector3(...slot), [slot]);
 
-  const activeRecipe = useMemo(() => {
+  const geometry = useMemo(() => {
     const archetype = defaultArchetype(detection.category, detection.scenery, detection.label);
-    const fallbackKit: ObjectKit = {
+    const kit: ObjectKit = {
       archetype,
-      proportions: { w: dimensions[0], h: dimensions[1], d: dimensions[2] },
+      proportions: { w: spawnDimensions[0], h: spawnDimensions[1], d: spawnDimensions[2] },
       colors: { main: '#78909c', secondary: '#37474f', accent: '#00bcd4' },
       materials: { main: 'metal', secondary: 'glass', accent: 'plastic' },
     };
-    return fitRecipe(kitToRecipe(fallbackKit), 1.0);
-  }, [detection, dimensions]);
-
-  const geometry = useMemo(() => {
-    return recipeMesh(activeRecipe, 'full');
-  }, [activeRecipe]);
+    const aspect = spawnDimensions[0] / Math.max(spawnDimensions[1], 1e-6);
+    // Largest side normalized to 1, centred so it spins around its middle.
+    return recipeMesh(fitRecipe(kitToRecipe(kit), aspect), 'full').center();
+  }, [detection, spawnDimensions]);
 
   useEffect(() => () => geometry.dispose(), [geometry]);
 
-  const materials = useMemo(() => {
-    return SURFACES.map((s: Surface) =>
-      surfaceMaterial(s, {
-        vertexColors: true,
-        color: new THREE.Color('#ffffff'),
-      })
-    );
-  }, []);
+  const materials = useMemo(
+    () =>
+      SURFACES.map((s: Surface) =>
+        surfaceMaterial(s, { vertexColors: true, color: new THREE.Color('#ffffff') })
+      ),
+    []
+  );
 
   useEffect(
     () => () => {
@@ -65,40 +78,52 @@ export const SpawnedObject3D = memo(function SpawnedObject3D({
     [materials]
   );
 
-  // Spring animation on spawn
   useFrame((_, delta) => {
-    if (scaleRef.current < 1) {
-      // Smooth spring expansion towards 1.0
-      scaleRef.current = Math.min(1, scaleRef.current + delta * 2.8);
-      const s = THREE.MathUtils.lerp(0, 1, scaleRef.current);
-      if (groupRef.current) {
-        groupRef.current.scale.set(s, s, s);
-      }
+    const root = rootRef.current;
+    const model = modelRef.current;
+    if (!root || !model) return;
+    const dt = Math.min(delta, 0.1);
+
+    // Fly in from the object in the video, growing from a point.
+    if (flyRef.current < 1) {
+      flyRef.current = Math.min(1, flyRef.current + dt / FLY_IN_SECONDS);
+      const k = 1 - Math.pow(1 - flyRef.current, 3);
+      root.position.lerpVectors(from, to, k);
+      root.scale.setScalar(Math.max(0.001, k));
+    } else {
+      root.position.copy(to);
     }
+
+    spinTurntable(turntable, dt, performance.now());
+    model.rotation.set(turntable.pitch, turntable.yaw, 0, 'YXZ');
+    const grow = hovered || turntable.heldBy !== null ? 1.12 : 1;
+    const s = THREE.MathUtils.lerp(model.scale.x, MINIATURE_SIZE * grow, Math.min(1, dt * 12));
+    model.scale.setScalar(s);
   });
 
+  const base: Vec3 = [slot[0], slot[1] - MINIATURE_SIZE * 0.62, slot[2]];
+
   return (
-    <group ref={groupRef} position={position} name={`spawned-object-${target.id}`}>
-      {/* 3D Multi-material Model */}
-      <mesh geometry={geometry} material={materials} castShadow receiveShadow />
+    <>
+      <group ref={rootRef} position={spawnPosition} name={`spawned-object-${target.id}`}>
+        <group ref={modelRef} scale={MINIATURE_SIZE}>
+          <mesh geometry={geometry} material={materials} castShadow />
+        </group>
 
-      {/* Energy connection aura ring at base (Green when connected, Cyan when idle) */}
-      <mesh position={[0, -dimensions[1] / 2 + 0.01, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[0.1, Math.max(dimensions[0], dimensions[2]) * 0.7, 32]} />
-        <meshBasicMaterial
-          color={isConnected ? '#22c55e' : '#38bdf8'}
-          transparent
-          opacity={isConnected ? 0.7 : 0.3}
-        />
-      </mesh>
+        {/* Pedestal ring: green when connected, cyan when idle, brighter when held/hovered. */}
+        <mesh position={[0, -MINIATURE_SIZE * 0.6, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+          <ringGeometry args={[PEDESTAL_RADIUS * 0.7, PEDESTAL_RADIUS, 40]} />
+          <meshBasicMaterial
+            color={isConnected ? '#22c55e' : '#38bdf8'}
+            transparent
+            opacity={hovered ? 0.95 : isConnected ? 0.75 : 0.45}
+            side={THREE.DoubleSide}
+          />
+        </mesh>
+      </group>
 
-      {/* 3D Electrical Power Connection Conduit linking to village diorama */}
-      {isConnected && (
-        <PowerConnectionBeam
-          from={[position[0], position[1] - dimensions[1] / 2, position[2]]}
-          to={[0, 0, -1.5]}
-        />
-      )}
-    </group>
+      {/* Power conduit from the pedestal to the village diorama. */}
+      {isConnected && <PowerConnectionBeam from={base} to={[0, 0, -1.5]} />}
+    </>
   );
 });

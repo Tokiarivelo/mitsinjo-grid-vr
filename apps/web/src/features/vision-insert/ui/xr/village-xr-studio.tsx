@@ -12,13 +12,14 @@ import { projectDetectionsTo3D, type SpatialTarget } from './spatial-projection'
 import { SpatialAirButton } from './spatial-air-button';
 import { HoloDetectionTarget } from './holo-detection-target';
 import { SpawnedObject3D } from './spawned-object-3d';
-import { AIR_BUTTON_ID, XRBlasterController } from './xr-blaster-controller';
+import { AIR_BUTTON_ID, XRBlasterController, type MiniatureHandle } from './xr-blaster-controller';
+import { createTurntable, type Turntable } from './turntable';
 import { playGridConnectSound, playGridDisconnectSound } from './xr-audio-fx';
 import { VillageSpatialHUD } from './village-spatial-hud';
 import { LiveWebcamBackdrop } from './live-webcam-backdrop';
 import { SpatialInteractionGuide } from './spatial-interaction-guide';
 import { pickTargetAtUv } from './webcam-screen';
-import { AIR_BUTTON_POSITION, INTERACTION_GUIDE_POSITION } from './xr-layout';
+import { AIR_BUTTON_POSITION, INTERACTION_GUIDE_POSITION, miniatureSlot } from './xr-layout';
 
 export interface VillageXRStudioProps {
   detections: ApplianceDetection[];
@@ -43,7 +44,11 @@ export const VillageXRStudio = memo(function VillageXRStudio({
   const { locale } = useAppLocale();
   const t = useTranslations('features.visionInsert');
   const { list: simulationAppliances, upsert, remove } = useSimulationAppliances();
-  const [materializedIds, setMaterializedIds] = useState<Set<string>>(() => new Set());
+  /** Shot objects, in the order they became 3D miniatures (= their pedestal slot). */
+  const [materialized, setMaterialized] = useState<string[]>([]);
+  const materializedIds = useMemo(() => new Set(materialized), [materialized]);
+  /** Rotation of each miniature, mutated by the input controller in the frame loop. */
+  const turntablesRef = useRef(new Map<string, Turntable>());
   const [hoveredTargetId, setHoveredTargetId] = useState<string | null>(null);
   const [recentEvent, setRecentEvent] = useState<string | null>(null);
   const eventTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -92,7 +97,7 @@ export const VillageXRStudio = memo(function VillageXRStudio({
       const title = localLabel(target.detection, locale) || target.detection.label;
 
       if (!materializedIds.has(id)) {
-        setMaterializedIds((prev) => new Set(prev).add(id));
+        setMaterialized((prev) => (prev.includes(id) ? prev : [...prev, id]));
         notifyEvent(t('vrHudEventMaterialized', { name: title }));
         onSelectAppliance?.(id);
         return;
@@ -187,6 +192,22 @@ export const VillageXRStudio = memo(function VillageXRStudio({
     else notifyEvent(t('vrHudEventNoObject'));
   }, [isScanning, targets, handleShootTarget, notifyEvent, t]);
 
+  const miniatures = useMemo<Array<MiniatureHandle & { target: SpatialTarget }>>(() => {
+    const byId = new Map(targets.map((tg) => [tg.id, tg]));
+    const out: Array<MiniatureHandle & { target: SpatialTarget }> = [];
+    materialized.forEach((id, index) => {
+      const target = byId.get(id);
+      if (!target) return;
+      let turntable = turntablesRef.current.get(id);
+      if (!turntable) {
+        turntable = createTurntable();
+        turntablesRef.current.set(id, turntable);
+      }
+      out.push({ id, position: miniatureSlot(index), turntable, target });
+    });
+    return out;
+  }, [materialized, targets]);
+
   const status = isScanning ? 'scanning' : targets.length > 0 ? 'detected' : 'idle';
 
   return (
@@ -246,20 +267,23 @@ export const VillageXRStudio = memo(function VillageXRStudio({
         />
       ))}
 
-      {/* 5. Materialized 3D Models */}
-      {targets
-        .filter((t) => materializedIds.has(t.id))
-        .map((target) => (
-          <SpawnedObject3D
-            key={`spawned-${target.id}`}
-            target={target}
-            isConnected={connectedIds.has(target.id)}
-          />
-        ))}
+      {/* 7. 3D miniatures in reach: spin, hold to rotate, tap to connect */}
+      {miniatures.map((m) => (
+        <SpawnedObject3D
+          key={`spawned-${m.id}`}
+          target={m.target}
+          slot={m.position}
+          turntable={m.turntable}
+          hovered={hoveredTargetId === m.id}
+          isConnected={connectedIds.has(m.id)}
+        />
+      ))}
 
       {/* 6. XR Blaster Controller Raycasting & Particle Effects */}
       <XRBlasterController
         targets={targets}
+        miniatures={miniatures}
+        onTapMiniature={handleShootTarget}
         onHoverTarget={setHoveredTargetId}
         onShootTarget={handleShootTarget}
         onTriggerScan={handleTriggerScan}
