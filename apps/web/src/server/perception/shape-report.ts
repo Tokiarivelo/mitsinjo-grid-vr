@@ -62,6 +62,14 @@ export function worstMetric(s: ModelScore): { metric: Metric; gap: number } {
   return { metric, gap: gaps[metric] };
 }
 
+/** Detail cells (PQ-T2): part recall, precision, interior edge F1, part ΔE; « — » when not measured. */
+function detailCells(s: ModelScore): string {
+  const d = s.detail ?? {};
+  return [d.partRecall, d.partPrecision, d.interiorEdgeF1, d.partDeltaE]
+    .map((v) => (v === undefined ? '—' : String(v)))
+    .join(' | ');
+}
+
 const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
 const ok = (pass: boolean) => (pass ? '✓' : '✗');
 
@@ -71,22 +79,23 @@ export function reportMarkdown(rows: ReportRow[], date: string): string {
     `# Shape report — ${date}`,
     '',
     `Stop criteria: IoU ≥ ${STOP.iou} · edge F1 ≥ ${STOP.edgeF1} · ΔE ≤ ${STOP.deltaE}. Sheet: \`contact-sheet.png\` (photo | flat | ¾).`,
+    'Detail (PQ-T2, not in the score yet): part recall · precision · interior edge F1 · part ΔE; « — » without SAM part masks.',
     '',
-    '| Object | Score | IoU | Edge F1 | ΔE | Parts | ms | Viol | Status | Worst |',
-    '| ------ | ----- | --- | ------- | -- | ----- | -- | ---- | ------ | ----- |',
+    '| Object | Score | IoU | Edge F1 | ΔE | Recall | Prec | Int F1 | Part ΔE | Parts | ms | Viol | Status | Worst |',
+    '| ------ | ----- | --- | ------- | -- | ------ | ---- | ------ | ------- | ----- | -- | ---- | ------ | ----- |',
   ];
   for (const r of rows) {
     const s = r.score;
     const w = worstMetric(s);
     lines.push(
       `| ${r.name} | ${s.score} | ${s.iou} ${ok(s.iou >= STOP.iou)} | ${s.edgeF1} ${ok(s.edgeF1 >= STOP.edgeF1)} | ` +
-        `${s.deltaE} ${ok(s.deltaE <= STOP.deltaE)} | ${r.parts} | ${Math.round(r.ms)} | ${r.violations} | ${statusCell(r.statusCounts)} | ${w.gap > 0 ? w.metric : '—'} |`
+        `${s.deltaE} ${ok(s.deltaE <= STOP.deltaE)} | ${detailCells(s)} | ${r.parts} | ${Math.round(r.ms)} | ${r.violations} | ${statusCell(r.statusCounts)} | ${w.gap > 0 ? w.metric : '—'} |`
     );
   }
   const avg = (f: (s: ModelScore) => number) => mean(rows.map((r) => f(r.score)));
   lines.push(
     `| **mean** | ${Math.round(avg((s) => s.score))} | ${avg((s) => s.iou).toFixed(2)} | ` +
-      `${avg((s) => s.edgeF1).toFixed(2)} | ${avg((s) => s.deltaE).toFixed(1)} | | | | | |`,
+      `${avg((s) => s.edgeF1).toFixed(2)} | ${avg((s) => s.deltaE).toFixed(1)} | | | | | | | | | |`,
     ''
   );
   const worst = rows.reduce<ReportRow | null>(

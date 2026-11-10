@@ -1,40 +1,36 @@
 # HANDOFF — read first, overwrite at end of session (≤40 lines)
 
-**Updated:** 2026-11-10 · **By:** Claude Code · **Branch:** docs/vision-to-3d-refine (from `main`, docs only)
+**Updated:** 2026-11-10 · **By:** Claude Code · **Branch:** feat/pq-t2-detail-score (from `main`)
 
 ## Current state
 
-- **Photo → 3D docs rewritten (no code changed).** `docs/vision-to-3d-methodology.md` now describes the real
-  pipeline (`server/perception/`), audits the old claims, ranks 15 weak points and lists every file to add or change.
-- **Main finding:** `make shape-report` says 93 / 100 on five **synthetic** pictures while the ¾ renders are still
-  boxy (car = slab + wedge, fridge without handle). The score sees outline and colour only; the critic fires
-  under 70 on a 256 px sheet. Nothing can be judged until the ruler is fixed.
-- **New:** `docs/vision-to-3d-muse-skills.md` (prompt-ready cards: base, look, kit, 13 archetype cards, critic,
-  stage ops, views check, final check, judge, Muse Image views, SAM wording). Target texts, not in the code yet.
-- **New:** `docs/tasks/PV-vision-quality.md` (PV-Q, PQ-T1…T41: task, files, test, done-when).
-- **Rendering audit** (methodology § 11): four renderers draw the same recipe unequally. Viewer has no
-  part-on-part shadow or AO; the village draws all placed objects with one material; VR has no maps. Tasks PQ-T32–T35. § 12: web research mapped to 13 studio steps (PQ-T36–T41).
-- **Moved:** cloud and sun maths → `docs/vision-to-3d-atmosphere.md` (word for word, not re-audited).
-- VR state unchanged (merged in `main`): /village walkable 360° tour, outdoor walk, `make vr-probe` 15 PASS.
+- **PQ-T2 done: detail score.** `server/perception/detail-score.ts` `scoreDetail`: part recall, part precision,
+  interior edge F1, part ΔE (methodology §6.1, as-built note there). `scoreRecipe` attaches it as
+  `ModelScore.detail`; not weighted into the score. `make shape-report` shows four new columns.
+- Golden mean 93 unchanged (IoU 0.98, edge 0.91, ΔE 3.4). No golden has SAM part masks, so recall / precision /
+  part ΔE show « — ». Interior edge F1: car 0.81, lamp 0.31, cottage 0.17, **fridge 0, tree 0**: the ruler now
+  sees what the outline score missed (fridge without handle).
+- PQ-T1 (real photo set) still open: needs the user's photos and API calls. Its real rows will fill the columns.
+- VR state unchanged (in `main`).
 
 ## Next
 
-1. **PQ-T1** real photo set (`make shape-capture`, API calls, needs the user's photos), then PQ-T2, T3, T36.
-2. **PV-C** (`docs/tasks/PV-capture-lab.md`, PC-T1…T41, planned): instant capture, elastic grab (mouse / controller
-   / hand), hologram, 3D Lab tools, AI assistant; **C7 = the Lab inside the headset** (hands, voice). Start: PC-T1, PC-T9.
-3. VR backlog as before: real Quest check, tour links, headset static text → i18n keys, VS-T9 audio.
+1. **PQ-T1** real photo set (`make shape-capture PHOTO=… ID=…`, user's photos, API calls).
+2. **PQ-T3** flat render draws assembly details (frames, panes, handles, rims) — offline, next agent task.
+3. Then PQ-T36 (interior difference, other angles), PV-C (PC-T1, PC-T9).
 
 ## Files touched
 
-- `docs/vision-to-3d-methodology.md` (rewrite), `docs/vision-to-3d-muse-skills.md` (new),
-  `docs/vision-to-3d-atmosphere.md` (new, split), `docs/tasks/PV-vision-quality.md` + `PV-capture-lab.md` (new), `docs/tasks/README.md`
-- `.claude/skills/shape-3d/SKILL.md`, `.claude/skills/shape-loop/SKILL.md`, `CLAUDE.md` (doc map row)
+- `apps/web/src/server/perception/detail-score.ts` (new) + `__tests__/detail-score.test.ts` (new, 10 tests)
+- `model-score.ts` (`detail` field, `matched` exported), `score-shape.ts` (`detailParts`, `gridParts`),
+  `shape-report.ts` + `__tests__/shape-report.test.ts` (four columns)
+- `docs/vision-to-3d-methodology.md` §6.1, `docs/tasks/PV-vision-quality.md` (PQ-T2 ticked),
+  `docs/tasks/PV-shape-realism.md` (loop log row), `.claude/skills/shape-3d/SKILL.md` (score row)
 
 ## Decisions
 
-- Q0 (measure on real photos, detail score, calibrated judge) comes before any prompt or geometry work.
-- Skill cards are texts for the Muse models, loaded per call and per archetype; a card replaces a prompt only
-  when its eval is not worse. Kit stays on Spark 1.3; Wonder = final check and judge only.
-- Muse Image: side view and operator-validated clean front only; top and back views are never generated (PR-4.1).
-- Unverified claims of the old file (prices, context sizes, « Passed » table, `scratch/test-orbit.mjs`) removed.
-- Open for the user: which real photos to capture for PQ-T1; whether to spend API calls on two kit samples (PQ-T18).
+- Untagged kit parts get the landmark guesses (axis-z cylinder below body = wheel, thin box = window or door).
+- Part ΔE compares the SAM box on the photo with the same pixels on the shaded render (an exact model → 0),
+  not with the unshaded part colour (which gave ΔE 7 on an exact model).
+- Interior edge F1 is 1 when neither side has interior edges ("nothing to draw, nothing drawn").
+- No test scenario: dev report only, nothing visible in the app.

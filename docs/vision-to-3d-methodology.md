@@ -167,6 +167,13 @@ the photo's view.
 Reported as its own columns first. It enters the weighted score only after the baseline on the real set is known
 (PQ-T6), so a threshold is never chosen to pass one case.
 
+**As built (PQ-T2):** `detail-score.ts` `scoreDetail`, attached as `ModelScore.detail` by `scoreRecipe` and shown in
+four `make shape-report` columns. Concepts map to part kinds (`CONCEPT_KINDS`: lamp → light or head); untagged kit
+parts are guessed like the landmarks (axis-z cylinder below the body = wheel, thin box = window or door). Matching
+is greedy one-to-one on visible bounding boxes (largest SAM part first). Part ΔE compares the SAM box on the photo
+with the same pixels on the shaded render. Recall, precision and part ΔE are absent without part masks (every
+synthetic golden today); interior edge F1 always shows.
+
 ### 6.2 Rubric judge (PQ-T4)
 
 Muse Wonder receives one sheet (photo, model front, model ¾) and grades six criteria from 1 to 5: silhouette,

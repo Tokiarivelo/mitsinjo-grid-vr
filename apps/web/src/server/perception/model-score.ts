@@ -6,6 +6,7 @@
  * Pure and deterministic; the loop (`/shape-loop`) and the Spark critic (PR-0.6) rank models with it.
  */
 import { deltaE2000, hexToLab, linearToLab, srgbToLinear } from './color-measure';
+import type { DetailScore } from './detail-score';
 import type { FlatRender } from './flat-render';
 import { distanceTo, emptyMask, iou, maskEdges, type Mask } from './silhouette-fit';
 
@@ -27,6 +28,8 @@ export interface ModelScore {
   landmark?: number;
   /** 0–100, higher = closer to the photo. */
   score: number;
+  /** Detail numbers (PQ-T2), reported beside the score, not weighted into it. */
+  detail?: DetailScore;
 }
 
 /** Weights of the score: silhouette, edges, colour. */
@@ -136,7 +139,7 @@ export function edgeMap(grid: RgbGrid, region?: Mask, share = 1): Mask {
 }
 
 /** Share of `a`'s pixels within `tol` of a pixel of `b` (1 when `a` is empty). */
-function matched(a: Mask, bDistance: Float32Array, tol: number): number {
+export function matched(a: Mask, bDistance: Float32Array, tol: number): number {
   let n = 0;
   let hit = 0;
   for (let i = 0; i < a.data.length; i++) {

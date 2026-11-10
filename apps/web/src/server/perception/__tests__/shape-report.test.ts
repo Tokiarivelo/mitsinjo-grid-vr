@@ -103,7 +103,11 @@ describe('shape report (PR-0.3)', () => {
       },
       {
         name: 'car',
-        score: score({ score: 60, edgeF1: 0.4 }),
+        score: score({
+          score: 60,
+          edgeF1: 0.4,
+          detail: { partRecall: 0.5, partPrecision: 1, interiorEdgeF1: 0.31, partDeltaE: 6.2 },
+        }),
         parts: 7,
         ms: 80,
         violations: 2,
@@ -112,7 +116,8 @@ describe('shape report (PR-0.3)', () => {
     ];
     const md = reportMarkdown(rows, '2026-11-01');
     expect(md).toContain('| car | 60 | 0.9 ✓ | 0.4 ✗ |');
-    expect(md).toContain('| 80 | 2 | I5 U2 | edgeF1 |');
+    expect(md).toContain('| 0.5 | 1 | 0.31 | 6.2 | 7 | 80 | 2 | I5 U2 | edgeF1 |');
+    expect(md).toContain('| — | — | — | — | 3 | 40 |');
     expect(md).toContain('| **mean** | 79 |');
     expect(md).toContain('**Next:** car (score 60) — edgeF1');
   });
