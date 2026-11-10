@@ -931,6 +931,7 @@
       "vrWristMenuOpen": "Menu",
       "vrWristMenuClose": "Fermer",
       "vrInteractionHelpWrist": "Menu : touchez le bouton sur votre poignet gauche (doigt de l'autre main, laser ou pincement) pour afficher ou masquer les panneaux.",
+      "vrInteractionHelpWalk": "Marcher : maintenez ↑ / W / Z (S pour reculer, A / Q / D pour aller de côté) ou poussez le stick ; marchez sur une flèche au sol, ou cliquez-la, pour passer au lieu suivant.",
       "vrAirButtonTitle": "Scanner la pièce et détecter",
       "vrAirButtonSubtitle": "Visez et tirez pour scanner",
       "vrInteractionGuideVR": "🎮 Appuyer sur la gâchette · ✋ Pincer les doigts",

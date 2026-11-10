@@ -5,16 +5,25 @@ import * as THREE from 'three';
 import { useFrame, useThree } from '@react-three/fiber';
 import { Billboard } from '@react-three/drei';
 import { useTranslations } from '@/lib/i18n';
-import { renderView, uFrontFacing, yawPitchOf, type CaptureView } from './equirect';
+import { renderView, uFrontFacing, yawPitchOf, type CaptureView, type Vec3 } from './equirect';
 import { entryU, TOUR_ROOMS, type TourRoomId } from './tour-data';
 import {
-  tourArrows,
+  arrowAt,
+  isWalkKey,
+  keyWalkAxes,
+  stepWalk,
+  stickWalkAxes,
   tourExpectedDetections,
+  tourScale,
+  TOUR_ARROW_REACH,
   TOUR_EYE,
   TOUR_SPHERE_RADIUS,
-  walkTarget,
+  TOUR_WALK_SPEED,
+  type Ground,
   type TourArrow,
+  type WalkAxes,
 } from './tour-nav';
+import { isDevXREmulated } from '@/features/microgrid-3d';
 import type { ApplianceDetection } from '@/lib/vision';
 import { getPillLabelTexture } from '../wrist-menu-texture';
 
@@ -27,10 +36,12 @@ export interface PanoramaTourProps {
   room: TourRoomId;
   /** Image column straight ahead; null until the first frame sets it from the head. */
   uFront: number | null;
-  /** Room asked for (arrow, stick, key); the tour fades out, swaps, then calls `onArrive`. */
+  /** Floor arrows of the room (from the tour state); their positions follow the walk. */
+  arrows: TourArrow[];
+  /** Place asked for (arrow shot, or walked onto): walk to its arrow, then through it. */
   pending: TourRoomId | null;
   onArrive: (room: TourRoomId, uFront: number) => void;
-  /** "Walk forward" (stick or key): the arrow closest to the gaze. */
+  /** Walked onto a floor arrow: go through to that place. */
   onWalk: (to: TourRoomId) => void;
   /** Hovered id from the input controller (`tour-link:<room>`). */
   hoveredId?: string | null;
@@ -38,49 +49,99 @@ export interface PanoramaTourProps {
   onRegisterCapture: (fn: ((view: CaptureView) => TourCapture | null) | null) => void;
 }
 
-const FADE_OUT = 0.18;
 const FADE_IN = 0.28;
-const WALK_COOLDOWN_MS = 900;
+/** Walk-through: the old photo keeps moving forward while the next one comes in from behind. */
+const CROSS_TIME = 0.75;
+const CROSS_DIST = 1.1;
+/** Eye height above the floor in the photos (m). */
+const FLOOR = TOUR_EYE[1];
+/** Head bob while walking (off a real headset: bobbing the world in VR is a comfort issue). */
+const BOB_AMPLITUDE = 0.022;
+const STEPS_PER_SECOND = 1.8;
 const CAPTURE_W = 1280;
 const CAPTURE_H = 720;
 
 const VERTEX = /* glsl */ `
-  varying vec3 vDir;
+  varying vec3 vWorld;
   void main() {
-    vDir = position;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    vec4 w = modelMatrix * vec4(position, 1.0);
+    vWorld = w.xyz;
+    gl_Position = projectionMatrix * viewMatrix * w;
   }
 `;
 
-// Same mapping as `equirect.ts` (yaw 0 = -Z, right = +u). Texture flipY: GL v = 1 - image v.
+// Grounded panorama: the photo is projected on a floor plane and a wall around the spot where it
+// was taken, so walking away from that spot slides the floor and shifts near things more than far
+// ones (parallax). Same mapping as `equirect.ts` (yaw 0 = -Z, right = +u); flipY: GL v = 1 - v.
 const FRAGMENT = /* glsl */ `
-  uniform sampler2D map;
-  uniform float uFront;
+  uniform sampler2D mapA;
+  uniform sampler2D mapB;
+  uniform float uFrontA;
+  uniform float uFrontB;
+  uniform vec3 offA;
+  uniform vec3 offB;
+  uniform float wallA;
+  uniform float wallB;
+  uniform float mixB;
   uniform float fade;
-  varying vec3 vDir;
+  uniform float vignette;
+  uniform vec3 eyeCenter;
+  uniform vec3 camFwd;
+  varying vec3 vWorld;
   const float TAU = 6.28318530718;
   const float PI = 3.14159265359;
+  const float FLOOR = ${FLOOR.toFixed(2)};
+
+  vec2 groundedUv(vec3 o, vec3 d, float wall, float uF) {
+    float b = dot(o, d);
+    float c = dot(o, o) - wall * wall;
+    float t = -b + sqrt(max(b * b - c, 0.0));
+    if (d.y < -1e-4) t = min(t, (-FLOOR - o.y) / d.y);
+    vec3 p = normalize(o + t * d);
+    float u = fract(uF + atan(p.x, -p.z) / TAU);
+    float v = 0.5 - asin(clamp(p.y, -1.0, 1.0)) / PI;
+    return vec2(u, 1.0 - v);
+  }
+
   void main() {
-    vec3 d = normalize(vDir);
-    float u = fract(uFront + atan(d.x, -d.z) / TAU);
-    float v = 0.5 - asin(clamp(d.y, -1.0, 1.0)) / PI;
-    vec3 c = texture2D(map, vec2(u, 1.0 - v)).rgb;
-    gl_FragColor = vec4(c * (1.0 - fade), 1.0);
+    vec3 d = normalize(vWorld - cameraPosition);
+    vec3 head = cameraPosition - eyeCenter;
+    vec3 c = texture2D(mapA, groundedUv(head + offA, d, wallA, uFrontA)).rgb;
+    if (mixB > 0.0) {
+      vec3 cb = texture2D(mapB, groundedUv(head + offB, d, wallB, uFrontB)).rgb;
+      c = mix(c, cb, mixB);
+    }
+    // Comfort vignette while moving: narrows the view edges, never the centre.
+    float edge = 1.0 - smoothstep(0.5, 0.9, dot(d, camFwd));
+    c *= (1.0 - fade) * (1.0 - vignette * edge);
+    gl_FragColor = vec4(c, 1.0);
     #include <colorspace_fragment>
   }
 `;
 
 const _dir = new THREE.Vector3();
+const _head = new THREE.Vector3();
+
+interface Cross {
+  to: TourRoomId;
+  uFront: number;
+  start: Ground;
+  fwd: Ground;
+  t: number;
+}
 
 /**
- * Walkable 360° test space (VS-T14): real photos of six rooms on a sphere around the viewer,
- * Street View-like floor arrows to the next rooms, blink fade between rooms (Meta comfort:
- * teleport with a fade, no smooth motion). Drawn last with no depth write, so panels, labels
- * and targets in front of it are never cut.
+ * Walkable 360° test space (VS-T14/16): real photos around the viewer, grounded on a floor so the
+ * viewer really walks (keys, thumbstick, or walking in the room) instead of jumping between
+ * spots. Walking onto a floor arrow (or shooting it) goes through to the next place: the photo
+ * keeps moving forward while the next one blends in. Comfort: constant speed, vignette while
+ * moving, no head bob in a real headset. Drawn last with no depth write, so panels, labels and
+ * targets in front of it are never cut.
  */
 export const PanoramaTour = memo(function PanoramaTour({
   room,
   uFront,
+  arrows,
   pending,
   onArrive,
   onWalk,
@@ -92,18 +153,32 @@ export const PanoramaTour = memo(function PanoramaTour({
   const texturesRef = useRef(new Map<TourRoomId, THREE.Texture>());
   const fadeRef = useRef(1);
   const pixelsRef = useRef<{ room: TourRoomId; data: ImageData } | null>(null);
-  const lastWalkRef = useRef(0);
-  const arrowsRef = useRef<TourArrow[]>([]);
-  const onWalkRef = useRef(onWalk);
-  onWalkRef.current = onWalk;
+  const groundRef = useRef<Ground>([0, 0]);
+  const crossRef = useRef<Cross | null>(null);
+  /** Shown room after a walk-through, until the parent's props catch up. */
+  const arrivedRef = useRef<{ room: TourRoomId; uFront: number } | null>(null);
+  const motionRef = useRef({ speed: 0, phase: 0 });
+  const heldRef = useRef(new Set<string>());
+  const hoverRef = useRef(false);
+  const arrowsGroupRef = useRef<THREE.Group>(null);
 
   const material = useMemo(
     () =>
       new THREE.ShaderMaterial({
         uniforms: {
-          map: { value: null },
-          uFront: { value: 0 },
+          mapA: { value: null },
+          mapB: { value: null },
+          uFrontA: { value: 0 },
+          uFrontB: { value: 0 },
+          offA: { value: new THREE.Vector3() },
+          offB: { value: new THREE.Vector3() },
+          wallA: { value: 4 },
+          wallB: { value: 4 },
+          mixB: { value: 0 },
           fade: { value: 1 },
+          vignette: { value: 0 },
+          eyeCenter: { value: new THREE.Vector3(...TOUR_EYE) },
+          camFwd: { value: new THREE.Vector3(0, 0, -1) },
         },
         vertexShader: VERTEX,
         fragmentShader: FRAGMENT,
@@ -149,11 +224,8 @@ export const PanoramaTour = memo(function PanoramaTour({
     [material, geometry]
   );
 
-  const arrows = useMemo(
-    () => (uFront === null ? [] : tourArrows(TOUR_ROOMS[room], uFront)),
-    [room, uFront]
-  );
-  arrowsRef.current = arrows;
+  // Arrow spots relative to the photo spot, captured before the walk moves them.
+  const bases = useMemo(() => arrows.map((a) => [...a.position] as Vec3), [arrows]);
 
   // Scan photo of the current room: what the viewer sees through `view`.
   useEffect(() => {
@@ -194,61 +266,166 @@ export const PanoramaTour = memo(function PanoramaTour({
     return () => onRegisterCapture(null);
   }, [room, uFront, onRegisterCapture]);
 
-  // Keyboard walk (desktop / emulator): ↑, W or Z (AZERTY).
+  // Keys held = walking (↑↓←→, WASD, ZQSD). Desktop preview: only while the pointer is over the
+  // scene, so arrow keys still scroll the page. Pointer locked (emulator Play Mode): the emulator
+  // moves the headset itself with these keys, and walking onto arrows still works.
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (!['ArrowUp', 'w', 'W', 'z', 'Z'].includes(e.key)) return;
+    const canvas = gl.domElement;
+    const held = heldRef.current;
+    const enter = () => (hoverRef.current = true);
+    const leave = () => (hoverRef.current = false);
+    const down = (e: KeyboardEvent) => {
+      if (!isWalkKey(e.key)) return;
       const target = e.target as HTMLElement | null;
       if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
-      camera.getWorldDirection(_dir);
-      const to = walkTarget(arrowsRef.current, yawPitchOf([_dir.x, _dir.y, _dir.z]).yaw);
-      if (to) onWalkRef.current(to);
+      if (!gl.xr?.isPresenting && !hoverRef.current) return;
+      if (e.key.startsWith('Arrow')) e.preventDefault();
+      held.add(e.key.toLowerCase());
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [camera]);
+    const up = (e: KeyboardEvent) => held.delete(e.key.toLowerCase());
+    const clear = () => held.clear();
+    canvas.addEventListener('pointerenter', enter);
+    canvas.addEventListener('pointerleave', leave);
+    window.addEventListener('keydown', down);
+    window.addEventListener('keyup', up);
+    window.addEventListener('blur', clear);
+    return () => {
+      canvas.removeEventListener('pointerenter', enter);
+      canvas.removeEventListener('pointerleave', leave);
+      window.removeEventListener('keydown', down);
+      window.removeEventListener('keyup', up);
+      window.removeEventListener('blur', clear);
+      held.clear();
+    };
+  }, [gl]);
 
-  useFrame((_, delta) => {
+  useFrame((_, rawDelta) => {
+    const delta = Math.min(rawDelta, 0.1);
     camera.getWorldDirection(_dir);
     const headYaw = yawPitchOf([_dir.x, _dir.y, _dir.z]).yaw;
-    const current = texturesRef.current.get(room) ?? texture(room);
+    material.uniforms.camFwd!.value.copy(_dir);
+
+    // Props catch up after a walk-through.
+    const arrived = arrivedRef.current;
+    if (arrived && arrived.room === room && arrived.uFront === uFront) arrivedRef.current = null;
+    const shownRoom = arrivedRef.current?.room ?? room;
+    const shownU = arrivedRef.current?.uFront ?? uFront;
+    const current = texturesRef.current.get(shownRoom) ?? texture(shownRoom);
 
     // First frame: face the start view.
-    if (uFront === null) {
+    if (shownU === null) {
       if (current.image) onArrive(room, uFrontFacing(entryU(TOUR_ROOMS[room], null), headYaw));
       material.uniforms.fade!.value = 1;
       return;
     }
 
-    // Thumbstick forward on any controller = walk to the arrow ahead.
+    const scale = tourScale(TOUR_ROOMS[shownRoom]);
     const session = gl.xr?.getSession?.();
-    if (session && !pending) {
-      const now = performance.now();
-      for (const source of session.inputSources) {
-        const axes = source.gamepad?.axes;
-        const y = axes && axes.length >= 4 ? axes[3]! : (axes?.[1] ?? 0);
-        if (y < -0.75 && now - lastWalkRef.current > WALK_COOLDOWN_MS) {
-          lastWalkRef.current = now;
-          const to = walkTarget(arrowsRef.current, headYaw);
-          if (to) onWalkRef.current(to);
-          break;
-        }
+    const realHeadset = !!session && !isDevXREmulated();
+    camera.getWorldPosition(_head);
+    const head: Ground = [_head.x - TOUR_EYE[0], _head.z - TOUR_EYE[2]];
+    const before = groundRef.current;
+    let ground = before;
+    const cross = crossRef.current;
+
+    if (cross) {
+      // Walk-through: old photo moves on, next one comes in from behind, then arrive.
+      cross.t = Math.min(1, cross.t + delta / CROSS_TIME);
+      const e = cross.t * cross.t * (3 - 2 * cross.t);
+      ground = [
+        cross.start[0] + cross.fwd[0] * CROSS_DIST * e,
+        cross.start[1] + cross.fwd[1] * CROSS_DIST * e,
+      ];
+      material.uniforms.mapB!.value = texture(cross.to);
+      material.uniforms.uFrontB!.value = cross.uFront;
+      material.uniforms.wallB!.value = tourScale(TOUR_ROOMS[cross.to]).wall;
+      material.uniforms.offB!.value.set(
+        cross.fwd[0] * CROSS_DIST * (e - 1),
+        0,
+        cross.fwd[1] * CROSS_DIST * (e - 1)
+      );
+      material.uniforms.mixB!.value = e;
+      if (cross.t >= 1) {
+        crossRef.current = null;
+        arrivedRef.current = { room: cross.to, uFront: cross.uFront };
+        groundRef.current = [0, 0];
+        material.uniforms.mixB!.value = 0;
+        onArrive(cross.to, cross.uFront);
+        // Next frame shows the new place at its photo spot.
+        material.uniforms.mapA!.value = texture(cross.to);
+        material.uniforms.uFrontA!.value = cross.uFront;
+        material.uniforms.wallA!.value = tourScale(TOUR_ROOMS[cross.to]).wall;
+        material.uniforms.offA!.value.set(0, 0, 0);
+        return;
       }
+    } else if (pending && !arrivedRef.current) {
+      // Going to a place: walk to its arrow, then through it once the next photo is loaded.
+      const i = arrows.findIndex((a) => a.to === pending);
+      const target: Ground =
+        i >= 0 ? [bases[i]![0] - TOUR_EYE[0], bases[i]![2] - TOUR_EYE[2]] : head;
+      const dx = target[0] - (ground[0] + head[0]);
+      const dz = target[1] - (ground[1] + head[1]);
+      const dist = Math.hypot(dx, dz);
+      if (dist > TOUR_ARROW_REACH) {
+        const step = Math.min(dist, TOUR_WALK_SPEED * delta);
+        ground = [ground[0] + (dx / dist) * step, ground[1] + (dz / dist) * step];
+      } else if (texture(pending).image) {
+        const fwd: Ground =
+          dist > 1e-3 ? [dx / dist, dz / dist] : [Math.sin(headYaw), -Math.cos(headYaw)];
+        crossRef.current = {
+          to: pending,
+          uFront: uFrontFacing(entryU(TOUR_ROOMS[pending], shownRoom), headYaw),
+          start: ground,
+          fwd,
+          t: 0,
+        };
+      }
+    } else if (!arrivedRef.current) {
+      // Free walking: keys (unless the emulator owns them) and thumbsticks.
+      const axes: WalkAxes =
+        typeof document !== 'undefined' && document.pointerLockElement
+          ? { forward: 0, strafe: 0 }
+          : keyWalkAxes(heldRef.current);
+      for (const source of session?.inputSources ?? []) {
+        const stick = stickWalkAxes(source.gamepad?.axes);
+        axes.forward += stick.forward;
+        axes.strafe += stick.strafe;
+      }
+      ground = stepWalk(ground, axes, headYaw, delta, scale.walk);
+      const onArrow = arrowAt(arrows, [ground[0] + head[0], ground[1] + head[1]]);
+      if (onArrow) onWalk(onArrow.to);
+    }
+    groundRef.current = ground;
+
+    // Step feel: bob (off a real headset) and a comfort vignette, from the walking speed.
+    const motion = motionRef.current;
+    const speed = Math.hypot(ground[0] - before[0], ground[1] - before[1]) / Math.max(delta, 1e-3);
+    motion.speed += (speed - motion.speed) * Math.min(1, delta * 10);
+    const moving = Math.min(1, motion.speed / TOUR_WALK_SPEED);
+    motion.phase += delta * Math.PI * 2 * STEPS_PER_SECOND * moving;
+    const bob = realHeadset ? 0 : BOB_AMPLITUDE * Math.abs(Math.sin(motion.phase)) * moving;
+    material.uniforms.vignette!.value = moving * (realHeadset ? 0.7 : 0.4);
+
+    // Arrows stay on the photo's floor: move them against the walk (the input controller reads
+    // the same positions to aim at them).
+    arrows.forEach((a, i) => {
+      const b = bases[i];
+      if (!b) return;
+      a.position[0] = b[0] - ground[0];
+      a.position[2] = b[2] - ground[1];
+    });
+    const group = arrowsGroupRef.current;
+    if (group instanceof THREE.Object3D) {
+      group.position.set(-ground[0], -bob, -ground[1]);
+      group.visible = !crossRef.current;
     }
 
-    // Blink: fade out, swap once the next photo is loaded, fade in.
-    if (pending) {
-      fadeRef.current = Math.min(1, fadeRef.current + delta / FADE_OUT);
-      const next = texture(pending);
-      if (fadeRef.current >= 1 && next.image) {
-        const from = room;
-        onArrive(pending, uFrontFacing(entryU(TOUR_ROOMS[pending], from), headYaw));
-      }
-    } else if (current.image) {
-      fadeRef.current = Math.max(0, fadeRef.current - delta / FADE_IN);
-    }
-    material.uniforms.map!.value = current;
-    material.uniforms.uFront!.value = uFront;
+    if (current.image) fadeRef.current = Math.max(0, fadeRef.current - delta / FADE_IN);
+    material.uniforms.mapA!.value = current;
+    material.uniforms.uFrontA!.value = shownU;
+    material.uniforms.wallA!.value = scale.wall;
+    material.uniforms.offA!.value.set(ground[0], bob, ground[1]);
+    if (!crossRef.current) material.uniforms.mixB!.value = 0;
     material.uniforms.fade!.value = fadeRef.current;
   });
 
@@ -262,14 +439,17 @@ export const PanoramaTour = memo(function PanoramaTour({
         frustumCulled={false}
         name="panorama-sphere"
       />
-      {arrows.map((a) => (
-        <TourArrowMark
-          key={a.id}
-          arrow={a}
-          hovered={hoveredId === a.id}
-          label={t('tourGoTo', { room: t(`tourRoom_${a.to}`) })}
-        />
-      ))}
+      <group ref={arrowsGroupRef}>
+        {arrows.map((a, i) => (
+          <TourArrowMark
+            key={a.id}
+            arrow={a}
+            position={bases[i] ?? a.position}
+            hovered={hoveredId === a.id}
+            label={t('tourGoTo', { room: t(`tourRoom_${a.to}`) })}
+          />
+        ))}
+      </group>
     </group>
   );
 });
@@ -290,17 +470,20 @@ const ARROW_SHAPE = (() => {
 /** Street View-like chevron on the floor, pointing to the next room, with its name above. */
 const TourArrowMark = memo(function TourArrowMark({
   arrow,
+  position,
   hovered,
   label,
 }: {
   arrow: TourArrow;
+  /** Spot on the photo's floor (the parent group follows the walk). */
+  position: Vec3;
   hovered: boolean;
   label: string;
 }) {
   const labelTex = useMemo(() => getPillLabelTexture(label, hovered, 512), [label, hovered]);
   const color = hovered ? '#c084fc' : '#e0f2fe';
   return (
-    <group position={arrow.position} name={`tour-arrow-${arrow.to}`}>
+    <group position={position} name={`tour-arrow-${arrow.to}`}>
       {/* Flat on the floor; local +Y of the shape points away from the viewer. */}
       <group rotation={[-Math.PI / 2, 0, -arrow.yaw]}>
         <mesh scale={hovered ? 1.2 : 1}>

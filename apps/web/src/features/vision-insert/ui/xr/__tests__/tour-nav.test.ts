@@ -5,7 +5,12 @@ import {
   tourArrows,
   tourExpectedDetections,
   TOUR_ARROW_DISTANCE,
-  walkTarget,
+  arrowAt,
+  keyWalkAxes,
+  stepWalk,
+  stickWalkAxes,
+  tourScale,
+  TOUR_WALK_SPEED,
 } from '../tour/tour-nav';
 import { equirectUv, dirFromYawPitch } from '../tour/equirect';
 
@@ -40,11 +45,52 @@ describe('floor arrows and walking', () => {
     }
   });
 
-  it('walking forward picks the arrow ahead, none when no arrow is near the gaze', () => {
+  it('walks along the head heading at walking speed, inside the walkable disc', () => {
+    const fwd = stepWalk([0, 0], { forward: 1, strafe: 0 }, 0, 0.5, 3);
+    expect(fwd[0]).toBeCloseTo(0, 6);
+    expect(fwd[1]).toBeCloseTo(-TOUR_WALK_SPEED * 0.5, 6);
+    // Facing +X (yaw π/2): forward goes +X, strafe right goes +Z.
+    const right = stepWalk([0, 0], { forward: 0, strafe: 1 }, Math.PI / 2, 1, 3);
+    expect(right[1]).toBeCloseTo(TOUR_WALK_SPEED, 6);
+    // Diagonal is not faster; the disc edge stops the walk.
+    const diag = stepWalk([0, 0], { forward: 1, strafe: 1 }, 0, 1, 9);
+    expect(Math.hypot(diag[0], diag[1])).toBeCloseTo(TOUR_WALK_SPEED, 6);
+    const edge = stepWalk([0, -1.9], { forward: 1, strafe: 0 }, 0, 1, 2);
+    expect(Math.hypot(edge[0], edge[1])).toBeCloseTo(2, 6);
+    expect(stepWalk([0.3, 0.2], { forward: 0, strafe: 0 }, 1, 1, 2)).toEqual([0.3, 0.2]);
+  });
+
+  it('reaches an arrow by walking onto it', () => {
     const arrows = tourArrows(TOUR_ROOMS.loft, 0.8);
     const hall = arrows.find((a) => a.to === 'hall')!;
-    expect(walkTarget(arrows, hall.yaw + 0.2)).toBe('hall');
-    expect(walkTarget([hall], hall.yaw + Math.PI)).toBeNull();
+    const onIt: [number, number] = [hall.position[0] * 0.9, hall.position[2] * 0.9];
+    expect(arrowAt(arrows, onIt)?.to).toBe('hall');
+    expect(arrowAt(arrows, [0, 0])).toBeNull();
+  });
+
+  it('outdoor places are wider than rooms: farther arrows, longer walks', () => {
+    expect(tourScale(TOUR_ROOMS.loft).arrow).toBe(TOUR_ARROW_DISTANCE);
+    expect(tourScale(TOUR_ROOMS.forest).walk).toBeGreaterThan(tourScale(TOUR_ROOMS.loft).walk);
+    const arrows = tourArrows(TOUR_ROOMS.forest, 0);
+    expect(Math.hypot(arrows[0]!.position[0], arrows[0]!.position[2])).toBeCloseTo(
+      tourScale(TOUR_ROOMS.forest).arrow,
+      2
+    );
+    // Every arrow can be reached inside the walkable disc.
+    for (const r of [TOUR_ROOMS.loft, TOUR_ROOMS.forest]) {
+      const sc = tourScale(r);
+      expect(sc.arrow).toBeLessThan(sc.walk);
+    }
+  });
+
+  it('reads keys (WASD, ZQSD, arrows) and the thumbstick as walk axes', () => {
+    expect(keyWalkAxes(new Set(['z']))).toEqual({ forward: 1, strafe: 0 });
+    expect(keyWalkAxes(new Set(['ArrowUp', 'w']))).toEqual({ forward: 1, strafe: 0 });
+    expect(keyWalkAxes(new Set(['s', 'q']))).toEqual({ forward: -1, strafe: -1 });
+    expect(keyWalkAxes(new Set(['D', 'x']))).toEqual({ forward: 0, strafe: 1 });
+    expect(stickWalkAxes([0, 0, 0.5, -1])).toEqual({ forward: 1, strafe: 0.5 });
+    expect(stickWalkAxes([0.05, 0.1])).toEqual({ forward: -0, strafe: 0 });
+    expect(stickWalkAxes(undefined)).toEqual({ forward: 0, strafe: 0 });
   });
 });
 

@@ -192,3 +192,12 @@
 - [x] Vérité terrain : maisons, voitures, arbres en décor (`scenery`) ; panneaux solaires, lampadaire, applique en objets.
 - [x] Panneaux IWER DevUI de retour (`installDevUI`) ; bouton « Quitter l'immersion VR » visible pendant la session émulée.
 - [x] **Done when :** `make vr-probe` → 14 PASS (promenade terrasse → forêt, DevUI monté, bouton de sortie présent).
+
+### VS-T16 : Marcher pour de vrai dans l'espace 360°
+
+- [x] Photo posée au sol (sol + mur, parallaxe) : marche continue clavier (↑/W/Z, S, A/Q/D) et stick, dans un disque autour du point de prise de vue.
+- [x] Marcher sur une flèche (ou tirer dessus = y marcher) → traversée en fondu enchaîné vers le lieu suivant, sans écran noir.
+- [x] Confort : vitesse constante, vignette en marche, pas de balancement de tête dans un vrai casque.
+- [x] Extension « Immersive Web Emulator » reconnue comme émulateur (visite 360° au lieu de la webcam).
+- [x] **Done when :** `make vr-probe` → 15 PASS (↑ maintenu : la flèche se rapproche puis séjour).
+- [ ] Vrai Quest : confort de la marche continue (vignette), réglage du mur par pièce si la parallaxe paraît fausse.

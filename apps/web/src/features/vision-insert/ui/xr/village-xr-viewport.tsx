@@ -160,7 +160,7 @@ export const VillageXRViewport = memo(function VillageXRViewport({
 
           <span
             className="hidden md:inline-flex items-center gap-1.5 rounded-full border border-energy-cyan/30 bg-energy-cyan/10 px-2.5 py-1 text-xs font-medium text-energy-cyan backdrop-blur-md cursor-help"
-            title={`${t('vrInteractionHelpWrist')}\n${t('vrInteractionHelpQuest')}\n${t('vrInteractionHelpIWER')}\n${t('vrInteractionHelpDesktop')}`}
+            title={`${t('vrInteractionHelpWalk')}\n${t('vrInteractionHelpWrist')}\n${t('vrInteractionHelpQuest')}\n${t('vrInteractionHelpIWER')}\n${t('vrInteractionHelpDesktop')}`}
           >
             <HelpCircle className="h-3.5 w-3.5" aria-hidden="true" />
             <span>{xrActive ? t('vrInteractionGuideVR') : t('vrInteractionGuideDesktop')}</span>

@@ -134,4 +134,5 @@ them after mount (re-targeting races React root unmounts and can leave a label e
 - Photos 4K (4096×2048 JPEG, sans mipmaps à cause de la couture u) : seules la pièce courante et ses voisines restent en mémoire GPU, les autres sont `dispose()`.
 - Sphère dessinée en dernier (`renderOrder` 1000, `depthWrite: false`) : pas de surdessin derrière les panneaux, rien n'est coupé.
 - Extérieur : 7 photos 4096×2048 JPEG q72 (0,7–2,3 Mo, feuillages lourds) ; même règle pièce courante + voisines (le jardin en a 4).
+- Marche (VS-T16) : tout dans le shader de la sphère (intersection rayon / sol + mur, 2 textures seulement pendant la traversée), aucune géométrie ni allocation par image ; positions des flèches mutées sur place.
 - Photo de scan (1280×720) calculée sur CPU au tir seulement (pixels de la pièce mis en cache), jamais par image.

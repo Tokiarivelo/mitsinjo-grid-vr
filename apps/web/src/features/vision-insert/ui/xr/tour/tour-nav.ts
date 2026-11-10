@@ -17,11 +17,33 @@ export const TOUR_CAPTURE_HFOV = (80 * Math.PI) / 180;
 export const TOUR_CAPTURE_ASPECT = 16 / 9;
 /** Plane the scan photo is laid on for targets (`surfaceFromView`), in front of the sphere. */
 export const TOUR_SURFACE_DISTANCE = 3;
-/** Floor arrows: distance from the viewer and pick radius (m). */
+/** Floor arrows indoors: distance from the photo spot and pick radius (m). */
 export const TOUR_ARROW_DISTANCE = 1.7;
 export const TOUR_ARROW_RADIUS = 0.38;
-/** Thumbstick / key "walk forward": the arrow must be within this angle of the gaze (rad). */
-export const TOUR_WALK_ANGLE = (70 * Math.PI) / 180;
+/** Walking speed (m/s): a calm human pace. */
+export const TOUR_WALK_SPEED = 1.4;
+/** Walking within this distance of an arrow goes through it to the next place (m). */
+export const TOUR_ARROW_REACH = 0.45;
+
+/**
+ * Size of the grounded photo (floor plane + walls around the photo spot) and of the walkable
+ * disc. Indoors the walls are close; outdoors the photo is a wide open space.
+ */
+export interface TourScale {
+  /** Radius of the wall the photo is projected on (m). */
+  wall: number;
+  /** How far from the photo spot the viewer may walk (m). */
+  walk: number;
+  /** Distance of the floor arrows from the photo spot (m). */
+  arrow: number;
+}
+
+const INDOOR: TourScale = { wall: 4, walk: 2.1, arrow: TOUR_ARROW_DISTANCE };
+const OUTDOOR: TourScale = { wall: 14, walk: 4, arrow: 3 };
+
+export function tourScale(room: TourRoom): TourScale {
+  return room.src.includes('/outdoor/') ? OUTDOOR : INDOOR;
+}
 
 export const tourLinkId = (to: TourRoomId) => `tour-link:${to}`;
 
@@ -35,6 +57,7 @@ export interface TourArrow {
 
 /** Floor arrows of a room, given the image column seen straight ahead (`uFront`). */
 export function tourArrows(room: TourRoom, uFront: number): TourArrow[] {
+  const dist = tourScale(room).arrow;
   return room.links.map((link) => {
     const { yaw } = equirectYawPitch(link.u, 0.5, uFront);
     return {
@@ -42,28 +65,98 @@ export function tourArrows(room: TourRoom, uFront: number): TourArrow[] {
       to: link.to,
       yaw,
       position: [
-        Number((TOUR_EYE[0] + Math.sin(yaw) * TOUR_ARROW_DISTANCE).toFixed(3)),
+        Number((TOUR_EYE[0] + Math.sin(yaw) * dist).toFixed(3)),
         0.03,
-        Number((TOUR_EYE[2] - Math.cos(yaw) * TOUR_ARROW_DISTANCE).toFixed(3)),
+        Number((TOUR_EYE[2] - Math.cos(yaw) * dist).toFixed(3)),
       ],
     };
   });
 }
 
-const wrapPi = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
+/** Walk input: forward (+) / back (-) and right (+) / left (-), each in [-1, 1]. */
+export interface WalkAxes {
+  forward: number;
+  strafe: number;
+}
 
-/** Room the viewer walks to when pushing "forward": the arrow closest to the gaze, if close enough. */
-export function walkTarget(arrows: readonly TourArrow[], headYaw: number): TourRoomId | null {
-  let best: TourArrow | null = null;
-  let bestDiff = TOUR_WALK_ANGLE;
-  for (const a of arrows) {
-    const diff = Math.abs(wrapPi(a.yaw - headYaw));
-    if (diff <= bestDiff) {
-      best = a;
-      bestDiff = diff;
-    }
+/** Ground offset [x, z] (m) from the photo spot. */
+export type Ground = [number, number];
+
+/**
+ * One frame of walking: moves `ground` along the head heading (yaw 0 = -Z) at walking speed,
+ * kept inside the walkable disc. Diagonals are not faster.
+ */
+export function stepWalk(
+  ground: Ground,
+  axes: WalkAxes,
+  headYaw: number,
+  dt: number,
+  walkRadius: number
+): Ground {
+  let { forward: f, strafe: s } = axes;
+  const len = Math.hypot(f, s);
+  if (len < 1e-3) return ground;
+  if (len > 1) {
+    f /= len;
+    s /= len;
   }
-  return best?.to ?? null;
+  const step = TOUR_WALK_SPEED * dt;
+  const sin = Math.sin(headYaw);
+  const cos = Math.cos(headYaw);
+  let x = ground[0] + (sin * f + cos * s) * step;
+  let z = ground[1] + (-cos * f + sin * s) * step;
+  const r = Math.hypot(x, z);
+  if (r > walkRadius) {
+    x *= walkRadius / r;
+    z *= walkRadius / r;
+  }
+  return [x, z];
+}
+
+/** Arrow the viewer stands on (within reach), if any. `ground` is relative to the photo spot. */
+export function arrowAt(arrows: readonly TourArrow[], ground: Ground): TourArrow | null {
+  for (const a of arrows) {
+    const dx = a.position[0] - TOUR_EYE[0] - ground[0];
+    const dz = a.position[2] - TOUR_EYE[2] - ground[1];
+    if (Math.hypot(dx, dz) <= TOUR_ARROW_REACH) return a;
+  }
+  return null;
+}
+
+const KEY_AXES: Record<string, [keyof WalkAxes, number]> = {
+  arrowup: ['forward', 1],
+  w: ['forward', 1],
+  z: ['forward', 1],
+  arrowdown: ['forward', -1],
+  s: ['forward', -1],
+  arrowleft: ['strafe', -1],
+  a: ['strafe', -1],
+  q: ['strafe', -1],
+  arrowright: ['strafe', 1],
+  d: ['strafe', 1],
+};
+
+/** True for a key that walks (↑↓←→, WASD and ZQSD for AZERTY keyboards). */
+export const isWalkKey = (key: string) => key.toLowerCase() in KEY_AXES;
+
+/** Walk axes from the keys held down. */
+export function keyWalkAxes(held: ReadonlySet<string>): WalkAxes {
+  const axes: WalkAxes = { forward: 0, strafe: 0 };
+  for (const key of held) {
+    const hit = KEY_AXES[key.toLowerCase()];
+    if (hit) axes[hit[0]] = Math.max(-1, Math.min(1, axes[hit[0]] + hit[1]));
+  }
+  return axes;
+}
+
+const STICK_DEADZONE = 0.15;
+
+/** Walk axes from a gamepad: the thumbstick (xr-standard axes 2–3, else 0–1); up = forward. */
+export function stickWalkAxes(axes: readonly number[] | undefined): WalkAxes {
+  if (!axes || axes.length < 2) return { forward: 0, strafe: 0 };
+  const [x, y] = axes.length >= 4 ? [axes[2]!, axes[3]!] : [axes[0]!, axes[1]!];
+  const dead = (v: number) => (Math.abs(v) < STICK_DEADZONE ? 0 : v);
+  return { forward: -dead(y), strafe: dead(x) };
 }
 
 /** Scan photo of the 360° view centred on a heading (head gaze, or a shot direction). */

@@ -175,6 +175,16 @@ try {
   await shot('5-hand-lamp');
   await rc('set_input_mode', { mode: 'controller' });
 
+  // Walking takes time (to the arrow, then through it): poll the room.
+  const waitRoom = async (to, ms = 6000) => {
+    const t1 = Date.now();
+    while (Date.now() - t1 < ms) {
+      if ((await tour())?.room === to) return true;
+      await sleep(150);
+    }
+    return false;
+  };
+
   const hall = (await tour())?.arrows.find((a) => a.to === 'hall');
   if (hall) {
     const at = { x: hall.position[0], y: hall.position[1], z: hall.position[2] };
@@ -183,9 +193,9 @@ try {
     await shot('6-arrow-hall');
     await fire('controller-right', at, { x: 0.2, y: 1.2, z: -0.1 });
   }
-  await sleep(1500);
+  check('shooting the floor arrow walks to the hall', await waitRoom('hall'));
+  await sleep(500);
   const inHall = await tour();
-  check('shooting the floor arrow walks to the hall', inHall?.room === 'hall');
   await rc('look_at', { device: 'headset', target: panoPoint(0.825, 0.56, inHall?.uFront ?? 0) });
   await sleep(800);
   await shot('7-hall-marry-letters');
@@ -197,10 +207,25 @@ try {
       target: { x: lounge.position[0], y: 1.2, z: lounge.position[2] },
     });
     await sleep(600);
-    await page.keyboard.press('ArrowUp');
+    // Hold ↑: the viewer walks (the floor slides), reaches the arrow and goes through.
+    const startArrow = Math.hypot(lounge.position[0], lounge.position[2]);
+    await page.keyboard.down('ArrowUp');
+    // Headless rendering is slow (few fps): poll until the arrow has come closer.
+    let closer = false;
+    for (let i = 0; i < 40 && !closer; i++) {
+      await sleep(150);
+      const now = await tour();
+      const mid = now?.arrows.find((a) => a.to === 'lounge');
+      if (now?.room !== 'hall' || !mid) break;
+      closer = Math.hypot(mid.position[0], mid.position[2]) < startArrow - 0.3;
+    }
+    await shot('8a-walking');
+    check('holding ↑ walks: the arrow ahead comes closer', closer);
+    const reached = await waitRoom('lounge');
+    await page.keyboard.up('ArrowUp');
+    check('↑ walks through to the room ahead (lounge)', reached);
   }
-  await sleep(1500);
-  check('↑ walks to the room ahead (lounge)', (await tour())?.room === 'lounge');
+  await sleep(600);
   await shot('8-lounge');
   // Outdoor walk (houses, trees, forest) through the hall window.
   const walkTo = async (to) => {
@@ -210,8 +235,9 @@ try {
     await rc('look_at', { device: 'headset', target: { x: at.x, y: 1.2, z: at.z } });
     await sleep(400);
     await fire('controller-right', at, { x: 0.2, y: 1.2, z: -0.1 });
-    await sleep(1200);
-    return (await tour())?.room === to;
+    const ok = await waitRoom(to);
+    await sleep(400);
+    return ok;
   };
   let outdoor = await walkTo('hall');
   for (const to of ['terrace', 'street', 'house', 'garden', 'avenue', 'forest']) {

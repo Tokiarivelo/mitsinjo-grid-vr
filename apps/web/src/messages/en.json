@@ -931,6 +931,7 @@
       "vrWristMenuOpen": "Menu",
       "vrWristMenuClose": "Close",
       "vrInteractionHelpWrist": "Menu: tap the button on your left wrist (other hand's finger, laser or pinch) to show or hide the panels.",
+      "vrInteractionHelpWalk": "Walk: hold ↑ / W / Z (S back, A / Q / D sideways) or push the thumbstick; walk onto a floor arrow, or click it, to go through to the next place.",
       "vrAirButtonTitle": "Scan Room & Detect",
       "vrAirButtonSubtitle": "Aim and trigger to scan",
       "vrInteractionGuideVR": "🎮 Pull Trigger · ✋ Pinch Fingers",

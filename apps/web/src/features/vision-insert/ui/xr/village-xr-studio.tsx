@@ -322,6 +322,7 @@ export const VillageXRStudio = memo(function VillageXRStudio({
         <PanoramaTour
           room={tour.room}
           uFront={tour.uFront}
+          arrows={tour.arrows}
           pending={tour.pending}
           onArrive={tour.arrive}
           onWalk={tour.walk}
