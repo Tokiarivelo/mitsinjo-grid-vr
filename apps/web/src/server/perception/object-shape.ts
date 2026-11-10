@@ -38,7 +38,7 @@ import { conceptOf, fetchOutlineForBox, samRetries, type OutlineCrop } from './o
 import { applyConstraints, buildGraph, notBuilt, partCoverage, repairGraph } from './object-graph';
 import { deduceHiddenSides } from './hidden-sides';
 import { enforcePartBudget, masksOnObject } from './mask-geometry';
-import { cropForShape, cropRectForShape, KIT_TIGHT_CROP, tightCropForShape } from './shape-crop';
+import { cropForShape, cropRectForShape } from './shape-crop';
 import { extractSwatches } from './photo-swatches';
 import { withLatheBody } from './lathe-body';
 import { fetchFacadeMasks, type FacadeMasks } from './facade-masks';
@@ -295,7 +295,6 @@ export async function runObjectShape(
             {
               ...(outlineCrop ? { crop: outlineCrop } : {}),
               retries: samRetries(target),
-              consensus: true,
             }
           ).then(
             (hit) => hit ?? undefined,
@@ -314,11 +313,6 @@ export async function runObjectShape(
           hasOutline: false,
         })
       : null;
-    // PQ-T8: the object alone as a second image (off until `make eval-shape` shows it helps).
-    const tightUrl =
-      KIT_TIGHT_CROP && photo
-        ? await tightCropForShape(photo, target.box, target.outline).catch(() => undefined)
-        : undefined;
     onStep?.('model');
     const started = Date.now();
     const timeout = AbortSignal.timeout(Math.max(0, timeoutMs));
@@ -330,7 +324,6 @@ export async function runObjectShape(
         ...(target.scenery ? { scenery: target.scenery } : {}),
         ...(aspect > 0 ? { aspect } : {}),
         ...(preConditions ? { facts: conditionsFacts(preConditions) } : {}),
-        ...(tightUrl ? { tightUrl } : {}),
         ...(target.facadeUrl ? { facadeUrl: target.facadeUrl } : {}),
       },
       signal ? AbortSignal.any([signal, timeout]) : timeout

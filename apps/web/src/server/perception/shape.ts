@@ -62,21 +62,12 @@ export function kitPrompt(version: number = KIT_PROMPT_VERSION): string {
 export const FACADE_REFERENCE_LINE =
   'The second image is the validated front elevation of this same object, drawn unoccluded: use it for the windows, doors, floors, roof shape, materials and part layout; the photo crop (first image) still gives the size, pose and colours.';
 
-/** Told to Spark when the tight crop of the object alone comes as the second image (PQ-T8). */
-export const TIGHT_CROP_LINE =
-  'The first image is the photo crop with context; the second image is the object alone, large, with the background painted grey: use it for the details and the parts.';
-export const FACADE_AS_THIRD_LINE = FACADE_REFERENCE_LINE.replace(
-  'The second image is',
-  'The third image is'
-);
-
 export function shapeQuestion(
   label: string,
   aspect?: number,
   hint?: KitArchetype,
   withFacade = false,
-  facts: readonly string[] = [],
-  withTight = false
+  facts: readonly string[] = []
 ): string {
   const name = label.slice(0, 40).replace(/"/g, "'");
   const seen =
@@ -84,10 +75,9 @@ export function shapeQuestion(
       ? ` On the photo it is ${aspect.toFixed(2)} times as wide as it is high.`
       : '';
   const guess = hint ? ` It is probably a "${hint}".` : '';
-  const facade = withFacade ? ` ${withTight ? FACADE_AS_THIRD_LINE : FACADE_REFERENCE_LINE}` : '';
-  const tight = withTight ? ` ${TIGHT_CROP_LINE}` : '';
+  const facade = withFacade ? ` ${FACADE_REFERENCE_LINE}` : '';
   const measured = facts.length ? ` Measured: ${facts.join(' · ')}.` : '';
-  return `Describe the full 3D "${name}" in the clear rectangle in the middle of this crop with strong 3D imagination and interpolation, even if partially occluded.${seen}${guess}${measured}${tight}${facade}`;
+  return `Describe the full 3D "${name}" in the clear rectangle in the middle of this crop with strong 3D imagination and interpolation, even if partially occluded.${seen}${guess}${measured}${facade}`;
 }
 
 const color = { type: 'string' };

@@ -129,8 +129,6 @@ export interface ShapeSubject {
   aspect?: number;
   /** Photo facts measured by code (PQ-T7), sent as the « Measured: » line of the question. */
   facts?: string[];
-  /** Tight crop of the object alone, grey outside its outline (PQ-T8): a second image before the facade. */
-  tightUrl?: string;
   /**
    * Validated 2D facade (front elevation, unoccluded): a second image beside the crop. The crop
    * keeps size, pose and measured colours; the facade refines windows, doors, materials, parts.

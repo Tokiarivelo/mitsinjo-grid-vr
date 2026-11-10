@@ -115,6 +115,10 @@ sam-probe: ## SAM outline probe: each concept on a capture's photo + crop → be
 	@test -n "$(ID)" -a -n "$(CONCEPTS)" || { echo 'Usage: make sam-probe ID=hut CONCEPTS="hut,thatched hut"'; exit 1; }
 	eval "$$(make -s env-export)" && SAM_PROBE=1 SAM_PROBE_ID="$(ID)" SAM_PROBE_CONCEPTS="$(CONCEPTS)" $(if $(PHOTO),SAM_PROBE_PHOTO="$(abspath $(PHOTO))") SHAPE_REAL_DIR="$(CURDIR)/apps/web/src/server/perception/__fixtures__/shape/real" $(PNPM) --filter $(WEB) exec vitest run src/server/perception/__tests__/sam-probe.test.ts
 
+outline-compare: ## Outline hits on the real photos: plain SAM walk vs SAM agreement (PQ-T9, costs ≈ 4 SAM calls per photo)
+	$(need_ws)
+	eval "$$(make -s env-export)" && OUTLINE_COMPARE=1 SHAPE_REAL_DIR="$(CURDIR)/apps/web/src/server/perception/__fixtures__/shape/real" $(PNPM) --filter $(WEB) exec vitest run src/server/perception/__tests__/outline-compare.test.ts
+
 shape-judge: ## Rubric judge (META_JUDGE_MODEL) on the real captures, intact vs damaged → calibration (PQ-T4, costs API calls; REPLAY=1 = stored answers only)
 	$(need_ws)
 	eval "$$(make -s env-export)" && SHAPE_JUDGE=1 $(if $(REPLAY),SHAPE_JUDGE_REPLAY=1) SHAPE_REAL_DIR="$(CURDIR)/apps/web/src/server/perception/__fixtures__/shape/real" $(PNPM) --filter $(WEB) exec vitest run src/server/perception/__tests__/rubric-judge.test.ts -t "make shape-judge"
