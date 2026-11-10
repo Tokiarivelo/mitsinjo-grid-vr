@@ -585,3 +585,7 @@ Rules
 
 Kept only when `make eval-lab` (PC-T29) does not drop. Unlike the generation cards, there is no score gate on an
 applied edit: the operator decides.
+
+The same card serves the Lab in immersion (PC-T37): the request is then a voice transcript, so it can be short or
+badly heard. The card's rules already cover it (unclear → `ask`, outside the model → `say` without ops); the part
+pointed at while speaking arrives as a selected id.

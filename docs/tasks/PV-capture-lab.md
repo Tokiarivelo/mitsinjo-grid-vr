@@ -10,6 +10,8 @@
 4. **Lab.** From there I can send it to a Lab to refine the 3D model.
 5. **Tools.** The Lab has many tools to edit the 3D object.
 6. **AI assistant.** In the Lab I can chat with an AI assistant to change parts of the model.
+7. **In immersion too** (added the same day). All of the above also works inside the headset, without leaving the
+   VR session: capture, elastic grab, hologram, the Lab tools and the AI assistant, by voice (phase C7).
 
 **Status:** ❌ planned. Nothing below is built.
 **Read first:** this file · `docs/vr-immersion-guide.md` · `.claude/skills/vr-immersion/SKILL.md` ·
@@ -97,6 +99,11 @@ in XR, depth written first so inner faces do not pile up.
 **D4. Every edit is a ShapeScript op.** Tools and the AI assistant write the same ops; the compiler and the
 constraint solver (`applyEdit`) check them; undo is the op log. Edited parts carry the status `edited`, so they
 are never confused with measured ones and the generation loop never overwrites them.
+
+**D6. One Lab, two surfaces.** The Lab on screen (C4, C5) and the Lab in the headset (C7) share the edit core
+(`use-lab-session`), the ops, the server route and the Lab edit card. Only the input and the panels differ: gizmo,
+lists and typed chat on screen; hands, controllers, spatial panels and voice in the headset. An object edited in
+one opens in the other with its history.
 
 **D5. The AI assistant proposes, the user applies.** Text or voice, plus the selected part, plus a picture of the
 current model → ops → shown as a hologram preview over the model → Apply or Reject → undoable. Unlike the
@@ -228,9 +235,10 @@ Design gate first for the whole Lab: spec in `docs/design/screens/` + Stitch moc
 - [ ] **PC-T23 Versions and saving.** Named snapshots, « back to the AI version », save to the village
       (`placed-models.store.ts`, storage version bump with a reader for the old shape). **Test:** store
       migration test; reset restores the first recipe exactly.
-- [ ] **PC-T24 From the headset.** Wrist menu action « Open in Lab » on the held hologram: the object is
-      queued and the Lab opens on it when the session ends (the Lab itself is a 2D screen; in-headset editing
-      is not in this plan). **Test:** wrist menu test; queue survives the session end.
+- [ ] **PC-T24 From the headset.** Wrist menu action « Open in Lab » on the held hologram enters the Lab in
+      immersion (C7, same session). Until C7 is built, and as the « continue on screen » action afterwards,
+      the object is queued and the screen Lab opens on it when the session ends, with its op history.
+      **Test:** wrist menu test; queue and history survive the session end.
 
 **Exit C4:** a user can fix any part of a generated model by hand, undo anything, and save the result.
 
@@ -263,13 +271,88 @@ Design gate first for the whole Lab: spec in `docs/design/screens/` + Stitch moc
 
 **Exit C5:** a spoken or typed request changes the right part, shows the change before applying it, and can be undone.
 
+## C7 — The Lab in immersion (tools and AI assistant inside the headset)
+
+Needs first: PC-T9–T12 (spring, one grab layer), PC-T13 (hologram material), PC-T17 (edit core), PC-T25 (edit
+route; the mock is enough to start). Capture, grab and hologram in the headset are already C1–C3; this phase adds
+editing. Run `/vr-immersion` before coding: the stack stays raw WebXR + R3F, no `@react-three/xr`.
+
+**Meta guidance used** (read with the `metavr docs` CLI, 2026-11-10; pages at the end):
+
+| Topic            | Meta says                                                                                                              | Applied here                                                                                    |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| Reach zones      | Touch UI at 42–46 cm; avoid placing UI at 0.5–0.8 m; rays from 0.8 to 3 m                                              | Model on a workbench at about 0.45 m; tool panel at 0.9 m (today's `MENU_DISTANCE`)             |
+| Target size      | Touch target ≥ 22 mm, ≥ 12 mm apart; with a ray, 2.5–3° of angle; keep the angular size when a panel moves in depth    | One size table for both distances in `xr-layout.ts`, checked by a test                          |
+| Hands            | Index finger only for touch; clean index–thumb pinch; button travel about 7 mm; no menu that opens on hover            | Poke with the index tip, pinch to grab; panels open on a press only                             |
+| Menu             | Palm-up pinch of the non-dominant hand opens an options menu; frequent items in the lower half of a panel              | The existing wrist menu carries the tool palette; Undo and Apply sit at the bottom              |
+| Two hands        | Both hands move, turn and (when unlocked) scale an object around the midpoint; scale range limited (example 0.5 to 2)  | Two-hand grab on the whole model = view only, clamped; on a selected part = a resize op         |
+| Feedback         | Without buttons, sight and sound replace touch: highlight where the action happens plus a short sound                  | Hover and select highlights, a sound per tool action (`xr-audio-fx.ts`), haptics on controllers |
+| Fatigue          | Arms above the heart tire fast; plan rests; offer distance interaction instead of forcing reach                        | Workbench at chest height, every tool also works with a ray, seated use possible                |
+| Comfort          | Do not lock content to the head; use depth sparingly                                                                   | Panels follow lazily like the wrist menu, never head-locked                                     |
+| Voice activation | A visible control starts listening (controller click, pinch or touch on a mic button); a false start is a privacy risk | Push-to-talk only: hold the mic button or a controller button; no wake word                     |
+| Voice attention  | Show the mic states (listening, processing, response), a short earcon, and the transcription                           | A mic badge next to the model with the four states and the heard text                           |
+| Voice errors     | No match → ask to repeat, in new words; no input → rephrase; out of domain → say what is possible                      | Mapped to the Lab edit answer (`ask`, or `say` without ops)                                     |
+| Rendering        | Quest is mostly fill-rate bound; real-time shadows and many texture maps cost; updates need not run at frame rate      | Preview = the single hologram material; no shadow pass; panels redrawn only on change           |
+
+- [ ] **PC-T32 Lab mode in the session.** A mode of the village XR studio, not a route: entering it docks the
+      held hologram on a workbench in front of the user (0.45 m, chest height, set once from the head pose, then
+      world-fixed with a « bring here » action), dims the village and pauses the scan; leaving returns the object
+      to where it was. State in `features/shape-lab/hooks/use-xr-lab.ts`, scene in
+      `features/vision-insert/ui/xr/lab/xr-lab-bench.tsx`, layout numbers in `xr-layout.ts`.
+      **Test:** enter → leave restores the pose; the bench stays in reach for a seated and a standing head height.
+- [ ] **PC-T33 Spatial panels.** Canvas-texture panels like `wrist-menu-texture.ts` (no DOM in the session):
+      tool palette on the wrist menu, part list and history on a panel at 0.9 m. All text comes from the
+      message files (EN, FR, MG) passed into the texture drawers; colours from the theme tokens; sizes from the
+      table above. A panel is redrawn only when its content changes. **Test:** texture drawer test per locale;
+      target size and spacing test at both distances; no redraw without a change.
+- [ ] **PC-T34 Select a part.** The ray of a controller or of a pinching hand, or the index tip at touch
+      distance, picks a part (same pick → part id mapping as PC-T18); hover and selection use the hologram rim;
+      the part list follows. **Test:** ray and poke picks give the same id as the screen Lab on one fixture.
+- [ ] **PC-T35 Move, turn, resize by hand.** A selected part is grabbed through the grab layer of PC-T10 and
+      follows 1:1; snapping as in PC-T19 with a tick sound and a haptic pulse at each step; release writes one
+      op through `use-lab-session`. Two hands on a selected part resize it; two hands on the whole model move,
+      turn and scale the view only (clamped 0.5 to 2), never an op. Constraints stay on: a window slides on its
+      wall and cannot leave it. **Test:** one grab → one op; view scale writes no op; constraint test.
+- [ ] **PC-T36 Tools in the headset.** Palette entries: select, move, paint (material and colour swatches drawn
+      as small spheres to poke), add from the part palette, duplicate, mirror, delete, explode view, undo, redo,
+      « back to the AI version », save to the village. Each entry calls the tool function of PC-T20–T23, no
+      second implementation. **Test:** each entry → the same ops as its screen tool.
+- [ ] **PC-T37 Voice assistant.** Hold the mic button (air button, wrist menu or a controller button) to speak;
+      the recording goes through the existing `/api/voice`, the text to the edit route of PC-T25 with the
+      selected part ids. Pointing while speaking counts: a part under the ray during the recording is added to
+      the selection (« make this one bigger »). The mic badge shows the four states and the heard text; the
+      assistant's sentence is shown as AI text beside the model, never spoken as a number source.
+      The microphone permission is asked before the session starts. **Test:** recording → request with the
+      pointed part; nothing sent while the button is held; each error kind → its message.
+- [ ] **PC-T38 Preview, apply, reject.** The proposed change appears as a hologram over the solid model with the
+      list of ops in plain words; two air buttons (`SpatialAirButton`): Apply and Reject. Apply is one undo
+      step. A spoken « yes » never applies in this version. When the answer carries `ask`, the candidate parts
+      glow and the user points at one. Requests without voice: six ready-made requests on the panel
+      (« bigger », « smaller », « paint », « add a window », « mirror », « remove ») that use the selection.
+      **Test:** reject leaves the recipe untouched; apply is one history entry; ask → pick → ops.
+- [ ] **PC-T39 Frame budget while editing.** Recompiling the model after an op runs outside the XR frame (a
+      worker, or sliced over frames) and swaps the mesh in one frame; the old mesh stays until then. No
+      allocation per frame in the Lab loops; voice and network never block the loop. Measured with the counters
+      of PC-T2 in the emulator, then on a headset. **Test:** compile returns the same mesh as the direct call;
+      **Done when:** no frame over 13.9 ms during grab, apply and undo on a Quest.
+- [ ] **PC-T40 Emulator probe.** Extend `apps/web/scripts/vr-village-probe.mjs` (`make vr-probe`) with the Lab path, controllers
+      then hands: open the Lab from the held hologram → select a part → move it → undo → send a mock request
+      → apply → save → leave. **Done when:** the new steps pass with `make dev-mock`.
+- [ ] **PC-T41 Real headset check.** On a Quest: reach and target sizes, pinch reliability on small parts,
+      voice in a noisy room, text sharpness of the panels, frame times; results in the loop log and in
+      `docs/vr-immersion-guide.md`. Needs the user and a device.
+
+**Exit C7:** inside the headset, without taking it off: pick a part, change it by hand or by voice, see the change
+as a hologram, apply or reject it, undo it, and save it to the village.
+
 ## C6 — Close
 
 - [ ] **PC-T30 Docs and scenarios.** `docs/contracts.md` (status `edited`, lab edit request and answer, new
       SSE fields), `docs/copilot.md` (lab edit prompt, prefetch flag, spend), `docs/performance.md` (three
       clocks, XR frame budget), `docs/vr-immersion-guide.md` (grab thresholds, hologram), `docs/design/`
       (Lab screens), `README.md`, `test-scenarios/06-village.md` (capture clocks, grab with each input,
-      hologram states, each Lab tool, assistant apply / reject / ask), `make scenarios-publish`.
+      hologram states, each Lab tool, assistant apply / reject / ask, the Lab in immersion with controllers
+      and with hands), `make scenarios-publish`.
 - [ ] **PC-T31 Final measure.** The three clocks and frame times against the PC-T2 baseline; `make check`,
       `make check-i18n`, `make vr-probe`, `make scene-audit`. **Done when:** every budget of D1 holds.
 
@@ -277,18 +360,25 @@ Design gate first for the whole Lab: spec in `docs/design/screens/` + Stitch moc
 
 Feedback ≤ 100 ms · ghost ≤ 1 s · no frame over budget during capture, grab and materialise · same grab with
 mouse, controller and hand · hologram readable in both themes and in XR · every Lab tool and every AI edit is one
-undoable op · AI edits never apply without the user · EN / FR / MG, 320 px to desktop.
+undoable op · AI edits never apply without the user · EN / FR / MG, 320 px to desktop · the same edits by hand and
+by voice inside the headset, with no frame over budget.
 
 ## Not verified
 
 - On a real Quest: frame times, hand-tracking pinch distances and haptics. The emulator checks logic only.
-- The Meta VR MCP server did not connect in the planning session, so Meta's guidance comes from its public
-  design pages, not from the MCP documentation tools. Re-check with `/vr-immersion` before coding C2.
+- The Meta VR MCP server and the IWER MCP server did not connect in the planning sessions. Meta's guidance for
+  C7 was read with the `metavr docs` CLI (same documentation source); for C1–C3 it comes from the public design
+  pages. Nothing was tried in the emulator. Re-check with `/vr-immersion` before coding C2 and C7.
+- In an immersive session on Quest Browser: whether the microphone prompt can appear without leaving the session
+  (hence « ask before the session » in PC-T37), `MediaRecorder` behaviour, and whether WebXR Layers (sharper
+  text through the compositor, per Meta) work with this three.js setup. The system keyboard was not looked at;
+  typed chat stays on the screen Lab.
+- Meta's sizes are given for native apps (dp, millimetres); the angular sizes are assumed to carry over to WebXR.
 - Hologram and editor sources are tutorials and product manuals, read as search summaries.
 
 ## Non-goals
 
-Editing inside the headset · free sculpting or vertex editing · AI-written code or geometry · physics simulation
+Typed chat inside the headset · a spoken « yes » that applies an edit · wake words · free sculpting or vertex editing · AI-written code or geometry · physics simulation
 of the held object · exporting files.
 
 ## Loop log
@@ -305,4 +395,5 @@ of the held object · exporting files.
 - [Damped springs (Ryan Juckett)](https://www.ryanjuckett.com/damped-springs/), [Critically damped smoothing (Unreal Engine API)](https://dev.epicgames.com/documentation/unreal-engine/API/Runtime/Core/FMath/CriticallyDampedSmoothing)
 - [Hologram shader (Three.js Journey)](https://www.threejs-journey.com/lessons/hologram-shader), [threejs-holographic-material](https://github.com/ektogamat/threejs-holographic-material)
 - [Handles (pmndrs/xr docs)](https://pmndrs.github.io/xr/docs/handles/introduction), [Three.js TransformControls for 3D editors](https://salivity.github.io/three.js/article/three-js-transformcontrols-for-3d-editors), [PlayCanvas editor toolbar](https://developer.playcanvas.com/user-manual/editor/interface/toolbar/), [SuperSplat editor interface](https://developer.playcanvas.com/user-manual/supersplat/editor/interface/)
+- Meta pages read with `metavr docs fetch` for C7: [Hands UI best practices](https://developers.meta.com/horizon/design/hands-ui-best-practices/), [Hands best practices](https://developers.meta.com/horizon/design/hands-best-practices/), [Voice technology](https://developers.meta.com/horizon/design/voice-technology/), [Comfort](https://developers.meta.com/horizon/design/comfort/), [Two-handed grab (Interaction SDK)](https://developers.meta.com/horizon/documentation/unity/unity-isdk-two-handed-grab-interaction/), [WebXR hands](https://developers.meta.com/horizon/documentation/web/webxr-hands/), [WebXR Layers](https://developers.meta.com/horizon/documentation/web/webxr-layers/), [WebXR performance best practices](https://developers.meta.com/horizon/documentation/web/webxr-perf-bp/)
 - [CADialogue: conversational assistant for parametric CAD](https://www.sciencedirect.com/science/article/abs/pii/S0010448525001678) ([code](https://github.com/Hiram31/CADialogue)), [B-repLer: language-guided editing of CAD models (arXiv 2508.10201)](https://arxiv.org/pdf/2508.10201), [CAD-Llama (arXiv 2505.04481)](https://arxiv.org/pdf/2505.04481)

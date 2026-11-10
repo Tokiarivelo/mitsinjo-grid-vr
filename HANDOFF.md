@@ -20,8 +20,8 @@
 ## Next
 
 1. **PQ-T1** real photo set (`make shape-capture`, API calls, needs the user's photos), then PQ-T2, T3, T36.
-2. **PV-C** (`docs/tasks/PV-capture-lab.md`, PC-T1…T31, planned): instant capture (feedback ≤ 100 ms, ghost ≤ 1 s),
-   elastic grab for mouse / controller / hand, hologram, 3D Lab tools, AI assistant by chat. Start: PC-T1, PC-T9.
+2. **PV-C** (`docs/tasks/PV-capture-lab.md`, PC-T1…T41, planned): instant capture, elastic grab (mouse / controller
+   / hand), hologram, 3D Lab tools, AI assistant; **C7 = the Lab inside the headset** (hands, voice). Start: PC-T1, PC-T9.
 3. VR backlog as before: real Quest check, tour links, headset static text → i18n keys, VS-T9 audio.
 
 ## Files touched
