@@ -34,8 +34,8 @@ Meta API calls; all others run offline.
       _Code done 2026-11-10:_ `REAL_SHAPES` (16 ids, 3 hard) in the fixtures index, `scoreRealSet` + « Real »
       table (missing / not scorable listed), captures now keep `partMasks` and the replay scores them.
       _Done 2026-11-10:_ 12 real rows (photos from Wikimedia Commons, licences in `real/photos/SOURCES.md`, local
-      only), mean 55 vs synthetic 93, logged in the loop log. Still open: car-corner (re-capture), utility pole
-      (re-capture after the SAM label fix), pump and solar street light (no outline, PQ-T9).
+      only), mean 55 vs synthetic 93, logged in the loop log. Later the same day: pole, pump and car-corner captured
+      too → 15 of 16 scored, mean 54; only the solar street light has no outline (PQ-T9).
       Guide: `PV-Q0-a-faire.md`.
 - [x] **PQ-T2 Detail score.** _(done 2026-11-10; real rows wait for PQ-T1)_ New `server/perception/detail-score.ts`: part recall, part precision, interior edge
       F1, colour per part (definitions: methodology §6.1). `ModelScore.detail` in `model-score.ts`, filled by
@@ -59,7 +59,7 @@ Meta API calls; all others run offline.
       **Done when:** calibration is run and written in the loop log: damaged models graded lower in ≥ 90 % of
       pairs → the judge may be used by the loop; under 90 % → it stays a developer note, and that is logged.
       _Code done 2026-11-10_ (live tool is a vitest block like `make eval-shape`, not a `.mjs` script: it runs the
-      TS server code directly). _Calibrated 2026-11-10:_ damaged lower in 73 % of 11 pairs → developer note only (logged). The judge
+      TS server code directly). _Calibrated 2026-11-10:_ damaged lower in 73 % of 11 pairs, then 77 % of 13 with pump and car-corner → developer note only (logged). The judge
       grades most current models 1–2 / 5, so removing parts barely moves an already-low grade; it separates
       well on decent models (fridge 4.0 → 2.8, fan 3.0 → 1.3). Re-run once the real mean rises (Q1–Q2).
 - [x] **PQ-T5 A version on every prompt.** _(done 2026-11-10)_ `KIT_PROMPT_VERSION`, `CRITIC_PROMPT_VERSION`,

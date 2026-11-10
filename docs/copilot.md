@@ -83,7 +83,7 @@ features/copilot/          # ChatPanel, ChatMessage, ToolActivity, ConfirmPropos
   **Rubric judge (PQ-T4, `rubric-judge.ts` + `judgeShape`):** Muse Wonder (`META_JUDGE_MODEL`) grades the model 1–5
   on silhouette, proportions, parts present, parts placed, surfaces, likeness from one sheet (photo | front | ¾);
   offline only (`make shape-judge`), never in a live answer; mock = grade 3. Trusted by the loop only after its
-  calibration (damaged models lower in ≥ 90 % of pairs). Run 2026-11-10: 73 % of 11 pairs → **developer note
+  calibration (damaged models lower in ≥ 90 % of pairs). Run 2026-11-10: 77 % of 13 pairs → **developer note
   only**. Only live Meta answers count and are stored (`liveJudgement`: a mock or fallback grade 3 never does);
   captures under three parts are skipped (`damage` removes nothing).
   **Prompt versions (PQ-T5):** `KIT_PROMPT_VERSION`, `CRITIC_PROMPT_VERSION` (`shape.ts`),
