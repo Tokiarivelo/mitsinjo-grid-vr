@@ -1,33 +1,40 @@
 # HANDOFF — read first, overwrite at end of session (≤40 lines)
 
-**Updated:** 2026-11-10 · **By:** Claude Code · **Branch:** feat/pq-t37-part-list (PR open; Q0 PR #9 merged)
+**Updated:** 2026-11-10 · **By:** Claude Code · **Branch:** feat/pq-q1-pixels (pushed, PR to open; PR #10 merged)
 
 ## Current state
 
-- **PV-Q phase Q0:** PQ-T1–T6, T36 done. PQ-T37 almost done: « Not built » explained for every real object,
-  panel part list shipped; only `evidence.visibleParts` left (waits for Q1 PQ-T12).
-- **Real baseline (15 of 16 scored, Wikimedia Commons photos, local only):** mean ≈ 54 vs synthetic 93. Judge
-  77 % of 13 pairs < 90 % → developer note only. Only the solar street light has no outline (PQ-T9).
-- Photos: `resources/real-photos/` and `__fixtures__/shape/real/photos/` (+ `SOURCES.md`), gitignored.
-- Machine: if dev says `Can't resolve 'three'` → stop dev, `make install` (broken install since the full disk).
+- **PV-Q Q1 (code done, 3 of 4 tasks unticked on purpose):** PQ-T7 ticked. PQ-T8 built but **off**
+  (`KIT_TIGHT_CROP = false`), PQ-T9 and PQ-T10 built, each waiting for a measured gain.
+- `make shape-report` after Q1: real mean 53 (baseline ≈ 54), synthetic 93, real colour ΔE 10.1 → no gain
+  shown yet. Goldens unchanged.
+- PQ-T37 still open: only `evidence.visibleParts` left (PQ-T12, Q2).
+- Not done for PQ-T7: design gate screenshots (1440 + 390, dark + light) of the new hint line.
+- Machine: if dev says `Can't resolve 'three'` → stop dev, `make install`.
 
 ## Next
 
-1. Review + merge the PQ-T37 part-list PR.
-2. Q1 from PQ-T7; PQ-T12 brings `evidence.visibleParts` (then close PQ-T37); PQ-T9 has the SAM evidence.
+1. Open the Q1 PR (one PR per phase), review + merge.
+2. Paid runs to close Q1: `make eval-shape` with `KIT_TIGHT_CROP = true` (T8: agreement and counts not worse,
+   else delete); `make sam-probe` on the hard real photos (T9: fewer « no outline »); per-part colour ΔE
+   baseline vs now (T10). Then tick or revert.
+3. Q2 from PQ-T11 (skill loader); PQ-T12 brings `evidence.visibleParts` and closes PQ-T37.
 
-## Files touched (this session, after PR #9)
+## Files touched (Q1)
 
-- `server/perception/mask-geometry.ts` (`masksOnObject`), `score-shape.ts`, `shape-report.ts`: only SAM masks on
-  the object's outline count as seen (commit 1086347, on main).
-- `server/perception/object-graph.ts` (`partCoverage`), `object-shape.ts` (`coverage` on the result),
-  `lib/object-shape.ts` (`PartCoverageSchema`, `ObjectShape.coverage?`).
-- `features/vision-insert/ui/part-coverage-line.tsx` (new) + `object-shape-panel.tsx`, messages en/fr/mg, tests.
-- Docs: `contracts.md`, `design/screens/village.md`, `design/stitch-map.md`, `tasks/PV-vision-quality.md`.
+- New: `server/perception/photo-conditions.ts`, `sam-consensus.ts`; `lib/photo-warning.ts`;
+  `features/vision-insert/ui/photo-warning-line.tsx` (+ tests for each).
+- Changed: `object-shape.ts` (conditions, facts, consensus, lit colours, part-mask timeout), `shape.ts`
+  (`facts`, tight-crop lines), `shape-crop.ts` (`tightCropForShape`), `outline.ts` (`consensus`, `skipFull`),
+  `part-masks.ts` (`partMasksTimeout`, `PART_RETRY`), `color-measure.ts` (`LIT_SHARE`, `litSurface`),
+  `lib/object-shape.ts` (`conditions`), messages en/fr/mg (`photoTooSmall`, `photoBlurred`).
+- Docs: `contracts.md`, `copilot.md`, `design/screens/village.md`, `tasks/PV-vision-quality.md`, loop log row.
 
 ## Decisions
 
-- Part list = per SAM concept « built/seen »; missing ones get « not built: n » with a `warning-amber` icon only
-  (amber text fails AA on light). Shown only for AI shapes with part masks; no plurals (no ICU in the i18n wrapper).
-- Built without mockup; gate-out 1440 + 390, dark + light, stubbed shape (temp script deleted).
-- Test scenarios V233–V234 (`test-scenarios/06-village.md`, local).
+- Blur does not lower colour confidence (it broke the goldens and does not move a median colour); only clipped
+  exposure does.
+- Shadow folding is opt-in (`litSurface`), off for plaster (beams and shadow look alike), never for groups in the
+  secondary band, no chains (roof → shadow → wall merged everything).
+- Consensus asks ≤ 3 SAM phrasings together; all-miss goes straight to the crop retry (`skipFull`).
+- Test scenarios V235–V238 (`test-scenarios/06-village.md`, local).
