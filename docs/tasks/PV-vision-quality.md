@@ -23,7 +23,7 @@ Meta API calls; all others run offline.
 
 ## Q0 — Measure the truth first
 
-- [ ] **PQ-T1 Real reference set** _(API)_. Capture ≥ 12 real photos with `make shape-capture PHOTO=… ID=…`:
+- [x] **PQ-T1 Real reference set** _(API)_. Capture ≥ 12 real photos with `make shape-capture PHOTO=… ID=…`:
       car side, car corner, car partly hidden, motorbike, house front, house row, hut, lamp post, utility pole,
       fridge, TV, fan, pump or generator, water tank, solar panel, tree. At least 3 hard ones (hidden ≥ 30 %,
       small < 150 px, backlit). Register them in `server/perception/__fixtures__/shape/index.ts` with
@@ -33,8 +33,10 @@ Meta API calls; all others run offline.
       **Done when:** `make shape-report` shows ≥ 12 real rows and the baseline is logged. Closes PR-0.5.
       _Code done 2026-11-10:_ `REAL_SHAPES` (16 ids, 3 hard) in the fixtures index, `scoreRealSet` + « Real »
       table (missing / not scorable listed), captures now keep `partMasks` and the replay scores them.
-      **Open (user):** capture the 12 missing photos; `TV` needs a re-capture (no outline). `LABEL=` picks
-      the detection when the id is not in its label (`ID=car-side LABEL=car`). Guide: `PV-Q0-a-faire.md`.
+      _Done 2026-11-10:_ 12 real rows (photos from Wikimedia Commons, licences in `real/photos/SOURCES.md`, local
+      only), mean 55 vs synthetic 93, logged in the loop log. Still open: car-corner (re-capture), utility pole
+      (re-capture after the SAM label fix), pump and solar street light (no outline, PQ-T9).
+      Guide: `PV-Q0-a-faire.md`.
 - [x] **PQ-T2 Detail score.** _(done 2026-11-10; real rows wait for PQ-T1)_ New `server/perception/detail-score.ts`: part recall, part precision, interior edge
       F1, colour per part (definitions: methodology §6.1). `ModelScore.detail` in `model-score.ts`, filled by
       `score-shape.ts` from the capture's part masks; four columns in the report. Not in the weighted score yet.
@@ -65,13 +67,16 @@ Meta API calls; all others run offline.
       **Test:** `eval-shape.test.ts` (rows grouped by version), `shape-capture.test.ts` (version round-trips;
       old captures without one still load).
       **Done when:** two prompt versions can be compared in one eval table.
-- [ ] **PQ-T6 Stop criteria on the real set.** From the PQ-T2 baseline, fix the gates for interior edge F1 and
+- [x] **PQ-T6 Stop criteria on the real set.** From the PQ-T2 baseline, fix the gates for interior edge F1 and
       colour per part (rule: a value at least half of the real objects miss today, never one chosen so that a
       given object passes). Add `SCORE_WEIGHTS_DETAIL` (silhouette, outline edge, colour, parts) used when part
       masks exist; `STOP` in `shape-report.ts` gains recall ≥ 0.8, precision ≥ 0.8 and the two new gates.
       **Test:** `model-score.test.ts` (weights sum to 1; without masks the classic weights apply and goldens
       keep their scores).
       **Done when:** methodology §9 and `/shape-loop` quote the same gates as the code.
+      _Done 2026-11-10:_ `STOP_DETAIL` in `shape-report.ts` (interior F1 ≥ 0.12: 6 of 12 real objects miss; part ΔE
+      ≤ 7: 2 of 3 miss, few masks yet, revisit when more captures have part masks), `weightDetail` +
+      `SCORE_WEIGHTS_DETAIL` in `model-score.ts`, used by `scoreRecipe`.
 
 - [x] **PQ-T36 Inside the outline, and from other angles.** _(done 2026-11-10; fan ✗ detached, lamp ✗ 4 blank bands)_ `detail-score.ts`: (a) interior difference:
       SSIM and mean colour difference between photo and render inside the outline, in 8 height bands, the
@@ -121,6 +126,13 @@ Meta API calls; all others run offline.
       wins; the Toy-Mini case (one answer merges car and hedge) → the tight one wins; all miss → the cause is
       reported once.
       **Done when:** on the hard real photos, « no outline » happens less often than at the PQ-T1 baseline.
+      _PQ-T1 baseline (2026-11-10, `make sam-probe`, best box IoU per word):_ 6 of 13 first captures had no
+      outline. Fixed already: wrong noun (« vintage TV » → `car`: 0; `tv`: 0.96), noun too short (`pole`: 0.19;
+      « utility pole »: 0.86) → head noun + one retry with the full label; on-demand outline not saved by the
+      capture. Open for this task: SAM does not know some objects at all (« pump », « hand pump », « water pump »:
+      0 instances on two photos; lookalike « fire hydrant » and « metal object »: 0.89; « object » alone: 0), and
+      thin assemblies come back as one part (solar street light: « street light » 0.27, « solar panel » 0.33).
+      Phrasings to try in the consensus: the label, the head noun, a lookalike, « <material> object ».
 - [ ] **PQ-T10 Colour of the lit surface.** `color-measure.ts`, `region-colors.ts`: read each region's colour
       on its brighter 60 % of pixels (median, as today), report the shadow share apart. First check what
       `measureKitColors` already does for `plaster`, and extend that logic instead of adding a second one.
