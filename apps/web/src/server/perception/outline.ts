@@ -71,9 +71,21 @@ const CONCEPT_NOUNS: ReadonlyArray<readonly [RegExp, string]> = [
  */
 export function conceptOf(d: Pick<ApplianceDetection, 'label'>): string {
   const label = d.label.trim().toLowerCase();
-  for (const [re, noun] of CONCEPT_NOUNS) if (re.test(label)) return noun;
-  return label;
+  // The head noun ends the main phrase: « vintage TV » is a tv, « car with roof rack » a car.
+  const head = label.split(HEAD_CUT)[0]!;
+  let best: { noun: string; end: number } | null = null;
+  for (const [re, noun] of CONCEPT_NOUNS) {
+    let end = -1;
+    for (const m of head.matchAll(new RegExp(re.source, 'g'))) end = m.index + m[0].length;
+    // Latest match wins; on a tie the earlier rule (phrases first) keeps it.
+    if (end >= 0 && (!best || end > best.end)) best = { noun, end };
+  }
+  return best?.noun ?? label;
 }
+
+/** Words that start a complement after the head noun (EN, FR). */
+const HEAD_CUT =
+  /\s(?:with|on|near|in|at|under|beside|next to|behind|avec|sur|près de|devant|derrière)\s/;
 
 /** Resolves to TIMEOUT after `ms` (the client also gets the abort signal), null on error. */
 const TIMEOUT = Symbol('timeout');
@@ -198,7 +210,16 @@ export async function fetchOutlineForBox(
   imageUrl: string,
   concept: string,
   box: NormBox,
-  { timeoutMs = SEGMENT_TIMEOUT_MS, crop }: { timeoutMs?: number; crop?: OutlineCrop } = {}
+  {
+    timeoutMs = SEGMENT_TIMEOUT_MS,
+    crop,
+    fallback,
+  }: {
+    timeoutMs?: number;
+    crop?: OutlineCrop;
+    /** Second concept tried once when `concept` misses (the full label: « utility pole » finds what « pole » does not). */
+    fallback?: string;
+  } = {}
 ): Promise<string | null> {
   const full = await withTimeout((signal) => segmentImage(imageUrl, concept, signal), timeoutMs);
   // Only a real SAM answer counts (the mock's boxes belong to another image).
@@ -243,6 +264,13 @@ export async function fetchOutlineForBox(
   }
   // Every miss logs its cause: a silent null here used to cost a whole investigation session.
   console.warn(`[vision] 3D outline missed for "${concept}": ${miss}`);
+  const next = fallback?.trim().toLowerCase();
+  if (next && next !== concept) {
+    return fetchOutlineForBox(segmentImage, imageUrl, next, box, {
+      timeoutMs,
+      ...(crop ? { crop } : {}),
+    });
+  }
   return null;
 }
 

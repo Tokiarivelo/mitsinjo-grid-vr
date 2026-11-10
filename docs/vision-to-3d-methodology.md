@@ -317,6 +317,7 @@ its Vitest test in `__tests__/` in the same commit.
 | Did a prompt change help the staged loop?      | `make eval-stages` (offline replay)                                                                                              | Stage scores not lower                                     |
 | Does the 2D path work end to end on live Meta? | `make facade-e2e FRONT=… OUT=…` (costs API calls)                                                                                | Model built, stages logged                                 |
 | Add a real photo to the reference set          | `make shape-capture PHOTO=… ID=… [LABEL=…]` (costs API calls)                                                                    | Capture and crop written to `__fixtures__/shape/real/`     |
+| Why does a capture have no outline?            | `make sam-probe ID=… CONCEPTS="a,b"` (costs SAM calls)                                                                           | A word with best IoU ≥ 0.3 on photo or crop                |
 | Everything before handoff                      | `make check`                                                                                                                     | Typecheck, lint, tests green                               |
 
 ---

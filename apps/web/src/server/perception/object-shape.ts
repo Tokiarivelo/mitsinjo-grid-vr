@@ -290,7 +290,7 @@ export async function runObjectShape(
             fullImageUrl,
             conceptOf(target),
             target.box,
-            outlineCrop ? { crop: outlineCrop } : {}
+            { ...(outlineCrop ? { crop: outlineCrop } : {}), fallback: target.label }
           ).then(
             (hit) => hit ?? undefined,
             () => undefined
