@@ -36,6 +36,8 @@ export const ShapeCaptureSchema = z.object({
   target: ShapeTargetSchema,
   /** Spark's kit answer (what the loop patches and replays). */
   kit: ObjectKitSchema,
+  /** Kit prompt version that produced `kit` (PQ-T5); absent on captures older than versions. */
+  promptVersion: z.number().int().min(1).optional(),
   recipe: ObjectRecipeSchema.optional(),
   fit: z.object({ iou: z.number().min(0).max(1) }).optional(),
   /** Spark latency, seconds. */

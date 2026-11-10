@@ -17,6 +17,12 @@ import { RECIPE_MATERIALS, type ObjectRecipe, type RecipePart } from '@/lib/obje
  * building (2026-11-01).
  */
 
+/**
+ * Version of the kit prompt (PQ-T5): bump it with every change of `SHAPE_SYSTEM_PROMPT` and keep the old
+ * text in `KIT_PROMPTS`, so `make eval-shape PROMPT=1,2` compares them on the same captures.
+ */
+export const KIT_PROMPT_VERSION = 1;
+
 export const SHAPE_SYSTEM_PROMPT = [
   'You describe ONE object seen on a photo crop so a SIMULATED rural microgrid editor can build a 3D model with high fidelity.',
   'Answer fast and short: do not plan 3D coordinates, the editor has the templates.',
@@ -34,6 +40,19 @@ export const SHAPE_SYSTEM_PROMPT = [
   `partMaterials (buildings, optional): what the roof, walls, frame (window and door frames), plinth, chimney and door are made of, each one of the materials above; read them on the drawing when there is one (labels, hatching: « REED THATCH » = thatch, brick courses = brick, stone base = stone).`,
   'Never give watts, kW or any energy value.',
 ].join(' ');
+
+/** Every kit prompt still comparable by version (current = `KIT_PROMPT_VERSION`). */
+export const KIT_PROMPTS: Readonly<Record<number, string>> = { 1: SHAPE_SYSTEM_PROMPT };
+
+/** The kit system prompt of `version` (default: current); throws on a version that was not kept. */
+export function kitPrompt(version: number = KIT_PROMPT_VERSION): string {
+  const text = KIT_PROMPTS[version];
+  if (!text)
+    throw new Error(
+      `unknown kit prompt version ${version} (kept: ${Object.keys(KIT_PROMPTS).join(', ')})`
+    );
+  return text;
+}
 
 /**
  * User turn; the label is the detection name (from a model or typed by the operator), quoted.
@@ -124,6 +143,9 @@ const ReplySchema = z.object({
 });
 
 const LIMITS = { windows: 8, doors: 3, wheels: 6, legs: 4, floors: 4, units: 8 } as const;
+
+/** Version of the critic prompt (PQ-T5), logged with every critic call. */
+export const CRITIC_PROMPT_VERSION = 1;
 
 export const CRITIC_SYSTEM_PROMPT = [
   'You are the visual critic of a 3D reconstruction loop. The image shows the PHOTO of one object (left) and OUR 3D MODEL seen from the same view (right).',

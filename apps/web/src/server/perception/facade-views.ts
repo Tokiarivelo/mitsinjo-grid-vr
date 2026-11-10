@@ -53,6 +53,9 @@ export const SIDE_VIEW_TIMEOUT_MS = 60_000;
 const MIN_CONFIDENCE = 0.5;
 const MAX_PER_CONCEPT = 12;
 
+/** Version of the side-view prompt (PQ-T5), logged with every Muse Image side drawing. */
+export const SIDE_VIEW_PROMPT_VERSION = 1;
+
 /** Prompt for the side elevation, the front facade sent as the reference image. */
 export const SIDE_VIEW_PROMPT =
   'This image is the front elevation of a building. Draw the RIGHT SIDE elevation of the very same building, as an architect would on the next sheet: same drawing style, same scale, same storeys and eave height, same chimneys, and the windows a house of this size has on its side wall (at least one per storey). The side wall is as deep as such a house really is, usually a bit more than half its front width. Straight-on orthographic view at eye level, the whole building centred on a plain white background, no perspective, no text, no dimension lines.';
@@ -190,6 +193,7 @@ export async function imagineSideView(
   signal?: AbortSignal
 ): Promise<Buffer | null> {
   if (!museImageReady()) return null;
+  console.info(`[vision] 3D side view → params {"promptVersion":${SIDE_VIEW_PROMPT_VERSION}}`);
   try {
     const timeout = AbortSignal.timeout(SIDE_VIEW_TIMEOUT_MS);
     return await museImage(

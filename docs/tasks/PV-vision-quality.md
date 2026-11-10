@@ -55,7 +55,7 @@ Meta API calls; all others run offline.
       non-body parts, mock answers a fixed grade).
       **Done when:** calibration is run and written in the loop log: damaged models graded lower in ≥ 90 % of
       pairs → the judge may be used by the loop; under 90 % → it stays a developer note, and that is logged.
-- [ ] **PQ-T5 A version on every prompt.** `KIT_PROMPT_VERSION`, `CRITIC_PROMPT_VERSION`,
+- [x] **PQ-T5 A version on every prompt.** _(done 2026-11-10)_ `KIT_PROMPT_VERSION`, `CRITIC_PROMPT_VERSION`,
       `VIEWS_CHECK_PROMPT_VERSION`, `SIDE_VIEW_PROMPT_VERSION` next to their prompts; logged by `visionJson`
       (`params.promptVersion`), stored in captures (`shape-capture.ts`, `stage-capture.ts`); `eval-shape.ts`
       groups its table by version; `make eval-shape` accepts `PROMPT=`.

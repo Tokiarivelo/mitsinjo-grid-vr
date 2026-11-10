@@ -28,6 +28,7 @@ import {
   writeCapture,
   type ShapeCapture,
 } from '../shape-capture';
+import { KIT_PROMPT_VERSION } from '../shape';
 import { writeGoldenCapture } from './golden-run';
 
 /** Golden fridge as a photo + target, Spark stubbed with the case prior. */
@@ -98,6 +99,15 @@ describe('shape capture (PR-0.4)', () => {
     expect(replay).not.toBeNull();
     expect(replay!.score.iou).toBeGreaterThan(0.6);
     expect(replay!.score.score).toBeGreaterThan(0);
+  });
+
+  it('keeps the kit prompt version; captures without one still load (PQ-T5)', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'shape-capture-'));
+    const capture = await writeGoldenCapture(dir, 'fridge');
+    expect(capture.promptVersion).toBeUndefined();
+    expect((await readCapture(dir, 'fridge')).capture.promptVersion).toBeUndefined();
+    writeCapture(dir, { ...capture, promptVersion: 2 }, readFileSync(join(dir, 'fridge.crop.jpg')));
+    expect((await readCapture(dir, 'fridge')).capture.promptVersion).toBe(2);
   });
 
   it('replays captured part masks on the whole crop (PQ-T1)', async () => {
@@ -289,6 +299,7 @@ describe.skipIf(!LIVE)('make shape-capture', () => {
       photo: { width: size.width, height: size.height },
       target,
       kit,
+      promptVersion: KIT_PROMPT_VERSION,
       recipe: shape.recipe,
       ...(shape.fit ? { fit: shape.fit } : {}),
       // PQ-T1: SAM part masks (crop fractions) so the replay scores parts too.

@@ -28,16 +28,23 @@ import {
 import { maskToOutline } from './mask-outline';
 import { timeoutSignal } from './abort';
 import { inlineImageUrl } from './inline-image';
-import { VIEWS_CHECK_JSON_SCHEMA, VIEWS_CHECK_SYSTEM_PROMPT, parseViewsCheck } from './views-check';
+import {
+  VIEWS_CHECK_JSON_SCHEMA,
+  VIEWS_CHECK_PROMPT_VERSION,
+  VIEWS_CHECK_SYSTEM_PROMPT,
+  parseViewsCheck,
+} from './views-check';
 import { REGION_SYSTEM_PROMPT, regionQuestion } from './region-prompt';
 import { defaultArchetype, kitToRecipe } from '@/lib/object-kit';
 import {
   CRITIC_JSON_SCHEMA,
+  CRITIC_PROMPT_VERSION,
   CRITIC_SYSTEM_PROMPT,
+  KIT_PROMPT_VERSION,
+  kitPrompt,
   parseKit,
   parseKitPatch,
   SHAPE_JSON_SCHEMA,
-  SHAPE_SYSTEM_PROMPT,
   shapeQuestion,
 } from './shape';
 import { boxUnionCoverage, parseSamOutput } from './parse-sam';
@@ -351,14 +358,15 @@ export class MetaPerceptionBackend implements PerceptionBackend {
   ): Promise<PerceptionCall<ShapeResult>> {
     const hint = defaultArchetype(target.category, target.scenery, target.label);
     // Standard id, not the contributor one: the operator waits on this answer (≈ 15 s vs ≈ 25 s measured).
+    const promptVersion = target.promptVersion ?? KIT_PROMPT_VERSION;
     const { content, model, usage } = await this.visionJson(
-      SHAPE_SYSTEM_PROMPT,
+      kitPrompt(promptVersion),
       shapeQuestion(target.label, target.aspect, hint, Boolean(target.facadeUrl)),
       imageUrl,
       SHAPE_JSON_SCHEMA,
       signal,
       false,
-      { kind: 'describeShape', params: { ...target } },
+      { kind: 'describeShape', params: { ...target, promptVersion } },
       target.facadeUrl ? [target.facadeUrl] : []
     );
     const kit = parseKit(content, hint);
@@ -416,7 +424,7 @@ export class MetaPerceptionBackend implements PerceptionBackend {
       CRITIC_JSON_SCHEMA,
       signal,
       false,
-      { kind: 'criticizeShape' }
+      { kind: 'criticizeShape', params: { promptVersion: CRITIC_PROMPT_VERSION } }
     );
     const patch = parseKitPatch(content);
     console.info(
@@ -437,7 +445,7 @@ export class MetaPerceptionBackend implements PerceptionBackend {
       VIEWS_CHECK_JSON_SCHEMA,
       signal,
       false,
-      { kind: 'checkViews' }
+      { kind: 'checkViews', params: { promptVersion: VIEWS_CHECK_PROMPT_VERSION } }
     );
     const check = parseViewsCheck(content);
     console.info(

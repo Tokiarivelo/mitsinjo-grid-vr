@@ -11,6 +11,9 @@ import { RECIPE_MATERIALS, type RecipeMaterial } from '@/lib/object-shape';
 /** Most missing parts acted on per check. */
 export const MAX_MISSING = 4;
 
+/** Version of the views-check prompt (PQ-T5), logged with every call. */
+export const VIEWS_CHECK_PROMPT_VERSION = 1;
+
 export const VIEWS_CHECK_SYSTEM_PROMPT = [
   'You check a 3D model of ONE object against its drawings. The image is a 2 × 2 sheet: top row = the FRONT drawing (left) and our 3D model seen from the front (right); bottom row = the SIDE drawing (left) and our model seen from the same side (right). The model is flat-shaded, without texture.',
   'Compare each model view with its drawing and list the visible parts the model is missing or shows wrong (e.g. a wheel, a mirror, a rear bumper, a door window, a handle, a leg, a lamp), the view where the part shows best, and its colour and material as drawn.',

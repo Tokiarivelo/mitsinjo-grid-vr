@@ -110,9 +110,9 @@ shape-capture: ## Capture one live 3D run → offline fixtures (PHOTO=… ID=…
 	@test -n "$(PHOTO)" -a -n "$(ID)" || { echo "Usage: make shape-capture PHOTO=path/to/photo.jpg ID=car1"; exit 1; }
 	eval "$$(make -s env-export)" && SHAPE_CAPTURE=1 SHAPE_CAPTURE_PHOTO="$(abspath $(PHOTO))" SHAPE_CAPTURE_ID="$(ID)" SHAPE_CAPTURE_DIR="$(CURDIR)/apps/web/src/server/perception/__fixtures__/shape/real" $(PNPM) --filter $(WEB) exec vitest run src/server/perception/__tests__/shape-capture.test.ts -t "make shape-capture"
 
-eval-shape: ## Kit eval on live Spark over the real captures (MODEL=…, PR-3.1, on demand, costs API calls)
+eval-shape: ## Kit eval on live Spark over the real captures (MODEL=…, PROMPT=1,2 kit prompt versions, PR-3.1, costs API calls)
 	$(need_ws)
-	eval "$$(make -s env-export)" && EVAL_SHAPE=1 EVAL_SHAPE_DIR="$(CURDIR)/apps/web/src/server/perception/__fixtures__/shape/real" $(if $(MODEL),META_VISION_MODEL="$(MODEL)") $(PNPM) --filter $(WEB) exec vitest run src/server/perception/__tests__/eval-shape.test.ts -t "make eval-shape"
+	eval "$$(make -s env-export)" && EVAL_SHAPE=1 EVAL_SHAPE_DIR="$(CURDIR)/apps/web/src/server/perception/__fixtures__/shape/real" $(if $(MODEL),META_VISION_MODEL="$(MODEL)") $(if $(PROMPT),EVAL_SHAPE_PROMPTS="$(PROMPT)") $(PNPM) --filter $(WEB) exec vitest run src/server/perception/__tests__/eval-shape.test.ts -t "make eval-shape"
 	@$(MAKE) -s eval-stages
 
 eval-stages: ## Replay recorded stage loops offline (shape/real/*.stages.json from facade-e2e ID=…), no API cost

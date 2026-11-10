@@ -4,6 +4,7 @@ import { readdirSync } from 'node:fs';
 import type { ObjectKit } from '@/lib/object-kit';
 import type { PerceptionClient } from './client';
 import { readCapture } from './shape-capture';
+import { KIT_PROMPT_VERSION } from './shape';
 
 /**
  * Kit eval harness (PR-3.1, S3): replays the captured crops on live Spark and scores the fresh
@@ -15,6 +16,8 @@ import { readCapture } from './shape-capture';
 export interface EvalRow {
   id: string;
   model: string;
+  /** Kit prompt version asked with (PQ-T5). */
+  promptVersion: number;
   archetype: [truth: string, got: string];
   subtype: [truth: string | undefined, got: string | undefined];
   /** Per count key: [truth, got]. */
@@ -33,7 +36,7 @@ const ROLES = ['main', 'secondary', 'accent'] as const;
 export function compareKits(
   truth: ObjectKit,
   got: ObjectKit
-): Omit<EvalRow, 'id' | 'model' | 'seconds'> {
+): Omit<EvalRow, 'id' | 'model' | 'seconds' | 'promptVersion'> {
   const counts: EvalRow['counts'] = {};
   for (const k of COUNT_KEYS) {
     const t = truth.details?.[k];
@@ -86,11 +89,12 @@ export function agreement(row: EvalRow): { match: number; total: number } {
   return { match, total };
 }
 
-/** One live Spark kit per capture in `dir`. */
+/** One live Spark kit per capture in `dir`, asked with kit prompt `promptVersion` (default: current). */
 export async function evalCaptures(
   client: Pick<PerceptionClient, 'describeShape'>,
   dir: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  promptVersion: number = KIT_PROMPT_VERSION
 ): Promise<EvalRow[]> {
   const ids = readdirSync(dir)
     .filter((f) => f.endsWith('.capture.json'))
@@ -110,6 +114,7 @@ export async function evalCaptures(
         category: capture.target.category,
         ...(capture.target.scenery ? { scenery: capture.target.scenery } : {}),
         ...(aspect > 0 ? { aspect } : {}),
+        promptVersion,
       },
       signal
     );
@@ -121,6 +126,7 @@ export async function evalCaptures(
     rows.push({
       id,
       model: out.model,
+      promptVersion,
       ...compareKits(capture.kit, out.kit),
       seconds,
     });
@@ -128,10 +134,47 @@ export async function evalCaptures(
   return rows;
 }
 
-/** Markdown agreement table for the console and the report file. */
+/** Kit prompt versions to evaluate: `PROMPT=1,2` (env `EVAL_SHAPE_PROMPTS`) → [1, 2]; empty → current. */
+export function parsePromptVersions(raw: string | undefined): number[] {
+  const versions = (raw ?? '')
+    .split(',')
+    .map((v) => Number(v.trim().replace(/^v/i, '')))
+    .filter((v) => Number.isInteger(v) && v >= 1);
+  return versions.length ? [...new Set(versions)] : [KIT_PROMPT_VERSION];
+}
+
+/**
+ * Markdown agreement table for the console and the report file, one section per prompt version
+ * (PQ-T5) with its total agreement and median latency, so two prompts compare in one table.
+ */
 export function evalMarkdown(rows: EvalRow[]): string {
-  const lines = ['| id | model | agree | arch | sub | counts | materials | Δprop | s |'];
-  lines.push('| -- | ----- | ----- | ---- | --- | ------ | --------- | ----- | - |');
+  const versions = [...new Set(rows.map((r) => r.promptVersion))].sort((a, b) => a - b);
+  return versions
+    .map((v) =>
+      versionTable(
+        v,
+        rows.filter((r) => r.promptVersion === v)
+      )
+    )
+    .join('\n');
+}
+
+function versionTable(version: number, rows: EvalRow[]): string {
+  const sum = rows.reduce(
+    (a, r) => {
+      const { match, total } = agreement(r);
+      return { match: a.match + match, total: a.total + total };
+    },
+    { match: 0, total: 0 }
+  );
+  const secs = rows.map((r) => r.seconds).sort((a, b) => a - b);
+  const median = secs.length ? secs[Math.floor((secs.length - 1) / 2)]! : 0;
+  const lines = [
+    `### Kit prompt v${version} — agree ${sum.match}/${sum.total}, median ${median.toFixed(1)} s`,
+    '',
+    '| id | model | agree | arch | sub | counts | materials | Δprop | s |',
+    '| -- | ----- | ----- | ---- | --- | ------ | --------- | ----- | - |',
+  ];
   for (const r of rows) {
     const { match, total } = agreement(r);
     const counts = Object.entries(r.counts)

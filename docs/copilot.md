@@ -77,6 +77,12 @@ features/copilot/          # ChatPanel, ChatMessage, ToolActivity, ConfirmPropos
   Every object is modelled, scenery too (`scenery` sent with the target; silhouette depth per scenery type).
   Mock: fixed recipes (fridge, TV, fan, lamp; house, tree, plant, car, person, animal, water; else a box), not checked.
   Image generation stays in `providers/meta.ts` (`/responses`, model `META_IMAGE_MODEL`).
+  **Prompt versions (PQ-T5):** `KIT_PROMPT_VERSION`, `CRITIC_PROMPT_VERSION` (`shape.ts`),
+  `VIEWS_CHECK_PROMPT_VERSION` (`views-check.ts`), `SIDE_VIEW_PROMPT_VERSION` (`facade-views.ts`), all 1, beside
+  `SHAPE_SCRIPT_PROMPT_VERSION`. Each call logs its `promptVersion` in the `[vision] 3D … → params` line; captures
+  store the kit version (`ShapeCapture.promptVersion`, absent on older ones). Old kit prompts stay in
+  `KIT_PROMPTS`; `make eval-shape PROMPT=1,2` asks each listed version on the same captures, one table section per
+  version (total agreement, median seconds). Bump the version with every prompt change.
 - `server/spend/`: `SpendGuard` estimates cost from catalogue prices (API `usage` when given, else ≈ 4 chars/token) per session
   (`sessionId`, else `global`). Over `META_SPEND_CAP_USD` → mock + `PROVIDER_FALLBACK` `reason: 'spend_cap'`. In memory: resets on restart.
 - Measured 2026-10-30 (real calls): vision ≈ 10 s (≈ 1 200 reasoning tokens), SAM ≈ 5 s, image ≈ 12–23 s, voice ≈ 3 s.

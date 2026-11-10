@@ -122,6 +122,8 @@ export interface ShapeSubject {
    * keeps size, pose and measured colours; the facade refines windows, doors, materials, parts.
    */
   facadeUrl?: string;
+  /** Kit prompt version to ask with (PQ-T5, evals); default `KIT_PROMPT_VERSION`. */
+  promptVersion?: number;
 }
 
 /** What `describeParts` is told about the object. */
