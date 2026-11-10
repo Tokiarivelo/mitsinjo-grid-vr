@@ -72,3 +72,6 @@ design/shots/
 *.swo
 .DS_Store
 Thumbs.db
+
+# Local reference photos for manual checks (PQ-T1), never committed
+/resources/

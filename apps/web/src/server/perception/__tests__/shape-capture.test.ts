@@ -231,10 +231,10 @@ describe.skipIf(!LIVE)('make shape-capture', () => {
     const photoPath = process.env.SHAPE_CAPTURE_PHOTO;
     const id = process.env.SHAPE_CAPTURE_ID;
     const dir = process.env.SHAPE_CAPTURE_DIR;
+    if (!photoPath || !id || !dir)
+      throw new Error('Usage: make shape-capture PHOTO=path/to/photo.jpg ID=car1 [LABEL=car]');
     // PQ-T1: what to pick on the photo (detection id or label part); default = the ID.
     const pick = process.env.SHAPE_CAPTURE_LABEL || id;
-    if (!photoPath || !id || !dir)
-      throw new Error('Usage: make shape-capture PHOTO=path/to/photo.jpg ID=car1');
     if (!/^[a-z0-9][a-z0-9-_]{0,63}$/i.test(id))
       throw new Error(`ID must be a safe file name, got ${JSON.stringify(id)}`);
 
@@ -264,7 +264,7 @@ describe.skipIf(!LIVE)('make shape-capture', () => {
     if (detections.length === 0) throw new Error('no detections on this photo');
     const found =
       detections.find((d) => d.id === pick) ??
-      detections.find((d) => d.label.toLowerCase().includes(pick!.toLowerCase()));
+      detections.find((d) => d.label.toLowerCase().includes(pick.toLowerCase()));
     if (!found)
       throw new Error(
         `no detection matching ${JSON.stringify(pick)} (rerun with LABEL=…); candidates: ${detections.map((d) => `${d.id} (${d.label})`).join(', ')}`

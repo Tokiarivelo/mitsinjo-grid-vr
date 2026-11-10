@@ -316,7 +316,7 @@ its Vitest test in `__tests__/` in the same commit.
 | Did a prompt change help the kit?              | `make eval-shape MODEL=…` (live, costs API calls)                                                                                | Agreement not lower, median ≤ 30 s                         |
 | Did a prompt change help the staged loop?      | `make eval-stages` (offline replay)                                                                                              | Stage scores not lower                                     |
 | Does the 2D path work end to end on live Meta? | `make facade-e2e FRONT=… OUT=…` (costs API calls)                                                                                | Model built, stages logged                                 |
-| Add a real photo to the reference set          | `make shape-capture PHOTO=… ID=…` (costs API calls)                                                                              | Capture and crop written to `__fixtures__/shape/real/`     |
+| Add a real photo to the reference set          | `make shape-capture PHOTO=… ID=… [LABEL=…]` (costs API calls)                                                                    | Capture and crop written to `__fixtures__/shape/real/`     |
 | Everything before handoff                      | `make check`                                                                                                                     | Typecheck, lint, tests green                               |
 
 ---
