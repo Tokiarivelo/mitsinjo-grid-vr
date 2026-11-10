@@ -6,41 +6,54 @@ on:
   pull_request:
     branches: [main]
 
+# A new push on the same branch / PR cancels the run still going.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# Independent jobs run in parallel: wall time = the slowest one, not the sum.
 jobs:
-  check:
-    name: Typecheck, Lint, Test & Build
+  static:
+    name: Format, Typecheck & Lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install pnpm
-        # Version from package.json "packageManager" (one source of truth).
-        uses: pnpm/action-setup@v4
-
-      - name: Use Node.js 22
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: 'pnpm'
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
+      - uses: ./.github/actions/setup
       - name: Format check (Prettier)
         run: pnpm format:check
-
       - name: Typecheck
         run: pnpm typecheck
-
       - name: Lint
         run: pnpm lint
 
-      - name: Unit tests
-        run: pnpm test
+  test:
+    name: Unit tests (${{ matrix.shard }}/3)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      # Web suite split in 3 (includes the i18n parity test).
+      - name: Web tests
+        run: pnpm --filter web exec vitest run --shard=${{ matrix.shard }}/3
+      - name: Engine and workspace tests
+        if: matrix.shard == 1
+        run: pnpm turbo run test --filter='!web'
 
-      - name: Verify i18n parity
-        run: pnpm --filter web test -- i18n-parity
-
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - uses: actions/cache@v4
+        with:
+          path: apps/web/.next/cache
+          key: next-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
+          restore-keys: next-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
       - name: Build
         run: pnpm build
         env:
@@ -51,23 +64,23 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install pnpm
-        # Version from package.json "packageManager" (one source of truth).
-        uses: pnpm/action-setup@v4
-
-      - name: Use Node.js 22
-        uses: actions/setup-node@v4
+      - uses: ./.github/actions/setup
+      - uses: actions/cache@v4
         with:
-          node-version: 22
-          cache: 'pnpm'
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
+          path: apps/web/.next/cache
+          key: next-e2e-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
+          restore-keys: next-e2e-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
+      - uses: actions/cache@v4
+        id: pw
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
       - name: Install Playwright Chromium
+        if: steps.pw.outputs.cache-hit != 'true'
         run: pnpm --filter web exec playwright install --with-deps chromium
-
+      - name: Install Playwright system deps
+        if: steps.pw.outputs.cache-hit == 'true'
+        run: pnpm --filter web exec playwright install-deps chromium
       - name: Run e2e
         run: pnpm --filter web test:e2e
         env:
