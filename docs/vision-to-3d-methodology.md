@@ -1,900 +1,498 @@
-# Vision-to-3D Synthesis: High-Fidelity Inverse Procedural Modeling & Real-Time Rendering Methodology
+# Vision-to-3D: photo → 3D object with Meta models (methodology)
 
-> **Target Domain:** Automated and semi-automated reconstruction of rich, volumetric, stylized, and physically plausible 3D visual environments from single-image or multi-image visual references.
-> **Standard:** Real-time WebGL / WebGPU (Three.js / React Three Fiber / HLSL / WGSL) target with 60+ FPS performance, $O(1)$ draw calls, zero runtime allocations, and continuous dynamic lighting reactivity.
-
----
-
-## 1. Executive Summary & Paradigm Comparison
-
-When converting visual concepts from 2D reference images into 3D environments, engineers typically encounter two competing paradigms:
-
-```
-                  ┌────────────────────────────────────────────────────────┐
-                  │                 Input Reference Image                  │
-                  └───────────────────────────┬────────────────────────────┘
-                                              │
-                     ┌────────────────────────┴────────────────────────┐
-                     ▼                                                 ▼
-     ┌───────────────────────────────┐                 ┌───────────────────────────────┐
-     │   Dense Neural Generation     │                 │ Inverse Procedural Synthesis  │
-     │   (NeRF / 3D Gaussian / Tripo)│                 │   (Analytical / Shaders / IPM)│
-     └───────────────┬───────────────┘                 └───────────────┬───────────────┘
-                     │                                                 │
-        [Heavy VRAM, Unlit, Static]                     [1 Draw Call, 0 allocations, 60fps]
-        [Dense Polygons, Dirty Normals]                 [Analytical Normals, Fully Dynamic]
-        [Fixed Baked Lighting, 15 FPS]                  [Dynamic Sun, Moon, Wind, Atmosphere]
-```
-
-### 1.1 Why Inverse Procedural Modeling (IPM) Outperforms Dense Meshes
-
-Dense neural generation (e.g., text/image-to-mesh models like Tripo3D, Shap-E, or NeRF/3DGS bakes) produces un-editable, dense, baked-lighting meshes. For volumetric atmospheric elements (clouds, water, terrain, vegetation, celestial bodies), this produces:
-
-1. **Baked Lighting Defects:** Shadows are baked into vertex colors or textures. When the sun moves, shadows don't react, destroying realism.
-2. **Facet & Normal Artifacts:** Coarse polygonization results in jagged icosahedral facets and dark silhouette terminators (such as the black polygonal lumps seen in early iterations).
-3. **Draw Call & VRAM Bloat:** Each unique cloud or rock requires separate geometry and material instances, exceeding mobile and integrated GPU draw call budgets.
-
-**Inverse Procedural Synthesis** deconstructs the visual reference image into:
-
-- **Hierarchical Geometric Primitives** ($C^1$ continuous spheres, capsules, or ellipsoids clustered using spatial probability distributions).
-- **Procedural Displacement Calculus** (continuous frequency-harmonic domain deformation evaluated on GPU vertices).
-- **Physical Photometric Shaders** (wrapped diffuse, subsurface scattering, atmospheric dual-ambient bounce, Fresnel rim lighting).
-- **Analytical Motion Dynamics** (continuous celestial trigonometry and wind advection).
-
-This yields **infinite visual fidelity, 1 single draw call (`InstancedMesh`), 0 CPU memory allocations per frame, and 60 FPS real-time responsiveness.**
+> **Scope.** How one object on a photo becomes a 3D model on `/village`: what the code does today, where the
+> quality is lost, and what to change to get the strongest image-to-3D the Meta models allow.
+> **Companions.** Prompt-ready knowledge for each Muse call: `vision-to-3d-muse-skills.md`. Step-by-step
+> checklist for model quality: `tasks/PV-vision-quality.md`. Capture feel, hologram and the editing Lab with its AI
+> assistant: `tasks/PV-capture-lab.md`. The sky of `/simulation` (clouds, sun): `vision-to-3d-atmosphere.md`.
+> **Status words.** « As built » = in the code on 2026-11-10. « Target » = planned in PV-Q, not built.
+> Nothing under « Target » is a fact about the app yet.
 
 ---
 
-## 2. The 6-Step Vision-to-3D Pipeline
+## 1. Audit of the previous version of this file
 
-```mermaid
-flowchart LR
-    A["1. Vision Decomposition\n(Perceptual Reverse-Engineering)"] --> B["2. Geometric Clustering\n(Primitive Hierarchy & Shells)"]
-    B --> C["3. Procedural Deformation\n(Harmonic 3D Vertex Calculus)"]
-    C --> D["4. Photometric Shader\n(Scattering & Optical Model)"]
-    D --> E["5. Motion & Celestial\n(Continuous Arc & Shadows)"]
-    E --> F["6. Automated Verification\n(Playwright & Color-Space Delta)"]
-```
+The previous version (git history, before 2026-11-10) described a cloud layer and a five-agent Meta loop. Checked
+against the repository:
 
----
+| Claim in the old file                                                 | What the repository shows                                                                                                                                                                                                                               | Action                                    |
+| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| The pipeline is clouds: shells, puffs, wrapped diffuse                | True for the `/simulation` sky only. The photo → 3D object pipeline (`server/perception/`, 60+ modules) was not mentioned                                                                                                                               | Cloud maths moved to the atmosphere file  |
+| `node scratch/test-orbit.mjs` verifies the result                     | The script does not exist. Scene audits are `make scene-audit` and `make shape-report`                                                                                                                                                                  | Replaced by real commands (§8)            |
+| Acceptance table « Passed » (1 draw call, 0 bytes / frame, ΔE < 8)    | No run backs it. Scene budget is < 150 draw calls (`performance.md`), not 1                                                                                                                                                                             | Removed                                   |
+| 13 test files prove each phase                                        | The files exist but test other things: `region-colors` = median colour per SAM mask, `spark-critic` = kit patch round, `autonomous-perf` = dispatch engine timing, not WebGL heap                                                                       | Test matrix rewritten (§8)                |
+| SAM 3.1 takes a role prompt and returns morphology JSON and 3D bounds | SAM is called with an image and a concept word and returns 2D boxes and masks (`client.segmentImage`)                                                                                                                                                   | Removed                                   |
+| Muse Image draws top-down and side views to recover depth             | Spike PR-4.1 (2026-11-02): 2 of 3 generated views were wrong (top-down returned a front view), 9–26.5 s each. Only a guarded side view is used                                                                                                          | Rewritten (§5, row 11)                    |
+| Muse Wonder orchestrates, Muse Glimmer runs Playwright                | The orchestrator is TypeScript (`runObjectShape`). Wonder does one background final check. Glimmer is the copilot chat fallback (`GLIMMER_BASE_URL`), it runs no tools here                                                                             | Rewritten (§2)                            |
+| Prices, context sizes, « converges in ≤ 3 iterations »                | Prices and the 1M context of Wonder and Spark match the saved Model API page (Wonder $4.00 in, $0.20 cached; Spark 1.3 $1.25 in; Muse Image $0.01 per image; SAM $2.50 per 1 000 images). The Glimmer « 32K » and the convergence claim are not sourced | Convergence claim removed; costs in §11.4 |
+| Contract 4 telemetry JSON (ΔE 6.84, IoU 0.892)                        | Sample values, not measurements                                                                                                                                                                                                                         | Removed                                   |
 
-## 3. Step 1: Inverse Vision Decomposition (2D $\to$ Parameters)
-
-Before writing any code or generating geometry, the reference image is decomposed across five perceptual axes:
-
-### 3.1 Structural & Morphological Analysis
-
-Decompose the target subject into macro, meso, and micro scales:
-
-- **Macro Scale (Global Architecture):**
-  - What is the global silhouette? (e.g., Flat condensation bottom at altitude $Y_0$, towering vertical domes, flat anvil top).
-  - How does it distribute in 3D space? (Concentric depth rings, horizon cloud deck, mid-sky clusters, overhead canopy).
-- **Meso Scale (Volumetric Clusters):**
-  - How many lobes compose a single cloud formation? (In cumulus reference: 1 central dome, 2 crest peaks, 4 lateral billows, 4 diagonal fillers, 3 flat base lobes, 2 crowning whisps = 16 overlapping primitives).
-- **Micro Scale (Surface Texture):**
-  - Is the surface perfectly smooth, faceted, or cauliflower-bumpy?
-  - Amplitude and frequency of organic bumps: $A \approx 0.08 \cdot R$, $f \approx 2.2$.
-
-### 3.2 Photometric & Optical Analysis
-
-Analyze pixel values across luminance zones in CIELAB or Linear sRGB:
-
-1. **Sunlit Crests ($Zone\_{sun}$):** Pure warm white ($L^* \ge 98$, RGB `(1.0, 1.0, 0.98)`).
-2. **Ambient Crevices & Undersides ($Zone\_{shade}$):** In the reference photo, shaded areas are **never black or grey**. They reflect Rayleigh sky scattering: rich, luminous azure/sky-blue ($L^* \approx 72$, RGB `(0.48, 0.72, 0.98)`).
-3. **Terminator Softness:** The transition between light and shade is not a sharp cutoff ($\vec{N} \cdot \vec{L} = 0$). It wraps around the cloud, indicating high multiple-internal scattering.
-4. **Backlight Translucency:** When looking toward the light source, the edges and core display forward Mie scattering (forward translucent glow).
+Kept from the old file because they are right: analyse the photo before building, build from parametric primitives
+instead of one dense mesh, never let a part fall to black, verify with a render compared to the reference, and
+correct by targeted parameter changes instead of regenerating.
 
 ---
 
-## 4. Step 2 & 3: Mathematical Formulations & Geometric Approximations
+## 2. As built: the pipeline today
 
-### 4.1 Concentric Shell Distribution & 360° Azimuth Calculus
-
-To eliminate empty sky wedges and populate the entire dome uniformly, banks are distributed across 4 concentric shells:
-
-$$ \begin{aligned}
-\text{Shell 0 (Horizon Rim):} & \quad R \in [150, 260], \quad Y \in [18, 32] \\
-\text{Shell 1 (Mid-Sky Valley):} & \quad R \in [65, 145], \quad Y \in [28, 44] \\
-\text{Shell 2 (Overhead Canopy):} & \quad R \in [15, 75], \quad Y \in [48, 68] \\
-\text{Shell 3 (Intermediate Fill):} & \quad R \in [90, 195], \quad Y \in [24, 44]
-\end{aligned}$$
-
-#### Azimuth Angle Formula (Anti-Clustering):
-For $B$ banks and bank index $b \in [0, B - 1]$:
-$$\theta_b = \frac{2\pi \cdot b}{B} + \left(\xi_1 - 0.5\right) \frac{\pi}{B}, \quad \xi_1 \sim \mathcal{U}(0, 1)$$
-
-#### Cartesian Center Coordinate:
-$$\vec{C}_b = \begin{pmatrix} R_b \cos \theta_b \\ Y_b \\ R_b \sin \theta_b \end{pmatrix}$$
-
-### 4.2 Scale Variation Calculus (Pareto-Log-Normal Distribution)
-Uniform sizes look artificial. Natural cumulus distributions follow a power-law scale distribution $P(S) \propto S^{-\alpha}$. We approximate this with a 4-tier stratified stochastic selector:
-
-```
-Size Distribution Stratification:
-├── 38% Tiny / Baby Puffs (S ∈ [2.4, 4.6])  ── Tight clusters (spread = 0.65)
-├── 34% Medium Cumulus   (S ∈ [5.0, 8.5])  ── Standard billows (spread = 0.88)
-├── 18% Large Cumulus    (S ∈ [9.2, 12.6]) ── Towering formations (spread = 1.0)
-└── 10% Horizon Banks    (S ∈ [13.0, 16.5])── Distant mountain-scale (spread = 1.12)
-```
-
-For overhead clouds ($R < 75$), large sizes are suppressed to avoid obstructing the camera view:
-$$S_{overhead} = \min\left(S_b, 7.5\right)$$
-
-### 4.3 Local Formation Coordinate System (Local-to-World Transform)
-Each cloud bank has an advection heading $\psi_b \sim \mathcal{U}(0, 2\pi)$ along the prevailing wind vector:
-
-$$\vec{F}_b = \begin{pmatrix} \cos \psi_b \\ 0 \\ \sin \psi_b \end{pmatrix}, \quad \vec{P}_b = \begin{pmatrix} -\sin \psi_b \\ 0 \\ \cos \psi_b \end{pmatrix}, \quad \vec{U} = \begin{pmatrix} 0 \\ 1 \\ 0 \end{pmatrix}$$
-
-For each puff $p \in [0, 15]$ with local offsets $(f_p, c_p, v_p)$ and base size $S_b$:
-$$\vec{X}_{b, p} = \vec{C}_b + \left(f_p \cdot \sigma_b + j_x\right) \vec{F}_b + \left(c_p \cdot \sigma_b + j_z\right) \vec{P}_b + \left(v_p \cdot \sigma_b + j_y\right) \vec{U}$$
-
-Where $\sigma_b$ is the cluster spread factor and $j_x, j_y, j_z$ are pseudo-random jitter offsets.
-
-### 4.4 3D Procedural Surface Deformation (Eliminating Facets)
-Instead of flat polygonal faces, a smooth sphere ($C^1$ topology) is deformed on the GPU vertex stage using harmonic sinusoidal 3D noise:
-
-```glsl
-// Local position in unit sphere frame
-vec3 p = position * 2.3;
-
-// Primary low-frequency billow lobe
-float bump1 = sin(p.x * 2.1 + p.y * 1.8) * cos(p.z * 2.2 + p.y * 1.4) * 0.085;
-
-// Secondary high-frequency micro-lobe
-float bump2 = sin(p.x * 4.2 + p.z * 3.8) * 0.038;
-
-float totalBump = bump1 + bump2;
-
-// Deformed vertex position
-vec3 displacedPos = position + normal * totalBump;
-```
-
-#### Analytical Normal Perturbation:
-The surface normal $\vec{n}$ is adjusted according to the partial derivatives of the displacement function:
-$$\vec{n}' = \text{normalize}\left(\vec{n} + \begin{pmatrix} 0.08 \cos(2.1 p_x) \\ 0.08 \sin(1.8 p_y) \\ -0.08 \sin(2.2 p_z) \end{pmatrix}\right)$$
-
-When transformed through the instance scale matrix $M_{inst}$, the world normal is safely normalized without non-uniform scale distortion:
-$$\vec{N}_{world} = \text{normalize}\left(M_{model} \cdot \left(M_{inst} \cdot \frac{\vec{n}'}{\sqrt{\max(\vec{s}^2, \epsilon)}}\right)\right)$$
-
----
-
-## 5. Step 4: The Optical & Photometric Lighting Model
-
-Standard Lambertian diffuse reflection fails catastrophically for clouds because clouds are **not solid opaque objects**; they are volumes composed of billions of water droplets exhibiting multiple scattering.
-
-```
-                      Sunlight (L)
-                           │  │  │
-                           ▼  ▼  ▼
-                     ┌───────────────┐
-                     │   Cloud Top   │ ── Pure White (diffuse wrap)
-                     │  (Backlight)  │
-                     └───────┬───────┘
-                             │  Forward Mie Scattering (Translucency SSS)
-                             ▼
-                     ┌───────────────┐
-                     │  Underside &  │ ── Radiant Azure / Sky-Blue Ambient
-                     │   Crevices    │    (No Dark Grey / Black!)
-                     └───────────────┘
-                             ▲
-                             │ Rayleigh Sky Upward Bounce
-```
-
-### 5.1 Half-Lambert Wrapped Diffuse
-To prevent the harsh dark shadow terminator line where $\vec{N} \cdot \vec{L} \le 0$, we use a wrapped diffuse function with wrap parameter $w = 0.65$:
-
-$$f_{wrap}(\vec{N}, \vec{L}) = \text{clamp}\left(\frac{\vec{N} \cdot \vec{L} + w}{1 + w}, 0, 1\right)$$
-
-To give soft volume rolloff, apply an S-curve smoothstep:
-$$k_{diff} = \text{smoothstep}\left(0.03, 0.97, f_{wrap}(\vec{N}, \vec{L})\right)$$
-
-### 5.2 Dual-Hemisphere Atmospheric Ambient Integration
-Clouds in the troposphere are immersed in scattered sky radiation. Upward-facing normals receive downwelling sky light; downward-facing normals receive ground bounce and hazy horizon light:
-
-$$u = \text{clamp}\left(\frac{N_y + 1}{2}, 0, 1\right)$$
-$$\vec{A}_{sky} = \text{lerp}\left(\begin{pmatrix} 0.55 \\ 0.78 \\ 1.00 \end{pmatrix}, \vec{C}_{sky}, 0.45\right)$$
-$$\vec{A}_{ground} = \text{lerp}\left(\begin{pmatrix} 0.75 \\ 0.88 \\ 1.00 \end{pmatrix}, \vec{C}_{ground}, 0.12\right)$$
-$$\vec{E}_{amb} = \text{lerp}\left(\vec{A}_{ground}, \vec{A}_{sky}, u\right)$$
-
-> **Crucial Insight:** Notice that $\vec{A}_{ground}$ mixes with a light blue haze vector rather than raw dark earth brown (`#3f3019`). Clouds reflect atmospheric haze, not dirt!
-
-### 5.3 Vertical Height & Crevice Shading
-Within each cloud puff, the vertical normalized position $Y_{local} \in [-1, 1]$ dictates the internal density and light penetration:
-
-$$h_T = \text{clamp}\left(\frac{Y_{local} + 0.95}{1.9}, 0, 1\right)$$
-$$\vec{C}_{base} = \text{lerp}\left(\vec{C}_{shadow}, \vec{C}_{white}, 0.55 \cdot h_T + 0.45\right)$$
-
-Where $\vec{C}_{shadow} = \text{RGB}(0.45, 0.73, 1.0)$ (Radiant Azure `#82b7eb`) and $\vec{C}_{white} = \text{RGB}(1.0, 1.0, 1.0)$.
-
-### 5.4 Subsurface Scattering (Translucency / Forward Mie Scattering)
-When the cloud is backlit by the sun ($\vec{V} \approx -\vec{L}$), photons undergo forward-peaked Mie scattering through the cloud edges:
-
-$$f_{forward} = \text{clamp}\left(\vec{V} \cdot (-\vec{L}), 0, 1\right)$$
-$$\vec{I}_{SSS} = \vec{C}_{sun} \cdot \left(f_{forward}\right)^{2.5} \cdot 0.65$$
-
-### 5.5 Fresnel Silhouette Silver Lining
-Photons grazing the silhouette of the cloud create a luminous silver halo:
-
-$$f_{fresnel} = \left(1 - \text{clamp}(\vec{N} \cdot \vec{V}, 0, 1)\right)^{2.6}$$
-$$k_{rim} = f_{fresnel} \cdot \left[0.4 + 0.6 \cdot \left(\max(0, \vec{L} \cdot (-\vec{V}))\right)^2\right]$$
-$$\vec{I}_{rim} = \text{lerp}\left(\vec{C}_{glow}, \text{vec3}(1.0), 0.5\right) \cdot k_{rim} \cdot \left(1 - 0.6 \cdot \delta_{darkness}\right)$$
-
-### 5.6 Invariant Daytime Luminance Floor (Zero-Black Guarantee)
-In physical photography, cumulus clouds on a clear day have an albedo of $0.70 - 0.85$. They **never** become black asteroids, even in deep shadow:
-
-$$f_{day} = \text{clamp}\left(3.0 \cdot L_y + 0.2, 0, 1\right)$$
-$$\vec{C}_{floor} = \begin{pmatrix} 0.48 \\ 0.72 \\ 0.98 \end{pmatrix} \cdot f_{day} \cdot \left(1 - 0.75 \cdot \delta_{darkness}\right)$$
-$$\vec{C}_{final} = \max\left(\vec{C}_{lit\_and\_shade} + \vec{I}_{SSS} + \vec{I}_{rim}, \, \vec{C}_{floor}\right)$$
-
----
-
-## 6. Step 5: Celestial Mechanics & 60 FPS Continuous Trajectory
-
-### 6.1 The 3D Trajectory Vector Equation
-To fulfill physical solar progression (rising East/side $+X$, passing overhead zenith $+Y$, descending South/behind $+Z$), the trajectory is mapped from a continuous hour angle $\theta \in [0, \pi]$:
-
-$$\alpha(\theta) = \alpha_{base} + \sin(\theta) \cdot \left(\alpha_{max} - \alpha_{base}\right), \quad \alpha_{max} = 74^\circ, \; \alpha_{base} = 3.5^\circ$$
-$$\phi(\theta) = \frac{\theta}{2}$$
-
-The unified 3D celestial direction unit vector is:
-$$\vec{D}(\theta) = \begin{pmatrix} \cos \alpha(\theta) \cos \phi(\theta) \\ \sin \alpha(\theta) \\ \cos \alpha(\theta) \sin \phi(\theta) \end{pmatrix}$$
-
-```
-                Zenith (+Y, +Z) [12:00]
-                     ▲
-                    ╱ ╲
-                   ╱   ╲
-                  ╱     ╲
-  Sunrise (+X)  ───────────► Sunset (+Z)
-   [06:00]                    [18:00]
-```
-
-### 6.2 Strict Unified Light-Shadow Vector Parity
-A common 3D defect is when the sun visual mesh, the directional light, the shadow camera, and the sky shader use slightly different vectors, causing shadows to point in contradictory directions.
-
-We enforce **Strict Single-Vector Parity**:
-$$\vec{P}_{sun\_mesh} = \vec{D}(\theta) \cdot R_{sky}$$
-$$\vec{P}_{key\_light} = \vec{D}(\theta) \cdot R_{light}$$
-$$\vec{u}_{SunDir} = \vec{D}(\theta)$$
-
-Every entity consumes the exact same computed unit vector $\vec{D}(\theta)$.
-
-### 6.3 60 FPS Continuous Time Progression Calculus
-Discretized hourly ticks (e.g., jumping from 12:00 to 13:00 every 500ms) cause visible shadow jumps. We use **Constant Angular Velocity with Soft Anchor Synchronization**:
-
-$$h_{t + \Delta t} = \left(h_t + v \cdot \Delta t\right) \pmod{24}$$
-
-Where $v = \text{SpeedMultiplier} \times \frac{24\text{ hours}}{12\text{ seconds}} = 2.0 \cdot \text{SpeedMultiplier}$ hours/sec.
-
-For interactive timeline scrubbing, an exponential decay glide guarantees zero discrete stepping:
-$$h_{t + \Delta t} = h_t + \Delta h_{shortest} \cdot \left(1 - e^{-12 \cdot \Delta t}\right)$$
-
----
-
-## 7. Step 6: Automated Verification & Fidelity Auditing
-
-How do we prove mathematical fidelity to the reference image without manual guesswork?
-
-```mermaid
-sequenceDiagram
-    participant Dev as Autonomous Agent
-    participant Headless as Playwright Headless WebGL
-    participant Shader as Three.js Render Target
-    participant Vision as Image Analysis & Perceptual Check
-
-    Dev->>Headless: Navigate to /simulation & set Camera Viewpoint
-    Headless->>Shader: Render Canvas (WebGlAngle / SwiftShader)
-    Headless->>Vision: Capture High-Res Frame (clouds-after.png)
-    Vision->>Vision: Compute Histogram, Luminance & Lobe Dispersion
-    Vision-->>Dev: Verified: min luminance >= 0.48, 0 facets, 1 draw call
-```
-
-### 7.1 Automated Playwright Script (`test-orbit.mjs`)
-We deploy automated headless browser tests with hardware WebGL flags:
-```bash
-node scratch/test-orbit.mjs
-```
-The script:
-1. Boots Chrome with `--enable-webgl --use-gl=angle`.
-2. Sets the exact camera matrix matching the user's viewpoint.
-3. Takes screenshots at `06:00` (sunrise), `12:00` (noon), `18:00` (sunset), and `00:00` (night).
-4. Verifies that the scene compiles without WebGL errors or unhandled shader warnings.
-
-### 7.2 Objective Metric Thresholds (The Acceptance Gate)
-To pass verification, the rendered output must satisfy:
-
-| Metric | Target | Formula / Test | Status |
-| :--- | :--- | :--- | :--- |
-| **Draw Calls** | **Exactly 1** | `gl.info.render.calls` for entire cloud layer | Passed (`InstancedMesh`) |
-| **CPU Allocations** | **0 bytes / frame** | Zero `new Vector3()`, zero GC in `useFrame` | Passed (mutated refs) |
-| **Facet Elimination** | **$C^1$ Continuous** | Normal deviation on surface $< 0.05$ | Passed (Procedural 3D Bump) |
-| **Min Daylight Luminance**| **$L^* \ge 45$** | `min(color) >= minSkyFloor` | Passed (No black rocks) |
-| **Scale Variety Range**| **$\ge 3.0\times$** | $\max(Scale) / \min(Scale) \ge 3.0$ | Passed ($16.5 / 2.4 \approx 6.8\times$) |
-| **Sky Coverage** | **$360^\circ$ Dome** | Azimuth gaps $< 15^\circ$ across all shells | Passed |
-
----
-
-## 8. Generalized Recipe for Any AI Vision-to-3D Task
-
-When tasked with generating a high-fidelity 3D asset/environment from a 2D reference image, follow this exact sequence:
-
-1. **Perform Inverse Photometry First:** Do not start with 3D modeling. First extract the primary light vector $\vec{L}$, ambient color ratio $\frac{C_{sky}}{C_{ground}}$, and shadow terminator sharpness.
-2. **Select Hierarchy of Primitive Instancing:** Choose a base primitive (Sphere, Cylinder, Capsule, Quad) and cluster multiple instances to compose the macroscopic shape. Never attempt to sculpt a monolithic high-poly mesh if the object has repetitive or procedural nature.
-3. **Write a Custom Vertex Displacement Shader:** Add harmonic sinusoidal or simplex noise directly on the GPU to break up rigid geometric primitives.
-4. **Implement Wrapped Diffuse + Ambient Bounce:** Never rely on pure `MeshStandardMaterial` or `MeshLambertMaterial` without wrapping for translucent, atmospheric, or stylized organic materials.
-5. **Enforce a Luminance Safety Floor:** Add a formula-based minimum color threshold to prevent back-lit geometry from collapsing into black voids.
-6. **Automate Camera Capture & Delta Auditing:** Run a headless Playwright script to photograph the 3D scene from the reference image's perspective and verify the visual fidelity before committing.
-
----
-
-## 9. Meta-Only Autonomous Multi-Agent Architecture for Vision-to-3D
-
-### 9.1 Feasibility Verdict: 100% Meta Model Autonomy
-
-**Can this entire vision-to-3D pipeline be achieved exclusively with Meta AI models?**
-**Yes, unequivocally.**
-
-Meta Superintelligence Labs (MSL) provides an integrated model ecosystem that natively spans the entire multimodal, agentic, mathematical, coding, and spatial synthesis stack. By combining the models available in the Meta Model API developer catalog (`/home/tokiarivelo/Téléchargements/Model API.html`), an autonomous multi-agent system can analyze visual inputs, synthesize shaders, generate optimized Three.js code, and execute closed-loop headless refinement without any third-party closed APIs.
+One rule shapes everything: **the LLM says what the object is, pixels say how it looks, deterministic code builds
+the geometry, a render compared to the photo decides what is kept.** Muse never writes vertices or code.
 
 ```mermaid
 flowchart TD
-    IMG["Reference Image(s)\n(User Upload)"] --> SAM["1. SAM 3.1\n(Zero-Shot Semantic Segmentation)"]
-    SAM -->|"Binary Masks & Bounding Strata"| WONDER["2. Muse Wonder 1.0 (Master Orchestrator)\n(Inverse Photometry & 3D Blueprinting)"]
-    WONDER <-->|"Orthographic Inpainting & Multi-Angle Synthesis"| MIMAGE["3. Muse Image 1.0\n(Novel View Synthesis)"]
-    WONDER -->|"Parametric Blueprint JSON"| SPARK["4. Muse Spark 1.3 (Lead 3D Engineer)\n(Three.js & GLSL Shader Generation)"]
-    SPARK -->|"InstancedMesh & Shader Code"| GLIMMER["5. Muse Glimmer (30B Edge Agent)\n(Local Build, Playwright Headless Render)"]
-    GLIMMER -->|"Delta Metrics & Screen Captures"| WONDER
-    WONDER -->|"Converged (ΔE < 8, 1 Draw Call, 60 FPS)"| PROD["6. Production Deployment\n(Zero Black Voids, High Fidelity)"]
-    WONDER -.->|"Unconverged: Parameter & Shader Diff"| SPARK
+    P["Photo, longest side ≤ 1280 px"] --> D["Detect or outline one object<br/>Spark 1.3 + SAM 3.1"]
+    D --> C["Shape crop: box × 1.6, 640–768 px,<br/>outside the box dimmed"]
+    C --> K["Kit: archetype, subtype, proportions,<br/>3 colour roles, materials, counts (Spark 1.3)"]
+    K --> M["Measure on pixels: colours, roofline,<br/>repetition, yaw, part masks (SAM)"]
+    M --> F["Fusion by confidence, then silhouette fit"]
+    F --> B["Body from the outline (profile / lathe),<br/>wheels, panels, chimney from masks"]
+    B --> G["Object graph, constraints, hidden sides, swatches"]
+    G --> S["Score: flat render vs photo"]
+    S -->|"score < 70 and ≥ 20 s left"| R["Critic: 1 round, kit patch kept only if the score rises"]
+    S --> V["3D viewer"]
+    R --> V
+    D -.->|"validated 2D drawing exists"| E["2D path: SAM on the drawing + guarded Muse Image side view"]
+    E --> H["House from elevations, or hull from views"]
+    H --> L["Staged ShapeScript loop (Spark), final check (Wonder), background"]
+    L --> V
 ```
 
+| Stage           | Model or code               | Files (`apps/web/src/`)                                                         | Numbers that matter                                                           |
+| --------------- | --------------------------- | ------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| Photo intake    | `sharp`                     | `server/perception/prepare-image.ts`                                            | Longest side ≤ 1280 px, JPEG quality 85                                       |
+| Detect / region | Spark 1.3, SAM 3.1          | `detect.ts`, `region.ts`, `region-prompt.ts`, `outline.ts`                      | One object per shape request                                                  |
+| Crop            | `sharp`                     | `shape-crop.ts`                                                                 | Context × 1.6, 640–768 px, outside the box white at 40 %                      |
+| Kit             | Spark 1.3                   | `shape.ts` (`SHAPE_SYSTEM_PROMPT`, `SHAPE_JSON_SCHEMA`), `meta.ts` `visionJson` | `reasoning_effort: 'high'`, JSON schema answer, no seed, 150 s call limit     |
+| Free parts      | Spark 1.3                   | `free-recipe.ts`                                                                | ≤ 12 plain solids, archetypes without a template                              |
+| Measurements    | Pure TypeScript + SAM masks | `color-measure`, `roofline`, `repetition`, `perspective`, `part-masks`          | Part masks: 5 s limit                                                         |
+| Fusion and fit  | Pure TypeScript             | `fusion.ts`, `silhouette-fit.ts`, `nelder-mead.ts`, `part-fit.ts`               | Shape maths ≤ 300 ms per object                                               |
+| Score           | Pure TypeScript             | `flat-render.ts`, `model-score.ts`, `score-shape.ts`                            | 0.40 silhouette IoU + 0.35 edge F1 + 0.25 colour ΔE                           |
+| Critic          | Spark 1.3                   | `spark-critic.ts`, `shape.ts` (`CRITIC_SYSTEM_PROMPT`)                          | 256 px sheet, only under 70 / 100, 1 round                                    |
+| 2D path         | SAM 3.1, Muse Image 1.0     | `facade-*.ts`, `object-views.ts`, `views-check.ts`                              | Side view kept only when it differs from the front and its depth is plausible |
+| Staged loop     | Spark 1.3, then Wonder 1.0  | `lib/shape-script.ts`, `shape-stages*.ts`, `shape-script-prompt.ts`             | ≤ 3 rounds per stage, ≤ 12 ops, each op tried alone, kept only on gain        |
+| Viewer          | React Three Fiber           | `features/vision-insert/utils/object-geometry.ts`, `surface-look.ts`            | ≤ 5 000 triangles, 12 parts (photo) or 32 components (2D path)                |
+
+Vocabulary the geometry engine can build: `box, cylinder, sphere, cone, prism, extrude, lathe, hip, hull`, 15
+materials, 17 archetypes (`lib/object-kit.ts`, `lib/object-shape.ts`).
+
+**Last measured state** (`make shape-report`, 2026-11-04): mean score 93 on five objects, IoU 0.98, edge F1 0.91,
+ΔE 3.4, every stop criterion met. Kit eval on four real captures: Spark 1.3 agrees with the frozen kits on 23 of
+26 fields, 13.8 s median.
+
 ---
 
-### 9.2 Model Allocation Matrix & Task Specialization
+## 3. The main finding: the judge passes models that do not look right
 
-Each stage of the Inverse Procedural Modeling (IPM) pipeline requires distinct cognitive and perceptive strengths. The table below outlines the optimal Meta model assignment for each stage:
+The report says 93 / 100 and « every object meets the criteria ». The contact sheet of the same report shows a car
+that is a red slab with a grey wedge and two dark ellipses, a fridge without a handle, and a lamp head drawn as a
+squat drum. Both are true at once, for three reasons:
 
-| Pipeline Stage | Assigned Meta Model | Model ID / Variant | Specific Strengths & Architectural Role | Context Window / Modality |
-| :--- | :--- | :--- | :--- | :--- |
-| **Stage 1: Semantic Decomposition** | **SAM 3.1** | `sam-3.1` | **Zero-Shot Boundary & Layer Segmentation:** Segment visual elements (sky background, foreground clouds, distant mountain horizon, sun disk) with pixel-exact alpha masks and 3D bounding geometry. | Visual Prompting, Bounding Box, Mask |
-| **Stage 2: Orchestration & Inverse Photometry** | **Muse Wonder 1.0** | `muse-wonder-1.0` *(or `muse-wonder-full`)* | **Master Agent & Mathematical Modeler:** Extracts photometric light vectors, computes Pareto scale distributions, balances draw call budgets, and manages the multi-agent refinement state machine. | **1M Tokens**<br>Frontier Reasoning, Multimodal, Planning |
-| **Stage 3: Novel Perspective Completion** | **Muse Image 1.0** | `muse-image-1.0` | **Cross-View Projection Hallucination:** Synthesizes missing lateral, top-down, and elevation viewpoints from single-perspective inputs to extract true 3D depth volume. | Multimodal Image-to-Image, Reference Inpainting |
-| **Stage 4: 3D Code & Shader Synthesis** | **Muse Spark 1.3** | `muse-spark-1.3` *(or `contributor`)* | **Real-Time WebGL / Three.js / GLSL Synthesis:** Generates zero-allocation `InstancedMesh` logic, vertex displacement GLSL math, wrapped diffuse lighting, and TypeScript state stores. | **1M Tokens**<br>Competitive Coding, AST Manipulation, MCP Tools |
-| **Stage 5: Local Execution & Telemetry** | **Muse Glimmer (30B)** | `Muse-Glimmer-30B` *(open weights)* | **Local Test Runner & Metric Aggregator:** Executes local `pnpm typecheck`, launches Playwright with `--use-gl=angle`, records draw calls, and generates telemetry summaries with minimal latency. | 32K Tokens<br>Local Edge Agent, High-Throughput Tool Use |
-| **Stage 6: Real-Time Human-in-the-Loop** | **Muse Voice Transcribe** | `muse-voice-transcribe-1.0` | **Interactive Spatial Voice Directives:** Transcribes real-time user voice instructions ("increase cloud puffiness", "slow down day speed") into structured simulation modifications. | Multimodal Audio Streaming |
+1. **The five reference pictures are synthetic.** They are flat-colour drawings (a red rectangle with two black
+   rectangles is « the car »). A model that reproduces a flat drawing scores high and says nothing about a real
+   photo. The real set planned as PR-0.5 (10 user photos) was never captured; four real captures exist (fan, lamp,
+   fridge, TV).
+2. **The score cannot see detail.** Silhouette, outline edges and mean colour make up 100 % of it. A brick with the
+   right outline and paint scores above 90. Handles, door lines, mirrors, window frames and wheel rims are worth
+   nothing.
+3. **The critic almost never runs, and sees little when it does.** It fires only under 70 / 100, on a 256 px wide
+   sheet, comparing the photo to a flat render with sharp boxes, while the viewer shows bevelled, textured parts.
+
+So every later improvement was judged by a ruler that stops measuring at « right outline, right colour ». Fixing
+the ruler comes first (§5 rows 1–3): without it, prompt and geometry work cannot be told apart from noise.
 
 ---
 
-### 9.3 Inter-Agent Communication & Formal JSON Context Schemas
+## 4. Method (the generalised recipe)
 
-To eliminate ambiguity and guarantee deterministic execution across the multi-agent loop, all context is exchanged using strict JSON contracts.
+For any photo → 3D task in this project, in this order:
 
-#### Contract 1: `SAM 3.1` $\to$ `Muse Wonder` (Semantic Stratification Manifest)
-```json
-{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "task": "semantic_decomposition",
-  "source_image": "uploaded_media_1.jpg",
-  "resolution": { "width": 1920, "height": 1080 },
-  "layers": [
-    {
-      "layer_id": "sky_background",
-      "category": "background",
-      "bounding_box": [0, 0, 1920, 1080],
-      "dominant_chroma_srgb": [0.24, 0.68, 0.98],
-      "gradient_orientation": "vertical_radial"
-    },
-    {
-      "layer_id": "cumulus_foreground_cloud_deck",
-      "category": "volumetric_cluster",
-      "bounding_box": [220, 180, 1720, 950],
-      "mask_uri": "scratch/masks/layer_clouds_cumulus.png",
-      "morphology": {
-        "billow_count_estimated": 38,
-        "aspect_ratio_mean": 1.45,
-        "convexity_score": 0.82,
-        "base_flatness_score": 0.94
-      },
-      "luminance_profile": {
-        "highlight_p95_cielab_L": 96.4,
-        "shadow_crevice_p05_cielab_L": 68.2,
-        "shadow_crevice_tint_srgb": [0.48, 0.72, 0.98],
-        "terminator_softness": 0.65
-      }
-    }
-  ]
+1. **Qualify the photo before asking a model.** Measure size in pixels, blur, exposure, hidden share and view
+   angle. Tell the model what was measured, and lower the trust in what cannot be measured.
+2. **Give the model the best pixels.** A context image to recognise the object, a tight image to read its parts.
+3. **Make the model look before it answers.** It first lists what it sees (parts, where, hidden by what), then
+   commits to the kit. Its answer is a small, strict JSON, never geometry.
+4. **Give the model what a specialist would know.** One skill card per object family: the parts that family
+   always has, the proportions it usually has, the mistakes this pipeline makes on it.
+5. **Measure everything that can be measured.** Outline, colours, roof line, repetition, yaw, part positions.
+   A measurement replaces a guess in proportion to its confidence.
+6. **Build with parametric parts,** grouped as an object graph (window in wall, wheel on body), so every later
+   correction is a parameter change.
+7. **Judge on real photos with a score that sees detail,** then let a second Meta model grade what numbers miss.
+8. **Correct in small steps, keep only gains.** One op at a time, re-render, re-score, drop what does not help.
+9. **Say what is measured and what is imagined.** Every part carries its status; hidden sides are inferred, and
+   shown as such.
+10. **Never** paste the photo on the model, call a non-Meta AI, or let any model output an energy value.
+
+---
+
+## 5. What to refine, ranked by effect on the result
+
+Each row names the evidence in the code and the task that fixes it (`tasks/PV-vision-quality.md`).
+
+| #   | Weak point                                   | Evidence                                                                                                     | Target                                                                                                                    | Task          |
+| --- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| 1   | Reference set is synthetic                   | `__fixtures__/shape/index.ts` goldens are drawn; PR-0.5 unchecked                                            | ≥ 12 real captured photos, hard cases included; the report gets a « Real » table that drives the loop                     | PQ-T1         |
+| 2   | Score blind to detail                        | `SCORE_WEIGHTS = { iou: 0.4, edge: 0.35, color: 0.25 }`                                                      | Detail score: part recall, part precision, interior edge F1, colour per part                                              | PQ-T2, PQ-T6  |
+| 3   | Judge and viewer show different models       | Flat render draws plain components; assemblies and bevels exist only in the viewer                           | Flat render draws assembly details; a Wonder rubric grades photo vs ¾ render                                              | PQ-T3, PQ-T4  |
+| 4   | Kit prompt hurries the model                 | « Answer fast and short »; schema has no place for what was seen                                             | Observe-then-commit schema: evidence list first, kit second, a confidence per field group                                 | PQ-T12        |
+| 5   | No specialist knowledge per object family    | One prompt for 17 archetypes; only vehicles have an anatomy line                                             | Skill cards per archetype, loaded by the detection hint                                                                   | PQ-T11, T13   |
+| 6   | Critic is weak                               | `CRITIC_WIDTH = 256`, `CRITIC_SCORE_MAX = 70`, 1 round, photo vs flat front only                             | 2 × 2 sheet at ≥ 512 px per tile with a difference tile and a ¾ view; fires on the detail score                           | PQ-T14        |
+| 7   | Photo path has no step-by-step loop          | `facadeStageLoop` and `viewStageLoop` run only with a validated 2D drawing                                   | The same staged loop with the photo crop and its SAM masks as target, in the background                                   | PQ-T19        |
+| 8   | One missed outline ruins everything          | Toy-Mini investigation: SAM answers change with the pixels; no outline → no fit, no body, no measured colour | Several SAM phrasings on photo and crop, agreement decides; time limits follow the remaining budget                       | PQ-T9         |
+| 9   | Hidden objects are guessed blind             | Prompt asks to « imagine »; nothing measures how much is hidden                                              | Hidden share measured and told to the model; operator may ask for a clean front drawing, then the 2D path                 | PQ-T7, PQ-T23 |
+| 10  | Details have no geometry                     | 12 parts on the photo path; no handle, seam, mirror, gutter, rim                                             | Detail assemblies expanded in the viewer and drawn in the flat render; 32 components when masks are measured              | PQ-T20, T21   |
+| 11  | Generated views are unreliable               | PR-4.1: 2 of 3 wrong; side prompt is one sentence                                                            | View card, two candidates, the most consistent one kept (height, top line, colours); back view by mirror, never generated | PQ-T16, T24   |
+| 12  | Surfaces look uniform                        | One `SURFACE_LOOK` entry per material; one colour per role; no shadow where parts meet                       | Colours per region, gloss measured on the photo, baked ambient shadow at part joints                                      | PQ-T25–T28    |
+| 13  | Prompts cannot be compared                   | Only `SHAPE_SCRIPT_PROMPT_VERSION` and `FREE_PARTS_PROMPT_VERSION` exist                                     | A version on every prompt, logged and stored in captures; eval table per version                                          | PQ-T5         |
+| 14  | Same reasoning effort and one sample for all | `reasoning_effort: 'high'` on every vision call; one answer trusted                                          | Effort per call measured against accept rate and latency; two kit samples vote when time allows                           | PQ-T17, T18   |
+| 15  | Colours include shadow                       | PG-T22 note: walls read tan because plaster, timber and shadow were averaged                                 | Colour read on the lit share of each region; shadow reported apart                                                        | PQ-T10        |
+
+---
+
+## 6. Target design of the parts that need a definition
+
+### 6.1 Detail score (PQ-T2)
+
+Computed by pure code from what is already available: SAM part masks on the photo and the recipe rendered flat at
+the photo's view.
+
+- **Part recall** = SAM parts with a matching model part of the same kind ÷ SAM parts. A match: centre distance
+  ≤ 0.10 of the box diagonal and area ratio between 0.5 and 2.
+- **Part precision** = model parts of a visible kind with a matching SAM part ÷ such model parts. Parts marked
+  `inferred` on hidden sides are not counted.
+- **Interior edge F1** = the existing edge F1, restricted to pixels inside the outline shrunk by twice the edge
+  tolerance. It rewards door lines, window frames and seams, which outline edges never see.
+- **Colour per part** = mean ΔE between each matched part's region on the photo and on the render.
+
+Reported as its own columns first. It enters the weighted score only after the baseline on the real set is known
+(PQ-T6), so a threshold is never chosen to pass one case.
+
+### 6.2 Rubric judge (PQ-T4)
+
+Muse Wonder receives one sheet (photo, model front, model ¾) and grades six criteria from 1 to 5: silhouette,
+proportions, parts present, parts placed, colours and materials, overall likeness. It returns JSON with one
+sentence per criterion below 4. It is used offline and in the background, never in the first answer.
+
+It is trusted only after calibration: on every real capture, remove two parts from the recipe and render again.
+The judge must grade the damaged model lower in at least 90 % of the pairs. Below that, the judge stays out of the
+loop and only its text is shown to the developer.
+
+### 6.3 Observe-then-commit kit (PQ-T12)
+
+The schema gains an `evidence` object placed **before** the kit fields, so the model writes what it sees before
+it classifies:
+
+```ts
+evidence: {
+  view: 'front' | 'side' | 'three_quarter' | 'back' | 'top';
+  visibleParts: { name: string; where: string }[]; // ≤ 12, plain words: "wheel, lower left"
+  hiddenBy: string[]; // "hedge", "person", "image edge"
+  unsure: string[]; // fields it had to guess
 }
 ```
 
-#### Contract 2: `Muse Wonder` $\to$ `Muse Image 1.0` (Multi-Angle Synthetic Projection Request)
-```json
-{
-  "task": "perspective_completion",
-  "reference_image_uri": "uploaded_media_1.jpg",
-  "conditioning_mask": "scratch/masks/layer_clouds_cumulus.png",
-  "target_views": [
-    {
-      "viewpoint": "orthographic_top_down",
-      "elevation_angle_deg": 90.0,
-      "prompt": "Top-down orthographic satellite view of the stylized cumulus cloud deck from reference image, clear blue sky background, soft puffy rounded lobes, zero ground visible, pure volumetric shape reference"
-    },
-    {
-      "viewpoint": "profile_lateral_cross_section",
-      "elevation_angle_deg": 0.0,
-      "azimuth_offset_deg": 90.0,
-      "prompt": "Side profile view of the stylized puffy cumulus clouds, flat base at the condensation condensation level, vertical rounded cauliflower crests, bright white and azure ambient lighting"
-    }
-  ],
-  "fidelity_constraints": {
-    "preserve_lighting_palette": true,
-    "negative_prompt": "photorealistic noise, jagged polygonal edges, dark shadows, black voids, gray rocks"
-  }
-}
-```
+`evidence` is used three ways: it becomes SAM concept words for part masks, `unsure` lowers the fusion confidence
+of the named fields, and it is logged so a wrong kit can be traced to a wrong observation. The line « Answer fast
+and short » is removed. Geometry numbers stay forbidden.
 
-#### Contract 3: `Muse Wonder` $\to$ `Muse Spark 1.3` (3D Parametric & Shader Blueprint)
-```json
-{
-  "task": "shader_and_instancing_synthesis",
-  "target_framework": "three_js_r3f",
-  "performance_budget": {
-    "max_draw_calls": 1,
-    "max_triangles": 160000,
-    "target_fps": 60,
-    "cpu_allocations_per_frame_bytes": 0
-  },
-  "geometry_blueprint": {
-    "primitive": "SphereGeometry",
-    "segments": [24, 18],
-    "sub_cluster_hierarchy": [
-      { "role": "central_core", "count": 1, "offset": [0, 0, 0], "scale_mult": 1.0 },
-      { "role": "crest_peaks", "count": 2, "offset_range_y": [0.35, 0.65], "scale_mult": 0.8 },
-      { "role": "lateral_billows", "count": 4, "offset_radius": 0.75, "scale_mult": 0.75 },
-      { "role": "base_fillers", "count": 3, "offset_y": -0.45, "scale_mult": 0.65 }
-    ],
-    "shell_distribution": {
-      "shells": [
-        { "name": "horizon_rim", "radius_range": [150, 260], "altitude_range": [18, 32], "bank_count": 9 },
-        { "name": "mid_sky", "radius_range": [65, 145], "altitude_range": [28, 44], "bank_count": 8 },
-        { "name": "overhead_canopy", "radius_range": [15, 75], "altitude_range": [48, 68], "bank_count": 4 }
-      ],
-      "azimuth_jitter_deg": 18.0
-    }
-  },
-  "shader_math_spec": {
-    "vertex_deformation": {
-      "bump_octaves": 2,
-      "frequency_harmonic_primary": 2.1,
-      "frequency_harmonic_secondary": 4.2,
-      "displacement_amplitude": 0.085
-    },
-    "fragment_lighting": {
-      "diffuse_wrap_w": 0.65,
-      "mie_forward_scatter_power": 2.5,
-      "fresnel_rim_power": 2.6,
-      "luminance_floor_day_cielab_L": 48.0,
-      "crevice_tint_rgb": [0.45, 0.73, 1.0]
-    }
-  }
-}
-```
+### 6.4 Photo-path staged loop (PQ-T19)
 
-#### Contract 4: `Muse Glimmer` $\to$ `Muse Wonder` (Headless Telemetry & Visual Audit Delta)
-```json
-{
-  "task": "telemetry_audit",
-  "commit_hash": "ffe82ab",
-  "headless_renderer": "Chromium WebGL Angle SwiftShader",
-  "telemetry": {
-    "draw_calls": 1,
-    "fps_average": 60.0,
-    "triangles_rendered": 153600,
-    "webgl_errors": [],
-    "shader_compilation_status": "OK_NO_WARNINGS"
-  },
-  "visual_delta_analysis": {
-    "cielab_delta_E_mean": 6.84,
-    "cielab_delta_E_p95": 9.12,
-    "silhouette_iou_score": 0.892,
-    "zero_black_guarantee_violations": 0,
-    "min_luminance_observed": 0.492,
-    "captured_frames": [
-      "scratch/renders/clouds_06h.png",
-      "scratch/renders/clouds_12h.png",
-      "scratch/renders/clouds_18h.png"
-    ]
-  },
-  "convergence_status": "CONVERGED_PASS"
-}
-```
+Same runner as the 2D path (`runShapeStages`), new target:
+
+- Target image = the tight crop; target parts = SAM masks on the photo; view = measured yaw.
+- Stage score = silhouette IoU at that view plus the detail score of the stage's part kinds.
+- Stages per archetype from `view-stages.ts` (vehicle: body → glass → wheels → details).
+- Runs in the background after the first answer, with the existing chip, checkpoints and « keep only gains » rule.
+- Parts the photo cannot see are locked, as side walls are locked on a front elevation.
+
+### 6.5 SAM agreement (PQ-T9)
+
+For the outline: ask up to three phrasings (the label, its normalised noun, the archetype noun) on the photo and
+on the crop. Keep a mask when two answers overlap with IoU ≥ 0.8; otherwise keep the most confident mask that
+lies inside the box by ≥ 90 %; otherwise report « no outline » with the cause. Calls run in parallel and stop
+when two agree.
 
 ---
 
-### 9.4 Closed-Loop Iterative Refinement State Machine
+## 7. Files to add, modify or rewrite
 
-The multi-agent loop operates as a rigorous, self-correcting finite state machine (FSM). If the output fails visual or performance gates, the loop feeds parametric diffs back to the lead code synthesizer until mathematical convergence is attained.
+Paths under `apps/web/src/` unless they start with `docs/`, `.claude/` or a root file. Every new module ships with
+its Vitest test in `__tests__/` in the same commit.
 
-```mermaid
-stateDiagram-v2
-    [*] --> Decompose: User Input Image
-    Decompose --> Hallucinate: Semantic Masks Extracted (SAM 3.1)
-    Hallucinate --> ParametricBlueprint: Multi-Angle Views (Muse Image 1.0)
-    ParametricBlueprint --> SynthesizeCode: Mathematical Specification (Muse Wonder 1.0)
-    SynthesizeCode --> ExecuteHeadless: Three.js & GLSL Shaders (Muse Spark 1.3)
-    ExecuteHeadless --> EvaluateDelta: 4K WebGL Captures & Telemetry (Muse Glimmer)
+**Add**
 
-    state EvaluateDelta {
-        [*] --> CheckDrawCalls
-        CheckDrawCalls --> CheckFaceting: Draw Calls == 1
-        CheckFaceting --> CheckLuminance: Normal Deviation < 0.05
-        CheckLuminance --> CheckDeltaE: Min Luminance >= 0.48
-        CheckDeltaE --> Converged: ΔE* < 8.0
-        CheckDrawCalls --> Unconverged: Draw Calls > 1
-        CheckFaceting --> Unconverged: Facet Jaggies Detected
-        CheckLuminance --> Unconverged: Black Void Detected
-        CheckDeltaE --> Unconverged: ΔE* >= 8.0
-    }
+| File                                                                      | Purpose                                                               | Task       |
+| ------------------------------------------------------------------------- | --------------------------------------------------------------------- | ---------- |
+| `server/perception/__fixtures__/shape/real/*.capture.json` + `*.crop.jpg` | Real reference set (≥ 12)                                             | PQ-T1      |
+| `server/perception/detail-score.ts`                                       | Part recall / precision, interior edge F1, colour per part            | PQ-T2      |
+| `server/perception/rubric-judge.ts`                                       | Judge sheet, question, schema, parser, calibration helper             | PQ-T4      |
+| `server/perception/photo-conditions.ts`                                   | Blur, exposure, pixel size, hidden share, view class                  | PQ-T7      |
+| `server/perception/sam-consensus.ts`                                      | Several phrasings, agreement rule, miss cause                         | PQ-T9      |
+| `server/perception/skills/index.ts`                                       | `skillFor(call, archetype)`, versions, size cap                       | PQ-T11     |
+| `server/perception/skills/{base,archetypes,critic,stages,views,judge}.ts` | The cards of `vision-to-3d-muse-skills.md` as versioned string arrays | PQ-T11–T16 |
+| `server/perception/photo-stages.ts`                                       | Target and scorer of the photo-path staged loop                       | PQ-T19     |
+| `server/perception/view-candidates.ts`                                    | Consistency score between a generated view and the front              | PQ-T16     |
+| `server/perception/gloss-measure.ts`                                      | Gloss estimate per region from highlight statistics                   | PQ-T26     |
+| `features/vision-insert/utils/vertex-ao.ts`                               | Baked ambient shadow at part joints                                   | PQ-T27     |
+| `scripts/shape-judge.mjs` + Makefile target `shape-judge`                 | Run the rubric judge on the real set, on demand                       | PQ-T4      |
 
-    EvaluateDelta --> RefineParameters: Unconverged (Audit Feedback)
-    RefineParameters --> SynthesizeCode: Targeted Shader/Math Diff (Muse Wonder -> Spark)
-    EvaluateDelta --> DeployProduction: Converged (All Gates Passed)
-    DeployProduction --> [*]
-```
+**Modify**
 
-#### 9.4.1 Error Correction Heuristics (Targeted Parameter Tuning)
+| File                                                                            | Change                                                                                      | Task                |
+| ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ------------------- |
+| `server/perception/__fixtures__/shape/index.ts`                                 | Register the real set, tag each case synthetic or real                                      | PQ-T1               |
+| `server/perception/model-score.ts`, `score-shape.ts`                            | `detail` on `ModelScore`; later the detail weights                                          | PQ-T2, PQ-T6        |
+| `server/perception/shape-report.ts`                                             | « Real » table, detail and judge columns, new stop criteria                                 | PQ-T1, T2, T6       |
+| `server/perception/flat-render.ts`                                              | Draw assembly details (frames, panes, handles, rims) so the judge sees them                 | PQ-T3               |
+| `server/perception/shape.ts`                                                    | Kit prompt and schema (evidence, confidences, wider details), versions, critic schema       | PQ-T5, T12, T14     |
+| `server/perception/free-recipe.ts`                                              | Skill card and evidence for free parts                                                      | PQ-T12              |
+| `server/perception/spark-critic.ts`                                             | 2 × 2 sheet, ≥ 512 px tiles, difference tile, gate on the detail score, 2 background rounds | PQ-T14              |
+| `server/perception/views-check.ts`, `shape-script-prompt.ts`                    | Skill cards, versions                                                                       | PQ-T5, PQ-T15       |
+| `server/perception/object-views.ts`, `facade-views.ts`                          | View card, two candidates, consistency pick                                                 | PQ-T16              |
+| `server/perception/meta.ts`, `client.ts`, `mock.ts`, `backend.ts`               | Reasoning effort per call, second image, kit samples, `judgeShape`                          | PQ-T4, T8, T17, T18 |
+| `server/perception/shape-crop.ts`                                               | Tight object image next to the context crop                                                 | PQ-T8               |
+| `server/perception/outline.ts`, `part-masks.ts`                                 | Use `sam-consensus`; time limits from the remaining budget                                  | PQ-T9               |
+| `server/perception/color-measure.ts`, `region-colors.ts`                        | Lit-share colour, shadow apart                                                              | PQ-T10              |
+| `server/perception/fusion.ts`                                                   | Confidences from photo conditions and from `evidence.unsure`                                | PQ-T7, PQ-T12       |
+| `server/perception/object-shape.ts`                                             | Wire conditions, consensus, photo stages, samples; new log lines                            | PQ-T7–T19           |
+| `server/perception/shape-stages-spark.ts`, `view-stages.ts`                     | `photoStageLoop`, stage kinds for detail parts                                              | PQ-T19, PQ-T20      |
+| `server/perception/hidden-sides.ts`                                             | Mirror measured sides to hidden ones, status `inferred`                                     | PQ-T22              |
+| `lib/object-kit.ts`, `lib/object-shape.ts`, `lib/shape-script.ts`               | Detail kinds, evidence schema, component budget on the photo path                           | PQ-T12, T20, T21    |
+| `features/vision-insert/utils/view-assemblies.ts`, `object-geometry.ts`         | Detail assemblies, ambient shadow                                                           | PQ-T20, PQ-T27      |
+| `features/vision-insert/utils/surface-look.ts`                                  | Roughness and clearcoat shifted by measured gloss, within ± 0.2                             | PQ-T26              |
+| `features/vision-insert/ui/object-shape-panel.tsx` + `messages/{en,fr,mg}.json` | Photo-quality hint, « draw a clean front » action, judge note                               | PQ-T7, PQ-T23       |
+| `lib/env.ts`, `.env.example`                                                    | `SHAPE_KIT_SAMPLES`, `META_JUDGE_MODEL`                                                     | PQ-T4, PQ-T18       |
+| `Makefile`                                                                      | `shape-judge`; `eval-shape` takes `PROMPT=`                                                 | PQ-T4, PQ-T5        |
 
-When an evaluation gate fails, `Muse Wonder 1.0` triggers precise mathematical compensations rather than regenerating random code:
+**Rewrite or update (docs and agent files)**
 
-1. **Failure Mode A: Dark Grey or Black Asteroid Crevices**
-   - *Diagnostic:* Photometric crevice luminance $L^* < 45$ or $\min(\text{RGB}) < 0.25$.
-   - *Automated Remediation:* Increase diffuse wrap factor $w \leftarrow \min(0.85, w + 0.12)$ and scale daytime luminance floor vector:
-     $$\vec{C}_{floor} \leftarrow \vec{C}_{floor} \cdot 1.25$$
-2. **Failure Mode B: Visible Polygonal Icosahedral Facets**
-   - *Diagnostic:* Discrete normal discontinuity between adjacent vertex triangles $> 5^\circ$.
-   - *Automated Remediation:* Inject second-order harmonic vertex noise frequency in the vertex shader:
-     $$\Delta \vec{P} \leftarrow \sin(2.1 \vec{P}_x + 1.8 \vec{P}_y) \cdot 0.085 + \sin(4.2 \vec{P}_x + 3.8 \vec{P}_z) \cdot 0.038$$
-3. **Failure Mode C: Unbalanced Sky Coverage (Empty Horizon Wedges)**
-   - *Diagnostic:* Azimuthal angular histogram variance $\sigma^2_\theta > 0.35$.
-   - *Automated Remediation:* Re-project cloud bank centers along concentric Golden Spiral / Fibonacci azimuth disks with forced stratified radial bounds ($R \in [150, 260]$).
-4. **Failure Mode D: Draw Call Budget Violation ($> 1$ Draw Call)**
-   - *Diagnostic:* `gl.info.render.calls > 1`.
-   - *Automated Remediation:* Disallow multiple separate `<mesh>` objects; enforce a single contiguous `THREE.InstancedMesh(baseSphereGeom, cloudMaterial, totalPuffs)` where individual puff transforms are encoded in a single `Float32Array` instance matrix buffer.
-
----
-
-### 9.5 Production System Prompts & Instruction Directives
-
-The following production prompts allow initializing and executing each Meta model in their respective role.
-
-#### Prompt 1: `Muse Wonder 1.0` (Master System Orchestrator)
-```markdown
-You are Muse Wonder 1.0, acting as the Lead 3D Mathematical Architect and Orchestrator for real-time WebGL/Three.js procedural reconstruction.
-Your objective is to deconstruct 2D visual references into inverse procedural models satisfying:
-1. Exactly ONE draw call per atmospheric system (InstancedMesh).
-2. Zero CPU allocations per frame (0 bytes GC in useFrame loops).
-3. 60+ FPS performance on integrated/mobile WebGL GPUs.
-4. Optical fidelity: no black crevice asteroids, wrapped diffuse scattering, and dual-ambient Rayleigh/Mie lighting.
-
-Your responsibilities:
-- Ingest semantic layer manifests from SAM 3.1.
-- Formulate parametric cluster distributions (shells, azimuth formulas, Pareto scale tiers).
-- Write formal JSON blueprints for Muse Spark 1.3.
-- Audit headless render metrics (CIELAB ΔE*, draw calls, normal continuity).
-- Manage the self-correcting refinement loop until all convergence gates pass.
-```
-
-#### Prompt 2: `SAM 3.1` (Zero-Shot Semantic Layer Extractor)
-```markdown
-You are SAM 3.1 (Segment Anything Model 3.1).
-Segment the provided visual reference into distinct volumetric and spatial strata:
-1. Segment the background sky dome gradient.
-2. Segment foreground, midground, and horizon cloud lobes.
-3. Isolate the primary illumination source (sun disk / celestial glow).
-4. Output binary alpha masks, bounding boxes [ymin, xmin, ymax, xmax], and morphological convexity metrics in JSON format.
-```
-
-#### Prompt 3: `Muse Spark 1.3` (Lead 3D Code & Shader Engineer)
-```markdown
-You are Muse Spark 1.3, Meta's premier coding model, specialized in real-time Three.js, React Three Fiber, and GLSL shader programming.
-You receive formal Parametric 3D Blueprints from Muse Wonder 1.0.
-Your mandate:
-1. Synthesize production-ready TypeScript and GLSL code.
-2. Structure all geometry as a single THREE.InstancedMesh using custom ShaderMaterial or onBeforeCompile hooks.
-3. Compute all matrix transformations (position, rotation, non-uniform scale) using pre-allocated THREE.Matrix4 and Float32Array buffers.
-4. Implement wrapped half-Lambert diffuse, forward Mie translucency, Fresnel silver lining, and an invariant daylight luminance floor in the fragment shader.
-5. Provide automated test harnesses (test-orbit.mjs) utilizing Playwright with WebGL Angle flags.
-Never use unlit materials, never hardcode black shadow colors, and never trigger garbage collection in animation loops.
-```
-
-#### Prompt 4: `Muse Glimmer (30B)` (Local Edge Test & Telemetry Runner)
-```markdown
-You are Muse Glimmer (30B), operating as the local workspace execution and validation agent.
-Your duties:
-1. Run local TypeScript static type checking: `pnpm --filter web typecheck`.
-2. Execute automated Playwright headless test suites: `node scratch/test-orbit.mjs`.
-3. Capture WebGL runtime telemetry: draw call count, triangle count, shader compile status, and console warnings.
-4. Calculate visual color deltas (CIELAB ΔE*) against reference targets.
-5. Format and deliver the Telemetry Audit JSON report back to Muse Wonder 1.0 for loop convergence verification.
-```
+| File                                                      | Change                                                             | Task   |
+| --------------------------------------------------------- | ------------------------------------------------------------------ | ------ |
+| `docs/vision-to-3d-methodology.md`                        | This rewrite; move « Target » items to « As built » as they land   | PQ-T30 |
+| `docs/vision-to-3d-muse-skills.md`                        | Source of the cards; kept equal to `server/perception/skills/`     | PQ-T11 |
+| `docs/contracts.md`                                       | Evidence, detail score, judge result, detail kinds, new SSE fields | PQ-T30 |
+| `docs/copilot.md`                                         | Prompt versions, effort table, judge model, skill loader           | PQ-T30 |
+| `docs/performance.md`                                     | Time budget per call, background rounds                            | PQ-T30 |
+| `docs/tasks/PV-shape-realism.md`                          | Loop log rows; PR-0.5 closed by PQ-T1                              | PQ-T29 |
+| `docs/tasks/PV-any-object.md`                             | PH-T8, PH-T9 closed by PQ-T25, PQ-T24                              | PQ-T30 |
+| `.claude/skills/shape-3d/SKILL.md`, `shape-loop/SKILL.md` | Real set first, detail score, judge, skill cards                   | PQ-T30 |
+| `README.md`, `test-scenarios/06-village.md`               | Features, limits, one scenario per visible change                  | PQ-T30 |
 
 ---
 
-### 9.6 Cost, Latency & Token Budget Optimization
+## 8. Verification: commands that exist
 
-Meta's Model API architecture is specifically optimized for high-iteration multi-agent loops:
-
-1. **Context Caching ($0.20 / 1M Cached Tokens vs $4.00 / 1M Input):**
-   - The 1M token context of `Muse Wonder 1.0` and `Muse Spark 1.3` allows caching the entire Three.js codebase, math definitions, and shader library across all iteration turns. Re-evaluating shader diffs consumes cached tokens at a **95% cost reduction**.
-2. **Local Offloading with `Muse Glimmer-30B`:**
-   - Headless execution, AST syntax verification, and telemetry log parsing are offloaded locally to the open-weight `Muse-Glimmer-30B` instance. This eliminates API round-trips for mechanical checks and reserves frontier model calls strictly for high-order visual reasoning.
-3. **Deterministic Convergence in $\le 3$ Iterations:**
-   - Because the initial blueprint from `Muse Wonder 1.0` is grounded in analytical inverse photometry and harmonic noise formulas, the loop typically reaches $\Delta E^* < 8.0$ and 1 draw call within **2 to 3 refinement iterations**, minimizing token expenditure while guaranteeing human-grade visual fidelity.
-
----
-
-## 10. Step-by-Step Implementation Checklist & Test Matrix
-
-This section establishes the operational protocol for engineering teams and autonomous agents implementing the Vision-to-3D pipeline. Each phase defines:
-1. **Concrete Deliverables & Tasks**
-2. **Assigned Meta Model**
-3. **Automated Vitest / Playwright Tests**
-4. **Binary Pass / Fail Acceptance Criteria**
-
-```mermaid
-flowchart TD
-    P0["Phase 0: Environment Pre-Flight\n(Meta API & Model Access)"] --> P1["Phase 1: Semantic Layer Stratification\n(SAM 3.1 Extraction)"]
-    P1 --> P2["Phase 2: Inverse Photometry & Blueprint\n(Muse Wonder 1.0 Parametrization)"]
-    P2 --> P3["Phase 3: Perspective Completion\n(Muse Image 1.0 Multi-View)"]
-    P3 --> P4["Phase 4: WebGL Instancing & Shaders\n(Muse Spark 1.3 Synthesis)"]
-    P4 --> P5["Phase 5: Headless WebGL Telemetry\n(Muse Glimmer / Playwright)"]
-    P5 --> P6["Phase 6: Perceptual Delta Audit\n(Muse Wonder 1.0 Convergence Gate)"]
-    P6 -->|"Pass (All Criteria Met)"| P7["Phase 7: Production Integration\n(Git, Typecheck & E2E)"]
-    P6 -->|"Fail (Delta > Threshold)"| P4
-```
+| Question                                       | Command                                                    | Passes when                                                |
+| ---------------------------------------------- | ---------------------------------------------------------- | ---------------------------------------------------------- |
+| Does the shape pipeline still work offline?    | `make test-shape`                                          | Golden set green                                           |
+| How good is every object, and which is worst?  | `make shape-report` → `test-results/shape-report/index.md` | Stop criteria met on the real table (§9)                   |
+| What does the user really see?                 | `make shape-shots` (dev server running)                    | Viewer shots, dark and light, reviewed with `/designer-3d` |
+| Did a prompt change help the kit?              | `make eval-shape MODEL=…` (live, costs API calls)          | Agreement not lower, median ≤ 30 s                         |
+| Did a prompt change help the staged loop?      | `make eval-stages` (offline replay)                        | Stage scores not lower                                     |
+| Does the 2D path work end to end on live Meta? | `make facade-e2e FRONT=… OUT=…` (costs API calls)          | Model built, stages logged                                 |
+| Add a real photo to the reference set          | `make shape-capture PHOTO=… ID=…` (costs API calls)        | Capture and crop written to `__fixtures__/shape/real/`     |
+| Everything before handoff                      | `make check`                                               | Typecheck, lint, tests green                               |
 
 ---
 
-### Phase 0: Environment Pre-Flight & Meta API Configuration
+## 9. Stop criteria (target, on the real set)
 
-- [ ] **Task 0.1:** Verify network connectivity and developer API credentials for Meta Model API (`https://api.meta.ai/v1/models`).
-- [ ] **Task 0.2:** Validate active model catalog aliases (`muse-wonder-1.0`, `sam-3.1`, `muse-spark-1.3`, `muse-image-1.0`, `Muse-Glimmer-30B`).
-- [ ] **Task 0.3:** Configure `.env.local` with `LLM_PROVIDER="meta"` and `META_API_KEY`.
-- [ ] **Task 0.4:** Set up fallback test fixtures for offline deterministic continuous integration (`LLM_PROVIDER="mock"`).
+A model is good enough when, per object:
 
-#### Automated Tests for Phase 0:
-* **Test 0.A (Meta Provider Client & Auth):**
-  - **File:** `apps/web/src/server/copilot/__tests__/meta-provider.test.ts`
-  - **Command:** `pnpm --filter web test -- meta-provider.test.ts`
-  - **Assertion:** Expects `GET /api/copilot/models` to successfully enumerate active models and resolve standard OpenAI-compatible bearer auth headers.
-* **Test 0.B (Local Edge Glimmer Fallback):**
-  - **File:** `apps/web/src/server/copilot/__tests__/glimmer-provider.test.ts`
-  - **Command:** `pnpm --filter web test -- glimmer-provider.test.ts`
-  - **Assertion:** Asserts that local `Muse-Glimmer-30B` endpoint or mock provider handles tool calls when network connectivity is gated.
+- Silhouette IoU ≥ 0.85, outline edge F1 ≥ 0.6, colour ΔE ≤ 8 (as today).
+- Part recall ≥ 0.8 and part precision ≥ 0.8; interior edge F1 and colour per part above the gates fixed in PQ-T6
+  from the measured baseline.
+- No graph constraint violated; every hidden part marked `inferred`.
+- Judge ≥ 4 / 5 on average with no criterion under 3 (only once the judge passed its calibration).
+- `/designer-3d` ≥ 4 / 5 on the viewer shots, dark and light.
+- ≤ 5 000 triangles, shape maths ≤ 300 ms, first answer ≤ 60 s; later rounds in the background.
+
+The pass is over when every real object meets them, or after three rounds on the same object without gain, which
+is reported with the sheet and the blocking cause (`/shape-loop`).
 
 ---
 
-### Phase 1: Semantic Layer Stratification (`SAM 3.1`)
+## 10. Limits that stay
 
-- [ ] **Task 1.1:** Implement image ingestion pipeline supporting linear sRGB decoding and resolution normalization ($1920 \times 1080$).
-- [ ] **Task 1.2:** Issue text-guided segmentation prompt to `sam-3.1` to isolate:
-  - Background Sky Gradient (`sky_background`)
-  - Volumetric Cumulus Cloud Deck (`cumulus_deck`)
-  - Horizon Mountain Silhouettes (`horizon_terrain`)
-  - Celestial Illumination Disk (`sun_disk`)
-- [ ] **Task 1.3:** Extract binary alpha masks, 2D polygon contours, and bounding boxes $[y_{min}, x_{min}, y_{max}, x_{max}]$.
-- [ ] **Task 1.4:** Generate `SemanticStratificationManifest` adhering to Contract 1 schema.
-
-#### Automated Tests for Phase 1:
-* **Test 1.A (SAM Polygon & Mask Parser):**
-  - **File:** `apps/web/src/server/perception/__tests__/parse-sam.test.ts`
-  - **Command:** `pnpm --filter web test -- parse-sam.test.ts`
-  - **Assertion:** Validates parsing of polygon contour vectors, alpha thresholding $> 0.5$, and area coverage sanity checks.
-* **Test 1.B (Multi-Part Volumetric Layer Separation):**
-  - **File:** `apps/web/src/server/perception/__tests__/part-masks.test.ts`
-  - **Command:** `pnpm --filter web test -- part-masks.test.ts`
-  - **Assertion:** Guarantees zero overlap between primary celestial disk mask and horizon terrain mask ($IoU < 0.01$).
+- No Meta model on the API turns a photo into a mesh (checked 2026-11-01, `copilot.md`): templates, measurements
+  and the loop remain the only route.
+- Sides the photo does not show are inferred by symmetry and rules. They are plausible, never measured.
+- Generated views are drawings by a model. They are used only after consistency checks and can still be wrong.
+- Photo swatches are small tileable patches (≈ 64 px). The photo is never projected on the model.
 
 ---
 
-### Phase 2: Inverse Photometry & Parametric Blueprinting (`Muse Wonder 1.0`)
+## 11. Rendering: every step from recipe to pixels
 
-- [ ] **Task 2.1:** Analyze segmented luminance zones to extract illumination vector $\vec{L}$ and shadow terminator softness.
-- [ ] **Task 2.2:** Compute daytime color vectors in linear CIELAB:
-  - $\vec{C}_{white} = [1.0, 1.0, 0.98]$ (Sunlit highlight)
-  - $\vec{C}_{shadow} = [0.48, 0.72, 0.98]$ (Azure crevice ambient bounce)
-  - Luminance safety floor $L^*_{floor} \ge 45$.
-- [ ] **Task 2.3:** Calculate 4-tier Pareto-stratified cloud scale distribution ($S \in [2.4, 16.5]$ with scale ratio $\ge 3.0\times$).
-- [ ] **Task 2.4:** Formulate 4 concentric radial shells ($R \in [15, 260]$) to eliminate azimuthal sky gaps.
-- [ ] **Task 2.5:** Generate `Parametric3DBlueprint` JSON adhering to Contract 3 schema.
+Added 2026-11-10 after reading the viewer code, `tasks/PT-studio-look.md` (done except PT-7), the S1 tasks of
+`PV-shape-realism.md` and `performance.md`. The same recipe is drawn by four renderers, and they are not equal.
 
-#### Automated Tests for Phase 2:
-* **Test 2.A (Celestial Trajectory & Vector Parity):**
-  - **File:** `apps/web/src/features/microgrid-3d/utils/__tests__/celestial.test.ts`
-  - **Command:** `pnpm --filter web test -- celestial.test.ts`
-  - **Assertion:** Tests solar vector $\vec{D}(\theta)$ for continuous altitude coverage $[3.5^\circ, 74^\circ]$, azimuth progression $[0, \pi]$, and strict single-vector parity across mesh, light, and uniforms.
-* **Test 2.B (Color Space & Zero-Black Invariant):**
-  - **File:** `apps/web/src/server/perception/__tests__/region-colors.test.ts`
-  - **Command:** `pnpm --filter web test -- region-colors.test.ts`
-  - **Assertion:** Asserts that daytime shadow crevice pixels satisfy $\min(\text{RGB}) \ge 0.40$ and CIELAB $L^* \ge 45$ (Zero black voids).
+### 11.1 The four renderers (as built)
 
----
+| Renderer                    | File                                                                       | Maps and swatches                                                                                                                              | Environment light      | Shadows                          | Post                               |
+| --------------------------- | -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- | -------------------------------- | ---------------------------------- |
+| Object viewer `/village`    | `vision-insert/ui/object-editor-3d.tsx`                                    | Yes                                                                                                                                            | Softbox studio (PMREM) | Ground contact shadow only       | Neutral tone mapping, ink, 4× MSAA |
+| Village scene `/simulation` | `microgrid-3d/utils/placed-models-geometry.ts`, `ui/appliance-markers.tsx` | **No**: every placed object is merged into one mesh with one material (roughness 0.7, metalness 0.2); glass, metal and thatch all render alike | HDRI (high tier)       | Sun shadow map, cast and receive | N8AO, bloom, ACES, ink (high tier) |
+| VR spawned object           | `vision-insert/ui/xr/spawned-object-3d.tsx`                                | **No**: plain `surfaceMaterial`, white colour                                                                                                  | Scene default          | Casts only                       | None (kept off for headset speed)  |
+| Judge render (server)       | `server/perception/flat-render.ts`                                         | No                                                                                                                                             | None (flat shade)      | None                             | None                               |
 
-### Phase 3: Orthographic Projection & Perspective Completion (`Muse Image 1.0`)
+### 11.2 Viewer chain, step by step (as built)
 
-- [ ] **Task 3.1:** Submit multi-angle hallucination request to `muse-image-1.0` with the segmented cloud mask as reference guidance.
-- [ ] **Task 3.2:** Synthesize top-down satellite view ($\theta_{elev} = 90^\circ$) to measure lateral billow clustering and formation thickness.
-- [ ] **Task 3.3:** Synthesize cross-sectional side profile view ($\theta_{elev} = 0^\circ$) to verify vertical flat condensation base at altitude $Y_0$.
-- [ ] **Task 3.4:** Extract structural height-to-width ratio ($H / W \approx 0.62$) and crown whisp density.
+1. **Geometry** (`object-geometry.ts` `recipeMesh`): one merged mesh, one group per material. Rounded boxes
+   (2 segments), bevelled extrude, lathe, hull and prism (`EDGE_BEVEL` 0.06), round parts 24 segments, spheres
+   18 × 12, roof overhang 0.03. Hip roofs have no bevel.
+2. **Normals**: computed per vertex; bevel rings give the highlight on edges.
+3. **UVs** (`surface-maps.ts` `planarUvs`): box projection in object units, one repeat per 0.25 of the object;
+   roof slopes mapped along the fall line.
+4. **Colour**: measured colour per part as vertex colour, times a grey shade map or a 64 px photo swatch, with a
+   gain so the surface does not darken.
+5. **Material** (`surface-look.ts`): roughness and metalness per material; clearcoat on painted, plastic, tile,
+   glass, metal; procedural normal and roughness maps (128 px, mipmaps, anisotropy 4) on textured materials.
+6. **Light**: softbox studio baked once as environment (intensity 0.9), one key light, one rim light. **No light
+   casts a shadow.**
+7. **Ground**: one baked contact shadow under the object.
+8. **Post**: Neutral tone mapping (keeps measured colours), ink outline 0.6, 4× MSAA, half-float buffer.
+9. **Output**: transparent canvas over the themed backdrop, pixel ratio 1 to 1.5, drawn on demand, faded in after
+   shader warm-up.
 
-#### Automated Tests for Phase 3:
-* **Test 3.A (Multi-View Hallucination Synthesis):**
-  - **File:** `apps/web/src/server/perception/__tests__/views-generation.test.ts`
-  - **Command:** `pnpm --filter web test -- views-generation.test.ts`
-  - **Assertion:** Validates prompt formatting, view angle matrix generation, and image decoding without channel corruption.
-* **Test 3.B (Contour & Silhouette Boundary Matching):**
-  - **File:** `apps/web/src/server/perception/__tests__/outline.test.ts`
-  - **Command:** `pnpm --filter web test -- outline.test.ts`
-  - **Assertion:** Verifies contour continuity ($C^0$ closed boundary) and convexity index $\ge 0.75$.
+### 11.3 What is missing in the rendering (target)
 
----
+| #   | Gap                                     | Evidence                                                                                                                                                                       | Target                                                                                                                                                                        | Task   |
+| --- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| R1  | Parts do not shade each other           | Viewer composer holds only tone mapping and ink; no light has `castShadow`                                                                                                     | Ambient occlusion pass in the viewer (it draws on demand, so the cost is paid only on change) plus one soft shadow map on the key light                                       | PQ-T33 |
+| R2  | VR object looks flatter than the viewer | `spawned-object-3d.tsx` builds materials without maps, swatches or studio light                                                                                                | Same material builder as the viewer; a small baked environment; no post pass (headset budget)                                                                                 | PQ-T32 |
+| R3  | Village copy loses every material       | `appliance-markers.tsx`: one `meshStandardMaterial vertexColors roughness={0.7} metalness={0.2}` for all placed objects; `mergeGeometries(…, false)` drops the material groups | Merge per surface family (matt, gloss, glass, metal: ≤ 4 meshes, ≤ + 3 draw calls) with the viewer look values; joint shadow baked in vertex colours; no maps on the low tier | PQ-T32 |
+| R4  | Lamps and screens never glow            | No emissive anywhere in `surface-look.ts`                                                                                                                                      | Emissive on lamp heads, screens and headlights, driven by the engine's running state in the village (the « emissive = data » rule), a fixed low glow in the viewer            | PQ-T34 |
+| R5  | Textures repeat visibly on large parts  | `planarUvs` maps object position ÷ 0.25 with no offset or turn, so one 64 or 128 px tile repeats four times across the object in a fixed grid                                  | Second, larger noise layer in the shade map and a seeded offset per material; patterns stay continuous across parts of one wall                                               | PQ-T35 |
+| R6  | One roughness per material              | `SURFACE_LOOK` table                                                                                                                                                           | Gloss measured on the photo (PQ-T26)                                                                                                                                          | PQ-T26 |
+| R7  | Uniform colour inside a part            | One vertex colour per part                                                                                                                                                     | Joint and ground darkening baked in vertex colours (PQ-T27), which also reaches VR and the village at no frame cost                                                           | PQ-T27 |
+| R8  | Judge render shows less than the viewer | Flat render has no assemblies                                                                                                                                                  | PQ-T3                                                                                                                                                                         | PQ-T3  |
+| R9  | Hip roof edges are sharp                | PT-1e left them to the ink                                                                                                                                                     | Leave; ink carries them (measured decision)                                                                                                                                   | —      |
 
-### Phase 4: WebGL Instanced Mesh & GLSL Shader Synthesis (`Muse Spark 1.3`)
+Not proposed, on purpose: glass transmission, depth of field, real-time reflections and bloom in the viewer. They
+cost frame time or change measured colours, and none of them fixes a fault a person would name first.
 
-- [ ] **Task 4.1:** Generate Three.js / React Three Fiber `InstancedMesh` with pre-allocated `Float32Array` instance matrix buffer:
-  - Budget: exactly 1 draw call, 0 runtime CPU memory allocations in `useFrame`.
-- [ ] **Task 4.2:** Implement GLSL vertex displacement shader:
-  - Harmonic 3D sinusoidal noise ($f_1 = 2.1, f_2 = 4.2, A = 0.085$) to eliminate polygonal facets and produce cauliflower billows.
-  - Analytical normal perturbation:
-    $$\vec{n}' = \text{normalize}\left(\vec{n} + \nabla \text{Noise}(p)\right)$$
-- [ ] **Task 4.3:** Implement GLSL fragment lighting shader:
-  - Half-Lambert wrapped diffuse with wrap parameter $w = 0.65$.
-  - Dual-hemisphere ambient bounce (sky azure downwelling, hazy ground bounce).
-  - Forward Mie translucency (subsurface scattering backlight glow).
-  - Fresnel silhouette silver lining halo.
-  - Hard daytime luminance safety floor ($L^* \ge 48$).
-- [ ] **Task 4.4:** Integrate smooth continuous celestial hour-angle progression ($h_{t+\Delta t} = h_t + v \cdot \Delta t$) with interactive scrub velocity.
+### 11.4 Cost of one object (from the saved Model API page, standard pricing)
 
-#### Automated Tests for Phase 4:
-* **Test 4.A (Cloud Instancing & Deterministic Layout):**
-  - **File:** `apps/web/src/features/microgrid-3d/utils/__tests__/weather-atmosphere.test.ts`
-  - **Command:** `pnpm --filter web test -- weather-atmosphere.test.ts`
-  - **Assertion:** Validates puff count ($N = \text{MAX\_BANKS} \times \text{PUFFS\_PER\_BANK}$), stratified scale variety ratio $> 3.0\times$, minimum clearance $> 8$, and radial depth spanning near ($< 140$) and far ($> 160$).
-* **Test 4.B (Shader Syntax & AST Static Verification):**
-  - **File:** `apps/web/src/server/perception/__tests__/spark-critic.test.ts`
-  - **Command:** `pnpm --filter web test -- spark-critic.test.ts`
-  - **Assertion:** Parses generated GLSL vertex and fragment shaders for uniform declaration parity, valid precision qualifiers, and absence of syntax errors.
+Muse Image $0.01 per image; SAM 3.1 $2.50 per 1 000 images (each concept on each image is one call); Spark 1.3
+$1.25 per million input tokens and $4.25 output; Wonder $4.00 and $20.00. The spend per object is dominated by
+Spark and Wonder rounds, not by SAM or Muse Image, so extra SAM phrasings (PQ-T9) and a second generated view
+(PQ-T16) are cheap, while extra critic and final-check rounds are where the budget goes. PQ-T31 measures it.
 
----
+### 11.5 What was read, and what is still unverified
 
-### Phase 5: Headless Execution & Runtime WebGL Telemetry (`Muse Glimmer-30B` / Playwright)
+Read for this section: the viewer (`object-editor-3d.tsx`, `studio-env.ts`, `surface-look.ts`, `surface-maps.ts`,
+`surface-textures.ts`, the constants of `object-geometry.ts`), the VR and village renderers
+(`spawned-object-3d.tsx`, `placed-models-geometry.ts`, `appliance-markers.tsx`, `post-effects.tsx`),
+`tasks/PT-studio-look.md`, the S1 tasks of `PV-shape-realism.md`, `performance.md`, `design/3d-scene.md`,
+`setup/example-3D-workflow.md`, the model sections of `ideas-meta-models.md`, and the saved Model API page.
 
-- [ ] **Task 5.1:** Launch automated headless browser script with ANGLE hardware acceleration:
-  ```bash
-  node scratch/test-orbit.mjs
-  ```
-- [ ] **Task 5.2:** Verify canvas context compilation on headless WebGL (SwiftShader / ANGLE).
-- [ ] **Task 5.3:** Extract real-time GPU runtime telemetry:
-  - `gl.info.render.calls` (Must equal exactly 1 for cloud layer).
-  - `gl.info.render.triangles` (Must remain within 160,000 budget).
-  - Frame time $\le 16.66\text{ ms}$ (60 FPS baseline).
-- [ ] **Task 5.4:** Photograph 4 canonical celestial lighting states:
-  - `06:00` (Dawn / East sunrise rim)
-  - `12:00` (Zenith noon highlight)
-  - `18:00` (Dusk / West sunset glow)
-  - `00:00` (Midnight starry sky with moonlight)
-- [ ] **Task 5.5:** Assemble `VerificationTelemetryAudit` JSON adhering to Contract 4 schema.
+From `example-3D-workflow.md`, one idea is not yet in the score: its loss adds a geometry term (constraint
+violations) to silhouette, edges and landmarks. Today violations are a report column only; PQ-T6 may fold them in
+as a penalty.
 
-#### Automated Tests for Phase 5:
-* **Test 5.A (Headless Multi-Angle Render Script):**
-  - **File:** `scratch/test-orbit.mjs`
-  - **Command:** `node scratch/test-orbit.mjs`
-  - **Assertion:** Exits with code 0; verifies canvas initialized without WebGL shader compilation warnings; generates 4 lossless PNG frames in `scratch/renders/`.
-* **Test 5.B (Runtime Frame-Rate & 0-Allocation Check):**
-  - **File:** `apps/web/src/features/autopilot/__tests__/autonomous-perf.test.ts`
-  - **Command:** `pnpm --filter web test -- autonomous-perf.test.ts`
-  - **Assertion:** Asserts loop execution time stays under 16ms per frame and produces zero heap allocation leaks.
+Still unverified, because no local document holds it (`ideas-meta-models.md` itself says the endpoint formats are
+« to check in the Meta docs »): the values `reasoning_effort` accepts, the largest image a call takes, and the
+parameters of Muse Image edits with reference images. PQ-T8, PQ-T16 and PQ-T17 start by checking them on the live
+API. No outside web research on rendering was done: the proposals come from this code and from three.js practice.
 
 ---
 
-### Phase 6: Perceptual Delta Auditing & Closed-Loop Convergence (`Muse Wonder 1.0`)
+## 12. Web research: the standard steps of making a 3D object, and how this pipeline follows them
 
-- [ ] **Task 6.1:** Compute CIELAB color-space delta $\Delta E^*_{00}$ comparing the rendered 3D frames against the original reference image:
-  $$\Delta E^* = \sqrt{(\Delta L^*)^2 + (\Delta a^*)^2 + (\Delta b^*)^2}$$
-- [ ] **Task 6.2:** Calculate silhouette Intersection-over-Union ($IoU = \frac{|M_{3D} \cap M_{ref}|}{|M_{3D} \cup M_{ref}|}$).
-- [ ] **Task 6.3:** Check normal continuity and curvature variation (absence of flat facets: normal discontinuity $< 5^\circ$).
-- [ ] **Task 6.4:** Verify zero daylight black voids ($\min(\text{RGB}) \ge 0.40$).
-- [ ] **Task 6.5:** **Convergence Decision Gate:**
-  - If **ALL** criteria pass: emit `CONVERGED_PASS` and proceed to Phase 7.
-  - If **ANY** criterion fails: `Muse Wonder 1.0` computes parameter diff vector $\Delta \vec{P}$ and triggers targeted code refinement back to Phase 4.
+Searched 2026-11-10. Sources are listed in §12.5. Tutorials and vendor guides agree on the order of the steps;
+none is a formal standard. Numbers from Adobe's PBR guide are the ones the guide says come from measured data.
 
-#### Automated Tests for Phase 6:
-* **Test 6.A (Silhouette IoU & Shape Fit):**
-  - **File:** `apps/web/src/server/perception/__tests__/silhouette-fit.test.ts`
-  - **Command:** `pnpm --filter web test -- silhouette-fit.test.ts`
-  - **Assertion:** Asserts silhouette IoU between projected 3D volume and reference mask exceeds $0.85$.
-* **Test 6.B (Photometric Color-Space Audit & Luminance Floor):**
-  - **File:** `apps/web/src/server/perception/__tests__/photo-audit.test.ts`
-  - **Command:** `pnpm --filter web test -- photo-audit.test.ts`
-  - **Assertion:** Asserts mean $\Delta E^* < 8.0$, 95th-percentile $\Delta E^* < 12.0$, and zero pixels below the daytime luminance floor.
+### 12.1 The steps a 3D artist follows, mapped to this pipeline
 
----
+| #   | Step in a studio pipeline          | What it is for                                              | Here today                                                                | Gap → task                                       |
+| --- | ---------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------ |
+| 1   | Reference gathering and admission  | Enough clear views; reject unusable references              | One photo; no check of size, blur or hidden share                         | PQ-T7 (conditions, hint to the operator)         |
+| 2   | Detail inventory                   | List every part to build before modelling                   | None: the kit is three colours and seven counts                           | PQ-T12 (`evidence`), PQ-T37 (coverage gate)      |
+| 3   | Camera match                       | Model and reference seen from the same view                 | Yaw from vanishing lines (`perspective.ts`), flat render in the photo box | Done; pitch is not solved (noted, no task)       |
+| 4   | Blockout                           | Main silhouette and proportions first                       | Kit template + silhouette fit, body from the outline                      | Done                                             |
+| 5   | Structure, then form               | Secondary volumes, then edges and curvature                 | Part masks, bevels, staged loop on the 2D path only                       | PQ-T19 (staged loop on photos), PQ-T20 (details) |
+| 6   | Topology and budget                | Clean, light mesh                                           | Parametric parts, ≤ 5 000 triangles, merged                               | Done                                             |
+| 7   | UV unwrap                          | Texture without stretching                                  | Box projection in object units, roof slopes along the fall line           | PQ-T35 (repetition)                              |
+| 8   | Baking (normal, ambient occlusion) | Small detail and contact shade without triangles            | Procedural normal maps; **no occlusion of any kind in the viewer**        | PQ-T33 (AO pass), PQ-T27 (baked joints)          |
+| 9   | PBR texturing                      | Base colour, metalness, roughness that obey physical ranges | Measured colour, one look per material; **no range check; metal at 0.6**  | PQ-T39 (PBR rules), PQ-T10, PQ-T26               |
+| 10  | Look development                   | Check materials under several lights                        | One studio light, dark and light theme                                    | PQ-T40 (three-light sheet)                       |
+| 11  | Lighting and render                | Environment light, shadows, tone mapping                    | Softbox studio, Neutral tone mapping, ink, contact shadow                 | PQ-T33, PQ-T34                                   |
+| 12  | Quality check                      | Compare with the reference from several views, gate by gate | Score on the photo view only; no check from other angles                  | PQ-T2, PQ-T36, PQ-T38                            |
+| 13  | Delivery to every target           | Same asset in every engine                                  | Viewer, village and VR draw it differently                                | PQ-T32                                           |
 
-### Phase 7: Production Integration & CI/CD Verification
+### 12.2 What comparable systems do that this one does not yet
 
-- [ ] **Task 7.1:** Execute full static TypeScript typecheck across all monorepo workspaces:
-  ```bash
-  pnpm turbo run typecheck
-  ```
-- [ ] **Task 7.2:** Execute complete Vitest test suite across all packages:
-  ```bash
-  pnpm turbo run test
-  ```
-- [ ] **Task 7.3:** Run end-to-end integration test suite with Playwright:
-  ```bash
-  pnpm --filter web test:e2e
-  ```
-- [ ] **Task 7.4:** Verify production Next.js build compilation:
-  ```bash
-  pnpm --filter web build
-  ```
-- [ ] **Task 7.5:** Commit code using conventional commits format (`feat(...)`, `docs(...)`) and push branch to origin:
-  ```bash
-  git commit -m "feat(3d): complete inverse procedural generation with Meta model loop"
-  git push origin <branch-name>
-  ```
+- **Measure inside the outline.** The img2threejs project reports that silhouette IoU read about 11 % of the
+  figure and gave a model with its face deleted the same score as a finished one; it added a difference measure
+  inside the silhouette, in height bands, required on every pass. This matches the finding of §3 and gives the
+  detail score a fourth term (PQ-T36).
+- **Check from more than one angle.** The same project flags a « degenerate view »: a flat plane that looks like a
+  volume from the reference view. Its check needs no reference, only the model seen from other angles. A model
+  that fits the photo but is paper-thin or lopsided from the side fails (PQ-T36).
+- **Hard gates are never overruled by a model's opinion.** Geometry failures (outline, scale, missing or fused
+  parts, parts in mid-air) send the work back without asking the vision model; the vision model may only rescue
+  a near miss on a soft signal. Here the critic and judge are advisory already; the missing piece is the part
+  coverage gate (PQ-T37).
+- **A critic that prefers « no fix ».** 3DCodeBench instructs its visual critic to answer « no fix needed » when
+  the render is good enough, because critics break working models, and reverts any fix whose render fails.
+  3D-PreMise reports the vision model contradicting itself when shown renders. This pipeline already keeps only
+  measured gains; it adds the « prefer no fix » wording and loop stops on a repeated defect, a back-and-forth or
+  a plateau (PQ-T38).
+- **Several renders for the critic.** LL3M's critic reads multi-view renders. The critic sheet of PQ-T14 has two
+  model views; the judge sheet has two.
+- **Ask instead of guessing.** img2threejs asks the user when its routing confidence is under 0.82. Here a
+  low-confidence archetype is built anyway (PQ-T41).
+- **Buildings as layout tree plus components.** A NeurIPS 2026 poster recovers a split-and-repeat layout tree and
+  per-component parameters from one facade photo, refined with rendered feedback, then compiles them to a
+  program. The house path here (repetition measurement, `repeat` ops, openings as components, staged loop) has
+  the same shape; no change proposed.
 
-#### Automated Tests for Phase 7:
-* **Test 7.A (Full Monorepo Unit & Integration Suite):**
-  - **Command:** `pnpm turbo run test`
-  - **Assertion:** All packages (`@mitsinjo/engine`, `bridge`, `web`, `tests`) must report 100% test success with zero failures.
-* **Test 7.B (Zero TypeScript Compiler Errors):**
-  - **Command:** `pnpm turbo run typecheck`
-  - **Assertion:** Exits with code 0, 0 compiler diagnostics.
-* **Test 7.C (Deterministic End-to-End User Scenario):**
-  - **File:** `apps/web/e2e/demo-path.spec.ts`
-  - **Command:** `pnpm --filter web test:e2e`
-  - **Assertion:** Headless browser loads `/simulation`, navigates timeline, mounts 3D canvas, and verifies UI interactivity without console errors.
+### 12.3 Physical rules for materials (target, PQ-T39)
 
----
+From Adobe's PBR guide, metal / roughness workflow:
 
-### Quick-Reference Execution Matrix
+- Base colour of a non-metal stays between 30 and 240 sRGB (50 for the strict limit); nothing is pure black or
+  pure white.
+- Metalness is 0 or 1. Bare metal: metalness 1 and a bright base colour (180–255 sRGB). Paint, rust and dirt on
+  metal are non-metal.
+- No light or shadow in the base colour (hence PQ-T10); occlusion is its own channel and must not darken
+  reflections.
 
-| Phase | Core Objective | Meta Model | Automated Vitest / Shell Test Command | Hard Gate Acceptance Criteria |
-| :---: | :--- | :--- | :--- | :--- |
-| **0** | API & Auth Setup | `muse-spark-1.3` | `pnpm --filter web test -- meta-provider.test.ts` | Bearer auth valid, model catalog resolved |
-| **1** | Semantic Segmentation | `sam-3.1` | `pnpm --filter web test -- parse-sam.test.ts` | Mask alpha valid, boundary IoU $< 0.01$ overlap |
-| **2** | Photometric Blueprint | `muse-wonder-1.0` | `pnpm --filter web test -- celestial.test.ts region-colors.test.ts` | $\vec{D}(\theta)$ continuous, $L^*_{floor} \ge 45$ |
-| **3** | Multi-View Generation | `muse-image-1.0` | `pnpm --filter web test -- views-generation.test.ts` | 2 valid orthographic projections synthesized |
-| **4** | Instancing & Shaders | `muse-spark-1.3` | `pnpm --filter web test -- weather-atmosphere.test.ts spark-critic.test.ts` | Scale ratio $> 3.0\times$, 0 GLSL compile warnings |
-| **5** | Headless Telemetry | `Muse-Glimmer-30B` | `node scratch/test-orbit.mjs` | **Draw calls $== 1$**, 60 FPS, 0 WebGL errors |
-| **6** | Perceptual Delta Gate | `muse-wonder-1.0` | `pnpm --filter web test -- silhouette-fit.test.ts photo-audit.test.ts` | **$\Delta E^* < 8.0$**, IoU $\ge 0.85$, 0 black voids |
-| **7** | Production Deploy | All / CI | `pnpm turbo run test && pnpm turbo run typecheck` | 100% tests pass, 0 typecheck errors |
+Against the code: `SURFACE_LOOK.metal` uses metalness 0.6 with the colour measured on the photo, which is why the
+loop log of 2026-11-01 notes that metal parts render darker than measured. A car body or a fridge is painted
+metal, so it should be `painted` (metalness 0, clearcoat), and only bare metal (galvanised sheet, chrome,
+aluminium) should be `metal` with metalness 1. `painted` exists in the viewer's surfaces but not in
+`RECIPE_MATERIALS`, so Muse cannot name it today.
 
----
+One consequence for PQ-T27: darkening vertex colours near joints is occlusion written into the base colour, which
+the guide lists as a mistake. It is kept only as the cheap path for the village and VR, bounded at 0.6, and the
+viewer uses the occlusion pass of PQ-T33 instead.
 
-### Automated Self-Healing Protocol (Failure $\to$ Fix Mappings)
+### 12.4 Metrics used in research, and what can be used here
 
-When an automated test fails during any phase of execution, the system triggers targeted self-healing actions:
+Papers on single-image 3D report Chamfer distance and F-score (need a true 3D model: not available here), and
+LPIPS, SSIM, CLIP and DINO similarity between renders and images. SSIM is plain arithmetic and enters the detail
+score (PQ-T36). LPIPS and CLIP need other vendors' networks: out. DINO is a Meta model with open weights; using it
+locally as an offline report metric would respect « Meta models only » in spirit, but it is not on the Meta API and
+adds a model runtime to the repository. **Open decision for the user; no task until decided.**
 
-```
-┌───────────────────────────────────────────────┬────────────────────────────────────────────────────────┐
-│ Detected Test Failure                         │ Automated Remediation Directive                        │
-├───────────────────────────────────────────────┼────────────────────────────────────────────────────────┤
-│ photo-audit.test.ts: min(RGB) < 0.40          │ In fragment shader: increase diffuse wrap factor w     │
-│ (Dark crevice asteroid detected)              │ by +0.10 and elevate vec3 floorAmbient to match sky.   │
-├───────────────────────────────────────────────┼────────────────────────────────────────────────────────┤
-│ test-orbit.mjs: gl.info.render.calls > 1      │ In component: replace multiple mesh children with a    │
-│ (Draw call budget exceeded)                   │ single unified InstancedMesh sharing one buffer.       │
-├───────────────────────────────────────────────┼────────────────────────────────────────────────────────┤
-│ spark-critic.test.ts: Facet jaggies detected   │ In vertex shader: add secondary harmonic noise octave  │
-│ (Normal discontinuity > 5°)                   │ sin(p.x * 4.2 + p.z * 3.8) * 0.038.                   │
-├───────────────────────────────────────────────┼────────────────────────────────────────────────────────┤
-│ weather-atmosphere.test.ts: scaleRatio < 3.0  │ In generator: re-stratify size selector to 38% baby    │
-│ (Lack of size variety across puffs)           │ puffs (S ∈ [2.4, 4.6]) and 10% grand towers (S > 13).  │
-├───────────────────────────────────────────────┼────────────────────────────────────────────────────────┤
-│ celestial.test.ts: trajectory jump > 0.05     │ In animation hook: switch from discrete hourly ticks   │
-│ (Shadow jitter during playback)               │ to continuous constant angular velocity integration.   │
-└───────────────────────────────────────────────┴────────────────────────────────────────────────────────┘
-```
+### 12.5 Sources
 
-$$
+- [Stages of a game-ready asset (Kaedim docs)](https://docs.kaedim3d.com/creating-assets/game-ready-assets/stages-of-a-game-ready-asset)
+- [Create game-ready assets in a real-time pipeline (The Rookies)](https://discover.therookies.co/2021/07/21/create-game-ready-assets-using-unreal-engine/)
+- [The PBR Guide, part 2 (Adobe Substance 3D)](https://www.adobe.com/learn/substance-3d-designer/web/the-pbr-guide-part-2)
+- [PBR Material, metal / rough (Autodesk)](https://help.autodesk.com/cloudhelp/2023/ENU/3DSMax-Lighting-Shading/files/GUID-A16234A5-6500-4662-8B20-A5EC9FE1B255.htm)
+- [Material reference (Roblox Creator docs)](https://create.roblox.com/docs/art/modeling/material-reference)
+- [Realistic render (Three.js Journey)](https://threejs-journey.com/lessons/realistic-render)
+- [img2threejs: image → procedural, quality-gated Three.js model](https://github.com/img2threejs/img2threejs)
+- [LL3M: Large Language 3D Modelers (arXiv 2508.08228)](https://arxiv.org/pdf/2508.08228)
+- [3DCodeBench: agentic procedural 3D modeling via code (arXiv 2606.01057)](https://arxiv.org/pdf/2606.01057)
+- [3D-PreMise (arXiv 2401.06437)](https://arxiv.org/pdf/2401.06437)
+- [Visual-to-Executable Procedural Reconstruction of Buildings (NeurIPS 2026 poster)](https://neurips.cc/virtual/2026/poster/155329)
+- [FaçAID: neuro-symbolic facade reconstruction (arXiv 2406.01829)](https://arxiv.org/abs/2406.01829v2)
+- [SPAR3D (arXiv 2501.04689)](https://arxiv.org/pdf/2501.04689) and [What do single-view 3D reconstruction networks learn? (arXiv 1905.03678)](https://arxiv.org/pdf/1905.03678), for metrics
+
+Read as search summaries and page extracts, not in full: threshold values of img2threejs other than its 0.7 global
+vision score and 0.82 routing confidence were not published in the pages read, and the NeurIPS paper was read
+from its abstract only.

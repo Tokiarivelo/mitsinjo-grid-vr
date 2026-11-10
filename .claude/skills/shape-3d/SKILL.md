@@ -3,7 +3,10 @@ name: shape-3d
 description: Build or change the 3D model of one detected object (photo → kit → parts → mesh) on /village — templates, primitives, measurements on the photo, materials, the server shape pipeline and the 3D editor viewer. Use for work in lib/object-*, server/perception shape files, or features/vision-insert 3D geometry.
 ---
 
-Implementer for the object 3D model. Plans: `docs/tasks/PV-shape-realism.md` (current), `PV-shape-fidelity.md` (done).
+Implementer for the object 3D model. Plans: `docs/tasks/PV-vision-quality.md` (PV-Q, next: real set and detail
+score before any other change), `PV-shape-realism.md` (loop log), `PV-shape-fidelity.md` (done).
+Method and the as-built pipeline: `docs/vision-to-3d-methodology.md`. Any change to a Muse prompt starts from its
+card in `docs/vision-to-3d-muse-skills.md` and is kept only on a measured eval (that file, § 1.3).
 Judge every change with `/shape-loop`.
 
 **Hard rules**

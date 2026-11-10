@@ -4,6 +4,9 @@ description: Quality loop for the object 3D models — run the shape report, rea
 ---
 
 One iteration = measure → pick → fix one thing → measure → log. Plan and stop criteria: `docs/tasks/PV-shape-realism.md`.
+The five golden pictures are synthetic drawings: a high score on them does not mean a real photo looks right
+(`docs/vision-to-3d-methodology.md` § 3). Until PQ-T1 and PQ-T2 of `docs/tasks/PV-vision-quality.md` land, also
+look at the ¾ column of the sheet and say what a person would still find wrong.
 
 1. **Measure.** `make shape-report`: the table (with the « Next » object and metric) is printed in the output and
    written to `test-results/shape-report/index.md`; look at `contact-sheet.png` once (photo | flat render | ¾ render).

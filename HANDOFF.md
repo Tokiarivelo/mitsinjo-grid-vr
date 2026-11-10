@@ -1,39 +1,40 @@
 # HANDOFF — read first, overwrite at end of session (≤40 lines)
 
-**Updated:** 2026-11-10 · **By:** Claude Code · **Branch:** feat/vr-village-outdoor-tour (on top of feat/vr-village-360-tour, not merged yet)
+**Updated:** 2026-11-10 · **By:** Claude Code · **Branch:** docs/vision-to-3d-refine (from `main`, docs only)
 
 ## Current state
 
-- VS-T14: without a real headset (desktop or IWER emulator), /village VR is a **walkable 360° tour** of real photos.
-  VS-T16: **real walking**: grounded photo (floor + wall in the shader, parallax); hold ↑/W/Z/S/A/Q/D or stick,
-  walk onto a floor arrow (or shoot it) → cross-fade walk-through. Desktop: drag = look, click = shoot.
-- VS-T15: **outdoor walk** from the hall window: terrace (solar panels), street of houses, house front, garden,
-  tree-lined road, forest, woods (7 real CC0 sites, `public/tour/outdoor/`, 11 MB). Houses/cars/trees = scenery.
-- Scan = gnomonic photo of the aimed view; mock ground truth = hand-labelled boxes (`tour-data.ts`) sent as `expected`.
-- Real headset keeps the webcam, on a **flat** screen (`ImageSurface`).
-- Emulated immersion hides the page (`data-xr-emulated`); `EmulatedXRExit` keeps « Exit VR » on screen (portal).
-- DevUI via `device.installDevUI(DevUI)` (single-flight). The IWE browser extension counts as emulated too
-  (`window.__IWE_XR_DEVICE__`; it fakes a Quest UA). `make vr-probe` → 15 PASS.
+- **Photo → 3D docs rewritten (no code changed).** `docs/vision-to-3d-methodology.md` now describes the real
+  pipeline (`server/perception/`), audits the old claims, ranks 15 weak points and lists every file to add or change.
+- **Main finding:** `make shape-report` says 93 / 100 on five **synthetic** pictures while the ¾ renders are still
+  boxy (car = slab + wedge, fridge without handle). The score sees outline and colour only; the critic fires
+  under 70 on a 256 px sheet. Nothing can be judged until the ruler is fixed.
+- **New:** `docs/vision-to-3d-muse-skills.md` (prompt-ready cards: base, look, kit, 13 archetype cards, critic,
+  stage ops, views check, final check, judge, Muse Image views, SAM wording). Target texts, not in the code yet.
+- **New:** `docs/tasks/PV-vision-quality.md` (PV-Q, PQ-T1…T41: task, files, test, done-when).
+- **Rendering audit** (methodology § 11): four renderers draw the same recipe unequally. Viewer has no
+  part-on-part shadow or AO; the village draws all placed objects with one material; VR has no maps. Tasks PQ-T32–T35. § 12: web research mapped to 13 studio steps (PQ-T36–T41).
+- **Moved:** cloud and sun maths → `docs/vision-to-3d-atmosphere.md` (word for word, not re-audited).
+- VR state unchanged (merged in `main`): /village walkable 360° tour, outdoor walk, `make vr-probe` 15 PASS.
 
 ## Next
 
-1. Real Quest: check the flat webcam keeps shots aligned; wrist button offsets.
-2. Tour links/boxes are hand-placed; refine doors if arrows feel off. Outdoor sites are different places (no geography).
-3. Static text in headset (HUD « Charge / Décharge », « 720p LIVE ») → i18n keys. VS-T9 spatial audio.
+1. **PQ-T1** real photo set (`make shape-capture`, API calls, needs the user's photos), then PQ-T2, T3, T36.
+2. **PV-C** (`docs/tasks/PV-capture-lab.md`, PC-T1…T41, planned): instant capture, elastic grab (mouse / controller
+   / hand), hologram, 3D Lab tools, AI assistant; **C7 = the Lab inside the headset** (hands, voice). Start: PC-T1, PC-T9.
+3. VR backlog as before: real Quest check, tour links, headset static text → i18n keys, VS-T9 audio.
 
 ## Files touched
 
-- `features/vision-insert/ui/xr/tour/` (`panorama-tour` walking shader, `tour-nav` walk helpers, `equirect`, `tour-data`, `tour-nav`, `panorama-tour`, `use-panorama-tour`) + tests;
-  `webcam-screen`, `xr-blaster-controller`, `village-xr-studio`, `village-xr-viewport` + tests
-- `microgrid-3d/ui/emulated-xr-exit.tsx` (new), `utils/dev-xr-emulator.ts`, `hooks/use-webxr.ts`,
-  `simulation/ui/village-viewport.tsx`; `lib/vision.ts`, `/api/vision` (`expected`); `app/layout.tsx`, `globals.css`
-- `messages/*` (`tourGoTo`, `tourRoom_*`), `scripts/vr-village-probe.mjs`, `public/tour/{studio,outdoor}` + `CREDITS.md`
-- Docs: `contracts.md`, `vr-village-spatial-detection.md` (Phase 9), `tasks/VR-village-spatial-shoot.md` (VS-T14/15),
-  `vr-immersion-guide.md`, `vr-testing-guide.md`, `performance.md`, `README.md`
+- `docs/vision-to-3d-methodology.md` (rewrite), `docs/vision-to-3d-muse-skills.md` (new),
+  `docs/vision-to-3d-atmosphere.md` (new, split), `docs/tasks/PV-vision-quality.md` + `PV-capture-lab.md` (new), `docs/tasks/README.md`
+- `.claude/skills/shape-3d/SKILL.md`, `.claude/skills/shape-loop/SKILL.md`, `CLAUDE.md` (doc map row)
 
 ## Decisions
 
-- Sphere r 9 m drawn last, no depth write → labels/panels never cut. No mipmaps (u seam).
-- Smooth walking asked for by the user (not teleport): constant speed, vignette, no head bob in a real headset;
-  arrive facing away from the door. Scan boxes stay where the scan put them while you walk.
-- `expected` never overrides Meta answers; perception golden tests time out in the full suite (pre-existing).
+- Q0 (measure on real photos, detail score, calibrated judge) comes before any prompt or geometry work.
+- Skill cards are texts for the Muse models, loaded per call and per archetype; a card replaces a prompt only
+  when its eval is not worse. Kit stays on Spark 1.3; Wonder = final check and judge only.
+- Muse Image: side view and operator-validated clean front only; top and back views are never generated (PR-4.1).
+- Unverified claims of the old file (prices, context sizes, « Passed » table, `scratch/test-orbit.mjs`) removed.
+- Open for the user: which real photos to capture for PQ-T1; whether to spend API calls on two kit samples (PQ-T18).
