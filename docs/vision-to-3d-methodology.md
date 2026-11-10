@@ -329,12 +329,12 @@ Added 2026-11-10 after reading the viewer code, `tasks/PT-studio-look.md` (done 
 
 ### 11.1 The four renderers (as built)
 
-| Renderer                    | File                                                                       | Maps and swatches                             | Environment light      | Shadows                          | Post                               |
-| --------------------------- | -------------------------------------------------------------------------- | --------------------------------------------- | ---------------------- | -------------------------------- | ---------------------------------- |
-| Object viewer `/village`    | `vision-insert/ui/object-editor-3d.tsx`                                    | Yes                                           | Softbox studio (PMREM) | Ground contact shadow only       | Neutral tone mapping, ink, 4× MSAA |
-| Village scene `/simulation` | `microgrid-3d/utils/placed-models-geometry.ts`, `ui/appliance-markers.tsx` | To check (PQ-T32)                             | HDRI (high tier)       | Sun shadow map, cast and receive | N8AO, bloom, ACES, ink (high tier) |
-| VR spawned object           | `vision-insert/ui/xr/spawned-object-3d.tsx`                                | **No**: plain `surfaceMaterial`, white colour | Scene default          | Casts only                       | None (kept off for headset speed)  |
-| Judge render (server)       | `server/perception/flat-render.ts`                                         | No                                            | None (flat shade)      | None                             | None                               |
+| Renderer                    | File                                                                       | Maps and swatches                                                                                                                              | Environment light      | Shadows                          | Post                               |
+| --------------------------- | -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- | -------------------------------- | ---------------------------------- |
+| Object viewer `/village`    | `vision-insert/ui/object-editor-3d.tsx`                                    | Yes                                                                                                                                            | Softbox studio (PMREM) | Ground contact shadow only       | Neutral tone mapping, ink, 4× MSAA |
+| Village scene `/simulation` | `microgrid-3d/utils/placed-models-geometry.ts`, `ui/appliance-markers.tsx` | **No**: every placed object is merged into one mesh with one material (roughness 0.7, metalness 0.2); glass, metal and thatch all render alike | HDRI (high tier)       | Sun shadow map, cast and receive | N8AO, bloom, ACES, ink (high tier) |
+| VR spawned object           | `vision-insert/ui/xr/spawned-object-3d.tsx`                                | **No**: plain `surfaceMaterial`, white colour                                                                                                  | Scene default          | Casts only                       | None (kept off for headset speed)  |
+| Judge render (server)       | `server/perception/flat-render.ts`                                         | No                                                                                                                                             | None (flat shade)      | None                             | None                               |
 
 ### 11.2 Viewer chain, step by step (as built)
 
@@ -357,17 +357,17 @@ Added 2026-11-10 after reading the viewer code, `tasks/PT-studio-look.md` (done 
 
 ### 11.3 What is missing in the rendering (target)
 
-| #   | Gap                                     | Evidence                                                                        | Target                                                                                                                                                             | Task   |
-| --- | --------------------------------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------ |
-| R1  | Parts do not shade each other           | Viewer composer holds only tone mapping and ink; no light has `castShadow`      | Ambient occlusion pass in the viewer (it draws on demand, so the cost is paid only on change) plus one soft shadow map on the key light                            | PQ-T33 |
-| R2  | VR object looks flatter than the viewer | `spawned-object-3d.tsx` builds materials without maps, swatches or studio light | Same material builder as the viewer; a small baked environment; no post pass (headset budget)                                                                      | PQ-T32 |
-| R3  | Village copy may lose the look          | `placed-models-geometry.ts` merges all placed models into one mesh              | Check which maps survive the merge; keep at least vertex colour, roughness per material and joint shadow                                                           | PQ-T32 |
-| R4  | Lamps and screens never glow            | No emissive anywhere in `surface-look.ts`                                       | Emissive on lamp heads, screens and headlights, driven by the engine's running state in the village (the « emissive = data » rule), a fixed low glow in the viewer | PQ-T34 |
-| R5  | Textures repeat visibly on large parts  | Every part uses the same UV origin and a 64 or 128 px tile                      | Seeded UV offset and quarter-turn per part; second, larger noise layer in the shade map                                                                            | PQ-T35 |
-| R6  | One roughness per material              | `SURFACE_LOOK` table                                                            | Gloss measured on the photo (PQ-T26)                                                                                                                               | PQ-T26 |
-| R7  | Uniform colour inside a part            | One vertex colour per part                                                      | Joint and ground darkening baked in vertex colours (PQ-T27), which also reaches VR and the village at no frame cost                                                | PQ-T27 |
-| R8  | Judge render shows less than the viewer | Flat render has no assemblies                                                   | PQ-T3                                                                                                                                                              | PQ-T3  |
-| R9  | Hip roof edges are sharp                | PT-1e left them to the ink                                                      | Leave; ink carries them (measured decision)                                                                                                                        | —      |
+| #   | Gap                                     | Evidence                                                                                                                                                                       | Target                                                                                                                                                                        | Task   |
+| --- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| R1  | Parts do not shade each other           | Viewer composer holds only tone mapping and ink; no light has `castShadow`                                                                                                     | Ambient occlusion pass in the viewer (it draws on demand, so the cost is paid only on change) plus one soft shadow map on the key light                                       | PQ-T33 |
+| R2  | VR object looks flatter than the viewer | `spawned-object-3d.tsx` builds materials without maps, swatches or studio light                                                                                                | Same material builder as the viewer; a small baked environment; no post pass (headset budget)                                                                                 | PQ-T32 |
+| R3  | Village copy loses every material       | `appliance-markers.tsx`: one `meshStandardMaterial vertexColors roughness={0.7} metalness={0.2}` for all placed objects; `mergeGeometries(…, false)` drops the material groups | Merge per surface family (matt, gloss, glass, metal: ≤ 4 meshes, ≤ + 3 draw calls) with the viewer look values; joint shadow baked in vertex colours; no maps on the low tier | PQ-T32 |
+| R4  | Lamps and screens never glow            | No emissive anywhere in `surface-look.ts`                                                                                                                                      | Emissive on lamp heads, screens and headlights, driven by the engine's running state in the village (the « emissive = data » rule), a fixed low glow in the viewer            | PQ-T34 |
+| R5  | Textures repeat visibly on large parts  | `planarUvs` maps object position ÷ 0.25 with no offset or turn, so one 64 or 128 px tile repeats four times across the object in a fixed grid                                  | Second, larger noise layer in the shade map and a seeded offset per material; patterns stay continuous across parts of one wall                                               | PQ-T35 |
+| R6  | One roughness per material              | `SURFACE_LOOK` table                                                                                                                                                           | Gloss measured on the photo (PQ-T26)                                                                                                                                          | PQ-T26 |
+| R7  | Uniform colour inside a part            | One vertex colour per part                                                                                                                                                     | Joint and ground darkening baked in vertex colours (PQ-T27), which also reaches VR and the village at no frame cost                                                           | PQ-T27 |
+| R8  | Judge render shows less than the viewer | Flat render has no assemblies                                                                                                                                                  | PQ-T3                                                                                                                                                                         | PQ-T3  |
+| R9  | Hip roof edges are sharp                | PT-1e left them to the ink                                                                                                                                                     | Leave; ink carries them (measured decision)                                                                                                                                   | —      |
 
 Not proposed, on purpose: glass transmission, depth of field, real-time reflections and bloom in the viewer. They
 cost frame time or change measured colours, and none of them fixes a fault a person would name first.
@@ -379,9 +379,19 @@ $1.25 per million input tokens and $4.25 output; Wonder $4.00 and $20.00. The sp
 Spark and Wonder rounds, not by SAM or Muse Image, so extra SAM phrasings (PQ-T9) and a second generated view
 (PQ-T16) are cheap, while extra critic and final-check rounds are where the budget goes. PQ-T31 measures it.
 
-### 11.5 Research not done
+### 11.5 What was read, and what is still unverified
 
-I read the repository docs, the viewer code and the saved model catalogue page. I did **not** read Meta's
-per-model API documentation (accepted `reasoning_effort` values, image size limits, Muse Image edit parameters):
-the saved page is the catalogue only. PQ-T17 and PQ-T8 start by checking those. I also did not read
-`docs/design/3d-scene.md`, `docs/setup/example-3D-workflow.md` or `docs/ideas-meta-models.md` in full.
+Read for this section: the viewer (`object-editor-3d.tsx`, `studio-env.ts`, `surface-look.ts`, `surface-maps.ts`,
+`surface-textures.ts`, the constants of `object-geometry.ts`), the VR and village renderers
+(`spawned-object-3d.tsx`, `placed-models-geometry.ts`, `appliance-markers.tsx`, `post-effects.tsx`),
+`tasks/PT-studio-look.md`, the S1 tasks of `PV-shape-realism.md`, `performance.md`, `design/3d-scene.md`,
+`setup/example-3D-workflow.md`, the model sections of `ideas-meta-models.md`, and the saved Model API page.
+
+From `example-3D-workflow.md`, one idea is not yet in the score: its loss adds a geometry term (constraint
+violations) to silhouette, edges and landmarks. Today violations are a report column only; PQ-T6 may fold them in
+as a penalty.
+
+Still unverified, because no local document holds it (`ideas-meta-models.md` itself says the endpoint formats are
+« to check in the Meta docs »): the values `reasoning_effort` accepts, the largest image a call takes, and the
+parameters of Muse Image edits with reference images. PQ-T8, PQ-T16 and PQ-T17 start by checking them on the live
+API. No outside web research on rendering was done: the proposals come from this code and from three.js practice.
