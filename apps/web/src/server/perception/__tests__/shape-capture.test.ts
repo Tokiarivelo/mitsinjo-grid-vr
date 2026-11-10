@@ -21,6 +21,7 @@ import { GOLDEN_SHAPES, goldenBox, goldenOutline, goldenSvg, PHOTO } from '../__
 import { cropForShape, cropRectForShape } from '../shape-crop';
 import {
   criticReplay,
+  pickDetection,
   remapBoxToCrop,
   remapOutlineToCrop,
   readCapture,
@@ -226,6 +227,27 @@ describe('criticReplay (PR-0.6)', () => {
 
 const LIVE = process.env.SHAPE_CAPTURE === '1';
 
+describe('pickDetection (PQ-T1)', () => {
+  const det = (id: string, label: string, w: number) => ({ id, label, box: { w, h: w } });
+  const ds = [
+    det('det-1', 'police car', 0.6),
+    det('det-2', 'dark grey car', 0.2),
+    det('det-3', 'stone building', 0.9),
+  ];
+
+  it('takes a detection id first, then the biggest box whose label contains the pick', () => {
+    expect(pickDetection(ds, 'det-2')!.id).toBe('det-2');
+    expect(pickDetection(ds, 'car')!.id).toBe('det-1');
+    expect(pickDetection(ds, 'GREY')!.id).toBe('det-2');
+  });
+
+  it('falls back to the first word of an id like car-side (the bug: no match, capture refused)', () => {
+    expect(pickDetection(ds, 'car-side')!.id).toBe('det-1');
+    expect(pickDetection(ds, 'water-tank')).toBeNull();
+    expect(pickDetection([], 'car')).toBeNull();
+  });
+});
+
 describe.skipIf(!LIVE)('make shape-capture', () => {
   it('captures one live run (detect → outline → Spark kit → recipe) as fixtures', async () => {
     const photoPath = process.env.SHAPE_CAPTURE_PHOTO;
@@ -262,13 +284,12 @@ describe.skipIf(!LIVE)('make shape-capture', () => {
     });
     const detections = outlined.length > 0 ? outlined : boxes;
     if (detections.length === 0) throw new Error('no detections on this photo');
-    const found =
-      detections.find((d) => d.id === pick) ??
-      detections.find((d) => d.label.toLowerCase().includes(pick.toLowerCase()));
+    const found = pickDetection(detections, pick);
     if (!found)
       throw new Error(
         `no detection matching ${JSON.stringify(pick)} (rerun with LABEL=…); candidates: ${detections.map((d) => `${d.id} (${d.label})`).join(', ')}`
       );
+    console.info(`[vision] capture ${id} picks ${found.id} (${found.label})`);
     const target = ShapeTargetSchema.parse({
       id: found.id,
       label: found.label,

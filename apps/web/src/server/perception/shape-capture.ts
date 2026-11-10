@@ -100,6 +100,24 @@ export function remapOutlineToCrop(
 }
 
 /** `<dir>/<id>.capture.json` + `<dir>/<id>.crop.jpg` (the exact bytes Spark saw). */
+/**
+ * The detection a capture is about (PQ-T1): `pick` as a detection id, else the biggest box whose label
+ * contains `pick`, else (when `pick` has several words, like the id `car-side`) its first word. Null
+ * when nothing matches; the caller lists the candidates.
+ */
+export function pickDetection<
+  D extends { id: string; label: string; box: { w: number; h: number } },
+>(detections: ReadonlyArray<D>, pick: string): D | null {
+  const byId = detections.find((d) => d.id === pick);
+  if (byId) return byId;
+  const biggest = (word: string) =>
+    detections
+      .filter((d) => d.label.toLowerCase().includes(word.toLowerCase()))
+      .reduce<D | null>((a, d) => (!a || d.box.w * d.box.h > a.box.w * a.box.h ? d : a), null);
+  const first = pick.split(/[-_\s]+/)[0] ?? '';
+  return biggest(pick) ?? (first && first !== pick ? biggest(first) : null);
+}
+
 export function writeCapture(
   dir: string,
   capture: ShapeCapture,

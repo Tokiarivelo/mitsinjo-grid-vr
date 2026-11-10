@@ -78,17 +78,21 @@ Ce que ça fait : appelle Muse Spark (détection, kit, contour SAM, parties), pu
 - `<ID>.capture.json` — tout ce que le modèle a répondu (rejouable hors ligne, sans API ensuite)
 - `<ID>.crop.jpg` — le recadrage de l'objet
 
-**Choisir l'objet sur la photo :** par défaut, la commande prend la détection dont le libellé contient
-l'`ID`. Mais `car-side` ne correspond pas au libellé « car ». Dans ce cas, ajoutez `LABEL=` :
+**Choisir l'objet sur la photo :** la commande prend, dans l'ordre : la détection dont l'id est `LABEL`
+(ou l'`ID`), sinon **la plus grande** dont le libellé contient ce mot, sinon le premier mot de l'`ID`
+(`car-side` → « car » → « police car »). Elle affiche son choix : `[vision] capture car-side picks det-1
+(police car)`. Les photos sont dans `resources/real-photos/` :
 
 ```bash
-make shape-capture PHOTO=voiture.jpg ID=car-side LABEL=car
-make shape-capture PHOTO=poteau.jpg  ID=utility-pole LABEL=pole
-make shape-capture PHOTO=case.jpg    ID=hut LABEL=hut
+make shape-capture PHOTO=./resources/real-photos/car-side.jpg ID=car-side
+make shape-capture PHOTO=./resources/real-photos/car-corner.jpg ID=car-corner LABEL=sedan
 ```
 
 Si rien ne correspond, la commande s'arrête et **affiche la liste des détections trouvées** : relancez avec
-un `LABEL=` pris dans cette liste (un id de détection ou un morceau de libellé).
+un `LABEL=` pris dans cette liste (un id comme `LABEL=det-1`, ou un morceau de libellé entre guillemets
+s'il y a un espace : `LABEL="police car"`).
+
+**Attention :** relancer un `ID` déjà capturé écrase sa capture et recoûte des appels API.
 
 ### Refaire `TV`
 
