@@ -311,6 +311,9 @@ describe.skipIf(!LIVE)('make shape-capture', () => {
       throw new Error(
         `capture needs a recipe, got ${shape.mode}${shape.mode === 'silhouette' ? ` (${shape.reason})` : ''}`
       );
+    // The pipeline may segment the outline on demand: keep the one the recipe was fitted to.
+    const outline = target.outline ?? shape.outline;
+    const fitted = outline ? { ...target, outline } : target;
     const rect = cropRectForShape(size.width, size.height, target.box);
     const jpeg = Buffer.from((await cropForShape(size, target.box)).split(',')[1]!, 'base64');
     const capture: ShapeCapture = {
@@ -320,7 +323,7 @@ describe.skipIf(!LIVE)('make shape-capture', () => {
       source: 'meta',
       model: shape.model,
       photo: { width: size.width, height: size.height },
-      target,
+      target: fitted,
       kit,
       promptVersion: KIT_PROMPT_VERSION,
       recipe: shape.recipe,
@@ -331,9 +334,7 @@ describe.skipIf(!LIVE)('make shape-capture', () => {
       crop: rect,
       cropTarget: {
         box: remapBoxToCrop(target.box, size.width, size.height, rect),
-        outline: target.outline
-          ? remapOutlineToCrop(target.outline, size.width, size.height, rect)
-          : undefined,
+        outline: outline ? remapOutlineToCrop(outline, size.width, size.height, rect) : undefined,
       },
     };
     const [json, jpg] = writeCapture(dir, capture, jpeg);
