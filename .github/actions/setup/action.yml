@@ -1,0 +1,12 @@
+name: Setup workspace
+description: pnpm (version from package.json "packageManager"), Node 22 with the pnpm store cache, frozen install.
+runs:
+  using: composite
+  steps:
+    - uses: pnpm/action-setup@v4
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 22
+        cache: 'pnpm'
+    - run: pnpm install --frozen-lockfile
+      shell: bash

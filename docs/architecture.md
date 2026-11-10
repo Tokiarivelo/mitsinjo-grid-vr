@@ -19,7 +19,8 @@ trimmed for a solo 10-day build: no NestJS, no DB, no Python, no shared-config p
 mitsinjo-grid/
 ├── CLAUDE.md  AGENTS.md  HANDOFF.md  README.md  LICENSE  .env.example
 ├── package.json  pnpm-workspace.yaml  turbo.json  tsconfig.base.json
-├── .github/workflows/ci.yml            # typecheck + lint + test
+├── .github/workflows/ci.yml            # parallel jobs: static (format/typecheck/lint), tests ×3 shards, build, e2e
+├── .github/actions/setup/              # shared CI setup: pnpm (packageManager), Node 22, frozen install
 ├── docs/                               # agent docs (see docs/README.md)
 ├── scripts/                            # shell helpers called by the Makefile (env.sh: load .env)
 ├── benchmarks/                         # engine.json (make bench) + README: latency, strategy A/B

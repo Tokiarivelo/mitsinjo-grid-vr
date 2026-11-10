@@ -66,6 +66,9 @@ const rectMask = (
   };
 };
 
+/** Full shape pipeline on a real photo: seconds of CPU, slower when the suite runs in parallel. */
+const GOLDEN_E2E_TIMEOUT_MS = 30_000;
+
 describe('convexHull / minAreaRect', () => {
   it('hull drops interior points', () => {
     const hull = convexHull([
@@ -339,150 +342,154 @@ describe('withMaskPanels (PR-2.7)', () => {
     );
   });
 
-  it('golden car: masks on the shell keep the score (machinery end to end)', async () => {
-    const c = GOLDEN_SHAPES.find((g) => g.name === 'car')!;
-    const buffer = await sharp(Buffer.from(goldenSvg(c)))
-      .jpeg({ quality: 85 })
-      .toBuffer();
-    const photo = { buffer, ...PHOTO };
-    const target: ShapeTarget = {
-      id: 'car',
-      label: 'car',
-      category: 'other',
-      box: goldenBox(c),
-      outline: goldenOutline(c),
-    };
-    const spark = {
-      describeShape: vi.fn().mockResolvedValue({
-        recipe: kitToRecipe(c.prior),
-        kit: c.prior,
-        source: 'meta',
-        model: 'muse-spark-1.3',
-      }),
-      describeParts: vi.fn().mockResolvedValue({ recipe: null }),
-    };
-    const plain = await runObjectShape(spark, photo, 'data:full', target);
-    expect(plain.mode).toBe('recipe');
-    // No locator masks: every part stamped, wheels inferred (outline evidence), never measured.
-    expect(plain.recipe!.parts.every((p) => p.status !== undefined)).toBe(true);
-    const plainWheels = plain.recipe!.parts.filter((p) => p.shape === 'cylinder');
-    expect(plainWheels.length).toBeGreaterThan(0);
-    expect(plainWheels.every((p) => p.status === 'inferred')).toBe(true);
-    // Two window masks splitting the shell side (self-consistent: thirds of its span).
-    const box = target.box;
-    const geom: MaskMapGeom = {
-      photoW: photo.width,
-      photoH: photo.height,
-      box,
-      crop: cropRectForShape(photo.width, photo.height, box),
-    };
-    const main = plain.recipe!.parts.find((p) => p.front)!;
-    const shell = plain
-      .recipe!.parts.filter((p) => p.shape === 'box' && p !== main && p.at[1] > main.at[1])
-      .sort((a, b) => b.size[0] * b.size[1] * b.size[2] - a.size[0] * a.size[1] * a.size[2])[0]!;
-    const sx0 = shell.at[0] - shell.size[0] / 2;
-    const sx1 = shell.at[0] + shell.size[0] / 2;
-    const sy0 = shell.at[1] - shell.size[1] / 2;
-    const sy1 = shell.at[1] + shell.size[1] / 2;
-    const objMask = (ox0: number, oy0: number, ox1: number, oy1: number): PartMask => {
-      const px = (ox: number) => (box.x + (ox + 0.5) * box.w) * photo.width;
-      const py = (oy: number) => (box.y + (0.5 - oy) * box.h) * photo.height;
-      const { crop } = geom;
-      const cu = (x: number) => (x - crop.left) / crop.width;
-      const cv = (y: number) => (y - crop.top) / crop.height;
-      const x0 = px(ox0);
-      const y0 = py(oy1);
-      const x1 = px(ox1);
-      const y1 = py(oy0);
-      return {
-        concept: 'window',
-        box: { x: cu(x0), y: cv(y0), w: cu(x1) - cu(x0), h: cv(y1) - cv(y0) },
-        outline: polygonPath([
-          [cu(x0), cv(y0)],
-          [cu(x1), cv(y0)],
-          [cu(x1), cv(y1)],
-          [cu(x0), cv(y1)],
-        ]),
+  it(
+    'golden car: masks on the shell keep the score (machinery end to end)',
+    async () => {
+      const c = GOLDEN_SHAPES.find((g) => g.name === 'car')!;
+      const buffer = await sharp(Buffer.from(goldenSvg(c)))
+        .jpeg({ quality: 85 })
+        .toBuffer();
+      const photo = { buffer, ...PHOTO };
+      const target: ShapeTarget = {
+        id: 'car',
+        label: 'car',
+        category: 'other',
+        box: goldenBox(c),
+        outline: goldenOutline(c),
       };
-    };
-    const span = sx1 - sx0;
-    const masks = [
-      objMask(
-        sx0 + 0.05 * span,
-        sy0 + 0.2 * (sy1 - sy0),
-        sx0 + 0.45 * span,
-        sy0 + 0.8 * (sy1 - sy0)
-      ),
-      objMask(
-        sx0 + 0.55 * span,
-        sy0 + 0.2 * (sy1 - sy0),
-        sx0 + 0.95 * span,
-        sy0 + 0.8 * (sy1 - sy0)
-      ),
-    ];
-    const segmentImage = vi.fn(async (_url: string, concept: string) => ({
-      source: 'meta' as const,
-      model: 'sam-3.1',
-      concept,
-      imageWidth: geom.crop.outWidth,
-      imageHeight: geom.crop.outHeight,
-      instances:
-        concept === 'window'
-          ? masks.map((m) => ({
-              box: {
-                x1: m.box.x * geom.crop.outWidth,
-                y1: m.box.y * geom.crop.outHeight,
-                x2: (m.box.x + m.box.w) * geom.crop.outWidth - 1,
-                y2: (m.box.y + m.box.h) * geom.crop.outHeight - 1,
-              },
-              confidence: 0.9,
-              outline: m.outline,
-            }))
-          : [],
-      count: concept === 'window' ? masks.length : 0,
-      boxCoverage: 0.1,
-    }));
-    const measured = await runObjectShape({ ...spark, segmentImage }, photo, 'data:full', target);
-    expect(measured.mode).toBe('recipe');
-    expect(measured.partMasks!.filter((m) => m.concept === 'window')).toHaveLength(2);
-    expect(measured.recipe!.parts.length).toBeLessThanOrEqual(MAX_RECIPE_PARTS);
-    // Shell recolored to the body, four glass panels (both sides) at the old glass colour.
-    // Biggest box above the main body, like the plain locator: Fit v2 (PR-2.9) may shift the
-    // cabin in y, so the shell is not matched by its height anymore.
-    const outMain = measured.recipe!.parts.find((p) => p.front)!;
-    const outShell = measured
-      .recipe!.parts.filter((p) => p.shape === 'box' && p !== outMain && p.at[1] > outMain.at[1])
-      .sort((a, b) => b.size[0] * b.size[1] * b.size[2] - a.size[0] * a.size[1] * a.size[2])[0]!;
-    expect(outShell.color).toBe(main.color);
-    // Glass colour within ΔE 3 of the shell's (region medians move a bit when Fit v2 shifts the shell).
-    const glassLab = hexToLab(shell.color);
-    const glassPanels = measured.recipe!.parts.filter(
-      (p) => p.shape === 'box' && p.size[2] < 0.05 && deltaE2000(hexToLab(p.color), glassLab) < 3
-    );
-    expect(glassPanels).toHaveLength(4);
-    expect(ObjectRecipeSchema.safeParse(measured.recipe!).success).toBe(true);
-    console.info(
-      `[test] car panels: iou ${plain.fit!.iou} → ${measured.fit!.iou}, parts ${plain.recipe!.parts.length} → ${measured.recipe!.parts.length}`
-    );
-    expect(Math.abs(measured.fit!.iou - plain.fit!.iou)).toBeLessThanOrEqual(0.03);
-    // Landmarks (PR-0.8): the glass sits on its masks, so the 4-term score must not drop.
-    const withLm = (await scoreRecipe(photo, target, measured.recipe!, measured.partMasks))!;
-    const withoutLm = (await scoreRecipe(photo, target, measured.recipe!))!;
-    expect(withLm.score.landmark).toBeDefined();
-    expect(withLm.score.landmark!).toBeGreaterThan(0.5);
-    console.info(
-      `[test] car landmarks: ${withLm.score.landmark}, score ${withoutLm.score.score} → ${withLm.score.score}`
-    );
-    expect(withLm.score.score).toBeGreaterThanOrEqual(withoutLm.score.score - 2);
-    // Statuses (PR-2.15): every part stamped, measured glass, template dims estimated.
-    expect(measured.recipe!.parts.every((p) => p.status !== undefined)).toBe(true);
-    const glass = measured.recipe!.parts.filter(
-      (p) => p.shape === 'box' && p.size[2] === 0.02 && p.at[2]! > 0
-    );
-    expect(glass.length).toBeGreaterThan(0);
-    expect(glass.every((p) => p.status === 'measured')).toBe(true);
-    expect(measured.recipe!.dimStatus).toMatchObject({ depth: 'estimated', scale: 'estimated' });
-  });
+      const spark = {
+        describeShape: vi.fn().mockResolvedValue({
+          recipe: kitToRecipe(c.prior),
+          kit: c.prior,
+          source: 'meta',
+          model: 'muse-spark-1.3',
+        }),
+        describeParts: vi.fn().mockResolvedValue({ recipe: null }),
+      };
+      const plain = await runObjectShape(spark, photo, 'data:full', target);
+      expect(plain.mode).toBe('recipe');
+      // No locator masks: every part stamped, wheels inferred (outline evidence), never measured.
+      expect(plain.recipe!.parts.every((p) => p.status !== undefined)).toBe(true);
+      const plainWheels = plain.recipe!.parts.filter((p) => p.shape === 'cylinder');
+      expect(plainWheels.length).toBeGreaterThan(0);
+      expect(plainWheels.every((p) => p.status === 'inferred')).toBe(true);
+      // Two window masks splitting the shell side (self-consistent: thirds of its span).
+      const box = target.box;
+      const geom: MaskMapGeom = {
+        photoW: photo.width,
+        photoH: photo.height,
+        box,
+        crop: cropRectForShape(photo.width, photo.height, box),
+      };
+      const main = plain.recipe!.parts.find((p) => p.front)!;
+      const shell = plain
+        .recipe!.parts.filter((p) => p.shape === 'box' && p !== main && p.at[1] > main.at[1])
+        .sort((a, b) => b.size[0] * b.size[1] * b.size[2] - a.size[0] * a.size[1] * a.size[2])[0]!;
+      const sx0 = shell.at[0] - shell.size[0] / 2;
+      const sx1 = shell.at[0] + shell.size[0] / 2;
+      const sy0 = shell.at[1] - shell.size[1] / 2;
+      const sy1 = shell.at[1] + shell.size[1] / 2;
+      const objMask = (ox0: number, oy0: number, ox1: number, oy1: number): PartMask => {
+        const px = (ox: number) => (box.x + (ox + 0.5) * box.w) * photo.width;
+        const py = (oy: number) => (box.y + (0.5 - oy) * box.h) * photo.height;
+        const { crop } = geom;
+        const cu = (x: number) => (x - crop.left) / crop.width;
+        const cv = (y: number) => (y - crop.top) / crop.height;
+        const x0 = px(ox0);
+        const y0 = py(oy1);
+        const x1 = px(ox1);
+        const y1 = py(oy0);
+        return {
+          concept: 'window',
+          box: { x: cu(x0), y: cv(y0), w: cu(x1) - cu(x0), h: cv(y1) - cv(y0) },
+          outline: polygonPath([
+            [cu(x0), cv(y0)],
+            [cu(x1), cv(y0)],
+            [cu(x1), cv(y1)],
+            [cu(x0), cv(y1)],
+          ]),
+        };
+      };
+      const span = sx1 - sx0;
+      const masks = [
+        objMask(
+          sx0 + 0.05 * span,
+          sy0 + 0.2 * (sy1 - sy0),
+          sx0 + 0.45 * span,
+          sy0 + 0.8 * (sy1 - sy0)
+        ),
+        objMask(
+          sx0 + 0.55 * span,
+          sy0 + 0.2 * (sy1 - sy0),
+          sx0 + 0.95 * span,
+          sy0 + 0.8 * (sy1 - sy0)
+        ),
+      ];
+      const segmentImage = vi.fn(async (_url: string, concept: string) => ({
+        source: 'meta' as const,
+        model: 'sam-3.1',
+        concept,
+        imageWidth: geom.crop.outWidth,
+        imageHeight: geom.crop.outHeight,
+        instances:
+          concept === 'window'
+            ? masks.map((m) => ({
+                box: {
+                  x1: m.box.x * geom.crop.outWidth,
+                  y1: m.box.y * geom.crop.outHeight,
+                  x2: (m.box.x + m.box.w) * geom.crop.outWidth - 1,
+                  y2: (m.box.y + m.box.h) * geom.crop.outHeight - 1,
+                },
+                confidence: 0.9,
+                outline: m.outline,
+              }))
+            : [],
+        count: concept === 'window' ? masks.length : 0,
+        boxCoverage: 0.1,
+      }));
+      const measured = await runObjectShape({ ...spark, segmentImage }, photo, 'data:full', target);
+      expect(measured.mode).toBe('recipe');
+      expect(measured.partMasks!.filter((m) => m.concept === 'window')).toHaveLength(2);
+      expect(measured.recipe!.parts.length).toBeLessThanOrEqual(MAX_RECIPE_PARTS);
+      // Shell recolored to the body, four glass panels (both sides) at the old glass colour.
+      // Biggest box above the main body, like the plain locator: Fit v2 (PR-2.9) may shift the
+      // cabin in y, so the shell is not matched by its height anymore.
+      const outMain = measured.recipe!.parts.find((p) => p.front)!;
+      const outShell = measured
+        .recipe!.parts.filter((p) => p.shape === 'box' && p !== outMain && p.at[1] > outMain.at[1])
+        .sort((a, b) => b.size[0] * b.size[1] * b.size[2] - a.size[0] * a.size[1] * a.size[2])[0]!;
+      expect(outShell.color).toBe(main.color);
+      // Glass colour within ΔE 3 of the shell's (region medians move a bit when Fit v2 shifts the shell).
+      const glassLab = hexToLab(shell.color);
+      const glassPanels = measured.recipe!.parts.filter(
+        (p) => p.shape === 'box' && p.size[2] < 0.05 && deltaE2000(hexToLab(p.color), glassLab) < 3
+      );
+      expect(glassPanels).toHaveLength(4);
+      expect(ObjectRecipeSchema.safeParse(measured.recipe!).success).toBe(true);
+      console.info(
+        `[test] car panels: iou ${plain.fit!.iou} → ${measured.fit!.iou}, parts ${plain.recipe!.parts.length} → ${measured.recipe!.parts.length}`
+      );
+      expect(Math.abs(measured.fit!.iou - plain.fit!.iou)).toBeLessThanOrEqual(0.03);
+      // Landmarks (PR-0.8): the glass sits on its masks, so the 4-term score must not drop.
+      const withLm = (await scoreRecipe(photo, target, measured.recipe!, measured.partMasks))!;
+      const withoutLm = (await scoreRecipe(photo, target, measured.recipe!))!;
+      expect(withLm.score.landmark).toBeDefined();
+      expect(withLm.score.landmark!).toBeGreaterThan(0.5);
+      console.info(
+        `[test] car landmarks: ${withLm.score.landmark}, score ${withoutLm.score.score} → ${withLm.score.score}`
+      );
+      expect(withLm.score.score).toBeGreaterThanOrEqual(withoutLm.score.score - 2);
+      // Statuses (PR-2.15): every part stamped, measured glass, template dims estimated.
+      expect(measured.recipe!.parts.every((p) => p.status !== undefined)).toBe(true);
+      const glass = measured.recipe!.parts.filter(
+        (p) => p.shape === 'box' && p.size[2] === 0.02 && p.at[2]! > 0
+      );
+      expect(glass.length).toBeGreaterThan(0);
+      expect(glass.every((p) => p.status === 'measured')).toBe(true);
+      expect(measured.recipe!.dimStatus).toMatchObject({ depth: 'estimated', scale: 'estimated' });
+    },
+    GOLDEN_E2E_TIMEOUT_MS
+  );
 
   it('golden cottage: a window mask segments the wall, the leaf sits inset (PR-2.17)', async () => {
     const c = GOLDEN_SHAPES.find((g) => g.name === 'cottage row')!;

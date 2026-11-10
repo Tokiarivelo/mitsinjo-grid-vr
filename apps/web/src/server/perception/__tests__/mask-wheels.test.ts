@@ -48,6 +48,9 @@ const wheelMask = (geom: MaskMapGeom, cx: number, cy: number, r: number): PartMa
   };
 };
 
+/** Full shape pipeline on a real photo: seconds of CPU, slower when the suite runs in parallel. */
+const GOLDEN_E2E_TIMEOUT_MS = 30_000;
+
 describe('fitCircle', () => {
   it('exact circle → exact centre and radius', () => {
     const pts = Array.from({ length: 12 }, (_, k) => {
@@ -256,78 +259,82 @@ describe('withMaskWheels (PR-2.6)', () => {
     ).toBe(recipe);
   });
 
-  it('golden car: masks at the template wheels keep the score (machinery end to end)', async () => {
-    const c = GOLDEN_SHAPES.find((g) => g.name === 'car')!;
-    const buffer = await sharp(Buffer.from(goldenSvg(c)))
-      .jpeg({ quality: 85 })
-      .toBuffer();
-    const photo = { buffer, ...PHOTO };
-    const target: ShapeTarget = {
-      id: 'car',
-      label: 'car',
-      category: 'other',
-      box: goldenBox(c),
-      outline: goldenOutline(c),
-    };
-    const spark = {
-      describeShape: vi.fn().mockResolvedValue({
-        recipe: kitToRecipe(c.prior),
-        kit: c.prior,
-        source: 'meta',
-        model: 'muse-spark-1.3',
-      }),
-      describeParts: vi.fn().mockResolvedValue({ recipe: null }),
-    };
-    const plain = await runObjectShape(spark, photo, 'data:full', target);
-    expect(plain.mode).toBe('recipe');
-    // Wheel masks where the template put its wheels (near side), round in pixels.
-    const box = target.box;
-    const geom: MaskMapGeom = {
-      photoW: photo.width,
-      photoH: photo.height,
-      box,
-      crop: cropRectForShape(photo.width, photo.height, box),
-    };
-    const templateWheels = plain.recipe!.parts.filter(
-      (p) => p.shape === 'cylinder' && p.axis === 'z' && p.at[2] > 0
-    );
-    expect(templateWheels.length).toBeGreaterThan(0);
-    const masks = templateWheels.map((tw) => {
-      const cx = (box.x + (tw.at[0] + 0.5) * box.w) * photo.width;
-      const cy = (box.y + (0.5 - tw.at[1]) * box.h) * photo.height;
-      const r = (tw.size[0] / 2) * box.w * photo.width;
-      return wheelMask(geom, cx, cy, r);
-    });
-    const segmentImage = vi.fn(async (_url: string, concept: string) => ({
-      source: 'meta' as const,
-      model: 'sam-3.1',
-      concept,
-      imageWidth: geom.crop.outWidth,
-      imageHeight: geom.crop.outHeight,
-      instances:
-        concept === 'wheel'
-          ? masks.map((m) => ({
-              box: {
-                x1: m.box.x * geom.crop.outWidth,
-                y1: m.box.y * geom.crop.outHeight,
-                x2: (m.box.x + m.box.w) * geom.crop.outWidth - 1,
-                y2: (m.box.y + m.box.h) * geom.crop.outHeight - 1,
-              },
-              confidence: 0.9,
-              outline: m.outline,
-            }))
-          : [],
-      count: concept === 'wheel' ? masks.length : 0,
-      boxCoverage: 0.1,
-    }));
-    const measured = await runObjectShape({ ...spark, segmentImage }, photo, 'data:full', target);
-    expect(measured.mode).toBe('recipe');
-    expect(measured.partMasks!.filter((m) => m.concept === 'wheel')).toHaveLength(masks.length);
-    expect(measured.recipe!.parts.length).toBeLessThanOrEqual(MAX_RECIPE_PARTS);
-    expect(ObjectRecipeSchema.safeParse(measured.recipe!).success).toBe(true);
-    console.info(
-      `[test] car wheels: iou ${plain.fit!.iou} → ${measured.fit!.iou}, parts ${plain.recipe!.parts.length} → ${measured.recipe!.parts.length}`
-    );
-    expect(Math.abs(measured.fit!.iou - plain.fit!.iou)).toBeLessThanOrEqual(0.03);
-  });
+  it(
+    'golden car: masks at the template wheels keep the score (machinery end to end)',
+    async () => {
+      const c = GOLDEN_SHAPES.find((g) => g.name === 'car')!;
+      const buffer = await sharp(Buffer.from(goldenSvg(c)))
+        .jpeg({ quality: 85 })
+        .toBuffer();
+      const photo = { buffer, ...PHOTO };
+      const target: ShapeTarget = {
+        id: 'car',
+        label: 'car',
+        category: 'other',
+        box: goldenBox(c),
+        outline: goldenOutline(c),
+      };
+      const spark = {
+        describeShape: vi.fn().mockResolvedValue({
+          recipe: kitToRecipe(c.prior),
+          kit: c.prior,
+          source: 'meta',
+          model: 'muse-spark-1.3',
+        }),
+        describeParts: vi.fn().mockResolvedValue({ recipe: null }),
+      };
+      const plain = await runObjectShape(spark, photo, 'data:full', target);
+      expect(plain.mode).toBe('recipe');
+      // Wheel masks where the template put its wheels (near side), round in pixels.
+      const box = target.box;
+      const geom: MaskMapGeom = {
+        photoW: photo.width,
+        photoH: photo.height,
+        box,
+        crop: cropRectForShape(photo.width, photo.height, box),
+      };
+      const templateWheels = plain.recipe!.parts.filter(
+        (p) => p.shape === 'cylinder' && p.axis === 'z' && p.at[2] > 0
+      );
+      expect(templateWheels.length).toBeGreaterThan(0);
+      const masks = templateWheels.map((tw) => {
+        const cx = (box.x + (tw.at[0] + 0.5) * box.w) * photo.width;
+        const cy = (box.y + (0.5 - tw.at[1]) * box.h) * photo.height;
+        const r = (tw.size[0] / 2) * box.w * photo.width;
+        return wheelMask(geom, cx, cy, r);
+      });
+      const segmentImage = vi.fn(async (_url: string, concept: string) => ({
+        source: 'meta' as const,
+        model: 'sam-3.1',
+        concept,
+        imageWidth: geom.crop.outWidth,
+        imageHeight: geom.crop.outHeight,
+        instances:
+          concept === 'wheel'
+            ? masks.map((m) => ({
+                box: {
+                  x1: m.box.x * geom.crop.outWidth,
+                  y1: m.box.y * geom.crop.outHeight,
+                  x2: (m.box.x + m.box.w) * geom.crop.outWidth - 1,
+                  y2: (m.box.y + m.box.h) * geom.crop.outHeight - 1,
+                },
+                confidence: 0.9,
+                outline: m.outline,
+              }))
+            : [],
+        count: concept === 'wheel' ? masks.length : 0,
+        boxCoverage: 0.1,
+      }));
+      const measured = await runObjectShape({ ...spark, segmentImage }, photo, 'data:full', target);
+      expect(measured.mode).toBe('recipe');
+      expect(measured.partMasks!.filter((m) => m.concept === 'wheel')).toHaveLength(masks.length);
+      expect(measured.recipe!.parts.length).toBeLessThanOrEqual(MAX_RECIPE_PARTS);
+      expect(ObjectRecipeSchema.safeParse(measured.recipe!).success).toBe(true);
+      console.info(
+        `[test] car wheels: iou ${plain.fit!.iou} → ${measured.fit!.iou}, parts ${plain.recipe!.parts.length} → ${measured.recipe!.parts.length}`
+      );
+      expect(Math.abs(measured.fit!.iou - plain.fit!.iou)).toBeLessThanOrEqual(0.03);
+    },
+    GOLDEN_E2E_TIMEOUT_MS
+  );
 });
