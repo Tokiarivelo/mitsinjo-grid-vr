@@ -145,6 +145,10 @@ Meta API calls; all others run offline.
       0 instances on two photos; lookalike « fire hydrant » and « metal object »: 0.89; « object » alone: 0), and
       thin assemblies come back as one part (solar street light: « street light » 0.27, « solar panel » 0.33).
       Phrasings to try in the consensus: the label, the head noun, a lookalike, « <material> object ».
+      _Built 2026-11-10, unticked:_ `sam-consensus.ts` (`pickConsensus`) + `fetchOutlineForBox({ consensus: true })` (noun,
+      full label, lookalike asked together; used by `object-shape.ts`), `partMasksTimeout` (25 % of the time left,
+      3–8 s) and one retry phrasing per empty part (`PART_RETRY`). Open: the « no outline less often » count needs
+      `make sam-probe` on the hard real photos (API) and the « <material> object » phrasing.
 - [ ] **PQ-T10 Colour of the lit surface.** `color-measure.ts`, `region-colors.ts`: read each region's colour
       on its brighter 60 % of pixels (median, as today), report the shadow share apart. First check what
       `measureKitColors` already does for `plaster`, and extend that logic instead of adding a second one.

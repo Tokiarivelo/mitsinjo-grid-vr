@@ -52,7 +52,7 @@ import {
 } from './shape-stages-spark';
 import { formatElevationScore, scoreElevation, type ScoredElevation } from './elevation-score';
 import { ELEVATION_ARCHETYPES, measureFacadeElevations } from './facade-views';
-import { fetchPartMasks } from './part-masks';
+import { fetchPartMasks, partMasksTimeout } from './part-masks';
 import { fitPartParams, hasPartGroups, preparePartFit } from './part-fit';
 import { REGION_GRID, measureRegionColors, withRegionColors } from './region-colors';
 import { withMaskChimney } from './mask-chimney';
@@ -292,7 +292,11 @@ export async function runObjectShape(
             fullImageUrl,
             conceptOf(target),
             target.box,
-            { ...(outlineCrop ? { crop: outlineCrop } : {}), retries: samRetries(target) }
+            {
+              ...(outlineCrop ? { crop: outlineCrop } : {}),
+              retries: samRetries(target),
+              consensus: true,
+            }
           ).then(
             (hit) => hit ?? undefined,
             () => undefined
@@ -675,7 +679,9 @@ export async function runObjectShape(
       let facadeMasks: FacadeMasks | null = null;
       if (finalKit && photo && segmentImage) {
         [partMasks, facadeMasks] = await Promise.all([
-          fetchPartMasks(segmentImage, imageUrl, finalKit.archetype),
+          fetchPartMasks(segmentImage, imageUrl, finalKit.archetype, {
+            timeoutMs: partMasksTimeout(started + timeoutMs - Date.now()),
+          }),
           target.facadeUrl
             ? fetchFacadeMasks(
                 segmentImage,

@@ -169,3 +169,43 @@ describe('part concepts are named in the panel (PQ-T37, PR #10 review)', () => {
     expect(concepts.filter((c) => !labels.includes(c))).toEqual([]);
   });
 });
+
+describe('part masks timing and retry (PQ-T9)', () => {
+  it('the deadline is a share of the time left, bounded', async () => {
+    const { partMasksTimeout } = await import('../part-masks');
+    expect(partMasksTimeout(60_000)).toBe(8000);
+    expect(partMasksTimeout(20_000)).toBe(5000);
+    expect(partMasksTimeout(2_000)).toBe(3000);
+    expect(partMasksTimeout(-5)).toBe(3000);
+  });
+
+  it('an empty first answer is asked again with another phrasing', async () => {
+    const { fetchPartMasks } = await import('../part-masks');
+    const asked: string[] = [];
+    const seg = (concept: string, n: number) => ({
+      source: 'meta' as const,
+      model: 'sam-3.1',
+      concept,
+      imageWidth: 100,
+      imageHeight: 100,
+      instances: Array.from({ length: n }, () => ({
+        box: { x1: 10, y1: 10, x2: 30, y2: 30 },
+        confidence: 0.9,
+      })),
+      count: n,
+      boxCoverage: 0,
+    });
+    const masks = await fetchPartMasks(
+      async (_u: string, c: string) => {
+        asked.push(c);
+        return seg(c, c === 'tire' ? 2 : 0);
+      },
+      'data:x',
+      'vehicle',
+      { concepts: ['wheel'] }
+    );
+    expect(asked).toEqual(['wheel', 'tire']);
+    expect(masks).toHaveLength(2);
+    expect(masks[0]!.concept).toBe('wheel');
+  });
+});
