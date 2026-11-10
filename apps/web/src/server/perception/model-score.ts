@@ -41,6 +41,11 @@ export const SCORE_WEIGHTS_LANDMARKS = {
   color: 0.2,
   landmark: 0.15,
 } as const;
+/**
+ * Weights once SAM part masks exist (PQ-T6): the parts term is the mean of part recall and precision.
+ * Replaces the landmark set (the parts term judges the same masks); without masks nothing changes.
+ */
+export const SCORE_WEIGHTS_DETAIL = { iou: 0.3, edge: 0.25, color: 0.2, parts: 0.25 } as const;
 /** Mean part-centre miss (grid-width fractions) at which the landmark term reaches 0. */
 export const LANDMARK_MAX_DIST = 0.25;
 /** Fewer rendered pixels than this → the part is hidden, its landmark is skipped. */
@@ -293,6 +298,22 @@ export function edgeF1(render: FlatRender, crop: RgbGrid, outline: Mask): number
 /** Area-weighted ΔE2000 of each part's colour against the mean Lab of the photo pixels it covers. */
 export function regionDeltaE(render: FlatRender, crop: RgbGrid, outline: Mask): number {
   return scoreRender(render, outline, photoTerms(crop, outline)).deltaE;
+}
+
+/**
+ * PQ-T6: the score under `SCORE_WEIGHTS_DETAIL` when the detail has part recall or precision (part
+ * masks were given); the score unchanged otherwise, so goldens and mask-less captures keep theirs.
+ */
+export function weightDetail(s: ModelScore): ModelScore {
+  const p = [s.detail?.partRecall, s.detail?.partPrecision].filter(
+    (v): v is number => v !== undefined
+  );
+  if (!p.length) return s;
+  const parts = p.reduce((a, b) => a + b, 0) / p.length;
+  const color = Math.max(0, 1 - s.deltaE / SCORE_DELTA_E_MAX);
+  const w = SCORE_WEIGHTS_DETAIL;
+  const score = 100 * (w.iou * s.iou + w.edge * s.edgeF1 + w.color * color + w.parts * parts);
+  return { ...s, score: Math.round(score) };
 }
 
 /** The score of a flat render against the photo crop and the SAM mask, all on the same grid. */

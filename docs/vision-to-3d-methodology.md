@@ -327,8 +327,10 @@ its Vitest test in `__tests__/` in the same commit.
 A model is good enough when, per object:
 
 - Silhouette IoU ≥ 0.85, outline edge F1 ≥ 0.6, colour ΔE ≤ 8 (as today).
-- Part recall ≥ 0.8 and part precision ≥ 0.8; interior edge F1 and colour per part above the gates fixed in PQ-T6
-  from the measured baseline.
+- With SAM part masks (`STOP_DETAIL`, PQ-T6): part recall ≥ 0.8, part precision ≥ 0.8, interior edge F1 ≥ 0.12,
+  part ΔE ≤ 7. The last two come from the real baseline of 2026-11-10 (a value at least half of the real objects
+  miss: 6 of 12, and 2 of the 3 with masks). The score then weighs silhouette 0.3, outline edge 0.25, colour 0.2,
+  parts 0.25 (`SCORE_WEIGHTS_DETAIL`, parts = mean of recall and precision); without masks the classic weights.
 - No graph constraint violated; every hidden part marked `inferred`.
 - Judge ≥ 4 / 5 on average with no criterion under 3 (only once the judge passed its calibration).
 - `/designer-3d` ≥ 4 / 5 on the viewer shots, dark and light.

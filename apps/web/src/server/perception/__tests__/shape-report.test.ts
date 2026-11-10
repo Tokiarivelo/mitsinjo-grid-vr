@@ -130,7 +130,8 @@ describe('shape report (PR-0.3)', () => {
     const md = reportMarkdown(rows, '2026-11-01');
     expect(md).toContain('| car | 60 | 0.9 ✓ | 0.4 ✗ |');
     expect(md).toContain(
-      '| 0.5 | 1 | 0.31 | 6.2 | 0.42@3 ✗ 1 blank | ✗ thin 0.05 | wheel ×1 | 7 | 80 | 2 | I5 U2 | edgeF1 |'
+      // PQ-T6 gates: recall ≥ 0.8 ✗, precision ≥ 0.8 ✓, interior F1 ≥ 0.12 ✓, part ΔE ≤ 7 ✓.
+      '| 0.5 ✗ | 1 ✓ | 0.31 ✓ | 6.2 ✓ | 0.42@3 ✗ 1 blank | ✗ thin 0.05 | wheel ×1 | 7 | 80 | 2 | I5 U2 | edgeF1 |'
     );
     expect(md).toContain('| — | — | — | — | — | — | — | 3 | 40 |');
     expect(md).toContain('| **mean** | 79 |');

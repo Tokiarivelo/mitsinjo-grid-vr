@@ -23,6 +23,18 @@ import { readCapture, rescoreCapture } from './shape-capture';
 
 export const STOP = { iou: 0.85, edgeF1: 0.6, deltaE: 8 } as const;
 
+/**
+ * Detail gates (PQ-T6), checked when SAM part masks exist. Interior edge F1 and part ΔE come from the
+ * real baseline of 2026-11-10 by the rule « a value at least half of the real objects miss today »
+ * (interior F1: 6 of 12 under 0.12; part ΔE: 2 of 3 over 7, few masks yet). Recall and precision: plan values.
+ */
+export const STOP_DETAIL = {
+  partRecall: 0.8,
+  partPrecision: 0.8,
+  interiorEdgeF1: 0.12,
+  partDeltaE: 7,
+} as const;
+
 export interface ReportRow {
   name: string;
   score: ModelScore;
@@ -74,11 +86,19 @@ export function worstMetric(s: ModelScore): { metric: Metric; gap: number } {
   return { metric, gap: gaps[metric] };
 }
 
-/** Detail cells (PQ-T2): part recall, precision, interior edge F1, part ΔE; « — » when not measured. */
+/** Detail cells (PQ-T2): part recall, precision, interior edge F1, part ΔE with ✓ / ✗ against `STOP_DETAIL`; « — » when not measured. */
 function detailCells(s: ModelScore): string {
   const d = s.detail ?? {};
-  return [d.partRecall, d.partPrecision, d.interiorEdgeF1, d.partDeltaE]
-    .map((v) => (v === undefined ? '—' : String(v)))
+  const g = STOP_DETAIL;
+  return (
+    [
+      [d.partRecall, (v: number) => v >= g.partRecall],
+      [d.partPrecision, (v: number) => v >= g.partPrecision],
+      [d.interiorEdgeF1, (v: number) => v >= g.interiorEdgeF1],
+      [d.partDeltaE, (v: number) => v <= g.partDeltaE],
+    ] as const
+  )
+    .map(([v, pass]) => (v === undefined ? '—' : `${v} ${ok(pass(v))}`))
     .join(' | ');
 }
 
@@ -157,7 +177,7 @@ export function reportMarkdown(rows: ReportRow[], date: string, real?: RealSecti
     `# Shape report — ${date}`,
     '',
     `Stop criteria: IoU ≥ ${STOP.iou} · edge F1 ≥ ${STOP.edgeF1} · ΔE ≤ ${STOP.deltaE}. Sheet: \`contact-sheet.png\` (photo | flat | ¾).`,
-    'Detail (PQ-T2, not in the score yet): part recall · precision · interior edge F1 · part ΔE; « — » without SAM part masks.',
+    `Detail (PQ-T6, weighted into the score when SAM part masks exist): recall ≥ ${STOP_DETAIL.partRecall} · precision ≥ ${STOP_DETAIL.partPrecision} · interior edge F1 ≥ ${STOP_DETAIL.interiorEdgeF1} · part ΔE ≤ ${STOP_DETAIL.partDeltaE}; « — » when not measured.`,
     'Band (PQ-T36): SSIM of the worst of 8 height bands inside the outline @ band (0 = top), blank bands ✗. Views: side ÷ front silhouette, ✗ thin (< 0.15) or detached at 45°. Not built (PQ-T37): SAM parts the model lacks, ✓ none.',
     '',
     '## Synthetic (drawn streets)',

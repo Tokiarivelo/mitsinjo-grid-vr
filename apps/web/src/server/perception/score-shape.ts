@@ -11,7 +11,13 @@ import { pathToRings } from '@/lib/vision';
 import { renderFlat, type FlatRender } from './flat-render';
 import { scoreDetail, type DetailPart, type GridPart } from './detail-score';
 import { cropToPhoto, isWheelPart, photoToObject, type MaskMapGeom } from './mask-geometry';
-import { scoreModel, type Landmark, type ModelScore, type RgbGrid } from './model-score';
+import {
+  scoreModel,
+  weightDetail,
+  type Landmark,
+  type ModelScore,
+  type RgbGrid,
+} from './model-score';
 import type { PhotoForRegions } from './region';
 import { sampleObjectRgb } from './shape-colors';
 import { cropRectForShape, type CropRect } from './shape-crop';
@@ -153,7 +159,7 @@ export async function scoreRecipe(
     samParts: masks?.length && geom ? gridParts(masks, geom, cols, rows) : [],
   });
   return {
-    score: { ...scoreModel(render, crop, outline, landmarks), detail },
+    score: weightDetail({ ...scoreModel(render, crop, outline, landmarks), detail }),
     crop,
     render,
   };
