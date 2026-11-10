@@ -11,7 +11,7 @@ import type { ElevationScore } from './elevation-score';
 import { renderFlat, THREE_QUARTER, type FlatRender } from './flat-render';
 import type { ModelScore, RgbGrid } from './model-score';
 import { checkConstraints, notBuilt } from './object-graph';
-import { captureMasks, readCapture, rescoreCapture } from './shape-capture';
+import { readCapture, rescoreCapture } from './shape-capture';
 
 /**
  * Shape report (PR-0.3) for the quality loop (`/shape-loop`): a Markdown table of the scores with the worst
@@ -258,14 +258,7 @@ export async function scoreRealSet(
     }
     const name = c.hard ? `${c.id} (${c.hard})` : c.id;
     scored.push({
-      row: reportRow(
-        name,
-        s.score,
-        capture.recipe,
-        capture.kit.archetype,
-        undefined,
-        captureMasks(capture)
-      ),
+      row: reportRow(name, s.score, capture.recipe, capture.kit.archetype, undefined, s.masks),
       sheet: {
         name: `${name} — ${s.score.score}`,
         crop: s.crop,

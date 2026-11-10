@@ -99,6 +99,12 @@ Meta API calls; all others run offline.
       _Partly done 2026-11-10:_ `repairGraph` (floating part = held by neither the ground, its parent, nor a held part; pulled against its parent, fused twin merged, by rule,
       before the statuses; log `[vision] 3D graph repair …`), `notBuilt` (SAM masks beyond the parts that draw them + listed names; log `[vision] 3D seen, not built …`), « Not built » report column (— without masks: every
       current capture). **Open:** `evidence.visibleParts` waits for PQ-T12; the panel has no part list yet (UI task).
+      _« Not built » explained 2026-11-10 (15 real captures):_ SAM masks outside the object's outline no longer count
+      (`masksOnObject`: car-side « window ×8 » was 5 windows of the car behind and the building). Left, all real:
+      car-side window ×3 (yaw mis-measured 53° on a side view → the yaw correction pushes the windows off the body,
+      the panel builder skips them: perspective yaw, Q1); car-corner window ×1 (1 of 2 placed at −29°, same
+      correction); house-row chimney ×2 (oblique 46° photo: chimneys from masks only up to 17°, by design); hut door
+      ×1 (house panels only move template doors, and the kit gave none). Every other real row: ✓ or no masks.
 
 **Exit Q0:** the report ranks real photos by a score that drops when a recognisable part is missing.
 

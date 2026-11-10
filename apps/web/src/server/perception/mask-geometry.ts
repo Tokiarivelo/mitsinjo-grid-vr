@@ -1,7 +1,8 @@
 import 'server-only';
 
-import { MAX_RECIPE_PARTS, type RecipePart } from '@/lib/object-shape';
+import { MAX_RECIPE_PARTS, type PartMask, type RecipePart } from '@/lib/object-shape';
 import type { NormBox } from '@/lib/vision';
+import { insideRings } from './color-measure';
 import type { CropRect } from './shape-crop';
 
 /** Geometry mapping SAM's crop fractions onto the recipe's box fractions. */
@@ -17,6 +18,23 @@ export type Pt = readonly [number, number];
 /** Crop fractions → photo pixels. The resize to the SAM image keeps fractions. */
 export function cropToPhoto(geom: MaskMapGeom, cu: number, cv: number): Pt {
   return [geom.crop.left + cu * geom.crop.width, geom.crop.top + cv * geom.crop.height];
+}
+
+/**
+ * The part masks that belong to the object (PQ-T37): centre inside its outline (`rings`, photo fractions).
+ * SAM segments the whole crop, so a neighbour's windows or a background building come back too; counted,
+ * they read as « seen, not built » and lower part recall. No outline → every mask is kept.
+ */
+export function masksOnObject(
+  masks: ReadonlyArray<PartMask>,
+  rings: ReadonlyArray<ReadonlyArray<readonly [number, number]>>,
+  geom: MaskMapGeom
+): PartMask[] {
+  if (!rings.length || !(geom.photoW > 0) || !(geom.photoH > 0)) return [...masks];
+  return masks.filter((m) => {
+    const [px, py] = cropToPhoto(geom, m.box.x + m.box.w / 2, m.box.y + m.box.h / 2);
+    return insideRings(px / geom.photoW, py / geom.photoH, rings);
+  });
 }
 
 /**

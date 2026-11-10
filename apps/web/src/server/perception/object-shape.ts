@@ -35,7 +35,7 @@ import {
 import { conceptOf, fetchOutlineForBox, samRetries, type OutlineCrop } from './outline';
 import { applyConstraints, buildGraph, notBuilt, repairGraph } from './object-graph';
 import { deduceHiddenSides } from './hidden-sides';
-import { enforcePartBudget } from './mask-geometry';
+import { enforcePartBudget, masksOnObject } from './mask-geometry';
 import { cropForShape, cropRectForShape } from './shape-crop';
 import { extractSwatches } from './photo-swatches';
 import { withLatheBody } from './lathe-body';
@@ -886,7 +886,21 @@ export async function runObjectShape(
           );
           recipe = repair.recipe;
         }
-        const missing = notBuilt(recipe, partMasks ?? []);
+        // Only the masks on the object: a neighbour's windows are not this model's parts.
+        const onObject =
+          partMasks?.length && photo
+            ? masksOnObject(
+                partMasks,
+                shaped.outline ? pathToRings(shaped.outline).filter((r) => r.length >= 3) : [],
+                {
+                  photoW: photo.width,
+                  photoH: photo.height,
+                  box: shaped.box,
+                  crop: cropRectForShape(photo.width, photo.height, shaped.box),
+                }
+              )
+            : (partMasks ?? []);
+        const missing = notBuilt(recipe, onObject);
         if (missing.length)
           console.info(`[vision] 3D seen, not built for "${target.label}": ${missing.join(', ')}`);
         const graph = buildGraph(finalKit.archetype, recipe, {

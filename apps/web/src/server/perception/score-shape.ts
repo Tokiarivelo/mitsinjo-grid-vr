@@ -10,7 +10,13 @@ import {
 import { pathToRings } from '@/lib/vision';
 import { renderFlat, type FlatRender } from './flat-render';
 import { scoreDetail, type DetailPart, type GridPart } from './detail-score';
-import { cropToPhoto, isWheelPart, photoToObject, type MaskMapGeom } from './mask-geometry';
+import {
+  cropToPhoto,
+  isWheelPart,
+  masksOnObject,
+  photoToObject,
+  type MaskMapGeom,
+} from './mask-geometry';
 import {
   scoreModel,
   weightDetail,
@@ -28,6 +34,8 @@ export interface RecipeScore {
   /** What was compared: photo box and flat render on the fit grid (contact sheet, Spark critic). */
   crop: RgbGrid;
   render: FlatRender;
+  /** The part masks on the object (outline filter, `masksOnObject`) that the score judged. */
+  masks: PartMask[];
 }
 
 /** Part-mask concepts judged as landmarks (PR-0.8): wheels, windows, doors. */
@@ -148,19 +156,22 @@ export async function scoreRecipe(
           crop: maskCrop ?? cropRectForShape(photo.width, photo.height, box),
         }
       : null;
-  const landmarks =
-    masks?.length && geom ? buildLandmarks(recipe, masks, geom, cols, rows) : undefined;
+  const onObject = masks?.length && geom ? masksOnObject(masks, rings, geom) : [];
+  const landmarks = onObject.length
+    ? buildLandmarks(recipe, onObject, geom!, cols, rows)
+    : undefined;
   const outline = ringsMask(rings, box, cols, rows);
   const detail = scoreDetail({
     render,
     crop,
     outline,
     parts: detailParts(recipe),
-    samParts: masks?.length && geom ? gridParts(masks, geom, cols, rows) : [],
+    samParts: onObject.length ? gridParts(onObject, geom!, cols, rows) : [],
   });
   return {
     score: weightDetail({ ...scoreModel(render, crop, outline, landmarks), detail }),
     crop,
     render,
+    masks: onObject,
   };
 }
