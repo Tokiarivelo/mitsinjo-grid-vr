@@ -214,7 +214,24 @@ describe('XRBlasterController (VS-T4)', () => {
     act(() => {
       fireEvent.pointerDown(gl.domElement, { button: 0, clientX: 400, clientY: 300 });
     });
+    expect(onTriggerScan).not.toHaveBeenCalled(); // on release, not on press
+    act(() => {
+      fireEvent.pointerUp(gl.domElement, { button: 0, clientX: 400, clientY: 300 });
+    });
     expect(onTriggerScan).toHaveBeenCalledTimes(1);
+  });
+
+  it('a mouse drag looks around without shooting', () => {
+    const { onTriggerScan, onShootScreen } = setup();
+    const canvas = gl.domElement;
+    const send = (type: string, clientX: number) =>
+      canvas.dispatchEvent(new MouseEvent(type, { clientX, clientY: 300, button: 0 }));
+    act(() => {
+      send('pointerdown', 300);
+      send('pointerup', 420);
+    });
+    expect(onTriggerScan).not.toHaveBeenCalled();
+    expect(onShootScreen).not.toHaveBeenCalled();
   });
 
   it('reports hover on the target under the laser', () => {

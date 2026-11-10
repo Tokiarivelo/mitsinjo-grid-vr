@@ -176,3 +176,12 @@
 - [x] Menu dans le monde à 0,9 m, sous les yeux, suivi différé (recentrage après ~35° de rotation ou 35 cm de déplacement).
 - [x] Bouton de scan inactif menu fermé ; bouton qui pulse quand un événement arrive menu fermé.
 - [x] **Done when :** `make vr-probe` → 8 PASS (menu fermé à l'entrée, ouvert puis fermé depuis le poignet, sans scan).
+
+### VS-T14 : Espace de test 360° navigable (photos réelles, hors vrai casque)
+
+- [x] Écran webcam plat (`ImageSurface`) au lieu de l'écran cylindrique ; étiquettes jamais coupées.
+- [x] Émulateur / PC : 6 pièces réelles en 360° (`tour/`), flèches au sol, ↑/W/Z, stick, fondu entre pièces.
+- [x] Scan = photo de la vue centrée sur la visée ; tir direct sur la photo ; vérité terrain mock (`expected`).
+- [x] Page web masquée pendant l'immersion émulée (`data-xr-emulated`).
+- [x] **Done when :** `make vr-probe` → 11 PASS (loft, scan du frigo, flèche → hall, ↑ → séjour) ; « MARRY » lisible à l'endroit.
+- [ ] Vérifier sur un vrai Quest que la webcam plate garde le tir aligné.

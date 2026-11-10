@@ -6,13 +6,13 @@ import { useFrame } from '@react-three/fiber';
 import { useTranslations } from '@/lib/i18n';
 import { CameraUtils, XRCameraSource, type CameraState } from './xr-camera-source';
 import { LIVE_PILL_POSITION } from './xr-layout';
-import { screenArc, WEBCAM_SCREEN, type WebcamScreenGeometry } from './webcam-screen';
+import { WEBCAM_SCREEN, type ImageSurface } from './webcam-screen';
 
 export interface LiveWebcamBackdropProps {
   /** Optional callback to register the frame capture function with the parent scene. */
   onRegisterCapture?: (captureFn: () => string | null) => void;
   /** Screen geometry; shared with target projection and blaster raycast. */
-  screen?: WebcamScreenGeometry;
+  screen?: ImageSurface;
 }
 
 const SAMPLE_ROOM_SRC = '/samples/vision-room.jpg';
@@ -173,27 +173,15 @@ export const LiveWebcamBackdrop = memo(function LiveWebcamBackdrop({
     };
   }, [isLive, cameraState, pillText]);
 
-  // Curved 16:9 screen, bottom edge on the floor: detections map back to it 1:1
+  // Flat 16:9 wall, bottom edge on the floor: detections map back to it 1:1
   // (webcam-screen.ts), so a shot at an object in the video lands on that object.
-  const { radius, height, distance, centerY } = screen;
-  const { thetaStart, thetaLength, centerZ: cylinderCenterZ } = screenArc(screen);
+  const { center, width, height } = screen;
 
   return (
     <group name="live-webcam-backdrop-root">
-      {/* 1. Zoomed-In Planar Panoramic Cinema Screen (Flat central focus, wide horizontal span, unmirrored interior projection) */}
-      <mesh position={[0, centerY, cylinderCenterZ]} scale={[-1, 1, 1]} name="curved-webcam-screen">
-        <cylinderGeometry
-          args={[
-            radius,
-            radius,
-            height,
-            64,
-            1,
-            true, // open ended
-            thetaStart,
-            thetaLength,
-          ]}
-        />
+      {/* 1. Flat webcam wall (a cylinder bent the image: straight lines curved) */}
+      <mesh position={center} name="webcam-screen">
+        <planeGeometry args={[width, height]} />
         <meshBasicMaterial
           ref={screenMaterialRef}
           map={activeTexture}
@@ -203,7 +191,7 @@ export const LiveWebcamBackdrop = memo(function LiveWebcamBackdrop({
       </mesh>
 
       {/* 2. Flat Architectural Backdrop Wall (Eliminates vertigo-inducing 360° spherical dome) */}
-      <mesh position={[0, centerY, -distance - 0.3]} name="studio-backdrop-wall">
+      <mesh position={[0, center[1], center[2] - 0.3]} name="studio-backdrop-wall">
         <planeGeometry args={[26, 12]} />
         <meshBasicMaterial color="#081022" side={THREE.DoubleSide} toneMapped={false} />
       </mesh>

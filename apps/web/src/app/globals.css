@@ -124,6 +124,14 @@ body {
   -webkit-overflow-scrolling: touch;
 }
 
+/* Emulated VR session (dev, IWER): only the immersive canvas shows, never the page around it. */
+html[data-xr-emulated] [data-app-root] {
+  visibility: hidden;
+}
+html[data-xr-emulated] [data-app-root] canvas {
+  visibility: visible;
+}
+
 body {
   background: var(--color-canvas);
   color: var(--color-text-primary);

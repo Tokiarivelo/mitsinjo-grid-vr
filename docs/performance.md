@@ -128,3 +128,9 @@ them after mount (re-targeting races React root unmounts and can leave a label e
 - Static generation for every route (no request-time data except `/api/copilot`).
 - Vercel: copilot route `runtime = 'nodejs'`, `maxDuration = 30`.
 - Docker Compose (`compose.yaml` + `Dockerfile`, `make docker-up` / `docker-down` / `docker-logs`): one `web` service, `pnpm install --frozen-lockfile` → `next build` → `next start` on :3000 (host `HOST_PORT`, default 3000), healthcheck on `/overview`; root `.env` optional, `LLM_PROVIDER=mock` without it.
+
+## /village 360° tour (VS-T14)
+
+- Photos 4K (4096×2048 JPEG, sans mipmaps à cause de la couture u) : seules la pièce courante et ses voisines restent en mémoire GPU, les autres sont `dispose()`.
+- Sphère dessinée en dernier (`renderOrder` 1000, `depthWrite: false`) : pas de surdessin derrière les panneaux, rien n'est coupé.
+- Photo de scan (1280×720) calculée sur CPU au tir seulement (pixels de la pièce mis en cache), jamais par image.

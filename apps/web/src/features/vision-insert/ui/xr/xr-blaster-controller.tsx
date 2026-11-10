@@ -9,7 +9,12 @@ import {
   updateHandMesh,
 } from '@/features/microgrid-3d/utils/xr-hands';
 import type { SpatialTarget } from './spatial-projection';
-import { pickTargetAtUv, screenHitFromRay } from './webcam-screen';
+import {
+  pickTargetAtUv,
+  screenHitFromRay,
+  WEBCAM_SCREEN,
+  type ImageSurface,
+} from './webcam-screen';
 import { AIR_BUTTON_RADIUS, AIR_BUTTON_TOUCH_RADIUS, MINIATURE_GRAB_RADIUS } from './xr-layout';
 import {
   WRIST_BUTTON_ID,
@@ -42,9 +47,24 @@ export interface XRBlasterControllerProps {
   onTriggerScan?: () => void;
   /** The webcam video was hit outside every detection box, at image coords (u, v). */
   onShootScreen?: (u: number, v: number) => void;
+  /** Where the scanned image sits (webcam wall, or a 360° tour scan photo); null = none yet. */
+  surface?: ImageSurface | null;
+  /** Floor arrows of the 360° tour: a shot on one calls `onHotspot(id)`. */
+  hotspots?: readonly Hotspot[];
+  onHotspot?: (id: string) => void;
+  /** A shot that hit nothing (no surface, panel or arrow): 360° tour scans that direction. */
+  onShootOutside?: (origin: THREE.Vector3, direction: THREE.Vector3) => void;
 }
 
-type AimKind = 'wrist' | 'miniature' | 'button' | 'target' | 'screen' | 'none';
+export interface Hotspot {
+  id: string;
+  position: [number, number, number];
+}
+
+/** Pick radius around a floor arrow (m). */
+const HOTSPOT_RADIUS = 0.38;
+
+type AimKind = 'wrist' | 'miniature' | 'button' | 'hotspot' | 'target' | 'screen' | 'none';
 interface Aim {
   kind: AimKind;
   id: string | null;
@@ -75,9 +95,12 @@ const _mouse = new THREE.Vector2();
 const _FORWARD = new THREE.Vector3(0, 0, -1);
 const BEAM_LENGTH = 3;
 const TOUCH_COOLDOWN_MS = 750;
+/** Mouse travel (px) under which a press + release is a click, not a drag. */
+const CLICK_SLOP_PX = 6;
 
 const BEAM_IDLE = '#38bdf8';
 const BEAM_WRIST = '#e9d5ff';
+const BEAM_HOTSPOT = '#a5f3fc';
 const BEAM_BUTTON = '#c084fc';
 const BEAM_TARGET = '#f59e0b';
 const BEAM_SCREEN = '#7dd3fc';
@@ -168,18 +191,27 @@ function rayNear(
   );
 }
 
+/** Everything a ray can hit besides scene panels (`userData.onSelect`). */
+interface AimScene {
+  targets: readonly SpatialTarget[];
+  menu: WristMenu;
+  miniatures?: readonly MiniatureHandle[];
+  surface: ImageSurface | null;
+  hotspots: readonly Hotspot[];
+}
+
+const _vHot = new THREE.Vector3();
+
 /**
  * What a ray points at, nearest first: the wrist button, a miniature, the scan button (menu
- * open), then the webcam video (resolved to the detection whose box holds that image point).
- * Writes the beam end to `end`.
+ * open), a tour floor arrow, then the scanned image (resolved to the detection whose box holds
+ * that image point). Writes the beam end to `end`.
  */
 function aimAt(
   origin: THREE.Vector3,
   direction: THREE.Vector3,
-  targets: readonly SpatialTarget[],
   end: THREE.Vector3,
-  menu: WristMenu,
-  miniatures: readonly MiniatureHandle[] = []
+  { targets, menu, miniatures = [], surface, hotspots }: AimScene
 ): Aim {
   _raycaster.ray.origin.copy(origin);
   _raycaster.ray.direction.copy(direction);
@@ -200,7 +232,15 @@ function aimAt(
     return { kind: 'button', id: AIR_BUTTON_ID, u: 0, v: 0 };
   }
 
-  const hit = screenHitFromRay(origin, direction);
+  for (const h of hotspots) {
+    _vHot.set(...h.position);
+    if (rayNear(origin, direction, _vHot, HOTSPOT_RADIUS)) {
+      end.copy(_vHot);
+      return { kind: 'hotspot', id: h.id, u: 0, v: 0 };
+    }
+  }
+
+  const hit = surface ? screenHitFromRay(origin, direction, surface) : null;
   if (hit) {
     const target = pickTargetAtUv(targets, hit.u, hit.v);
     if (target) {
@@ -217,6 +257,7 @@ function aimAt(
 
 function beamColor(kind: AimKind): string {
   if (kind === 'wrist') return BEAM_WRIST;
+  if (kind === 'hotspot') return BEAM_HOTSPOT;
   if (kind === 'miniature') return BEAM_MINIATURE;
   if (kind === 'button') return BEAM_BUTTON;
   if (kind === 'target') return BEAM_TARGET;
@@ -244,6 +285,10 @@ export const XRBlasterController = memo(function XRBlasterController({
   onShootTarget,
   onTriggerScan,
   onShootScreen,
+  surface = WEBCAM_SCREEN,
+  hotspots = [],
+  onHotspot,
+  onShootOutside,
 }: XRBlasterControllerProps) {
   const { gl, camera, scene } = useThree();
   const hoveredRef = useRef<string | null>(null);
@@ -298,7 +343,7 @@ export const XRBlasterController = memo(function XRBlasterController({
   /** Starts holding the miniature the input points at; false when it points at none. */
   const tryGrab = useCallback(
     (key: InputKey, origin: THREE.Vector3, direction: THREE.Vector3, haptics?: Gamepad | null) => {
-      const aim = aimAt(origin, direction, targets, _vEnd, menu, miniatures);
+      const aim = aimAt(origin, direction, _vEnd, { targets, menu, miniatures, surface, hotspots });
       if (aim.kind !== 'miniature' || !aim.miniature) return false;
       grabTurntable(aim.miniature.turntable, key, performance.now());
       grabsRef.current.set(key, {
@@ -315,7 +360,7 @@ export const XRBlasterController = memo(function XRBlasterController({
       }
       return true;
     },
-    [targets, miniatures, menu]
+    [targets, miniatures, menu, surface, hotspots]
   );
 
   const release = useCallback(
@@ -334,10 +379,15 @@ export const XRBlasterController = memo(function XRBlasterController({
   /** Resolves one shot. `haptics` is the gamepad of the input that fired, if any. */
   const triggerShot = useCallback(
     (origin: THREE.Vector3, direction: THREE.Vector3, haptics?: Gamepad | null) => {
-      const aim = aimAt(origin, direction, targets, _vEnd, menu);
+      const aim = aimAt(origin, direction, _vEnd, { targets, menu, surface, hotspots });
 
       if (aim.kind === 'wrist') {
         toggleMenu();
+        return;
+      }
+      if (aim.kind === 'hotspot' && aim.id) {
+        playTargetHitSound();
+        onHotspot?.(aim.id);
         return;
       }
       if (aim.kind === 'button') {
@@ -369,7 +419,13 @@ export const XRBlasterController = memo(function XRBlasterController({
         }
       }
 
-      if (aim.kind === 'none') return;
+      if (aim.kind === 'none') {
+        if (onShootOutside) {
+          playLaserShootSound();
+          onShootOutside(origin, direction);
+        }
+        return;
+      }
       startBlast(origin, _vEnd);
       playLaserShootSound();
       if (aim.kind === 'target' && aim.id) {
@@ -384,7 +440,20 @@ export const XRBlasterController = memo(function XRBlasterController({
       }
       onShootScreen?.(aim.u, aim.v);
     },
-    [camera, scene, targets, menu, toggleMenu, pressButton, onShootTarget, onShootScreen]
+    [
+      camera,
+      scene,
+      targets,
+      menu,
+      surface,
+      hotspots,
+      toggleMenu,
+      pressButton,
+      onHotspot,
+      onShootTarget,
+      onShootScreen,
+      onShootOutside,
+    ]
   );
 
   // XR pointers (controllers and hands), grips and articulated hands.
@@ -475,31 +544,47 @@ export const XRBlasterController = memo(function XRBlasterController({
       grab.y = py(e);
       rotateTurntable(grab.miniature.turntable, dx * MOUSE_GAIN, dy * MOUSE_GAIN);
     };
-    const onDown = (e: MouseEvent) => {
-      if ((typeof e.button === 'number' && e.button !== 0) || !camera) return;
+    const rayAt = (e: MouseEvent) => {
       const ndc = toNdc(e);
       _mouse.set(ndc.x, ndc.y);
-      _raycaster.setFromCamera(_mouse, camera);
+      _raycaster.setFromCamera(_mouse, camera!);
       _vOrigin.copy(_raycaster.ray.origin);
       _vDirection.copy(_raycaster.ray.direction);
+    };
+    // A click (press + release without dragging) shoots; a drag looks around (desktop controls).
+    let press: { x: number; y: number } | null = null;
+    const onDown = (e: MouseEvent) => {
+      if ((typeof e.button === 'number' && e.button !== 0) || !camera) return;
+      rayAt(e);
       if (tryGrab('mouse', _vOrigin, _vDirection)) {
         const grab = grabsRef.current.get('mouse')!;
         grab.x = px(e);
         grab.y = py(e);
         return;
       }
+      press = { x: px(e), y: py(e) };
+    };
+    const onUp = (e: MouseEvent) => {
+      release('mouse');
+      const p = press;
+      press = null;
+      if (!p || !camera || Math.hypot(px(e) - p.x, py(e) - p.y) > CLICK_SLOP_PX) return;
+      rayAt(e);
       triggerShot(_vOrigin, _vDirection);
     };
-    const onUp = () => release('mouse');
+    const onLeave = () => {
+      press = null;
+      release('mouse');
+    };
     dom.addEventListener('pointermove', onMove);
     dom.addEventListener('pointerdown', onDown);
     dom.addEventListener('pointerup', onUp);
-    dom.addEventListener('pointerleave', onUp);
+    dom.addEventListener('pointerleave', onLeave);
     return () => {
       dom.removeEventListener('pointermove', onMove);
       dom.removeEventListener('pointerdown', onDown);
       dom.removeEventListener('pointerup', onUp);
-      dom.removeEventListener('pointerleave', onUp);
+      dom.removeEventListener('pointerleave', onLeave);
     };
   }, [gl, camera, triggerShot, tryGrab, release]);
 
@@ -508,7 +593,7 @@ export const XRBlasterController = memo(function XRBlasterController({
     origin: THREE.Vector3,
     direction: THREE.Vector3
   ): string | null => {
-    const aim = aimAt(origin, direction, targets, _vEnd, menu, miniatures);
+    const aim = aimAt(origin, direction, _vEnd, { targets, menu, miniatures, surface, hotspots });
     const pointer = pointers[index];
     const pip = pips[index];
     const color = beamColor(aim.kind);

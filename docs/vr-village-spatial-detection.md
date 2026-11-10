@@ -199,7 +199,7 @@ flowchart TD
 ### Phase 8 : Écran Panoramique Studio à Focus Plat & Prévention du Vertige (Anti-Vertigo Planar Cinema Screen)
 
 - **Vision :** Afficher le décor d'atelier et la webcam sans déformation sphérique pour éliminer les nausées de mouvement et le conflit vestibulaire :
-  - **Géométrie actuelle (`WEBCAM_SCREEN`) :** rayon 8,5 m, hauteur 4,2 m (16:9), centre à 2,6 m devant, **bord bas posé au sol** (avant, le bas de la vidéo passait sous le plancher). Le menu du poignet (bouton de scan, guide, HUD) s'ouvre sous la ligne des yeux à 0,9 m et la pastille caméra est à ~1 m (`xr-layout.ts`) : le centre de la vidéo reste dégagé.
+  - **Géométrie actuelle (`WEBCAM_SCREEN`, VS-T14) :** écran **plat** (`ImageSurface` : centre, axes droite/haut, largeur, hauteur), 4,2 m de haut (16:9), centre à 2,6 m devant, **bord bas posé au sol**. L'ancien écran courbe (rayon 8,5 m) déformait la vidéo en cylindre ; `screenHitFromRay` est maintenant une intersection rayon-plan. Le menu du poignet (bouton de scan, guide, HUD) s'ouvre sous la ligne des yeux à 0,9 m et la pastille caméra est à ~1 m (`xr-layout.ts`) : le centre de la vidéo reste dégagé.
   - _Historique —_ **Focus central plat ($R = 11{,}5\text{ m}$) :** Courbure géante centrée à $4{,}2\text{ m}$ devant le regard. La flèche de courbure sur les $6\text{ m}$ centraux est $< 38\text{ cm}$, offrant une vue optiquement 100 % plane où les lignes horizontales ne sont pas déformées en œil de poisson.
   - **Grand angle panoramique étendu ($153^\circ$) :** Arc horizontal de $153^\circ$ (`thetaLength = Math.PI * 0.85`), permettant à l'utilisateur de tourner la tête librement de gauche à droite pour inspecter les cibles périphériques sans sentiment d'enfermement.
   - **Suppression du dôme sphérique 360° :** Remplacé par un mur architectural droit sombre (`name="studio-backdrop-wall"`, `<planeGeometry args={[26, 9]} />`) et un sol étendu stable (`circleGeometry args={[9, 48]}`), assurant un ancrage gravitationnel solide.
@@ -218,6 +218,16 @@ flowchart TD
 - [x] Tests unitaires Vitest pour le backdrop webcam et la gestion du flux.
 
 ---
+
+### Phase 9 : Espace de test 360° navigable (VS-T14, émulateur et PC)
+
+- **Quand :** hors vrai casque (pas de session XR, ou émulateur IWER `isDevXREmulated()`), la webcam est remplacée par une visite de **6 pièces réelles** (photos équirectangulaires 4K, Poly Haven CC0, `public/tour/CREDITS.md`) : loft cuisine, hall, chambre, salle de bain, salon, séjour, reliées en boucle. Sur un vrai Quest, la webcam (écran plat) reste.
+- **Rendu :** sphère r = 9 m centrée sur l'œil (`TOUR_EYE` 1,6 m), shader équirect (`tour/equirect.ts`, lacet 0 = −Z, u croît vers la droite), dessinée en dernier sans écriture de profondeur : panneaux, étiquettes et cibles ne sont jamais coupés. Pièce courante + voisines chargées, les autres libérées.
+- **Marcher (style Street View) :** flèches au sol vers chaque porte (« Aller : Hall »), tir/pincement/clic dessus, touche ↑ / W / Z ou stick vers l'avant = flèche la plus proche du regard (≤ 70°). Fondu au noir 0,18 s → changement → retour 0,28 s (confort Meta : téléportation avec fondu, pas de déplacement continu). On arrive dos à la porte d'où l'on vient.
+- **Regarder (PC sans session) :** glisser = tourner la tête (`OrbitControls`, pas de zoom/pan), boutons zoom = champ de vision 30–90°, clic sans glisser (≤ 6 px) = tir.
+- **Scanner :** bouton du menu (regard) ou tir direct sur la photo avant tout scan (`onShootOutside`) → photo 1280×720, 80° de champ, centrée sur la visée (`renderView`, projection gnomonique) ; les cibles sont posées sur un plan à 3 m dans cette direction (`surfaceFromView`). Un objet tiré avant le scan est résolu à la fin du scan.
+- **Vérité terrain hors ligne :** chaque pièce porte des objets délimités à la main sur la photo (`tour-data.ts`) ; `tourExpectedDetections` les projette dans la photo du scan et les envoie dans `expected` à `/api/vision` (mock seulement).
+- **Page web masquée en immersion émulée :** `markEmulatedImmersion` pose `data-xr-emulated` sur `<html>` ; `[data-app-root]` passe en `visibility: hidden` sauf le canvas.
 
 ## 4. Modalités de contrôle & Interaction (Casque VR, Hand Tracking & Émulateur PC)
 

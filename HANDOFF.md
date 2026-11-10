@@ -1,37 +1,38 @@
 # HANDOFF — read first, overwrite at end of session (≤40 lines)
 
-**Updated:** 2026-11-10 · **By:** Claude Code · **Branch:** feat/vr-village-wrist-menu (stacked on feat/vr-village-mini-turntable, not merged yet)
+**Updated:** 2026-11-10 · **By:** Claude Code · **Branch:** feat/vr-village-360-tour (on top of feat/vr-village-wrist-menu, not merged yet)
 
 ## Current state
 
-- /village VR verified in the IWER emulator (Quest 3) with a fake webcam (sample room): controllers, hands, mouse.
-- VS-T11: shoot an object **in the webcam video** → it turns into 3D; VS-T12: it flies to a spinning 22 cm
-  miniature in reach (hold select = rotate, tap = connect).
-- New (VS-T13): **wrist menu**. No floating panel on entry. Small "Menu" button on the left wrist (`wrist` joint /
-  left grip / bottom-left of view as fallback). Other hand's fingertip, laser, pinch or mouse toggles the menu
-  (scan button, guide, HUD), spawned in world space 0.9 m ahead, 0.32 m below the eyes, lazy-following the viewer
-  (`wrist-menu.ts`). Scan button dead while closed; wrist button pulses on new events while closed.
-- `XRBlasterController` stays the only input source (`menu` prop = shared mutable `WristMenu`).
-- `make vr-probe` → 8 PASS (menu closed on entry, opens/closes from the wrist without scanning, shoot flow).
-- Dev only: `window.__IWER_DEVICE__` (IWER remote) and `window.__VR_WRIST_MENU__` (probe aims at the wrist button).
+- VS-T14 done: without a real headset (desktop, or IWER emulator `isDevXREmulated()`), /village VR is a **walkable
+  360° tour** of 6 real rooms (4K CC0 equirect photos, `public/tour/`). Floor arrows (shoot/click), ↑/W/Z, stick
+  forward = walk to the arrow nearest the gaze; blink fade between rooms. Desktop: drag = look, click = shoot.
+- Scan in the tour = gnomonic photo of the aimed view (`renderView`); a shot at the photo before any scan scans there.
+  Mock ground truth: hand-labelled boxes (`tour-data.ts`) sent as `expected` to `/api/vision` (mock answers only).
+- Real headset keeps the webcam, now a **flat** screen (`ImageSurface`, ray-plane hit) — no more cylinder look.
+- Emulated immersion hides the web page (`data-xr-emulated` on `<html>`, `[data-app-root]` hidden but the canvas).
+- `make vr-probe` → 11 PASS (wrist menu, loft fridge scan + miniature, hand pinch, arrow → hall, ↑ → lounge);
+  screenshots confirm "MARRY" reads correctly (orientation OK).
 
 ## Next
 
-1. Real Quest: check wrist button offset on hands/controllers (`WRIST_OFFSET_*`) and menu height/distance.
-2. Optional: Meta palm-up pinch gesture (non-dominant hand) as a second way to open the menu.
-3. Static text in headset (HUD « Charge / Décharge », webcam pill « 720p LIVE », air-button badges) → i18n keys.
-4. VS-T9 spatial audio; foveation / frame-rate settings in `xr-session.ts`.
+1. Real Quest: check the flat webcam keeps shots aligned; wrist button offsets.
+2. Tour links/boxes are approximate (hand-placed); refine doors if arrows feel off.
+3. Static text in headset (HUD « Charge / Décharge », « 720p LIVE ») → i18n keys. VS-T9 spatial audio.
 
 ## Files touched
 
-- `apps/web/src/features/vision-insert/ui/xr/`: `wrist-menu.ts`, `wrist-menu-texture.ts`, `xr-wrist-menu.tsx` (new),
-  `xr-blaster-controller.tsx`, `village-xr-studio.tsx`, `xr-layout.ts`, `spatial-air-button.tsx`,
-  `village-spatial-hud.tsx`, `village-xr-viewport.tsx` + tests (`wrist-menu`, `xr-wrist-menu` new)
-- `messages/{en,fr,mg}.json` (`vrWristMenuOpen/Close`, `vrInteractionHelpWrist`), `scripts/vr-village-probe.mjs`, `Makefile`
-- Docs: `vr-village-spatial-detection.md`, `tasks/VR-village-spatial-shoot.md` (VS-T13)
+- `features/vision-insert/ui/xr/tour/` (new: `equirect`, `tour-data`, `tour-nav`, `panorama-tour`, `use-panorama-tour`)
+  - tests; `webcam-screen`, `live-webcam-backdrop`, `spatial-projection`, `xr-blaster-controller`,
+    `village-xr-studio`, `village-xr-viewport`, `wrist-menu-texture`, `xr-wrist-menu` + tests
+- `lib/vision.ts`, `server/perception/vision-pipeline.ts`, `app/api/vision/route.ts`, `utils/expected-detections.ts`,
+  `hooks/use-vision-detection.ts`; `microgrid-3d/utils/dev-xr-emulator.ts`, `hooks/use-webxr.ts`; `app/layout.tsx`, `globals.css`
+- `messages/*` (`tourGoTo`, `tourRoom_*`), `scripts/vr-village-probe.mjs`, `public/tour/`
+- Docs: `contracts.md`, `vr-village-spatial-detection.md` (Phase 9), `tasks/VR-village-spatial-shoot.md` (VS-T14),
+  `vr-immersion-guide.md`, `vr-testing-guide.md`, `performance.md`, `README.md`
 
 ## Decisions
 
-- Meta hands UI guidance: spawn the menu _from_ the wrist, never anchor it to the wrist; ray UI ≥ 0.8 m → 0.9 m.
-- Lazy follow (re-centre after ~35° turn or 35 cm move, eased) instead of head-locked: no jitter, follows the person.
-- Menu content is unmounted when closed (three's raycaster ignores `visible`, the HUD would still catch shots).
+- Sphere r 9 m drawn last, no depth write → labels/panels never cut. No mipmaps (u seam).
+- Comfort (Meta): teleport with fade, no smooth locomotion; arrive facing away from the door you came through.
+- `expected` never overrides Meta answers; perception golden tests still time out in the full suite (pass alone, pre-existing).

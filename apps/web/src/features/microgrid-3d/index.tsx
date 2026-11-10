@@ -13,6 +13,7 @@ export { useSceneQuality, type SceneQuality } from './hooks/use-scene-quality';
 export { useWebXR, type WebXRStatus } from './hooks/use-webxr';
 export { useContextLoss, type ContextLoss } from './hooks/use-context-loss';
 export { disableIWERFrameClear } from './utils/xr-session';
+export { isDevXREmulated } from './utils/dev-xr-emulator';
 export { VillageScenePlaceholder };
 export { GridDiagram, type GridDiagramProps } from './ui/grid-diagram';
 export {

@@ -14,7 +14,7 @@ vi.mock('@react-three/fiber', () => ({
 }));
 vi.mock('../wrist-menu-texture', () => ({
   getWristIconTexture: vi.fn(() => null),
-  getWristLabelTexture: vi.fn(() => null),
+  getPillLabelTexture: vi.fn(() => null),
 }));
 
 describe('WristMenuButton', () => {

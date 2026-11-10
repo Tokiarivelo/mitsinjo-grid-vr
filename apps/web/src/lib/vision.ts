@@ -58,6 +58,9 @@ export const ApplianceDetectionSchema = z.object({
 });
 export type ApplianceDetection = z.infer<typeof ApplianceDetectionSchema>;
 
+/** Ground truth sent with a 360° tour scan (`/api/vision` field `expected`, VS-T14). */
+export const ExpectedDetectionsSchema = z.array(ApplianceDetectionSchema).max(40);
+
 /** `vision_detections` SSE event data. */
 export const VisionDetectionsEventSchema = z.object({
   phase: z.enum(['boxes', 'outlines']),

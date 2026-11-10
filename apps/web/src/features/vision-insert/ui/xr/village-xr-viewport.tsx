@@ -15,7 +15,9 @@ import {
   useWebGLAvailable,
   useContextLoss,
   installWebGLContextSafetyPolyfill,
+  isDevXREmulated,
 } from '@/features/microgrid-3d';
+import { TOUR_EYE } from './tour/tour-nav';
 import { VillageXRStudio } from './village-xr-studio';
 
 export interface VillageXRViewportProps {
@@ -57,19 +59,18 @@ export const VillageXRViewport = memo(function VillageXRViewport({
   const hasAutoEnteredRef = useRef(false);
   const controlsRef = useRef<ComponentRef<typeof OrbitControls> | null>(null);
 
-  const handleZoomIn = useCallback(() => {
-    if (controlsRef.current) {
-      controlsRef.current.dollyIn(1.2);
-      controlsRef.current.update();
-    }
-  }, []);
+  // 360° tour off a real headset (desktop preview, IWER emulator); real headset = webcam wall.
+  const tourMode = !xrActive || isDevXREmulated();
 
-  const handleZoomOut = useCallback(() => {
-    if (controlsRef.current) {
-      controlsRef.current.dollyOut(1.2);
-      controlsRef.current.update();
-    }
+  // Desktop look-around turns in place (Street View): zoom = narrower field of view, not dolly.
+  const zoomBy = useCallback((factor: number) => {
+    const camera = controlsRef.current?.object;
+    if (!(camera instanceof THREE.PerspectiveCamera)) return;
+    camera.fov = Math.max(30, Math.min(90, camera.fov * factor));
+    camera.updateProjectionMatrix();
   }, []);
+  const handleZoomIn = useCallback(() => zoomBy(1 / 1.2), [zoomBy]);
+  const handleZoomOut = useCallback(() => zoomBy(1.2), [zoomBy]);
 
   // Trigger enter session once renderer is ready on initial mount
   const handleCreated = useCallback(
@@ -224,19 +225,21 @@ export const VillageXRViewport = memo(function VillageXRViewport({
               alpha: true,
             });
           }}
-          camera={{ position: [0, 1.45, 0.35], fov: 65 }}
+          camera={{ position: [TOUR_EYE[0], TOUR_EYE[1], TOUR_EYE[2] + 0.01], fov: 70 }}
           onCreated={handleCreated}
           className="w-full h-full"
         >
-          {/* Orbit controls for desktop preview when not presenting in headset */}
+          {/* Desktop preview: drag to look around from the eye (Street View), no dolly or pan */}
           {!xrActive && (
             <OrbitControls
               ref={controlsRef}
               enableDamping
-              maxPolarAngle={Math.PI / 2 + 0.1}
-              minDistance={0.3}
-              maxDistance={3.5}
-              target={[0, 1.35, -1.3]}
+              enableZoom={false}
+              enablePan={false}
+              rotateSpeed={-0.35}
+              minPolarAngle={0.25}
+              maxPolarAngle={Math.PI - 0.25}
+              target={TOUR_EYE}
             />
           )}
 
@@ -247,6 +250,7 @@ export const VillageXRViewport = memo(function VillageXRViewport({
             onTriggerScan={onTriggerScan}
             onSelectAppliance={onSelectAppliance}
             photoKey={photoKey}
+            tourMode={tourMode}
           />
         </Canvas>
       </CanvasCreationBoundary>

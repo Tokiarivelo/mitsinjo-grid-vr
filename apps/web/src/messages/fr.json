@@ -1212,7 +1212,14 @@
         "cancel": "Annuler",
         "cancelLabel": "Annuler l'amélioration du modèle"
       },
-      "minimapEms": "EMS"
+      "minimapEms": "EMS",
+      "tourGoTo": "Aller : {room}",
+      "tourRoom_hall": "Hall",
+      "tourRoom_loft": "Loft cuisine",
+      "tourRoom_bedroom": "Chambre",
+      "tourRoom_bath": "Salle de bain",
+      "tourRoom_salon": "Salon",
+      "tourRoom_lounge": "Séjour"
     },
     "dispatch": {
       "modeLabel": "Mode de dispatch",

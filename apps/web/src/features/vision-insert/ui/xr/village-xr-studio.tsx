@@ -1,6 +1,8 @@
 'use client';
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import * as THREE from 'three';
+import { useThree } from '@react-three/fiber';
 import { useAppLocale, useTranslations } from '@/lib/i18n';
 import { localLabel, type ApplianceDetection } from '@/lib/vision';
 import { defaultArchetype, kitToRecipe, type ObjectKit } from '@/lib/object-kit';
@@ -18,7 +20,11 @@ import { playGridConnectSound, playGridDisconnectSound } from './xr-audio-fx';
 import { VillageSpatialHUD } from './village-spatial-hud';
 import { LiveWebcamBackdrop } from './live-webcam-backdrop';
 import { SpatialInteractionGuide } from './spatial-interaction-guide';
-import { pickTargetAtUv } from './webcam-screen';
+import { pickTargetAtUv, screenHitFromRay, WEBCAM_SCREEN } from './webcam-screen';
+import { PanoramaTour } from './tour/panorama-tour';
+import { usePanoramaTour } from './tour/use-panorama-tour';
+import { TOUR_EYE } from './tour/tour-nav';
+import { yawPitchOf } from './tour/equirect';
 import { MENU_GUIDE_OFFSET, MENU_SCAN_OFFSET, miniatureSlot } from './xr-layout';
 import { createWristMenu, WRIST_BUTTON_ID } from './wrist-menu';
 import { WristMenuButton, WristMenuPanel } from './xr-wrist-menu';
@@ -29,7 +35,14 @@ export interface VillageXRStudioProps {
   onTriggerScan: (capturedUrl?: string) => void;
   onSelectAppliance?: (id: string) => void;
   photoKey?: string;
+  /**
+   * Walkable 360° test space of real photos instead of the webcam wall (VS-T14): on by default
+   * off a real headset (desktop preview, IWER emulator).
+   */
+  tourMode?: boolean;
 }
+
+const _gaze = new THREE.Vector3();
 
 /**
  * Village XR Studio Scene.
@@ -43,13 +56,18 @@ export const VillageXRStudio = memo(function VillageXRStudio({
   onTriggerScan,
   onSelectAppliance,
   photoKey,
+  tourMode = false,
 }: VillageXRStudioProps) {
+  const { camera } = useThree();
+  const tour = usePanoramaTour(tourMode);
   const { locale } = useAppLocale();
   const t = useTranslations('features.visionInsert');
   const { list: simulationAppliances, upsert, remove } = useSimulationAppliances();
   /** Shot objects, in the order they became 3D miniatures (= their pedestal slot). */
   const [materialized, setMaterialized] = useState<string[]>([]);
   const materializedIds = useMemo(() => new Set(materialized), [materialized]);
+  /** Target of each shot object when it was shot: its miniature stays after leaving the room. */
+  const shotTargetsRef = useRef(new Map<string, SpatialTarget>());
   /** Rotation of each miniature, mutated by the input controller in the frame loop. */
   const turntablesRef = useRef(new Map<string, Turntable>());
   const [hoveredTargetId, setHoveredTargetId] = useState<string | null>(null);
@@ -71,6 +89,15 @@ export const VillageXRStudio = memo(function VillageXRStudio({
       delete w.__VR_WRIST_MENU__;
     };
   }, [menu]);
+  // Dev only: lets `make vr-probe` read the tour room, heading and floor arrows.
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'production' || !tourMode) return;
+    const w = window as Window & { __VR_TOUR__?: unknown };
+    w.__VR_TOUR__ = { room: tour.room, uFront: tour.uFront, arrows: tour.arrows };
+    return () => {
+      delete w.__VR_TOUR__;
+    };
+  }, [tourMode, tour.room, tour.uFront, tour.arrows]);
   const [recentEvent, setRecentEvent] = useState<string | null>(null);
   const eventTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const captureFnRef = useRef<(() => string | null) | null>(null);
@@ -85,10 +112,29 @@ export const VillageXRStudio = memo(function VillageXRStudio({
     }, 4500);
   }, []);
 
+  /** Scan: the webcam frame, or in the 360° tour the view centred on the gaze (or `heading`). */
+  const scanTour = useCallback(
+    (heading?: { yaw: number; pitch: number }) => {
+      let h = heading;
+      if (!h) {
+        camera.getWorldDirection(_gaze);
+        h = yawPitchOf([_gaze.x, _gaze.y, _gaze.z]);
+      }
+      const shot = tour.scan(h.yaw, h.pitch);
+      if (shot) onTriggerScan(shot.url);
+      return shot;
+    },
+    [camera, tour, onTriggerScan]
+  );
+
   const handleTriggerScan = useCallback(() => {
+    if (tourMode) {
+      scanTour();
+      return;
+    }
     const frame = captureFnRef.current ? captureFnRef.current() : null;
     onTriggerScan(frame || undefined);
-  }, [onTriggerScan]);
+  }, [tourMode, scanTour, onTriggerScan]);
 
   const photo = photoKey ?? 'vr-studio';
 
@@ -105,19 +151,27 @@ export const VillageXRStudio = memo(function VillageXRStudio({
     return set;
   }, [simulationAppliances, detections, photo]);
 
-  // Convert 2D detections to 3D spatial target slots
+  // Convert 2D detections to 3D targets on the scanned image (webcam wall or tour scan photo).
+  const surface = tourMode ? tour.surface : WEBCAM_SCREEN;
   const targets = useMemo<SpatialTarget[]>(() => {
-    return projectDetectionsTo3D(detections);
-  }, [detections]);
+    if (!surface) return [];
+    return projectDetectionsTo3D(detections, tourMode ? { screen: surface, eye: TOUR_EYE } : {});
+  }, [detections, surface, tourMode]);
+
+  const findTarget = useCallback(
+    (id: string) => targets.find((tg) => tg.id === id) ?? shotTargetsRef.current.get(id),
+    [targets]
+  );
 
   const handleShootTarget = useCallback(
     (id: string) => {
       // 1. If not yet materialized, first laser shot materializes procedural 3D model
-      const target = targets.find((t) => t.id === id);
+      const target = findTarget(id);
       if (!target) return;
       const title = localLabel(target.detection, locale) || target.detection.label;
 
       if (!materializedIds.has(id)) {
+        shotTargetsRef.current.set(id, target);
         setMaterialized((prev) => (prev.includes(id) ? prev : [...prev, id]));
         notifyEvent(t('vrHudEventMaterialized', { name: title }));
         onSelectAppliance?.(id);
@@ -173,7 +227,7 @@ export const VillageXRStudio = memo(function VillageXRStudio({
     },
     [
       materializedIds,
-      targets,
+      findTarget,
       connectedIds,
       photo,
       locale,
@@ -199,6 +253,23 @@ export const VillageXRStudio = memo(function VillageXRStudio({
     [targets.length, isScanning, notifyEvent, t, handleTriggerScan]
   );
 
+  /** 360° tour: a shot that hit no scanned photo scans the view centred on it. */
+  const handleShootOutside = useCallback(
+    (origin: THREE.Vector3, direction: THREE.Vector3) => {
+      if (isScanning) return;
+      const shot = scanTour(yawPitchOf([direction.x, direction.y, direction.z]));
+      if (!shot) return;
+      const hit = screenHitFromRay(origin, direction, shot.surface);
+      pendingShotRef.current = { u: hit?.u ?? 0.5, v: hit?.v ?? 0.5, sawScan: false };
+    },
+    [isScanning, scanTour]
+  );
+
+  // Walking to another room drops a shot waiting for its scan.
+  useEffect(() => {
+    pendingShotRef.current = null;
+  }, [tour.room]);
+
   useEffect(() => {
     const pending = pendingShotRef.current;
     if (!pending) return;
@@ -217,7 +288,7 @@ export const VillageXRStudio = memo(function VillageXRStudio({
     const byId = new Map(targets.map((tg) => [tg.id, tg]));
     const out: Array<MiniatureHandle & { target: SpatialTarget }> = [];
     materialized.forEach((id, index) => {
-      const target = byId.get(id);
+      const target = byId.get(id) ?? shotTargetsRef.current.get(id);
       if (!target) return;
       let turntable = turntablesRef.current.get(id);
       if (!turntable) {
@@ -246,24 +317,34 @@ export const VillageXRStudio = memo(function VillageXRStudio({
       />
       <directionalLight position={[-3, 4, -2]} intensity={0.4} color="#7dd3fc" />
 
-      {/* 2. Live Webcam Panoramic Screen & 360° Studio Atmosphere (VS-T10) */}
-      <LiveWebcamBackdrop
-        onRegisterCapture={(fn) => {
-          captureFnRef.current = fn;
-        }}
-      />
-
-      {/* 3. Studio Floor Platform & Grid Markings */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.01, -1.5]} receiveShadow>
-        <circleGeometry args={[5, 48]} />
-        <meshStandardMaterial color="#1e293b" roughness={0.7} metalness={0.15} />
-      </mesh>
-
-      {/* Subtle floor grid ring */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, -1.5]}>
-        <ringGeometry args={[2.1, 2.15, 64]} />
-        <meshBasicMaterial color="#38bdf8" transparent opacity={0.25} />
-      </mesh>
+      {/* 2–3. Surroundings: walkable 360° real photos (VS-T14), or the live webcam wall + floor */}
+      {tourMode ? (
+        <PanoramaTour
+          room={tour.room}
+          uFront={tour.uFront}
+          pending={tour.pending}
+          onArrive={tour.arrive}
+          onWalk={tour.walk}
+          hoveredId={hoveredTargetId}
+          onRegisterCapture={tour.registerCapture}
+        />
+      ) : (
+        <>
+          <LiveWebcamBackdrop
+            onRegisterCapture={(fn) => {
+              captureFnRef.current = fn;
+            }}
+          />
+          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.01, -1.5]} receiveShadow>
+            <circleGeometry args={[5, 48]} />
+            <meshStandardMaterial color="#1e293b" roughness={0.7} metalness={0.15} />
+          </mesh>
+          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, -1.5]}>
+            <ringGeometry args={[2.1, 2.15, 64]} />
+            <meshBasicMaterial color="#38bdf8" transparent opacity={0.25} />
+          </mesh>
+        </>
+      )}
 
       {/* 4. Wrist button → menu (scan button, guide, HUD VS-T8), following the viewer */}
       <WristMenuButton
@@ -318,6 +399,10 @@ export const VillageXRStudio = memo(function VillageXRStudio({
         onShootTarget={handleShootTarget}
         onTriggerScan={handleTriggerScan}
         onShootScreen={handleShootScreen}
+        surface={surface}
+        hotspots={tour.arrows}
+        onHotspot={tour.walkThrough}
+        onShootOutside={tourMode ? handleShootOutside : undefined}
       />
     </group>
   );

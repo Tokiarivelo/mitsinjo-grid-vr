@@ -1,4 +1,5 @@
 import { act, render } from '@testing-library/react';
+import * as THREE from 'three';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '@/lib/i18n';
 import type { ApplianceDetection } from '@/lib/vision';
@@ -15,6 +16,18 @@ vi.mock('../xr-blaster-controller', () => ({
   },
 }));
 vi.mock('../live-webcam-backdrop', () => ({ LiveWebcamBackdrop: () => null }));
+const camera = new THREE.PerspectiveCamera();
+camera.position.set(0, 1.6, 0);
+camera.lookAt(0, 1.6, -1);
+camera.updateMatrixWorld(true);
+vi.mock('@react-three/fiber', () => ({ useThree: () => ({ camera }) }));
+const tourMock = vi.hoisted(() => ({ props: null as Record<string, unknown> | null }));
+vi.mock('../tour/panorama-tour', () => ({
+  PanoramaTour: (props: Record<string, unknown>) => {
+    tourMock.props = props;
+    return null;
+  },
+}));
 vi.mock('../spatial-air-button', () => ({ SpatialAirButton: () => null }));
 vi.mock('../holo-detection-target', () => ({ HoloDetectionTarget: () => null }));
 vi.mock('../spawned-object-3d', () => ({ SpawnedObject3D: () => null }));
@@ -41,7 +54,7 @@ const fridge: ApplianceDetection = {
   box: { x: 0.13, y: 0.22, w: 0.17, h: 0.66 },
 };
 
-function setup() {
+function setup(tourMode = false) {
   const onTriggerScan = vi.fn();
   const onSelectAppliance = vi.fn();
   const view = (detections: ApplianceDetection[], isScanning: boolean) => (
@@ -51,6 +64,7 @@ function setup() {
         isScanning={isScanning}
         onTriggerScan={onTriggerScan}
         onSelectAppliance={onSelectAppliance}
+        tourMode={tourMode}
       />
     </I18nProvider>
   );
@@ -120,5 +134,47 @@ describe('VillageXRStudio — shoot an object in the webcam video', () => {
 
     act(() => menu.toggle());
     expect(queryByTestId('wrist-menu-panel')).toBeNull();
+  });
+});
+
+describe('VillageXRStudio — 360° tour (VS-T14)', () => {
+  const capture = vi.fn(() => ({ url: 'data:image/jpeg;base64,view', expected: [] }));
+
+  function enterTour() {
+    const r = setup(true);
+    act(() => {
+      (tourMock.props!.onRegisterCapture as (fn: unknown) => void)(capture);
+      (tourMock.props!.onArrive as (room: string, u: number) => void)('loft', 0.8);
+    });
+    return r;
+  }
+
+  it('shows the tour instead of the webcam wall, with floor arrows to the next rooms', () => {
+    enterTour();
+    expect(tourMock.props!.room).toBe('loft');
+    const ids = blaster.props!.hotspots!.map((h) => h.id);
+    expect(ids).toEqual(['tour-link:hall', 'tour-link:bedroom']);
+    expect(blaster.props!.surface).toBeNull(); // nothing scanned yet
+  });
+
+  it('a shot on an arrow walks to that room', () => {
+    enterTour();
+    act(() => blaster.props!.onHotspot!('tour-link:bedroom'));
+    expect(tourMock.props!.pending).toBe('bedroom');
+  });
+
+  it('a shot at the room scans the view centred on it, then resolves the object under it', () => {
+    const { rerender, view, onTriggerScan, onSelectAppliance } = enterTour();
+    act(() =>
+      blaster.props!.onShootOutside!(new THREE.Vector3(0, 1.6, 0), new THREE.Vector3(0, 0, -1))
+    );
+    expect(capture).toHaveBeenCalled();
+    expect(onTriggerScan).toHaveBeenCalledWith('data:image/jpeg;base64,view');
+    expect(blaster.props!.surface).not.toBeNull();
+
+    const centre: ApplianceDetection = { ...fridge, box: { x: 0.45, y: 0.45, w: 0.1, h: 0.1 } };
+    rerender(view([], true));
+    rerender(view([centre], false));
+    expect(onSelectAppliance).toHaveBeenCalledWith('fridge');
   });
 });

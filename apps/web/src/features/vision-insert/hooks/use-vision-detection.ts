@@ -8,6 +8,7 @@ import {
   type VisionDetectionsEvent,
 } from '@/lib/vision';
 import { prepareVisionImage } from '../utils/prepare-image';
+import { expectedDetectionsFor } from '../utils/expected-detections';
 import { useKeptRef, useKeptState } from './use-kept-state';
 
 /** `loading` = waiting for boxes · `refining` = boxes shown, SAM outlines coming · `ready` · `error`. */
@@ -48,6 +49,9 @@ export function useVisionDetection(scope?: string) {
       try {
         const form = new FormData();
         form.append('image', await prepareVisionImage(imageDataUrl), 'photo.jpg');
+        // 360° test tour scan: its labelled objects, for offline (mock) answers.
+        const expected = expectedDetectionsFor(imageDataUrl);
+        if (expected) form.append('expected', JSON.stringify(expected));
         const res = await fetch('/api/vision', {
           method: 'POST',
           body: form,

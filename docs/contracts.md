@@ -545,12 +545,12 @@ drops later slider edits (it restores the whole input). Session GET adds `summar
 `POST /api/voice` multipart `{ audio: WAV ≤ 2 MB (≈ 60 s 16 kHz mono), locale?, sessionId? }` → `{ text, durationMs, source:
 'meta'|'mock', fallback? }`; 400 missing, 413 too big, 415 not WAV. Audio is not stored.
 
-`POST /api/vision` multipart `{ image: JPEG|PNG|WebP ≤ 12 MB (sent as picked, or shrunk to ≤ 2560 px JPEG by the client above 3.5 MB for the 4.5 MB host body limit; the server rotates it per EXIF, fits ≤ 1280 px, re-encodes JPEG q85 with sharp, `server/perception/prepare-image.ts`), sessionId? }` → `text/event-stream`:
+`POST /api/vision` multipart `{ image: JPEG|PNG|WebP ≤ 12 MB (sent as picked, or shrunk to ≤ 2560 px JPEG by the client above 3.5 MB for the 4.5 MB host body limit; the server rotates it per EXIF, fits ≤ 1280 px, re-encodes JPEG q85 with sharp, `server/perception/prepare-image.ts`), sessionId?, expected? }` → `text/event-stream`:
 `vision_detections { phase: 'boxes'|'outlines', detections: ApplianceDetection[], refined? /*outlines only*/, source, model, fallback? }`
 (boxes as soon as Muse answers; outlines after SAM, Meta only) · `vision_error { code: 'VISION_FAILED', message }` · `done {}`.
 400 missing, 413 too big, 415 not an image. Meta + R2: the photo is uploaded once to `vision/<ts>-<rand>.<ext>`
 (`hostVisionImage`) and Muse + SAM get the link (`VisionImage {url, inlineUrl?}`); Meta failure → one retry inline (base64).
-R2 off or mock mode: base64 only, nothing stored. Mock: `MOCK_DETECTIONS`, drawn in `public/samples/vision-room.jpg`.
+R2 off or mock mode: base64 only, nothing stored. Mock: `MOCK_DETECTIONS`, drawn in `public/samples/vision-room.jpg`; `expected` (JSON `ExpectedDetectionsSchema` = `ApplianceDetection[]` ≤ 40, 400 `Invalid expected` if malformed) replaces mock answers only, never Meta's (`withExpectedDetections`): the /village 360° tour sends the hand-labelled objects seen in its scan photo (VS-T14).
 Shared Zod (client + server): `@/lib/vision` (`NormBoxSchema`, `ApplianceDetectionSchema`, `VisionDetectionsEventSchema`).
 `ApplianceDetection.label` = English name from the model (also SAM's text prompt) or the operator's text; `labels?: { fr?, mg? }` =
 same name translated by the model in the same call; the page shows `localLabel(d, locale)` (switching language needs no new call).

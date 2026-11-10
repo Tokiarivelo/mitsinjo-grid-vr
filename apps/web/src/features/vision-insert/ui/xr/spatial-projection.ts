@@ -1,5 +1,5 @@
 import type { ApplianceDetection } from '@/lib/vision';
-import { screenArc, screenPoint, WEBCAM_SCREEN, type WebcamScreenGeometry } from './webcam-screen';
+import { screenPoint, WEBCAM_SCREEN, type ImageSurface } from './webcam-screen';
 
 type Vec3 = [number, number, number];
 
@@ -27,14 +27,15 @@ export interface SpatialProjectionOptions {
   spawnDistance?: number;
   /** Largest side of a spawned model (m). Default: 0.9. */
   maxSpawnSize?: number;
-  screen?: WebcamScreenGeometry;
+  /** Surface the scanned image sits on: webcam wall, or a 360° tour scan plane. */
+  screen?: ImageSurface;
 }
 
 const round = (n: number) => Number(n.toFixed(3));
 
 /**
  * Projects normalized detection boxes ({ x, y, w, h } in [0, 1] of the scanned webcam frame)
- * onto the curved webcam screen, so each hologram frame covers its object in the video
+ * onto the flat image surface (webcam wall or tour scan plane), so each hologram frame covers its object in the video
  * from the viewer's eye, and the spawned 3D model pops out along the same line of sight.
  */
 export function projectDetectionsTo3D(
@@ -50,7 +51,7 @@ export function projectDetectionsTo3D(
   } = options;
   if (!detections || detections.length === 0) return [];
 
-  const arcWidth = screenArc(screen).thetaLength * screen.radius;
+  const arcWidth = screen.width;
 
   return detections.map((det, index) => {
     const { x, y, w, h } = det.box;

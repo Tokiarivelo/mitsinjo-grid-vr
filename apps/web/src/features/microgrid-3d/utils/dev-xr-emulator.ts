@@ -31,3 +31,17 @@ export async function installDevXREmulator(): Promise<boolean> {
     return false;
   }
 }
+
+/** True when the WebXR runtime is the dev emulator (IWER), not a real headset. */
+export function isDevXREmulated(): boolean {
+  return typeof window !== 'undefined' && '__IWER_DEVICE__' in window;
+}
+
+/**
+ * While an emulated session runs, the page stays on screen around the canvas: mark <html> so CSS
+ * hides the app (`[data-app-root]`) and only the immersive canvas and the emulator overlay show.
+ */
+export function markEmulatedImmersion(active: boolean): void {
+  if (typeof document === 'undefined') return;
+  document.documentElement.toggleAttribute('data-xr-emulated', active && isDevXREmulated());
+}

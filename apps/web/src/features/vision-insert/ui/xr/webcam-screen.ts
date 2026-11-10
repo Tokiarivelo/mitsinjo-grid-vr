@@ -1,102 +1,104 @@
 /**
- * Geometry of the curved webcam screen in the /village VR studio.
- * Single source of truth shared by the backdrop mesh, the target projection and the
- * blaster raycast, so a shot at an object seen in the video lands on that object.
+ * Flat image surfaces of the /village VR studio: where a photo / video frame sits in the world.
+ * Single source of truth shared by the backdrop mesh, the target projection and the blaster
+ * raycast, so a shot at an object seen in the image lands on that object.
  *
- * The screen is the inside of an open cylinder (axis vertical, centred at z = centerZ),
- * mirrored on X so the video reads left-to-right. Image coords: u → right, v → down, in [0, 1].
+ * - `WEBCAM_SCREEN`: the live webcam wall, flat (no cylinder), bottom edge on the floor.
+ * - `surfaceFromView`: the invisible plane of a 360° tour scan photo (`tour/equirect.ts`).
+ * Image coords: u → right, v → down, in [0, 1].
  */
-export interface WebcamScreenGeometry {
-  /** Cylinder radius (m). Large radius = nearly flat central focus. */
-  radius: number;
-  /** Screen height (m). */
+type Vec3 = [number, number, number];
+
+export interface ImageSurface {
+  /** World centre of the image. */
+  center: Vec3;
+  /** Unit vectors along the image's +u (right) and its up (−v). */
+  right: Vec3;
+  up: Vec3;
+  /** Size of the image on the surface (m). */
+  width: number;
   height: number;
-  /** Distance from the origin to the screen centre along -Z (m). */
-  distance: number;
-  /** Height of the screen centre (m). height / 2 keeps the bottom edge on the floor. */
-  centerY: number;
-  /** Video aspect ratio (width / height). */
-  aspect: number;
 }
 
-export const WEBCAM_SCREEN: WebcamScreenGeometry = {
-  radius: 8.5,
-  height: 4.2,
-  distance: 2.6,
-  centerY: 2.1,
-  aspect: 16 / 9,
+const WEBCAM_HEIGHT = 4.2;
+
+/** Live webcam wall: 16:9, 2.6 m ahead, bottom edge on the floor. */
+export const WEBCAM_SCREEN: ImageSurface = {
+  center: [0, WEBCAM_HEIGHT / 2, -2.6],
+  right: [1, 0, 0],
+  up: [0, 1, 0],
+  width: (WEBCAM_HEIGHT * 16) / 9,
+  height: WEBCAM_HEIGHT,
 };
 
-export interface ScreenArc {
-  thetaStart: number;
-  thetaLength: number;
-  /** Z of the cylinder axis. */
-  centerZ: number;
-}
-
-export function screenArc(g: WebcamScreenGeometry = WEBCAM_SCREEN): ScreenArc {
-  const thetaLength = (g.height * g.aspect) / g.radius;
+/** Plane `distance` m ahead of `eye`, facing it, covering the view's field of view. */
+export function surfaceFromView(
+  eye: Vec3,
+  basis: { forward: Vec3; right: Vec3; up: Vec3; tx: number; ty: number },
+  distance: number
+): ImageSurface {
   return {
-    thetaLength,
-    thetaStart: Math.PI - thetaLength / 2,
-    centerZ: g.radius - g.distance,
+    center: [
+      eye[0] + basis.forward[0] * distance,
+      eye[1] + basis.forward[1] * distance,
+      eye[2] + basis.forward[2] * distance,
+    ],
+    right: basis.right,
+    up: basis.up,
+    width: 2 * distance * basis.tx,
+    height: 2 * distance * basis.ty,
   };
 }
 
-/** World point [x, y, z] of image coords (u, v) on the screen surface. */
-export function screenPoint(
-  u: number,
-  v: number,
-  g: WebcamScreenGeometry = WEBCAM_SCREEN
-): [number, number, number] {
-  const { thetaStart, thetaLength, centerZ } = screenArc(g);
-  const theta = thetaStart + u * thetaLength;
+/** World point [x, y, z] of image coords (u, v) on the surface. */
+export function screenPoint(u: number, v: number, s: ImageSurface = WEBCAM_SCREEN): Vec3 {
+  const a = (u - 0.5) * s.width;
+  const b = (0.5 - v) * s.height;
   return [
-    -g.radius * Math.sin(theta),
-    g.centerY + g.height / 2 - v * g.height,
-    centerZ + g.radius * Math.cos(theta),
+    s.center[0] + s.right[0] * a + s.up[0] * b,
+    s.center[1] + s.right[1] * a + s.up[1] * b,
+    s.center[2] + s.right[2] * a + s.up[2] * b,
   ];
 }
 
 export interface ScreenHit {
   u: number;
   v: number;
-  point: [number, number, number];
+  point: Vec3;
   /** Distance along the ray (m). */
   distance: number;
 }
 
-type Vec3 = { x: number; y: number; z: number };
+type XYZ = { x: number; y: number; z: number };
 
-/**
- * Where a ray (from inside the cylinder) meets the screen, in image coords.
- * Null when the ray leaves through the uncovered part of the cylinder or points away.
- */
+/** Where a ray meets the surface, in image coords; null when it misses or points away. */
 export function screenHitFromRay(
-  origin: Vec3,
-  direction: Vec3,
-  g: WebcamScreenGeometry = WEBCAM_SCREEN
+  origin: XYZ,
+  direction: XYZ,
+  s: ImageSurface = WEBCAM_SCREEN
 ): ScreenHit | null {
-  const { thetaStart, thetaLength, centerZ } = screenArc(g);
-  const ox = origin.x;
-  const oz = origin.z - centerZ;
-  const a = direction.x * direction.x + direction.z * direction.z;
-  if (a < 1e-9) return null;
-  const b = 2 * (ox * direction.x + oz * direction.z);
-  const c = ox * ox + oz * oz - g.radius * g.radius;
-  const disc = b * b - 4 * a * c;
-  if (disc < 0) return null;
-  const t = (-b + Math.sqrt(disc)) / (2 * a);
+  const [rx, ry, rz] = s.right;
+  const [ux, uy, uz] = s.up;
+  // Normal = right × up (towards the viewer).
+  const nx = ry * uz - rz * uy;
+  const ny = rz * ux - rx * uz;
+  const nz = rx * uy - ry * ux;
+  const denom = direction.x * nx + direction.y * ny + direction.z * nz;
+  if (Math.abs(denom) < 1e-9) return null;
+  const t =
+    ((s.center[0] - origin.x) * nx +
+      (s.center[1] - origin.y) * ny +
+      (s.center[2] - origin.z) * nz) /
+    denom;
   if (t <= 0) return null;
-
   const px = origin.x + direction.x * t;
   const py = origin.y + direction.y * t;
   const pz = origin.z + direction.z * t;
-  // Undo the X mirror, then read the cylinder angle (x = R sin θ, z = R cos θ).
-  let theta = Math.atan2(-px, pz - centerZ);
-  if (theta < 0) theta += Math.PI * 2;
-  const u = (theta - thetaStart) / thetaLength;
-  const v = (g.centerY + g.height / 2 - py) / g.height;
+  const dx = px - s.center[0];
+  const dy = py - s.center[1];
+  const dz = pz - s.center[2];
+  const u = 0.5 + (dx * rx + dy * ry + dz * rz) / s.width;
+  const v = 0.5 - (dx * ux + dy * uy + dz * uz) / s.height;
   if (u < 0 || u > 1 || v < 0 || v > 1) return null;
   return { u, v, point: [px, py, pz], distance: t };
 }

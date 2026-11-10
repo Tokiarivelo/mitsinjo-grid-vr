@@ -1,8 +1,9 @@
 // /village VR probe: drives the dev IWER emulator (Quest 3) like the IWER MCP does, through
 // `window.__IWER_DEVICE__.remote.dispatch`, with the sample room fed as a fake webcam.
-// Checks: session starts; a controller shot at the fridge in the video (no scan yet) starts ONE
-// scan and turns it into a spinning 3D miniature in reach; a tap on the miniature connects it;
-// a hand pinch at the fan and the left controller at the TV add their miniatures.
+// The emulator shows the walkable 360° tour (VS-T14), not the webcam. Checks: session starts;
+// wrist menu; loft with 2 floor arrows; a controller shot at the fridge (no scan yet) starts ONE
+// scan and a miniature; a tap on it connects it; a hand pinch at the lamp; shooting a floor
+// arrow walks to the hall; ↑ walks on. Screenshots show the photo orientation ("MARRY" letters).
 // Screenshots in <outDir>/vr-*.png.
 // Usage: node scripts/vr-village-probe.mjs <baseUrl> <outDir>   (dev server must run; needs ffmpeg)
 import { chromium } from '@playwright/test';
@@ -39,16 +40,17 @@ if (!existsSync(video)) {
   ]);
 }
 
-// Mirror of src/features/vision-insert/ui/xr/webcam-screen.ts (WEBCAM_SCREEN).
-const G = { radius: 8.5, height: 4.2, distance: 2.6, centerY: 2.1, aspect: 16 / 9 };
-function screenPoint(u, v) {
-  const L = (G.height * G.aspect) / G.radius;
-  const th = Math.PI - L / 2 + u * L;
-  const cz = G.radius - G.distance;
+// Mirror of src/features/vision-insert/ui/xr/tour (TOUR_EYE, tour-data boxes): a point
+// `dist` m from the eye in the direction of panorama image point (u, v), given `uFront`.
+const EYE = { x: 0, y: 1.6, z: 0 };
+function panoPoint(u, v, uFront, dist = 6) {
+  const yaw = (u - uFront) * Math.PI * 2;
+  const pitch = (0.5 - v) * Math.PI;
+  const c = Math.cos(pitch);
   return {
-    x: -G.radius * Math.sin(th),
-    y: G.centerY + G.height / 2 - v * G.height,
-    z: cz + G.radius * Math.cos(th),
+    x: EYE.x + Math.sin(yaw) * c * dist,
+    y: EYE.y + Math.sin(pitch) * dist,
+    z: EYE.z - Math.cos(yaw) * c * dist,
   };
 }
 // First miniature pedestal: mirror of miniatureSlot(0) in xr-layout.ts.
@@ -57,10 +59,9 @@ const MINI_0 = {
   y: 1.28,
   z: -Math.cos((18 * Math.PI) / 180) * 0.55,
 };
-// Object centres in the sample room (mock detector boxes).
-const FRIDGE = screenPoint(0.2137, 0.5506);
-const FAN = screenPoint(0.787, 0.631);
-const TV = screenPoint(0.543, 0.419);
+// Loft objects (centres of the hand-drawn boxes in tour-data.ts).
+const FRIDGE_UV = [0.8435, 0.552];
+const LAMP_UV = [0.9285, 0.465];
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const results = [];
@@ -148,29 +149,65 @@ try {
   if (m1) await fire('controller-right', m1.button, { x: 0.2, y: 1.3, z: -0.1 });
   check('a second press closes it', (await menu())?.open === false);
 
-  await fire('controller-right', FRIDGE, { x: 0.2, y: 1.3, z: -0.3 });
-  check('a shot at the video before any scan starts a scan', scans === 1);
+  const tour = () => page.evaluate(() => window.__VR_TOUR__ ?? null);
+  const t0tour = await tour();
+  check(
+    'tour starts in the loft with 2 floor arrows',
+    t0tour?.room === 'loft' && t0tour.arrows.length === 2
+  );
+  const uF = t0tour?.uFront ?? 0.8;
+  const fridge = panoPoint(...FRIDGE_UV, uF);
+  await rc('look_at', { device: 'headset', target: fridge });
+  await sleep(800);
+  await shot('2-loft-fridge-ahead');
+  await fire('controller-right', fridge, { x: 0.15, y: 1.45, z: -0.15 });
+  check('a shot at the 360° photo before any scan starts a scan', scans === 1);
   const t0 = Date.now();
   while (scansDone === 0 && Date.now() - t0 < 120000) await sleep(1000);
   await sleep(3000);
-  await shot('2-fridge-3d');
-  await sleep(1200);
-  await shot('2b-fridge-spinning');
+  await shot('3-fridge-3d');
   await fire('controller-right', MINI_0, { x: 0.25, y: 1.3, z: 0 });
-  await shot('3-fridge-connected');
+  await shot('4-fridge-connected');
   check('one scan only (no double fire)', scans === 1);
 
   await rc('set_input_mode', { mode: 'hand' });
-  await fire('hand-right', FAN, { x: 0.2, y: 1.3, z: 0 });
-  await shot('4-hand-fan-3d');
-
+  await fire('hand-right', panoPoint(...LAMP_UV, uF, 3), { x: 0.2, y: 1.35, z: -0.1 });
+  await shot('5-hand-lamp');
   await rc('set_input_mode', { mode: 'controller' });
-  await fire('controller-left', TV, { x: -0.2, y: 1.3, z: 0 });
-  await shot('5-tv-3d');
+
+  const hall = (await tour())?.arrows.find((a) => a.to === 'hall');
+  if (hall) {
+    const at = { x: hall.position[0], y: hall.position[1], z: hall.position[2] };
+    await rc('look_at', { device: 'headset', target: at });
+    await sleep(600);
+    await shot('6-arrow-hall');
+    await fire('controller-right', at, { x: 0.2, y: 1.2, z: -0.1 });
+  }
+  await sleep(1500);
+  const inHall = await tour();
+  check('shooting the floor arrow walks to the hall', inHall?.room === 'hall');
+  await rc('look_at', { device: 'headset', target: panoPoint(0.825, 0.56, inHall?.uFront ?? 0) });
+  await sleep(800);
+  await shot('7-hall-marry-letters');
+
+  const lounge = inHall?.arrows.find((a) => a.to === 'lounge');
+  if (lounge) {
+    await rc('look_at', {
+      device: 'headset',
+      target: { x: lounge.position[0], y: 1.2, z: lounge.position[2] },
+    });
+    await sleep(600);
+    await page.keyboard.press('ArrowUp');
+  }
+  await sleep(1500);
+  check('↑ walks to the room ahead (lounge)', (await tour())?.room === 'lounge');
+  await shot('8-lounge');
   check('no page errors', errors.length === 0);
   if (errors.length) console.log(errors.slice(0, 10).join('\n'));
 } finally {
   await browser.close();
 }
-console.log(`Screenshots: ${outDir}/vr-*.png (check the 3D models over the fridge, fan and TV)`);
+console.log(
+  `Screenshots: ${outDir}/vr-*.png (check the fridge miniature and that MARRY reads left to right)`
+);
 process.exit(results.every((r) => r.ok) ? 0 : 1);

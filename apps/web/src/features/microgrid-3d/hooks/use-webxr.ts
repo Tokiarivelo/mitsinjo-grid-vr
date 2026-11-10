@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
 import type { WebGLRenderer } from 'three';
 import { isImmersiveVRSupported, startImmersiveVRSession } from '../utils/xr-session';
-import { installDevXREmulator } from '../utils/dev-xr-emulator';
+import { installDevXREmulator, markEmulatedImmersion } from '../utils/dev-xr-emulator';
 
 export type WebXRStatus = 'checking' | 'unsupported' | 'supported' | 'active';
 
@@ -44,6 +44,7 @@ export function useWebXR(rendererRef: RefObject<WebGLRenderer | null>): UseWebXR
     () => () => {
       const session = sessionRef.current;
       sessionRef.current = null;
+      markEmulatedImmersion(false);
       void session?.end()?.catch(() => undefined);
     },
     []
@@ -63,10 +64,12 @@ export function useWebXR(rendererRef: RefObject<WebGLRenderer | null>): UseWebXR
           'end',
           () => {
             sessionRef.current = null;
+            markEmulatedImmersion(false);
             setStatus('supported');
           },
           { once: true }
         );
+        markEmulatedImmersion(true);
         setStatus('active');
       },
       (cause: unknown) => {

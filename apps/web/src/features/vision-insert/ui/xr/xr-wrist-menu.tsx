@@ -15,7 +15,7 @@ import {
   type WristMenu,
   type WristXR,
 } from './wrist-menu';
-import { getWristIconTexture, getWristLabelTexture } from './wrist-menu-texture';
+import { getWristIconTexture, getPillLabelTexture } from './wrist-menu-texture';
 
 // Frame-loop scratch objects (no allocation per frame).
 const _v = new THREE.Vector3();
@@ -73,7 +73,7 @@ export const WristMenuButton = memo(function WristMenuButton({
 
   const icon = useMemo(() => getWristIconTexture(open), [open]);
   const label = useMemo(
-    () => getWristLabelTexture(open ? t('vrWristMenuClose') : t('vrWristMenuOpen'), open),
+    () => getPillLabelTexture(open ? t('vrWristMenuClose') : t('vrWristMenuOpen'), open),
     [open, t]
   );
 

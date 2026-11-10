@@ -1212,7 +1212,14 @@
         "cancel": "Foanana",
         "cancelLabel": "Foanana ny fanatsarana ny modely"
       },
-      "minimapEms": "EMS"
+      "minimapEms": "EMS",
+      "tourGoTo": "Mankany : {room}",
+      "tourRoom_hall": "Efitra fandraisana",
+      "tourRoom_loft": "Lakozia",
+      "tourRoom_bedroom": "Efitra fatoriana",
+      "tourRoom_bath": "Efitra fandroana",
+      "tourRoom_salon": "Efitra fandraisam-bahiny",
+      "tourRoom_lounge": "Efitra fialan-tsasatra"
     },
     "dispatch": {
       "modeLabel": "Fomba fandefasana",

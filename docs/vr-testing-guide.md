@@ -81,9 +81,9 @@ redondante mais compatible).
 
 ## /village : vérification scriptée dans l'émulateur
 
-`make vr-probe` (serveur dev lancé, ffmpeg) : webcam simulée = pièce d'exemple, IWER piloté via
-`window.__IWER_DEVICE__.remote.dispatch` (dev seulement, même API que l'IWER MCP) — manettes, mains,
-tir sur les objets de la vidéo. Détails : `docs/vr-village-spatial-detection.md` §6.
+`make vr-probe` (serveur dev lancé, ffmpeg) : IWER piloté via `window.__IWER_DEVICE__.remote.dispatch`
+(dev seulement, même API que l'IWER MCP) dans l'espace 360° (VS-T14, lu via `window.__VR_TOUR__`) —
+menu au poignet, tir sur le frigo du loft, main, flèche au sol → hall, ↑ → séjour (11 PASS). Détails : `docs/vr-village-spatial-detection.md` §6.
 
 ## Tests automatiques (déjà verts)
 

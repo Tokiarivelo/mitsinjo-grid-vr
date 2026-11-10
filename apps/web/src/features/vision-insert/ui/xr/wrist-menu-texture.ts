@@ -46,29 +46,36 @@ export function getWristIconTexture(open: boolean): THREE.CanvasTexture {
   return tex;
 }
 
-/** Small pill label above the wrist button (translated text passed in). Cached per text. */
-export function getWristLabelTexture(text: string, open: boolean): THREE.CanvasTexture {
-  const key = `label:${open}:${text}`;
+/**
+ * Pill label (translated text passed in): above the wrist button, over the tour's floor arrows.
+ * `active` = violet border (open / hovered), cyan otherwise. Cached per text, state and width.
+ */
+export function getPillLabelTexture(
+  text: string,
+  active: boolean,
+  width = 256
+): THREE.CanvasTexture {
+  const key = `label:${active}:${width}:${text}`;
   const hit = cache.get(key);
   if (hit) return hit;
   const canvas = document.createElement('canvas');
-  canvas.width = 256;
+  canvas.width = width;
   canvas.height = 64;
   const ctx = canvas.getContext('2d');
   if (ctx) {
     ctx.fillStyle = 'rgba(8, 16, 32, 0.9)';
     ctx.beginPath();
-    if (ctx.roundRect) ctx.roundRect(2, 2, 252, 60, 28);
-    else ctx.rect(2, 2, 252, 60);
+    if (ctx.roundRect) ctx.roundRect(2, 2, width - 4, 60, 28);
+    else ctx.rect(2, 2, width - 4, 60);
     ctx.fill();
     ctx.lineWidth = 3;
-    ctx.strokeStyle = open ? '#c084fc' : '#38bdf8';
+    ctx.strokeStyle = active ? '#c084fc' : '#38bdf8';
     ctx.stroke();
     ctx.font = 'bold 30px "Inter", -apple-system, sans-serif';
     ctx.fillStyle = '#f0f9ff';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(text, 128, 33);
+    ctx.fillText(text, width / 2, 33, width - 24);
   }
   const tex = toTexture(canvas);
   cache.set(key, tex);
