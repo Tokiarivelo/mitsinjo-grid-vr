@@ -206,6 +206,10 @@ Reste, **rien à faire de votre côté pour l'instant** :
 
 PQ-T37 se coche quand la colonne est vide ou expliquée pour chaque objet réel.
 
+**État au 2026-11-10 :** colonne expliquée pour chaque objet réel, liste des pièces dans le panneau livrée
+(PR #10). **À refaire plus tard :** dès que PQ-T12 (phase Q1) est fait, brancher `evidence.visibleParts` dans
+`notBuilt` / `partCoverage` (chaque partie listée construite ou affichée « non construite »), puis cocher PQ-T37.
+
 ---
 
 ## Résumé : votre liste
