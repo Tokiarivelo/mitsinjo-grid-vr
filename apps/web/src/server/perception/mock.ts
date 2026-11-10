@@ -1,10 +1,12 @@
 import type { PartsSubject, PerceptionBackend, PerceptionCall, ShapeSubject } from './backend';
+import { JUDGE_CRITERIA, type JudgeCriterion } from './rubric-judge';
 import { mockRecipe } from './shape';
 import { boxUnionCoverage } from './parse-sam';
 import { classifyLabel } from './detect';
 import type {
   ApplianceDetection,
   CriticResult,
+  JudgeResult,
   ViewsCheckResult,
   ShapeOpsResult,
   DetectionResult,
@@ -15,6 +17,9 @@ import type {
   Transcript,
   VisionResult,
 } from './schemas';
+
+/** The mock judge's grade on every criterion (PQ-T4). */
+export const MOCK_JUDGE_GRADE = 3;
 
 /** Model id reported by every mock perception result. */
 export const MOCK_PERCEPTION_MODEL = 'mock-perception-v1';
@@ -240,6 +245,19 @@ export class MockPerceptionBackend implements PerceptionBackend {
   ): Promise<PerceptionCall<CriticResult>> {
     // The mock never patches: the critic round is a no-op without Meta.
     return { model: MOCK_PERCEPTION_MODEL, usage: {}, result: { patch: null } };
+  }
+
+  /** Fixed grade 3 on every criterion: the judge is a developer tool, never live in mock. */
+  async judgeShape(_imageUrl: string, _question: string): Promise<PerceptionCall<JudgeResult>> {
+    const grades = Object.fromEntries(JUDGE_CRITERIA.map((c) => [c, MOCK_JUDGE_GRADE])) as Record<
+      JudgeCriterion,
+      number
+    >;
+    return {
+      model: MOCK_PERCEPTION_MODEL,
+      usage: {},
+      result: { judgement: { grades, notes: {} } },
+    };
   }
 
   async checkViews(

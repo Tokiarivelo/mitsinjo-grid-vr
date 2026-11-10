@@ -43,6 +43,9 @@ features/copilot/          # ChatPanel, ChatMessage, ToolActivity, ConfirmPropos
   (IoU ≥ 0.05); then SAM on the whole photo (Meta only). Mock: the hint classified by keywords (EN + FR/MG aliases), no hint → none.
   `refineDetections` (`outline.ts`, PV-T5): one SAM call per distinct label (≤ 8, parallel, 8 s timeout each), greedy best-IoU
   (≥ 0.3) match → the detection takes the pixel-precise SAM box. Timeout, error, spend cap or a mock answer → Muse box kept.
+  The SAM word is `conceptOf(label)`: the head noun, i.e. the last known noun before a complement (« vintage TV » → `tv`,
+  « car with roof rack » → `car`). The on-demand outline (`fetchOutlineForBox`) walks `samRetries` while it misses: the full label
+  (« pole » → « utility pole », PQ-T1), then a measured lookalike SAM knows (`pump` → « fire hydrant », PQ-T9); only while SAM answers without a match (a timeout, a failed call or a mock answer ends the walk). `make sam-probe ID=… CONCEPTS=…` compares words on a capture.
   `parseSamOutput` also returns each mask still encoded (`{encoding, height, width, payload}`, raster over the box);
   `mask-outline.ts` decodes it with `@meta-sam/parser` (SAM License, `THIRD_PARTY_NOTICES.md`) into a simplified SVG path in
   image fractions (≤ 160 points) set on each SAM instance and carried to the matched detection. Unreadable mask → no outline. Never throws: missing key, spend cap or API error → deterministic mock with `fallback` set.
@@ -77,6 +80,18 @@ features/copilot/          # ChatPanel, ChatMessage, ToolActivity, ConfirmPropos
   Every object is modelled, scenery too (`scenery` sent with the target; silhouette depth per scenery type).
   Mock: fixed recipes (fridge, TV, fan, lamp; house, tree, plant, car, person, animal, water; else a box), not checked.
   Image generation stays in `providers/meta.ts` (`/responses`, model `META_IMAGE_MODEL`).
+  **Rubric judge (PQ-T4, `rubric-judge.ts` + `judgeShape`):** Muse Wonder (`META_JUDGE_MODEL`) grades the model 1–5
+  on silhouette, proportions, parts present, parts placed, surfaces, likeness from one sheet (photo | front | ¾);
+  offline only (`make shape-judge`), never in a live answer; mock = grade 3. Trusted by the loop only after its
+  calibration (damaged models lower in ≥ 90 % of pairs). Run 2026-11-10: 77 % of 13 pairs → **developer note
+  only**. Only live Meta answers count and are stored (`liveJudgement`: a mock or fallback grade 3 never does);
+  captures under three parts are skipped (`damage` removes nothing).
+  **Prompt versions (PQ-T5):** `KIT_PROMPT_VERSION`, `CRITIC_PROMPT_VERSION` (`shape.ts`),
+  `VIEWS_CHECK_PROMPT_VERSION` (`views-check.ts`), `SIDE_VIEW_PROMPT_VERSION` (`facade-views.ts`), all 1, beside
+  `SHAPE_SCRIPT_PROMPT_VERSION`. Each call logs its `promptVersion` in the `[vision] 3D … → params` line; captures
+  store the kit version (`ShapeCapture.promptVersion`, absent on older ones). Old kit prompts stay in
+  `KIT_PROMPTS`; `make eval-shape PROMPT=1,2` asks each listed version on the same captures, one table section per
+  version (total agreement, median seconds). Bump the version with every prompt change.
 - `server/spend/`: `SpendGuard` estimates cost from catalogue prices (API `usage` when given, else ≈ 4 chars/token) per session
   (`sessionId`, else `global`). Over `META_SPEND_CAP_USD` → mock + `PROVIDER_FALLBACK` `reason: 'spend_cap'`. In memory: resets on restart.
 - Measured 2026-10-30 (real calls): vision ≈ 10 s (≈ 1 200 reasoning tokens), SAM ≈ 5 s, image ≈ 12–23 s, voice ≈ 3 s.

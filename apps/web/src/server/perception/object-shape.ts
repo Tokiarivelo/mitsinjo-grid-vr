@@ -4,6 +4,7 @@ import { elevationForCheckpoint, type StageLoopContext } from './stage-checkpoin
 
 import {
   MAX_RECIPE_PARTS,
+  clampParts,
   SHAPE_TIMEOUT_MS,
   fitRecipe,
   frontPartIndex,
@@ -31,8 +32,8 @@ import {
   sampleObjectPixels,
   sampleObjectRgb,
 } from './shape-colors';
-import { conceptOf, fetchOutlineForBox, type OutlineCrop } from './outline';
-import { applyConstraints, buildGraph } from './object-graph';
+import { conceptOf, fetchOutlineForBox, samRetries, type OutlineCrop } from './outline';
+import { applyConstraints, buildGraph, notBuilt, repairGraph } from './object-graph';
 import { deduceHiddenSides } from './hidden-sides';
 import { enforcePartBudget } from './mask-geometry';
 import { cropForShape, cropRectForShape } from './shape-crop';
@@ -289,7 +290,7 @@ export async function runObjectShape(
             fullImageUrl,
             conceptOf(target),
             target.box,
-            outlineCrop ? { crop: outlineCrop } : {}
+            { ...(outlineCrop ? { crop: outlineCrop } : {}), retries: samRetries(target) }
           ).then(
             (hit) => hit ?? undefined,
             () => undefined
@@ -877,6 +878,17 @@ export async function runObjectShape(
       // fit values read estimated, a single view never measures depth, the box-fit scale is
       // estimated (metric scale arrives with free placement).
       if (finalKit) {
+        // PQ-T37: hard geometry gates fixed by rule (floating parts pulled in, fused twins merged).
+        const repair = repairGraph(finalKit.archetype, recipe);
+        if (repair.recipe !== recipe) {
+          console.info(
+            `[vision] 3D graph repair for "${target.label}": pulled ${repair.pulled.length} floating part(s), merged ${repair.merged.length} duplicate(s)`
+          );
+          recipe = repair.recipe;
+        }
+        const missing = notBuilt(recipe, partMasks ?? []);
+        if (missing.length)
+          console.info(`[vision] 3D seen, not built for "${target.label}": ${missing.join(', ')}`);
         const graph = buildGraph(finalKit.archetype, recipe, {
           outline: !!shaped.outline,
           photo: !!photo,
@@ -905,6 +917,14 @@ export async function runObjectShape(
             scale: template,
           },
         };
+      }
+      // A fitting step can squeeze a part under the schema minimum (house-front capture, PQ-T1).
+      const safe = clampParts(recipe);
+      if (safe.clamped.length) {
+        console.info(
+          `[vision] 3D clamp for "${target.label}": part(s) ${safe.clamped.map((i) => `${i} (${recipe.parts[i]!.kind ?? recipe.parts[i]!.shape})`).join(', ')} out of range`
+        );
+        recipe = safe.recipe;
       }
       if (photo) {
         try {

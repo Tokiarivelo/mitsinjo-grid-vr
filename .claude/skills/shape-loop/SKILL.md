@@ -25,7 +25,9 @@ look at the ¾ column of the sheet and say what a person would still find wrong.
 5. **Review** every 3rd iteration or after a « Look » task: `/designer-3d` on the ¾ sheet, ≤ 3 issues, score 1–5.
 6. **Log** one row in the plan's « Loop log » (date, task / fix, mean IoU, edge F1, mean ΔE, designer, note); tick the
    task; commit (+ push) with the scores in the message.
-7. **Stop** when every object meets the criteria, or after 3 rounds on the same issue without gain → report to the
+7. **Stop** when every object meets the criteria (`STOP` + `STOP_DETAIL` in `shape-report.ts`, methodology §9:
+   IoU ≥ 0.85, edge F1 ≥ 0.6, ΔE ≤ 8; with part masks recall ≥ 0.8, precision ≥ 0.8, interior edge F1 ≥ 0.12,
+   part ΔE ≤ 7), or after 3 rounds on the same issue without gain → report to the
    user with the sheet and the blocking cause. In `/loop` mode, end the loop on either.
 
 Report to the user: outcome first (scores before → after), what changed, what is still below target.

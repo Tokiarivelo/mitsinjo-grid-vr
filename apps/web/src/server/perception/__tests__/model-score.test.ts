@@ -4,7 +4,16 @@ import type { ObjectRecipe, RecipePart } from '@/lib/object-shape';
 vi.mock('server-only', () => ({}));
 import { hexToRgb } from '../color-measure';
 import { renderFlat } from '../flat-render';
-import { edgeMap, scoreModel, type RgbGrid } from '../model-score';
+import {
+  edgeMap,
+  SCORE_WEIGHTS,
+  SCORE_WEIGHTS_DETAIL,
+  SCORE_WEIGHTS_LANDMARKS,
+  scoreModel,
+  weightDetail,
+  type ModelScore,
+  type RgbGrid,
+} from '../model-score';
 import { scoreRecipe } from '../score-shape';
 import { emptyMask, type Mask } from '../silhouette-fit';
 import { GOLDEN_SHAPES } from '../__fixtures__/shape';
@@ -181,5 +190,29 @@ describe('scoreRecipe on the golden set (PR-0.2)', () => {
   it('is null without an outline', async () => {
     const { shape, photo: p, target } = await runGolden(GOLDEN_SHAPES[2]!);
     expect(await scoreRecipe(p, { box: target.box }, shape.recipe!)).toBeNull();
+  });
+});
+
+describe('detail weights (PQ-T6)', () => {
+  const sum = (w: Record<string, number>) => Object.values(w).reduce((a, b) => a + b, 0);
+  const base: ModelScore = { iou: 0.8, edgeF1: 0.5, deltaE: 10, score: 66 };
+
+  it('every weight set sums to 1', () => {
+    for (const w of [SCORE_WEIGHTS, SCORE_WEIGHTS_LANDMARKS, SCORE_WEIGHTS_DETAIL])
+      expect(sum(w)).toBeCloseTo(1, 10);
+  });
+
+  it('without part masks the classic score stays', () => {
+    expect(weightDetail(base)).toBe(base);
+    const noParts = { ...base, detail: { interiorEdgeF1: 0.3 } };
+    expect(weightDetail(noParts)).toBe(noParts);
+  });
+
+  it('with part masks, missing parts pull the score down', () => {
+    const all = weightDetail({ ...base, detail: { partRecall: 1, partPrecision: 1 } });
+    const half = weightDetail({ ...base, detail: { partRecall: 0.5, partPrecision: 1 } });
+    // 100 × (0.3·0.8 + 0.25·0.5 + 0.2·(1 − 10/25) + 0.25·1) = 73.5
+    expect(all.score).toBe(74);
+    expect(half.score).toBeLessThan(all.score);
   });
 });

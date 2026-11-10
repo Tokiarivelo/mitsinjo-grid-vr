@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { kitToRecipe, ObjectKitSchema, type ObjectKit } from '@/lib/object-kit';
 import {
   ObjectRecipeSchema,
+  PartMaskSchema,
   ShapeTargetSchema,
   type ObjectRecipe,
   type PartMask,
@@ -35,6 +36,8 @@ export const ShapeCaptureSchema = z.object({
   target: ShapeTargetSchema,
   /** Spark's kit answer (what the loop patches and replays). */
   kit: ObjectKitSchema,
+  /** Kit prompt version that produced `kit` (PQ-T5); absent on captures older than versions. */
+  promptVersion: z.number().int().min(1).optional(),
   recipe: ObjectRecipeSchema.optional(),
   fit: z.object({ iou: z.number().min(0).max(1) }).optional(),
   /** Spark latency, seconds. */
@@ -96,6 +99,32 @@ export function remapOutlineToCrop(
     .join('');
 }
 
+/**
+ * The detection a capture is about (PQ-T1): `pick` as a detection id, else the biggest box whose label
+ * contains `pick`, else (when `pick` has several words, like the id `car-side`) its first word. Null
+ * when nothing matches; the caller lists the candidates.
+ */
+export function pickDetection<
+  D extends { id: string; label: string; box: { w: number; h: number } },
+>(detections: ReadonlyArray<D>, pick: string): D | null {
+  const byId = detections.find((d) => d.id === pick);
+  if (byId) return byId;
+  const biggest = (word: string) =>
+    detections
+      .filter((d) => d.label.toLowerCase().includes(word.toLowerCase()))
+      .reduce<D | null>((a, d) => (!a || d.box.w * d.box.h > a.box.w * a.box.h ? d : a), null);
+  const first = pick.split(/[-_\s]+/)[0] ?? '';
+  return biggest(pick) ?? (first && first !== pick ? biggest(first) : null);
+}
+
+/** The valid SAM part masks of a capture (stored loosely; malformed ones dropped). */
+export function captureMasks(capture: Pick<ShapeCapture, 'partMasks'>): PartMask[] {
+  return (capture.partMasks ?? []).flatMap((m) => {
+    const parsed = PartMaskSchema.safeParse(m);
+    return parsed.success ? [parsed.data] : [];
+  });
+}
+
 /** `<dir>/<id>.capture.json` + `<dir>/<id>.crop.jpg` (the exact bytes Spark saw). */
 export function writeCapture(
   dir: string,
@@ -131,9 +160,18 @@ export async function rescoreCapture(dir: string, id: string): Promise<RecipeSco
   const { capture, cropPhoto } = await readCapture(dir, id);
   const recipe: ObjectRecipe | undefined = capture.recipe;
   if (!recipe) return null;
-  // No masks: captured boxes are fractions of the saved crop, but scoreRecipe would remap them
-  // through a crop-of-the-crop. Replay stays 3-term until the mapping is capture-aware.
-  return scoreRecipe(cropPhoto, capture.cropTarget, recipe);
+  // Captured mask boxes are fractions of the saved crop, i.e. of the whole replayed image (PQ-T1).
+  const masks = captureMasks(capture);
+  if (!masks.length) return scoreRecipe(cropPhoto, capture.cropTarget, recipe);
+  const { width, height } = cropPhoto;
+  return scoreRecipe(cropPhoto, capture.cropTarget, recipe, masks, {
+    left: 0,
+    top: 0,
+    width,
+    height,
+    outWidth: width,
+    outHeight: height,
+  });
 }
 
 export interface CriticReplayRound {

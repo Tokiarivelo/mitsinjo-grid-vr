@@ -340,7 +340,14 @@ make test-integration
 make test-shape
 
 # 3D shape report: scores + contact sheet (photo | flat | ¾) → test-results/shape-report/
+# (synthetic table + « Real » table from the local captures in __fixtures__/shape/real/)
 make shape-report
+# Which SAM word outlines a capture? best box IoU per word, photo and crop (costs SAM calls)
+make sam-probe ID=utility-pole CONCEPTS="pole,utility pole"
+# Rubric judge (Muse Wonder) on the real captures, intact vs damaged → calibration (costs API calls)
+make shape-judge            # REPLAY=1: stored answers only, no API call
+# Kit eval on live Spark, two prompt versions in one table (costs API calls)
+make eval-shape PROMPT=1,2
 # Facade → 3D on live Meta (front + side, sheet.png in OUT); any object with LABEL/SCENERY
 make facade-e2e FRONT=front.png OUT=test-results/facade
 make facade-e2e FRONT=car.png OUT=test-results/car LABEL='purple vintage car' SCENERY=vehicle
@@ -399,6 +406,7 @@ Template with comments: [.env.example](.env.example) · local vs Vercel: [docs/s
 | `META_SEGMENT_MODEL`      | -           | `sam-3.1`                   | outlines each detected object (SAM)                                                                 |
 | `META_IMAGE_MODEL`        | -           | `muse-image-1.0`            | 2D facade drawings, shedding posters                                                                |
 | `META_REFINE_MODEL`       | -           | `muse-wonder-1.0`           | final check + re-refinement of the 3D model (falls back to `META_VISION_MODEL`)                     |
+| `META_JUDGE_MODEL`        | -           | `muse-wonder-1.0`           | rubric judge of the 3D models (`make shape-judge`, offline only)                                    |
 | `META_SPEND_CAP_USD`      | -           | `15`                        | estimated Meta spend allowed per chat session; over it → mock; `0` = no paid call                   |
 | `META_PREFER_CONTRIBUTOR` | -           | `true`                      | prefer Spark `*-contributor` ids (≈ 12× cheaper, Meta trains on them); `false` for real user data   |
 | `GLIMMER_BASE_URL`        | local model | empty                       | OpenAI-compatible URL (Ollama `http://localhost:11434/v1`, vLLM); set → chain Meta → Glimmer → mock |

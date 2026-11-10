@@ -11,7 +11,8 @@ import {
 import { isChimneyStack } from './mask-chimney';
 import { isWheelPart, PART_MIRROR_MIN_Z, roofTopAbove, type MaskMapGeom } from './mask-geometry';
 import { vehicleShell } from './mask-panels';
-import { buildLandmarks } from './score-shape';
+import { CONCEPT_KINDS } from './detail-score';
+import { buildLandmarks, detailParts } from './score-shape';
 
 export interface GraphNode {
   index: number;
@@ -221,4 +222,130 @@ export function checkConstraints(archetype: KitArchetype, recipe: ObjectRecipe):
     }
   }
   return n;
+}
+
+/** Gap (unit space) still counted as touching. */
+export const TOUCH_EPS = 0.01;
+/** Two parts of one kind closer than this (each axis, unit space) with sizes within `FUSED_SIZE` are one part twice. */
+export const FUSED_DIST = 0.02;
+export const FUSED_SIZE = 0.1;
+
+type Box3 = { lo: [number, number, number]; hi: [number, number, number] };
+const box3 = (p: RecipePart): Box3 => ({
+  lo: p.at.map((v, i) => v - p.size[i]! / 2) as [number, number, number],
+  hi: p.at.map((v, i) => v + p.size[i]! / 2) as [number, number, number],
+});
+
+/** Per-axis move that brings `a` against `b` (0 on an axis where they already overlap or touch). */
+function gapShift(a: Box3, b: Box3): [number, number, number] {
+  return [0, 1, 2].map((i) =>
+    a.hi[i]! < b.lo[i]! - TOUCH_EPS
+      ? b.lo[i]! - a.hi[i]!
+      : a.lo[i]! > b.hi[i]! + TOUCH_EPS
+        ? b.hi[i]! - a.lo[i]!
+        : 0
+  ) as [number, number, number];
+}
+
+export interface GraphRepair {
+  recipe: ObjectRecipe;
+  /** Parts moved against their parent (they floated in mid-air). */
+  pulled: number[];
+  /** Duplicates dropped (same kind fused at one place), indices in the input recipe. */
+  merged: number[];
+}
+
+/**
+ * Hard geometry gates (PQ-T37), fixed by rule without asking a model: a part held by nothing (it touches
+ * neither the ground, nor its graph parent, nor a part that is itself held: a roof tier on the tier
+ * below) is pulled against its parent; two parts of the same kind at one place (centres within
+ * `FUSED_DIST`, sizes within `FUSED_SIZE`) keep only the first. Same reference when clean. Pure.
+ */
+export function repairGraph(archetype: KitArchetype, recipe: ObjectRecipe): GraphRepair {
+  const kinds = detailParts(recipe).map((d, i) => {
+    const p = recipe.parts[i]!;
+    return d.kinds.length ? d.kinds.join('|') : `${p.shape}:${p.color}`;
+  });
+  const merged: number[] = [];
+  recipe.parts.forEach((p, i) => {
+    if (merged.includes(i)) return;
+    for (let j = i + 1; j < recipe.parts.length; j++) {
+      const q = recipe.parts[j]!;
+      if (merged.includes(j) || kinds[j] !== kinds[i] || q.shape !== p.shape) continue;
+      const close = [0, 1, 2].every(
+        (k) =>
+          Math.abs(p.at[k]! - q.at[k]!) <= FUSED_DIST &&
+          Math.abs(p.size[k]! - q.size[k]!) <= FUSED_SIZE * Math.max(p.size[k]!, q.size[k]!)
+      );
+      if (close) merged.push(j);
+    }
+  });
+  const kept = merged.length
+    ? { ...recipe, parts: recipe.parts.filter((_, i) => !merged.includes(i)) }
+    : recipe;
+  const keptIndex = recipe.parts.map((_, i) => i).filter((i) => !merged.includes(i));
+  const graph = buildGraph(archetype, kept);
+  const ground = Math.min(...kept.parts.map((p) => box3(p).lo[1]));
+  const pulled: number[] = [];
+  const parts = [...kept.parts];
+  const touches = (i: number, j: number) =>
+    gapShift(box3(parts[i]!), box3(parts[j]!)).every((v) => v === 0);
+  // Held = the body, a part on the ground, or a part touching a held one (stacked tiers, arm → head).
+  const held = new Set<number>();
+  const spread = () => {
+    for (let grew = true; grew;) {
+      grew = false;
+      parts.forEach((p, i) => {
+        if (held.has(i)) return;
+        const rooted = graph.nodes[i]!.parent === null || box3(p).lo[1] <= ground + TOUCH_EPS;
+        if (rooted || [...held].some((j) => touches(i, j))) {
+          held.add(i);
+          grew = true;
+        }
+      });
+    }
+  };
+  spread();
+  for (let i = 0; i < parts.length; i++) {
+    if (held.has(i)) continue;
+    const p = parts[i]!;
+    const shift = gapShift(box3(p), box3(parts[graph.nodes[i]!.parent!]!));
+    parts[i] = { ...p, at: p.at.map((v, k) => v + shift[k]!) as RecipePart['at'] };
+    pulled.push(keptIndex[i]!);
+    held.add(i);
+    spread();
+  }
+  return {
+    recipe: pulled.length ? { ...kept, parts } : kept,
+    pulled,
+    merged,
+  };
+}
+
+/**
+ * Parts seen but not built (PQ-T37): per SAM concept, masks beyond the parts that can draw it, as
+ * `wheel ×1`; and every `listed` part name (the kit's visible parts, PQ-T12) no part kind draws.
+ * Empty when everything seen is built. Pure.
+ */
+export function notBuilt(
+  recipe: ObjectRecipe,
+  masks: ReadonlyArray<PartMask> = [],
+  listed: ReadonlyArray<string> = []
+): string[] {
+  const kinds = detailParts(recipe).map((d) => d.kinds);
+  const drawing = (concept: string) => {
+    const want = CONCEPT_KINDS[concept] ?? [concept];
+    return kinds.filter((ks) => ks.some((k) => (want as ReadonlyArray<string>).includes(k))).length;
+  };
+  const out: string[] = [];
+  const seen = new Map<string, number>();
+  for (const m of masks) seen.set(m.concept, (seen.get(m.concept) ?? 0) + 1);
+  for (const [concept, n] of seen) {
+    const missing = n - drawing(concept);
+    if (missing > 0) out.push(`${concept} ×${missing}`);
+  }
+  for (const name of new Set(listed)) {
+    if (!seen.has(name) && drawing(name) === 0) out.push(name);
+  }
+  return out;
 }

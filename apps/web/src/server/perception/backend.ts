@@ -5,6 +5,7 @@ import type { UsageSample } from '@/server/spend';
 import type { StageSheet } from './shape-script-prompt';
 import type {
   CriticResult,
+  JudgeResult,
   ViewsCheckResult,
   ShapeOpsResult,
   DetectionResult,
@@ -81,6 +82,15 @@ export interface PerceptionBackend {
     signal?: AbortSignal
   ): Promise<PerceptionCall<CriticResult>>;
   /**
+   * Rubric judge (PQ-T4): `imageUrl` is photo | model | model ¾, `question` names the object.
+   * Asked of `META_JUDGE_MODEL` (Muse Wonder); offline and background only.
+   */
+  judgeShape(
+    imageUrl: string,
+    question: string,
+    signal?: AbortSignal
+  ): Promise<PerceptionCall<JudgeResult>>;
+  /**
    * AI check of a views model (PV-H): `imageUrl` is the 2 × 2 drawings | model sheet, `question`
    * the label and silhouette match. One vision call; null check when unusable.
    */
@@ -122,6 +132,8 @@ export interface ShapeSubject {
    * keeps size, pose and measured colours; the facade refines windows, doors, materials, parts.
    */
   facadeUrl?: string;
+  /** Kit prompt version to ask with (PQ-T5, evals); default `KIT_PROMPT_VERSION`. */
+  promptVersion?: number;
 }
 
 /** What `describeParts` is told about the object. */

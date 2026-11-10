@@ -1,6 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import { MAX_DETECTIONS } from '../detect';
-import { conceptOf, fetchOutlineForBox, iou, refineDetections, samBoxToNorm } from '../outline';
+import {
+  conceptOf,
+  fetchOutlineForBox,
+  iou,
+  refineDetections,
+  samBoxToNorm,
+  samRetries,
+} from '../outline';
 import { boxUnionCoverage, parseSamOutput } from '../parse-sam';
 import type { ApplianceDetection, SegmentResult } from '../schemas';
 
@@ -81,6 +88,16 @@ describe('conceptOf (PR-2.21)', () => {
     expect(c('power plant')).toBe('building');
     expect(c('Main street')).toBe('main street');
   });
+  it('takes the head noun, the last one before a complement (PQ-T1 real captures)', () => {
+    // before: 'car' (« vintage » is a car word, its rule came first) → SAM found nothing; « tv » IoU 0.96.
+    expect(c('vintage TV')).toBe('tv');
+    expect(c('red vintage car')).toBe('car');
+    expect(c("traveller's palm tree")).toBe('tree');
+    expect(c('antique hand water pump')).toBe('pump');
+    expect(c('row of terrace houses')).toBe('house');
+    expect(c('car with solar panel on the roof')).toBe('car');
+    expect(c('lamp post near the house')).toBe('street lamp');
+  });
   it('keeps short labels and unknown ones untouched', () => {
     expect(c('fridge')).toBe('fridge');
     expect(c('lamp')).toBe('lamp');
@@ -117,6 +134,101 @@ describe('fetchOutlineForBox (PR-2.20)', () => {
           car
         )
       ).toBeNull();
+    } finally {
+      warn.mockRestore();
+    }
+  });
+});
+
+describe('samRetries (PQ-T9)', () => {
+  it('full label first, then the lookalike SAM knows; never the noun itself', () => {
+    expect(samRetries({ label: 'utility pole' })).toEqual(['utility pole']);
+    expect(samRetries({ label: 'hand water pump' })).toEqual(['hand water pump', 'fire hydrant']);
+    expect(samRetries({ label: 'pump' })).toEqual(['fire hydrant']);
+    expect(samRetries({ label: 'tv' })).toEqual([]);
+  });
+  it('walks the retries in order until one hits', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const OUTLINE = 'M0.61 0.46L0.99 0.46L0.99 0.84L0.61 0.84Z';
+      const asked: string[] = [];
+      const seg = async (_url: string, concept: string) => {
+        asked.push(concept);
+        const r = samResult(concept);
+        if (concept !== 'fire hydrant') return { ...r, instances: [], count: 0 };
+        r.instances[0] = { ...r.instances[0]!, outline: OUTLINE };
+        return r;
+      };
+      const box = { x: 0.6, y: 0.45, w: 0.4, h: 0.4 };
+      const retries = samRetries({ label: 'hand water pump' });
+      expect(await fetchOutlineForBox(seg, 'data:x', 'pump', box, { retries })).toBe(OUTLINE);
+      expect(asked).toEqual(['pump', 'hand water pump', 'fire hydrant']);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+});
+
+describe('fetchOutlineForBox label fallback (PQ-T1)', () => {
+  const OUTLINE = 'M0.61 0.46L0.99 0.46L0.99 0.84L0.61 0.84Z';
+  const pole = { x: 0.6, y: 0.45, w: 0.4, h: 0.4 };
+  it('retries once with the full label when the noun misses (« pole » → « utility pole »)', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const asked: string[] = [];
+      const seg = async (_url: string, concept: string) => {
+        asked.push(concept);
+        const r = samResult(concept);
+        if (concept !== 'utility pole') return { ...r, instances: [], count: 0 };
+        r.instances[0] = { ...r.instances[0]!, outline: OUTLINE };
+        return r;
+      };
+      const out = await fetchOutlineForBox(seg, 'data:x', 'pole', pole, {
+        retries: ['Utility Pole'],
+      });
+      expect(out).toBe(OUTLINE);
+      expect(asked).toEqual(['pole', 'utility pole']);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+  it('no retry when SAM never answered: a timeout or a failed call is not a wrong word (PR #9 review)', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const asked: string[] = [];
+      const failing = async (_url: string, concept: string) => {
+        asked.push(concept);
+        throw new Error('offline');
+      };
+      expect(
+        await fetchOutlineForBox(failing, 'data:x', 'pole', pole, { retries: ['utility pole'] })
+      ).toBeNull();
+      expect(asked).toEqual(['pole']);
+      asked.length = 0;
+      const mock = async (_url: string, concept: string) => {
+        asked.push(concept);
+        return { ...samResult(concept), source: 'mock' as const };
+      };
+      expect(
+        await fetchOutlineForBox(mock, 'data:x', 'pole', pole, { retries: ['utility pole'] })
+      ).toBeNull();
+      expect(asked).toEqual(['pole']);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+  it('no second call when the label is the concept', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      let calls = 0;
+      const seg = async (_url: string, concept: string) => {
+        calls++;
+        return { ...samResult(concept), instances: [], count: 0 };
+      };
+      expect(
+        await fetchOutlineForBox(seg, 'data:x', 'pump', pole, { retries: ['pump'] })
+      ).toBeNull();
+      expect(calls).toBe(1);
     } finally {
       warn.mockRestore();
     }

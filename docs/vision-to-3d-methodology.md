@@ -167,6 +167,26 @@ the photo's view.
 Reported as its own columns first. It enters the weighted score only after the baseline on the real set is known
 (PQ-T6), so a threshold is never chosen to pass one case.
 
+**As built (PQ-T2):** `detail-score.ts` `scoreDetail`, attached as `ModelScore.detail` by `scoreRecipe` and shown in
+four `make shape-report` columns. Concepts map to part kinds (`CONCEPT_KINDS`: lamp → light or head); untagged kit
+parts are guessed like the landmarks (axis-z cylinder below the body = wheel, thin box = window or door). Matching
+is greedy one-to-one on visible bounding boxes (largest SAM part first). Part ΔE compares the SAM box on the photo
+with the same pixels on the shaded render. Recall, precision and part ΔE are absent without part masks (every
+synthetic golden today); interior edge F1 always shows.
+
+**As built (PQ-T36):** `bandDifference` cuts the outline in 8 height bands and reports the worst band's SSIM
+(luminance, one window per band, range −1…1) with its ΔE and the count of blank bands (render covers < 50 %).
+`degenerateView(recipe, archetype)` renders the model at 0°, 45° and 90° on one fixed frame: ✗ thin when the side
+silhouette is under 0.15 of the front (not screen, panel, water), ✗ detached when the 45° silhouette has more than
+one piece (≥ 0.5 % of it). Both are report columns. First run: the real fan falls apart at 45°, the real lamp leaves
+4 bands blank. Band SSIM is low on the synthetic goldens too: their flat colours have no shading, the render does.
+
+**As built (PQ-T37):** `object-graph.ts` `repairGraph` runs before the statuses: a part whose box touches neither
+its graph parent nor the ground (gap > 0.01) is moved against its parent; two parts of one kind with centres within
+0.02 and sizes within 10 % keep the first. `notBuilt(recipe, masks, listed)` lists SAM concepts with more masks
+than parts that draw them, and listed names no part kind draws. Box tests are coarse: the real fan passes them but
+its 45° render still falls in 2 pieces (PQ-T36 sees what the boxes miss).
+
 ### 6.2 Rubric judge (PQ-T4)
 
 Muse Wonder receives one sheet (photo, model front, model ¾) and grades six criteria from 1 to 5: silhouette,
@@ -176,6 +196,12 @@ sentence per criterion below 4. It is used offline and in the background, never 
 It is trusted only after calibration: on every real capture, remove two parts from the recipe and render again.
 The judge must grade the damaged model lower in at least 90 % of the pairs. Below that, the judge stays out of the
 loop and only its text is shown to the developer.
+
+**As built (PQ-T4):** `rubric-judge.ts` (Judge card word for word, `JUDGE_PROMPT_VERSION` 1, strict schema,
+`parseJudge` clamps grades to 1–5, `damage` drops the two biggest non-body parts, `judgeSheet` photo | front | ¾,
+`calibration`); `judgeShape` on the Meta backend (`META_JUDGE_MODEL`), client and mock (grade 3 everywhere).
+`make shape-judge` judges every real capture intact and damaged and stores `<id>.judge.json` beside it (replayed
+when model and prompt version match; `REPLAY=1` never calls the API). **Calibration not run yet** (API spend).
 
 ### 6.3 Observe-then-commit kit (PQ-T12)
 
@@ -282,16 +308,17 @@ its Vitest test in `__tests__/` in the same commit.
 
 ## 8. Verification: commands that exist
 
-| Question                                       | Command                                                    | Passes when                                                |
-| ---------------------------------------------- | ---------------------------------------------------------- | ---------------------------------------------------------- |
-| Does the shape pipeline still work offline?    | `make test-shape`                                          | Golden set green                                           |
-| How good is every object, and which is worst?  | `make shape-report` → `test-results/shape-report/index.md` | Stop criteria met on the real table (§9)                   |
-| What does the user really see?                 | `make shape-shots` (dev server running)                    | Viewer shots, dark and light, reviewed with `/designer-3d` |
-| Did a prompt change help the kit?              | `make eval-shape MODEL=…` (live, costs API calls)          | Agreement not lower, median ≤ 30 s                         |
-| Did a prompt change help the staged loop?      | `make eval-stages` (offline replay)                        | Stage scores not lower                                     |
-| Does the 2D path work end to end on live Meta? | `make facade-e2e FRONT=… OUT=…` (costs API calls)          | Model built, stages logged                                 |
-| Add a real photo to the reference set          | `make shape-capture PHOTO=… ID=…` (costs API calls)        | Capture and crop written to `__fixtures__/shape/real/`     |
-| Everything before handoff                      | `make check`                                               | Typecheck, lint, tests green                               |
+| Question                                       | Command                                                                                                                          | Passes when                                                |
+| ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| Does the shape pipeline still work offline?    | `make test-shape`                                                                                                                | Golden set green                                           |
+| How good is every object, and which is worst?  | `make shape-report` → `test-results/shape-report/index.md` (synthetic + « Real » tables, real = local captures of `REAL_SHAPES`) | Stop criteria met on the real table (§9)                   |
+| What does the user really see?                 | `make shape-shots` (dev server running)                                                                                          | Viewer shots, dark and light, reviewed with `/designer-3d` |
+| Did a prompt change help the kit?              | `make eval-shape MODEL=…` (live, costs API calls)                                                                                | Agreement not lower, median ≤ 30 s                         |
+| Did a prompt change help the staged loop?      | `make eval-stages` (offline replay)                                                                                              | Stage scores not lower                                     |
+| Does the 2D path work end to end on live Meta? | `make facade-e2e FRONT=… OUT=…` (costs API calls)                                                                                | Model built, stages logged                                 |
+| Add a real photo to the reference set          | `make shape-capture PHOTO=… ID=… [LABEL=…]` (costs API calls)                                                                    | Capture and crop written to `__fixtures__/shape/real/`     |
+| Why does a capture have no outline?            | `make sam-probe ID=… CONCEPTS="a,b"` (costs SAM calls)                                                                           | A word with best IoU ≥ 0.3 on photo or crop                |
+| Everything before handoff                      | `make check`                                                                                                                     | Typecheck, lint, tests green                               |
 
 ---
 
@@ -300,8 +327,10 @@ its Vitest test in `__tests__/` in the same commit.
 A model is good enough when, per object:
 
 - Silhouette IoU ≥ 0.85, outline edge F1 ≥ 0.6, colour ΔE ≤ 8 (as today).
-- Part recall ≥ 0.8 and part precision ≥ 0.8; interior edge F1 and colour per part above the gates fixed in PQ-T6
-  from the measured baseline.
+- With SAM part masks (`STOP_DETAIL`, PQ-T6): part recall ≥ 0.8, part precision ≥ 0.8, interior edge F1 ≥ 0.12,
+  part ΔE ≤ 7. The last two come from the real baseline of 2026-11-10 (a value at least half of the real objects
+  miss: 6 of 12, and 2 of the 3 with masks). The score then weighs silhouette 0.3, outline edge 0.25, colour 0.2,
+  parts 0.25 (`SCORE_WEIGHTS_DETAIL`, parts = mean of recall and precision); without masks the classic weights.
 - No graph constraint violated; every hidden part marked `inferred`.
 - Judge ≥ 4 / 5 on average with no criterion under 3 (only once the judge passed its calibration).
 - `/designer-3d` ≥ 4 / 5 on the viewer shots, dark and light.
@@ -329,12 +358,17 @@ Added 2026-11-10 after reading the viewer code, `tasks/PT-studio-look.md` (done 
 
 ### 11.1 The four renderers (as built)
 
-| Renderer                    | File                                                                       | Maps and swatches                                                                                                                              | Environment light      | Shadows                          | Post                               |
-| --------------------------- | -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- | -------------------------------- | ---------------------------------- |
-| Object viewer `/village`    | `vision-insert/ui/object-editor-3d.tsx`                                    | Yes                                                                                                                                            | Softbox studio (PMREM) | Ground contact shadow only       | Neutral tone mapping, ink, 4× MSAA |
-| Village scene `/simulation` | `microgrid-3d/utils/placed-models-geometry.ts`, `ui/appliance-markers.tsx` | **No**: every placed object is merged into one mesh with one material (roughness 0.7, metalness 0.2); glass, metal and thatch all render alike | HDRI (high tier)       | Sun shadow map, cast and receive | N8AO, bloom, ACES, ink (high tier) |
-| VR spawned object           | `vision-insert/ui/xr/spawned-object-3d.tsx`                                | **No**: plain `surfaceMaterial`, white colour                                                                                                  | Scene default          | Casts only                       | None (kept off for headset speed)  |
-| Judge render (server)       | `server/perception/flat-render.ts`                                         | No                                                                                                                                             | None (flat shade)      | None                             | None                               |
+| Renderer                    | File                                                                          | Maps and swatches                                                                                                                              | Environment light      | Shadows                          | Post                               |
+| --------------------------- | ----------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- | -------------------------------- | ---------------------------------- |
+| Object viewer `/village`    | `vision-insert/ui/object-editor-3d.tsx`                                       | Yes                                                                                                                                            | Softbox studio (PMREM) | Ground contact shadow only       | Neutral tone mapping, ink, 4× MSAA |
+| Village scene `/simulation` | `microgrid-3d/utils/placed-models-geometry.ts`, `ui/appliance-markers.tsx`    | **No**: every placed object is merged into one mesh with one material (roughness 0.7, metalness 0.2); glass, metal and thatch all render alike | HDRI (high tier)       | Sun shadow map, cast and receive | N8AO, bloom, ACES, ink (high tier) |
+| VR spawned object           | `vision-insert/ui/xr/spawned-object-3d.tsx`                                   | **No**: plain `surfaceMaterial`, white colour                                                                                                  | Scene default          | Casts only                       | None (kept off for headset speed)  |
+| Judge render (server)       | `server/perception/flat-render.ts` (assemblies via `expandAssemblies`, PQ-T3) | No                                                                                                                                             | None (flat shade)      | None                             | None                               |
+
+Since PQ-T3 the judge render and the viewer expand assemblies with the same function
+(`features/vision-insert/utils/assembly-parts.ts` `expandAssemblies`): frames, panes, sills, door leaves, eave
+rolls, chimney caps, wheel rims, cell lines, timber beams; glass shows through the hole cut in its wall. Each
+pixel still names its recipe part (`origin`), and turned views are framed on the recipe parts only.
 
 ### 11.2 Viewer chain, step by step (as built)
 

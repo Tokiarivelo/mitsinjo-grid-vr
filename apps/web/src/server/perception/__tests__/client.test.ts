@@ -17,6 +17,7 @@ function fakeMeta(overrides: Partial<PerceptionBackend> = {}): PerceptionBackend
     describeParts: vi.fn(),
     criticizeShape: vi.fn(),
     checkViews: vi.fn(),
+    judgeShape: vi.fn(),
     analyzeImage: vi.fn().mockResolvedValue({
       model: 'muse-spark-1.3',
       usage: { inputTokens: 1000, outputTokens: 100 },

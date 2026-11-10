@@ -28,16 +28,30 @@ import {
 import { maskToOutline } from './mask-outline';
 import { timeoutSignal } from './abort';
 import { inlineImageUrl } from './inline-image';
-import { VIEWS_CHECK_JSON_SCHEMA, VIEWS_CHECK_SYSTEM_PROMPT, parseViewsCheck } from './views-check';
+import {
+  JUDGE_CRITERIA,
+  JUDGE_JSON_SCHEMA,
+  JUDGE_PROMPT_VERSION,
+  JUDGE_SYSTEM_PROMPT,
+  parseJudge,
+} from './rubric-judge';
+import {
+  VIEWS_CHECK_JSON_SCHEMA,
+  VIEWS_CHECK_PROMPT_VERSION,
+  VIEWS_CHECK_SYSTEM_PROMPT,
+  parseViewsCheck,
+} from './views-check';
 import { REGION_SYSTEM_PROMPT, regionQuestion } from './region-prompt';
 import { defaultArchetype, kitToRecipe } from '@/lib/object-kit';
 import {
   CRITIC_JSON_SCHEMA,
+  CRITIC_PROMPT_VERSION,
   CRITIC_SYSTEM_PROMPT,
+  KIT_PROMPT_VERSION,
+  kitPrompt,
   parseKit,
   parseKitPatch,
   SHAPE_JSON_SCHEMA,
-  SHAPE_SYSTEM_PROMPT,
   shapeQuestion,
 } from './shape';
 import { boxUnionCoverage, parseSamOutput } from './parse-sam';
@@ -52,6 +66,7 @@ import { redactDataUrls, redactDataUrlsInText, type VisionCallLog } from './visi
 import {
   ObservationSchema,
   type CriticResult,
+  type JudgeResult,
   type ViewsCheckResult,
   type ShapeOpsResult,
   type DetectionResult,
@@ -351,14 +366,15 @@ export class MetaPerceptionBackend implements PerceptionBackend {
   ): Promise<PerceptionCall<ShapeResult>> {
     const hint = defaultArchetype(target.category, target.scenery, target.label);
     // Standard id, not the contributor one: the operator waits on this answer (≈ 15 s vs ≈ 25 s measured).
+    const promptVersion = target.promptVersion ?? KIT_PROMPT_VERSION;
     const { content, model, usage } = await this.visionJson(
-      SHAPE_SYSTEM_PROMPT,
+      kitPrompt(promptVersion),
       shapeQuestion(target.label, target.aspect, hint, Boolean(target.facadeUrl)),
       imageUrl,
       SHAPE_JSON_SCHEMA,
       signal,
       false,
-      { kind: 'describeShape', params: { ...target } },
+      { kind: 'describeShape', params: { ...target, promptVersion } },
       target.facadeUrl ? [target.facadeUrl] : []
     );
     const kit = parseKit(content, hint);
@@ -416,13 +432,36 @@ export class MetaPerceptionBackend implements PerceptionBackend {
       CRITIC_JSON_SCHEMA,
       signal,
       false,
-      { kind: 'criticizeShape' }
+      { kind: 'criticizeShape', params: { promptVersion: CRITIC_PROMPT_VERSION } }
     );
     const patch = parseKitPatch(content);
     console.info(
       `[vision] 3D critic from ${model}: ${patch ? Object.keys(patch).join(',') : 'no patch'}`
     );
     return { model, usage, result: { patch } };
+  }
+
+  async judgeShape(
+    imageUrl: string,
+    question: string,
+    signal?: AbortSignal
+  ): Promise<PerceptionCall<JudgeResult>> {
+    const { content, model, usage } = await this.visionJson(
+      JUDGE_SYSTEM_PROMPT,
+      question,
+      imageUrl,
+      JUDGE_JSON_SCHEMA,
+      signal,
+      false,
+      { kind: 'judgeShape', params: { promptVersion: JUDGE_PROMPT_VERSION } },
+      [],
+      env.META_JUDGE_MODEL
+    );
+    const judgement = parseJudge(content);
+    console.info(
+      `[vision] 3D judge from ${model}: ${judgement ? JUDGE_CRITERIA.map((c) => `${c} ${judgement.grades[c]}`).join(', ') : 'unusable'}`
+    );
+    return { model, usage, result: { judgement } };
   }
 
   async checkViews(
@@ -437,7 +476,7 @@ export class MetaPerceptionBackend implements PerceptionBackend {
       VIEWS_CHECK_JSON_SCHEMA,
       signal,
       false,
-      { kind: 'checkViews' }
+      { kind: 'checkViews', params: { promptVersion: VIEWS_CHECK_PROMPT_VERSION } }
     );
     const check = parseViewsCheck(content);
     console.info(

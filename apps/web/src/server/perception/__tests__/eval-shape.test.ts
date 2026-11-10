@@ -2,22 +2,19 @@
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import sharp from 'sharp';
 import { describe, expect, it, vi } from 'vitest';
 vi.mock('server-only', () => ({}));
-import { kitToRecipe, type ObjectKit } from '@/lib/object-kit';
-import type { ShapeTarget } from '@/lib/object-shape';
+import type { ObjectKit } from '@/lib/object-kit';
 import { getPerceptionClient } from '../client';
-import { agreement, compareKits, evalCaptures, evalMarkdown } from '../eval-shape';
-import { runObjectShape } from '../object-shape';
-import { cropForShape, cropRectForShape } from '../shape-crop';
 import {
-  remapBoxToCrop,
-  remapOutlineToCrop,
-  writeCapture,
-  type ShapeCapture,
-} from '../shape-capture';
-import { GOLDEN_SHAPES, goldenBox, goldenOutline, goldenSvg, PHOTO } from '../__fixtures__/shape';
+  agreement,
+  compareKits,
+  evalCaptures,
+  evalMarkdown,
+  parsePromptVersions,
+} from '../eval-shape';
+import { KIT_PROMPT_VERSION, kitPrompt, SHAPE_SYSTEM_PROMPT } from '../shape';
+import { writeGoldenCapture } from './golden-run';
 
 const kit: ObjectKit = {
   archetype: 'vehicle',
@@ -30,7 +27,7 @@ const kit: ObjectKit = {
 
 describe('compareKits + agreement (PR-3.1)', () => {
   it('identical kits agree everywhere', () => {
-    const row = { id: 'x', model: 'm', ...compareKits(kit, kit), seconds: 1 };
+    const row = { id: 'x', model: 'm', promptVersion: 1, ...compareKits(kit, kit), seconds: 1 };
     const { match, total } = agreement(row);
     expect(match).toBe(total);
     expect(row.proportionsDelta).toBe(0);
@@ -44,7 +41,7 @@ describe('compareKits + agreement (PR-3.1)', () => {
       materials: { main: 'metal', secondary: 'glass', accent: 'plastic' },
       details: { wheels: 6, doors: 2 },
     };
-    const row = { id: 'x', model: 'm', ...compareKits(kit, other), seconds: 1 };
+    const row = { id: 'x', model: 'm', promptVersion: 1, ...compareKits(kit, other), seconds: 1 };
     expect(row.archetype).toEqual(['vehicle', 'vehicle']);
     expect(row.subtype).toEqual(['sedan', 'van']);
     expect(row.counts.wheels).toEqual([4, 6]);
@@ -63,52 +60,8 @@ describe('compareKits + agreement (PR-3.1)', () => {
 
 describe('evalCaptures (PR-3.1)', () => {
   async function captureDir() {
-    const fridge = GOLDEN_SHAPES.find((g) => g.name === 'fridge')!;
-    const buffer = await sharp(Buffer.from(goldenSvg(fridge)))
-      .jpeg({ quality: 85 })
-      .toBuffer();
-    const photo = { buffer, ...PHOTO };
-    const target: ShapeTarget = {
-      id: fridge.name,
-      label: fridge.name,
-      category: 'other',
-      box: goldenBox(fridge),
-      outline: goldenOutline(fridge),
-    };
-    const spark = {
-      describeShape: vi.fn().mockResolvedValue({
-        recipe: kitToRecipe(fridge.prior),
-        kit: fridge.prior,
-        source: 'meta',
-        model: 'muse-spark-1.3',
-      }),
-      describeParts: vi.fn().mockResolvedValue({ recipe: null }),
-    };
-    const shape = await runObjectShape(spark, photo, 'data:full', target);
-    if (shape.mode !== 'recipe' || !shape.recipe) throw new Error('no recipe');
-    const rect = cropRectForShape(photo.width, photo.height, target.box);
-    const jpeg = Buffer.from((await cropForShape(photo, target.box)).split(',')[1]!, 'base64');
     const dir = mkdtempSync(join(tmpdir(), 'shape-eval-'));
-    const capture: ShapeCapture = {
-      version: 1,
-      id: 'fridge',
-      capturedAt: new Date().toISOString(),
-      source: 'meta',
-      model: shape.model,
-      photo: { width: photo.width, height: photo.height },
-      target,
-      kit: fridge.prior,
-      recipe: shape.recipe,
-      seconds: 0.1,
-      crop: rect,
-      cropTarget: {
-        box: remapBoxToCrop(target.box, photo.width, photo.height, rect),
-        outline: target.outline
-          ? remapOutlineToCrop(target.outline, photo.width, photo.height, rect)
-          : undefined,
-      },
-    };
-    writeCapture(dir, capture, jpeg);
+    await writeGoldenCapture(dir, 'fridge');
     return dir;
   }
 
@@ -124,6 +77,29 @@ describe('evalCaptures (PR-3.1)', () => {
     const quiet = { describeShape: vi.fn().mockResolvedValue({ model: 'm' }) };
     await expect(evalCaptures(quiet, dir)).resolves.toHaveLength(0);
   }, 60_000);
+
+  it('asks with the chosen kit prompt and groups the table by version (PQ-T5)', async () => {
+    const dir = await captureDir();
+    const client = { describeShape: vi.fn().mockResolvedValue({ kit, model: 'm' }) };
+    const rows = [
+      ...(await evalCaptures(client, dir, undefined, 1)),
+      ...(await evalCaptures(client, dir, undefined, 2)),
+    ];
+    expect(client.describeShape.mock.calls.map((c) => c[1].promptVersion)).toEqual([1, 2]);
+    expect(rows.map((r) => r.promptVersion)).toEqual([1, 2]);
+    const md = evalMarkdown([rows[1]!, rows[0]!]);
+    expect(md.indexOf('### Kit prompt v1')).toBeGreaterThanOrEqual(0);
+    expect(md.indexOf('### Kit prompt v2')).toBeGreaterThan(md.indexOf('### Kit prompt v1'));
+    expect(md).toMatch(/### Kit prompt v1 — agree \d+\/\d+, median \d+\.\d s/);
+  }, 60_000);
+
+  it('reads PROMPT=1,2 (and v-prefixed, duplicate or empty values)', () => {
+    expect(parsePromptVersions('1,2')).toEqual([1, 2]);
+    expect(parsePromptVersions('v2, 2 ,x')).toEqual([2]);
+    expect(parsePromptVersions(undefined)).toEqual([KIT_PROMPT_VERSION]);
+    expect(kitPrompt(KIT_PROMPT_VERSION)).toBe(SHAPE_SYSTEM_PROMPT);
+    expect(() => kitPrompt(99)).toThrow(/unknown kit prompt version 99/);
+  });
 });
 
 const LIVE = process.env.EVAL_SHAPE === '1';
@@ -135,7 +111,9 @@ describe.skipIf(!LIVE)('make eval-shape', () => {
       join(process.cwd(), 'src/server/perception/__fixtures__/shape/real');
     const client = getPerceptionClient('eval-shape');
     if (!client.callsMeta) throw new Error('Refusing to eval mock: set LLM_PROVIDER=meta');
-    const rows = await evalCaptures(client, dir);
+    const rows = [];
+    for (const v of parsePromptVersions(process.env.EVAL_SHAPE_PROMPTS))
+      rows.push(...(await evalCaptures(client, dir, undefined, v)));
     const md = `# Kit eval — ${new Date().toISOString().slice(0, 10)}\n\n${evalMarkdown(rows)}`;
     console.info(`\n${md}`);
     expect(rows.length).toBeGreaterThan(0);

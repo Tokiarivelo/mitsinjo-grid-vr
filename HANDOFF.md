@@ -1,40 +1,38 @@
 # HANDOFF — read first, overwrite at end of session (≤40 lines)
 
-**Updated:** 2026-11-10 · **By:** Claude Code · **Branch:** docs/vision-to-3d-refine (from `main`, docs only)
+**Updated:** 2026-11-10 · **By:** Claude Code · **Branch:** feat/pq-t2-detail-score (Q0, PR #9 open)
 
 ## Current state
 
-- **Photo → 3D docs rewritten (no code changed).** `docs/vision-to-3d-methodology.md` now describes the real
-  pipeline (`server/perception/`), audits the old claims, ranks 15 weak points and lists every file to add or change.
-- **Main finding:** `make shape-report` says 93 / 100 on five **synthetic** pictures while the ¾ renders are still
-  boxy (car = slab + wedge, fridge without handle). The score sees outline and colour only; the critic fires
-  under 70 on a 256 px sheet. Nothing can be judged until the ruler is fixed.
-- **New:** `docs/vision-to-3d-muse-skills.md` (prompt-ready cards: base, look, kit, 13 archetype cards, critic,
-  stage ops, views check, final check, judge, Muse Image views, SAM wording). Target texts, not in the code yet.
-- **New:** `docs/tasks/PV-vision-quality.md` (PV-Q, PQ-T1…T41: task, files, test, done-when).
-- **Rendering audit** (methodology § 11): four renderers draw the same recipe unequally. Viewer has no
-  part-on-part shadow or AO; the village draws all placed objects with one material; VR has no maps. Tasks PQ-T32–T35. § 12: web research mapped to 13 studio steps (PQ-T36–T41).
-- **Moved:** cloud and sun maths → `docs/vision-to-3d-atmosphere.md` (word for word, not re-audited).
-- VR state unchanged (merged in `main`): /village walkable 360° tour, outdoor walk, `make vr-probe` 15 PASS.
+- **PV-Q phase Q0:** PQ-T1–T6, T36 done; PQ-T37 partial (needs Q1 PQ-T12 + a UI task). Judge calibrated:
+  77 % of 13 pairs < 90 % → developer note only (it grades most models 1–2).
+- **Real baseline (12 captures, Wikimedia Commons photos, local only):** mean 55 vs synthetic 93 (IoU 0.72,
+  edge F1 0.38, ΔE 9.9). Worst lamp 32, car-hidden 38, motorbike 40; best fridge 92. Gates `STOP_DETAIL`.
+- Photos: `resources/real-photos/` (copy to check) and `__fixtures__/shape/real/photos/` (+ `SOURCES.md`), gitignored.
+- Fixes found by the live captures: parts clamped into the schema, capture keeps the on-demand outline,
+  SAM gets the head noun + one retry with the full label (`make sam-probe` measures words).
+- Machine: shared `node_modules` broken since the full disk (React typings) → `make install`.
 
-## Next
+## Next (user first) — French guide: `docs/tasks/PV-Q0-a-faire.md`
 
-1. **PQ-T1** real photo set (`make shape-capture`, API calls, needs the user's photos), then PQ-T2, T3, T36.
-2. **PV-C** (`docs/tasks/PV-capture-lab.md`, PC-T1…T41, planned): instant capture, elastic grab (mouse / controller
-   / hand), hologram, 3D Lab tools, AI assistant; **C7 = the Lab inside the headset** (hands, voice). Start: PC-T1, PC-T9.
-3. VR backlog as before: real Quest check, tour links, headset static text → i18n keys, VS-T9 audio.
+1. Real set complete: 15 of 16 scored (mean 54), only the solar street light has no outline (PQ-T9).
+2. Then Q1 from PQ-T7; PQ-T9 has the SAM evidence (solar street light returns one part).
+3. PQ-T37 open: `evidence.visibleParts` (PQ-T12), part list in the panel (UI task).
 
-## Files touched
+## Files touched (this session, after the Q0 code)
 
-- `docs/vision-to-3d-methodology.md` (rewrite), `docs/vision-to-3d-muse-skills.md` (new),
-  `docs/vision-to-3d-atmosphere.md` (new, split), `docs/tasks/PV-vision-quality.md` + `PV-capture-lab.md` (new), `docs/tasks/README.md`
-- `.claude/skills/shape-3d/SKILL.md`, `.claude/skills/shape-loop/SKILL.md`, `CLAUDE.md` (doc map row)
+- `server/perception/`: `outline.ts` (head noun, label retry), `object-shape.ts` (clamp, retry), `shape-capture.ts`
+  (`pickDetection`), `model-score.ts` (`weightDetail`), `score-shape.ts`, `shape-report.ts` (`STOP_DETAIL`),
+  tests incl. `sam-probe.test.ts`; `lib/object-shape.ts` (`clampParts`)
+- `Makefile` (`sam-probe`, `shape-capture LABEL=`), `.gitignore` (`/resources/`), `README.md`, `docs/copilot.md`,
+  methodology §9 + tools table, `.claude/skills/shape-loop`, `docs/tasks/PV-vision-quality.md`, `PV-shape-realism.md`,
+  `PV-Q0-a-faire.md` (new, French)
 
 ## Decisions
 
-- Q0 (measure on real photos, detail score, calibrated judge) comes before any prompt or geometry work.
-- Skill cards are texts for the Muse models, loaded per call and per archetype; a card replaces a prompt only
-  when its eval is not worse. Kit stays on Spark 1.3; Wonder = final check and judge only.
-- Muse Image: side view and operator-validated clean front only; top and back views are never generated (PR-4.1).
-- Unverified claims of the old file (prices, context sizes, « Passed » table, `scratch/test-orbit.mjs`) removed.
-- Open for the user: which real photos to capture for PQ-T1; whether to spend API calls on two kit samples (PQ-T18).
+- Real photos come from Wikimedia Commons (free licences), stay local; hard set: hidden car, small pole, backlit panel.
+- Detail weights replace the landmark set when part masks exist; goldens keep their scores.
+- Live SAM retries: full label, then a measured lookalike, only when SAM answered without a match (a timeout,
+  a failure or a mock ends the walk: each word costs up to 16 s). More phrasings: PQ-T9.
+- PR #9 review: `repairGraph` counts a part held by another held part (stepped roof tiers were pulled flat).
+- No test scenario: developer tooling and pipeline internals, nothing new visible in the app.

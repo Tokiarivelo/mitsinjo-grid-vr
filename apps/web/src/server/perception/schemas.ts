@@ -116,6 +116,14 @@ export type CriticResult = Omit<z.infer<typeof CriticResultSchema>, 'patch'> & {
   patch: Partial<ObjectKit> | null;
 };
 
+/** Rubric judge (PQ-T4): six 1–5 grades and notes; null when unusable. Parsed in `parseJudge`. */
+export const JudgeResultSchema = PerceptionSourceSchema.extend({
+  judgement: z.record(z.string(), z.unknown()).nullable(),
+});
+export type JudgeResult = Omit<z.infer<typeof JudgeResultSchema>, 'judgement'> & {
+  judgement: import('./rubric-judge').Judgement | null;
+};
+
 /** AI check of a views model (PV-H): what is missing, per view; null when unusable or mock. */
 export const ViewsCheckResultSchema = PerceptionSourceSchema.extend({
   check: z.record(z.string(), z.unknown()).nullable(),

@@ -1,9 +1,17 @@
 import 'server-only';
 
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import sharp from 'sharp';
+import type { KitArchetype } from '@/lib/object-kit';
+import type { ObjectRecipe, PartMask } from '@/lib/object-shape';
+import type { RealCase } from './__fixtures__/shape';
+import { degenerateView, type ViewCheck } from './detail-score';
 import type { ElevationScore } from './elevation-score';
-import type { FlatRender } from './flat-render';
+import { renderFlat, THREE_QUARTER, type FlatRender } from './flat-render';
 import type { ModelScore, RgbGrid } from './model-score';
+import { checkConstraints, notBuilt } from './object-graph';
+import { captureMasks, readCapture, rescoreCapture } from './shape-capture';
 
 /**
  * Shape report (PR-0.3) for the quality loop (`/shape-loop`): a Markdown table of the scores with the worst
@@ -15,16 +23,32 @@ import type { ModelScore, RgbGrid } from './model-score';
 
 export const STOP = { iou: 0.85, edgeF1: 0.6, deltaE: 8 } as const;
 
+/**
+ * Detail gates (PQ-T6), checked when SAM part masks exist. Interior edge F1 and part ΔE come from the
+ * real baseline of 2026-11-10 by the rule « a value at least half of the real objects miss today »
+ * (interior F1: 6 of 12 under 0.12; part ΔE: 2 of 3 over 7, few masks yet). Recall and precision: plan values.
+ */
+export const STOP_DETAIL = {
+  partRecall: 0.8,
+  partPrecision: 0.8,
+  interiorEdgeF1: 0.12,
+  partDeltaE: 7,
+} as const;
+
 export interface ReportRow {
   name: string;
   score: ModelScore;
   parts: number;
-  /** Whole shape math, ms. */
-  ms: number;
+  /** Whole shape math, ms; absent on replayed real captures (no shape math re-run). */
+  ms?: number;
   /** Coherence violations of the shipped recipe (PR-2.14); always 0 when clean. */
   violations: number;
   /** Part dimension statuses, non-zero counts (PR-2.15). */
   statusCounts: { measured: number; estimated: number; inferred: number; unknown: number };
+  /** Model seen at 0° / 45° / 90° (PQ-T36); absent when not checked. */
+  view?: ViewCheck;
+  /** Parts SAM saw that the model does not build (PQ-T37); absent without part masks. */
+  notBuilt?: string[];
 }
 
 /** Compact counts cell: `M1 I11` (zeros omitted). */
@@ -62,46 +86,195 @@ export function worstMetric(s: ModelScore): { metric: Metric; gap: number } {
   return { metric, gap: gaps[metric] };
 }
 
+/** Detail cells (PQ-T2): part recall, precision, interior edge F1, part ΔE with ✓ / ✗ against `STOP_DETAIL`; « — » when not measured. */
+function detailCells(s: ModelScore): string {
+  const d = s.detail ?? {};
+  const g = STOP_DETAIL;
+  return (
+    [
+      [d.partRecall, (v: number) => v >= g.partRecall],
+      [d.partPrecision, (v: number) => v >= g.partPrecision],
+      [d.interiorEdgeF1, (v: number) => v >= g.interiorEdgeF1],
+      [d.partDeltaE, (v: number) => v <= g.partDeltaE],
+    ] as const
+  )
+    .map(([v, pass]) => (v === undefined ? '—' : `${v} ${ok(pass(v))}`))
+    .join(' | ');
+}
+
+/** Worst height band (PQ-T36): `SSIM@band`, ✗ with the count when bands are blank. */
+function bandCell(s: ModelScore): string {
+  const d = s.detail;
+  if (d?.bandSsim === undefined) return '—';
+  const blank = d.blankBands ? ` ✗ ${d.blankBands} blank` : '';
+  return `${d.bandSsim}@${d.worstBand}${blank}`;
+}
+
+/** Degenerate view (PQ-T36): ✓ with the side share, or ✗ thin / detached. */
+function viewCell(v: ViewCheck | undefined): string {
+  if (!v) return '—';
+  if (v.fail === 'thin') return `✗ thin ${v.sideShare}`;
+  if (v.fail === 'detached') return `✗ ${v.pieces45} pieces`;
+  return `✓ ${v.sideShare}`;
+}
+
 const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
 const ok = (pass: boolean) => (pass ? '✓' : '✗');
 
-/** The report page: one row per object, means, and what the loop should look at next. */
-export function reportMarkdown(rows: ReportRow[], date: string): string {
-  const lines = [
-    `# Shape report — ${date}`,
-    '',
-    `Stop criteria: IoU ≥ ${STOP.iou} · edge F1 ≥ ${STOP.edgeF1} · ΔE ≤ ${STOP.deltaE}. Sheet: \`contact-sheet.png\` (photo | flat | ¾).`,
-    '',
-    '| Object | Score | IoU | Edge F1 | ΔE | Parts | ms | Viol | Status | Worst |',
-    '| ------ | ----- | --- | ------- | -- | ----- | -- | ---- | ------ | ----- |',
-  ];
+const HEADER = [
+  '| Object | Score | IoU | Edge F1 | ΔE | Recall | Prec | Int F1 | Part ΔE | Band | Views | Not built | Parts | ms | Viol | Status | Worst |',
+  '| ------ | ----- | --- | ------- | -- | ------ | ---- | ------ | ------- | ---- | ----- | --------- | ----- | -- | ---- | ------ | ----- |',
+];
+
+/** One table: a row per object and the means. */
+function scoreTable(rows: ReadonlyArray<ReportRow>): string[] {
+  const lines = [...HEADER];
   for (const r of rows) {
     const s = r.score;
     const w = worstMetric(s);
+    const ms = r.ms === undefined ? '—' : String(Math.round(r.ms));
     lines.push(
       `| ${r.name} | ${s.score} | ${s.iou} ${ok(s.iou >= STOP.iou)} | ${s.edgeF1} ${ok(s.edgeF1 >= STOP.edgeF1)} | ` +
-        `${s.deltaE} ${ok(s.deltaE <= STOP.deltaE)} | ${r.parts} | ${Math.round(r.ms)} | ${r.violations} | ${statusCell(r.statusCounts)} | ${w.gap > 0 ? w.metric : '—'} |`
+        `${s.deltaE} ${ok(s.deltaE <= STOP.deltaE)} | ${detailCells(s)} | ${bandCell(s)} | ${viewCell(r.view)} | ${r.notBuilt === undefined ? '—' : r.notBuilt.join(', ') || '✓'} | ${r.parts} | ${ms} | ${r.violations} | ${statusCell(r.statusCounts)} | ${w.gap > 0 ? w.metric : '—'} |`
     );
   }
   const avg = (f: (s: ModelScore) => number) => mean(rows.map((r) => f(r.score)));
   lines.push(
     `| **mean** | ${Math.round(avg((s) => s.score))} | ${avg((s) => s.iou).toFixed(2)} | ` +
-      `${avg((s) => s.edgeF1).toFixed(2)} | ${avg((s) => s.deltaE).toFixed(1)} | | | | | |`,
+      `${avg((s) => s.edgeF1).toFixed(2)} | ${avg((s) => s.deltaE).toFixed(1)} | | | | | | | | | | | | |`,
     ''
   );
+  return lines;
+}
+
+/** « Next » line: the lowest score and its worst metric. */
+function nextLine(rows: ReadonlyArray<ReportRow>): string | null {
   const worst = rows.reduce<ReportRow | null>(
     (a, r) => (!a || r.score.score < a.score.score ? r : a),
     null
   );
-  if (worst) {
-    const w = worstMetric(worst.score);
+  if (!worst) return null;
+  const w = worstMetric(worst.score);
+  return w.gap > 0
+    ? `**Next:** ${worst.name} (score ${worst.score.score}) — ${w.metric} is ${Math.round(w.gap * 100)} % off target.`
+    : `**Next:** every object meets the metric criteria; lowest score ${worst.name} (${worst.score.score}).`;
+}
+
+/** The real set in the report (PQ-T1): captured rows and the registered ids not captured on this machine. */
+export interface RealSection {
+  rows: ReportRow[];
+  missing: string[];
+  /** Captured but not scorable (no outline or no recipe in the capture). */
+  unscored?: string[];
+}
+
+/**
+ * The report page: the synthetic table, the « Real » table, and what the loop should look at next —
+ * taken from the real rows once there are any (synthetic drawings say little about photos).
+ */
+export function reportMarkdown(rows: ReportRow[], date: string, real?: RealSection): string {
+  const lines = [
+    `# Shape report — ${date}`,
+    '',
+    `Stop criteria: IoU ≥ ${STOP.iou} · edge F1 ≥ ${STOP.edgeF1} · ΔE ≤ ${STOP.deltaE}. Sheet: \`contact-sheet.png\` (photo | flat | ¾).`,
+    `Detail (PQ-T6, weighted into the score when SAM part masks exist): recall ≥ ${STOP_DETAIL.partRecall} · precision ≥ ${STOP_DETAIL.partPrecision} · interior edge F1 ≥ ${STOP_DETAIL.interiorEdgeF1} · part ΔE ≤ ${STOP_DETAIL.partDeltaE}; « — » when not measured.`,
+    'Band (PQ-T36): SSIM of the worst of 8 height bands inside the outline @ band (0 = top), blank bands ✗. Views: side ÷ front silhouette, ✗ thin (< 0.15) or detached at 45°. Not built (PQ-T37): SAM parts the model lacks, ✓ none.',
+    '',
+    '## Synthetic (drawn streets)',
+    '',
+    ...scoreTable(rows),
+  ];
+  if (real) {
     lines.push(
-      w.gap > 0
-        ? `**Next:** ${worst.name} (score ${worst.score.score}) — ${w.metric} is ${Math.round(w.gap * 100)} % off target.`
-        : `**Next:** every object meets the metric criteria; lowest score ${worst.name} (${worst.score.score}).`
+      `## Real (${real.rows.length} captured, ${real.missing.length} missing)`,
+      '',
+      ...(real.rows.length ? scoreTable(real.rows) : ['No real capture on this machine.', '']),
+      ...(real.missing.length
+        ? [`Missing (\`make shape-capture PHOTO=… ID=<id>\`): ${real.missing.join(', ')}.`, '']
+        : []),
+      ...(real.unscored?.length
+        ? [`Not scorable (capture without outline or recipe): ${real.unscored.join(', ')}.`, '']
+        : [])
     );
   }
+  const next = nextLine(real?.rows.length ? real.rows : rows);
+  if (next) lines.push(next);
   return lines.join('\n') + '\n';
+}
+
+/** Report row of a scored recipe: part count, statuses and coherence violations (PR-2.14, PR-2.15). */
+export function reportRow(
+  name: string,
+  score: ModelScore,
+  recipe: ObjectRecipe,
+  archetype: KitArchetype,
+  ms?: number,
+  masks?: ReadonlyArray<PartMask>
+): ReportRow {
+  const statusCounts = { measured: 0, estimated: 0, inferred: 0, unknown: 0 };
+  for (const p of recipe.parts) statusCounts[p.status ?? 'unknown'] += 1;
+  return {
+    name,
+    score,
+    parts: recipe.parts.length,
+    ...(ms !== undefined ? { ms } : {}),
+    violations: checkConstraints(archetype, recipe),
+    statusCounts,
+    view: degenerateView(recipe, archetype),
+    ...(masks?.length ? { notBuilt: notBuilt(recipe, masks) } : {}),
+  };
+}
+
+/** A captured real case, re-scored offline: its row and the images for the contact sheet. */
+export interface RealScored {
+  row: ReportRow;
+  sheet: SheetRow;
+}
+
+/**
+ * The real set (PQ-T1): every registered id with a capture in `dir` is re-scored offline (no API, the
+ * captured recipe on the captured crop); ids without files are listed as missing, never an error.
+ */
+export async function scoreRealSet(
+  dir: string,
+  cases: ReadonlyArray<RealCase>
+): Promise<{ scored: RealScored[]; missing: string[]; unscored: string[] }> {
+  const scored: RealScored[] = [];
+  const missing: string[] = [];
+  const unscored: string[] = [];
+  for (const c of cases) {
+    if (
+      !existsSync(join(dir, `${c.id}.capture.json`)) ||
+      !existsSync(join(dir, `${c.id}.crop.jpg`))
+    ) {
+      missing.push(c.id);
+      continue;
+    }
+    const { capture } = await readCapture(dir, c.id);
+    const s = await rescoreCapture(dir, c.id);
+    if (!s || !capture.recipe) {
+      unscored.push(c.id);
+      continue;
+    }
+    const name = c.hard ? `${c.id} (${c.hard})` : c.id;
+    scored.push({
+      row: reportRow(
+        name,
+        s.score,
+        capture.recipe,
+        capture.kit.archetype,
+        undefined,
+        captureMasks(capture)
+      ),
+      sheet: {
+        name: `${name} — ${s.score.score}`,
+        crop: s.crop,
+        flat: s.render,
+        threeQuarter: renderFlat(capture.recipe, 1, 160, 120, THREE_QUARTER),
+      },
+    });
+  }
+  return { scored, missing, unscored };
 }
 
 export interface SheetRow {

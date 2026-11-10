@@ -126,7 +126,9 @@ export type RecipeMaterial = z.infer<typeof RecipeMaterialSchema>;
 export const MAX_YAW = Math.PI / 3;
 
 const coord = z.number().min(-RECIPE_BOUND).max(RECIPE_BOUND);
-const extent = z.number().min(0.01).max(1);
+/** Smallest part extent the schema accepts. */
+export const MIN_EXTENT = 0.01;
+const extent = z.number().min(MIN_EXTENT).max(1);
 
 /**
  * One primitive. Object centred at the origin, x right, y up, z toward the camera.
@@ -511,6 +513,23 @@ export function fitRecipe(recipe: ObjectRecipe, boxAspect: number, yaw = 0): Obj
 export function recipeIssue(recipe: ObjectRecipe): 'no_body' | null {
   const fill = recipe.parts.reduce((s, p) => s + volume(p), 0);
   return fill < MIN_FILL_VOLUME ? 'no_body' : null;
+}
+
+/**
+ * Last guard before a recipe ships: every part size into [MIN_EXTENT, 1] and every centre into
+ * ±RECIPE_BOUND, so a fitting step that squeezes a part flat never breaks the schema. Returns the
+ * same recipe when nothing moved, and the indices of the parts it changed (for the log).
+ */
+export function clampParts(recipe: ObjectRecipe): { recipe: ObjectRecipe; clamped: number[] } {
+  const clamped: number[] = [];
+  const parts = recipe.parts.map((p, i) => {
+    const size = p.size.map((v) => clamp(v, MIN_EXTENT, 1)) as RecipePart['size'];
+    const at = p.at.map((v) => clamp(v, -RECIPE_BOUND, RECIPE_BOUND)) as RecipePart['at'];
+    if (size.every((v, k) => v === p.size[k]) && at.every((v, k) => v === p.at[k])) return p;
+    clamped.push(i);
+    return { ...p, size, at };
+  });
+  return { recipe: clamped.length ? { ...recipe, parts } : recipe, clamped };
 }
 
 /** Main body part: the one marked `front`, else the biggest. */
