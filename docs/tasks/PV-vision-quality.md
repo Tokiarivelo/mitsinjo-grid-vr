@@ -33,7 +33,8 @@ Meta API calls; all others run offline.
       **Done when:** `make shape-report` shows ≥ 12 real rows and the baseline is logged. Closes PR-0.5.
       _Code done 2026-11-10:_ `REAL_SHAPES` (16 ids, 3 hard) in the fixtures index, `scoreRealSet` + « Real »
       table (missing / not scorable listed), captures now keep `partMasks` and the replay scores them.
-      **Open (user):** capture the 13 missing photos; `TV` needs a re-capture (no outline).
+      **Open (user):** capture the 12 missing photos; `TV` needs a re-capture (no outline). `LABEL=` picks
+      the detection when the id is not in its label (`ID=car-side LABEL=car`). Guide: `PV-Q0-a-faire.md`.
 - [x] **PQ-T2 Detail score.** _(done 2026-11-10; real rows wait for PQ-T1)_ New `server/perception/detail-score.ts`: part recall, part precision, interior edge
       F1, colour per part (definitions: methodology §6.1). `ModelScore.detail` in `model-score.ts`, filled by
       `score-shape.ts` from the capture's part masks; four columns in the report. Not in the weighted score yet.

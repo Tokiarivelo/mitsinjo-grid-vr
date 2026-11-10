@@ -105,10 +105,10 @@ improve-shot: ## Improvement chip shots (running + finalised), desktop + mobile,
 	$(need_ws)
 	@$(PNPM) --filter $(WEB) exec node scripts/improve-chip-shot.mjs $(URL) $(CURDIR)/test-results/shape-report
 
-shape-capture: ## Capture one live 3D run → offline fixtures (PHOTO=… ID=…, PR-0.4)
+shape-capture: ## Capture one live 3D run → offline fixtures (PHOTO=… ID=…, LABEL=… picks the object, PR-0.4)
 	$(need_ws)
 	@test -n "$(PHOTO)" -a -n "$(ID)" || { echo "Usage: make shape-capture PHOTO=path/to/photo.jpg ID=car1"; exit 1; }
-	eval "$$(make -s env-export)" && SHAPE_CAPTURE=1 SHAPE_CAPTURE_PHOTO="$(abspath $(PHOTO))" SHAPE_CAPTURE_ID="$(ID)" SHAPE_CAPTURE_DIR="$(CURDIR)/apps/web/src/server/perception/__fixtures__/shape/real" $(PNPM) --filter $(WEB) exec vitest run src/server/perception/__tests__/shape-capture.test.ts -t "make shape-capture"
+	eval "$$(make -s env-export)" && SHAPE_CAPTURE=1 SHAPE_CAPTURE_PHOTO="$(abspath $(PHOTO))" SHAPE_CAPTURE_ID="$(ID)" $(if $(LABEL),SHAPE_CAPTURE_LABEL="$(LABEL)") SHAPE_CAPTURE_DIR="$(CURDIR)/apps/web/src/server/perception/__fixtures__/shape/real" $(PNPM) --filter $(WEB) exec vitest run src/server/perception/__tests__/shape-capture.test.ts -t "make shape-capture"
 
 shape-judge: ## Rubric judge (META_JUDGE_MODEL) on the real captures, intact vs damaged → calibration (PQ-T4, costs API calls; REPLAY=1 = stored answers only)
 	$(need_ws)

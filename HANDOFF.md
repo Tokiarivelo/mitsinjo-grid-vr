@@ -13,10 +13,10 @@
 - Machine: disk was full mid-session (freed by the user); shared `node_modules` now gives ~780 JSX type errors
   in files this branch never touched (React / three typings) — same on `main`: reinstall (`make install`).
 
-## Next (user first)
+## Next (user first) — step-by-step guide in French: `docs/tasks/PV-Q0-a-faire.md`
 
-1. **PQ-T1:** capture the 12 missing real photos (`make shape-capture PHOTO=… ID=<id>`, ids in
-   `REAL_SHAPES`), re-capture `TV`. Then `make shape-report`.
+1. **PQ-T1:** capture the 12 missing real photos (`make shape-capture PHOTO=… ID=<id> LABEL=<detection>`,
+   ids in `REAL_SHAPES`), re-capture `TV`. Then `make shape-report`.
 2. **PQ-T4:** `make shape-judge` (API) → calibration in the loop log.
 3. **PQ-T6:** gates from the real baseline (needs 1). Then Q1 (PQ-T7…).
 4. PQ-T37 open parts: `evidence.visibleParts` (PQ-T12), part list in the panel (UI task).
