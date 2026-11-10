@@ -1,8 +1,5 @@
 import type { PartsSubject, PerceptionBackend, PerceptionCall, ShapeSubject } from './backend';
 import { JUDGE_CRITERIA, type JudgeCriterion } from './rubric-judge';
-
-/** The mock judge's grade on every criterion (PQ-T4). */
-export const MOCK_JUDGE_GRADE = 3;
 import { mockRecipe } from './shape';
 import { boxUnionCoverage } from './parse-sam';
 import { classifyLabel } from './detect';
@@ -20,6 +17,9 @@ import type {
   Transcript,
   VisionResult,
 } from './schemas';
+
+/** The mock judge's grade on every criterion (PQ-T4). */
+export const MOCK_JUDGE_GRADE = 3;
 
 /** Model id reported by every mock perception result. */
 export const MOCK_PERCEPTION_MODEL = 'mock-perception-v1';

@@ -234,7 +234,10 @@ export async function fetchOutlineForBox(
   }: {
     timeoutMs?: number;
     crop?: OutlineCrop;
-    /** Concepts tried in order while `concept` misses (`samRetries`: the full label, then a lookalike). */
+    /**
+     * Concepts tried in order while SAM answers `concept` without a match (`samRetries`: the full label,
+     * then a lookalike). A timeout, a failed call or a mock answer ends the walk: no word fixes those.
+     */
     retries?: ReadonlyArray<string>;
   } = {}
 ): Promise<string | null> {
@@ -242,6 +245,8 @@ export async function fetchOutlineForBox(
   // Only a real SAM answer counts (the mock's boxes belong to another image).
   const answered = usableAnswer(full, timeoutMs);
   let miss: string;
+  // Another word only helps when SAM answered and found nothing: not on a timeout, a failure or a mock.
+  let heard = !('miss' in answered);
   if ('miss' in answered) {
     miss = answered.miss;
   } else {
@@ -261,6 +266,7 @@ export async function fetchOutlineForBox(
       timeoutMs
     );
     const cropAnswered = usableAnswer(onCrop, timeoutMs);
+    heard ||= !('miss' in cropAnswered);
     if ('miss' in cropAnswered) {
       miss = `${miss}; crop: ${cropAnswered.miss}`;
     } else {
@@ -282,7 +288,7 @@ export async function fetchOutlineForBox(
   // Every miss logs its cause: a silent null here used to cost a whole investigation session.
   console.warn(`[vision] 3D outline missed for "${concept}": ${miss}`);
   const rest = retries.map((r) => r.trim().toLowerCase()).filter((r) => r && r !== concept);
-  if (rest.length) {
+  if (heard && rest.length) {
     return fetchOutlineForBox(segmentImage, imageUrl, rest[0]!, box, {
       timeoutMs,
       ...(crop ? { crop } : {}),

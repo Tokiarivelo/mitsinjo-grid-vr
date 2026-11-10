@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
+import { kitToRecipe, ObjectKitSchema } from '@/lib/object-kit';
 import type { ObjectRecipe, PartMask, RecipePart } from '@/lib/object-shape';
 import type { MaskMapGeom } from '../mask-geometry';
 import {
@@ -254,6 +255,39 @@ describe('repairGraph + notBuilt (PQ-T37)', () => {
     const r = repairGraph('vehicle', clean);
     expect(r.recipe).toBe(clean);
     expect(r.pulled).toEqual([]);
+  });
+
+  it('a part held by another part is not floating: stacked roof tiers stay (PR #9 review)', () => {
+    // Walls, then three roof tiers each resting on the one below; only the first touches the walls.
+    const walls = box([0, -0.2, 0], [1, 0.6, 1], { front: true });
+    const tiers = [
+      box([0, 0.16, 0], [1, 0.12, 1]),
+      box([0, 0.28, 0], [0.72, 0.12, 0.74]),
+      box([0, 0.4, 0], [0.42, 0.12, 0.48]),
+    ];
+    const stepped: ObjectRecipe = { proportions: { w: 1, h: 1, d: 0.6 }, parts: [walls, ...tiers] };
+    const r = repairGraph('house', stepped);
+    expect(r.pulled).toEqual([]);
+    expect(r.recipe).toBe(stepped);
+    // The top tier lifted off the stack is pulled back, and the tiers under it do not move.
+    const lifted = { ...tiers[2]!, at: [0, 0.7, 0] as RecipePart['at'] };
+    const fixed = repairGraph('house', {
+      ...stepped,
+      parts: [walls, tiers[0]!, tiers[1]!, lifted],
+    });
+    expect(fixed.pulled).toEqual([3]);
+    expect(fixed.recipe.parts[2]).toBe(tiers[1]);
+  });
+
+  it('the house template keeps its roof (PR #9 review)', () => {
+    const recipe = kitToRecipe(
+      ObjectKitSchema.parse({
+        archetype: 'house',
+        proportions: { w: 1, h: 1, d: 0.6 },
+        colors: { main: '#888888', secondary: '#444444', accent: '#cc2222' },
+      })
+    );
+    expect(repairGraph('house', recipe).recipe).toBe(recipe);
   });
 
   it('reports what was seen but not built, and a listed mirror with no geometry', () => {

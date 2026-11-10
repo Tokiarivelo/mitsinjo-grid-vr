@@ -4,14 +4,14 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import sharp from 'sharp';
 import type { KitArchetype } from '@/lib/object-kit';
-import { PartMaskSchema, type ObjectRecipe, type PartMask } from '@/lib/object-shape';
+import type { ObjectRecipe, PartMask } from '@/lib/object-shape';
 import type { RealCase } from './__fixtures__/shape';
 import { degenerateView, type ViewCheck } from './detail-score';
 import type { ElevationScore } from './elevation-score';
 import { renderFlat, THREE_QUARTER, type FlatRender } from './flat-render';
 import type { ModelScore, RgbGrid } from './model-score';
 import { checkConstraints, notBuilt } from './object-graph';
-import { readCapture, rescoreCapture } from './shape-capture';
+import { captureMasks, readCapture, rescoreCapture } from './shape-capture';
 
 /**
  * Shape report (PR-0.3) for the quality loop (`/shape-loop`): a Markdown table of the scores with the worst
@@ -264,10 +264,7 @@ export async function scoreRealSet(
         capture.recipe,
         capture.kit.archetype,
         undefined,
-        (capture.partMasks ?? []).flatMap((m) => {
-          const parsed = PartMaskSchema.safeParse(m);
-          return parsed.success ? [parsed.data] : [];
-        })
+        captureMasks(capture)
       ),
       sheet: {
         name: `${name} — ${s.score.score}`,

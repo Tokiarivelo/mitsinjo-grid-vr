@@ -45,7 +45,7 @@ features/copilot/          # ChatPanel, ChatMessage, ToolActivity, ConfirmPropos
   (≥ 0.3) match → the detection takes the pixel-precise SAM box. Timeout, error, spend cap or a mock answer → Muse box kept.
   The SAM word is `conceptOf(label)`: the head noun, i.e. the last known noun before a complement (« vintage TV » → `tv`,
   « car with roof rack » → `car`). The on-demand outline (`fetchOutlineForBox`) walks `samRetries` while it misses: the full label
-  (« pole » → « utility pole », PQ-T1), then a measured lookalike SAM knows (`pump` → « fire hydrant », PQ-T9). `make sam-probe ID=… CONCEPTS=…` compares words on a capture.
+  (« pole » → « utility pole », PQ-T1), then a measured lookalike SAM knows (`pump` → « fire hydrant », PQ-T9); only while SAM answers without a match (a timeout, a failed call or a mock answer ends the walk). `make sam-probe ID=… CONCEPTS=…` compares words on a capture.
   `parseSamOutput` also returns each mask still encoded (`{encoding, height, width, payload}`, raster over the box);
   `mask-outline.ts` decodes it with `@meta-sam/parser` (SAM License, `THIRD_PARTY_NOTICES.md`) into a simplified SVG path in
   image fractions (≤ 160 points) set on each SAM instance and carried to the matched detection. Unreadable mask → no outline. Never throws: missing key, spend cap or API error → deterministic mock with `fallback` set.

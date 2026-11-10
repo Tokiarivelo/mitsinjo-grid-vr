@@ -99,7 +99,6 @@ export function remapOutlineToCrop(
     .join('');
 }
 
-/** `<dir>/<id>.capture.json` + `<dir>/<id>.crop.jpg` (the exact bytes Spark saw). */
 /**
  * The detection a capture is about (PQ-T1): `pick` as a detection id, else the biggest box whose label
  * contains `pick`, else (when `pick` has several words, like the id `car-side`) its first word. Null
@@ -118,6 +117,15 @@ export function pickDetection<
   return biggest(pick) ?? (first && first !== pick ? biggest(first) : null);
 }
 
+/** The valid SAM part masks of a capture (stored loosely; malformed ones dropped). */
+export function captureMasks(capture: Pick<ShapeCapture, 'partMasks'>): PartMask[] {
+  return (capture.partMasks ?? []).flatMap((m) => {
+    const parsed = PartMaskSchema.safeParse(m);
+    return parsed.success ? [parsed.data] : [];
+  });
+}
+
+/** `<dir>/<id>.capture.json` + `<dir>/<id>.crop.jpg` (the exact bytes Spark saw). */
 export function writeCapture(
   dir: string,
   capture: ShapeCapture,
@@ -153,10 +161,7 @@ export async function rescoreCapture(dir: string, id: string): Promise<RecipeSco
   const recipe: ObjectRecipe | undefined = capture.recipe;
   if (!recipe) return null;
   // Captured mask boxes are fractions of the saved crop, i.e. of the whole replayed image (PQ-T1).
-  const masks = (capture.partMasks ?? []).flatMap((m) => {
-    const parsed = PartMaskSchema.safeParse(m);
-    return parsed.success ? [parsed.data] : [];
-  });
+  const masks = captureMasks(capture);
   if (!masks.length) return scoreRecipe(cropPhoto, capture.cropTarget, recipe);
   const { width, height } = cropPhoto;
   return scoreRecipe(cropPhoto, capture.cropTarget, recipe, masks, {

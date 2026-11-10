@@ -96,7 +96,7 @@ Meta API calls; all others run offline.
       **Test:** `object-graph.test.ts` (floating wheel caught and pulled in; duplicate window merged; a listed
       mirror with no geometry is reported).
       **Done when:** the report has a « Not built » column and it is empty or explained for every real object.
-      _Partly done 2026-11-10:_ `repairGraph` (floating part pulled against its parent, fused twin merged, by rule,
+      _Partly done 2026-11-10:_ `repairGraph` (floating part = held by neither the ground, its parent, nor a held part; pulled against its parent, fused twin merged, by rule,
       before the statuses; log `[vision] 3D graph repair …`), `notBuilt` (SAM masks beyond the parts that draw them + listed names; log `[vision] 3D seen, not built …`), « Not built » report column (— without masks: every
       current capture). **Open:** `evidence.visibleParts` waits for PQ-T12; the panel has no part list yet (UI task).
 

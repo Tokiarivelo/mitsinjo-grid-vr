@@ -65,6 +65,16 @@ describe('rubric judge (PQ-T4)', () => {
     expect(parseJudge('not json')).toBeNull();
     expect(parseJudge('{"grades":{"silhouette":3}}')).toBeNull();
     expect(parseJudge('null')).toBeNull();
+    // A null or empty grade is missing, not the grade 1 (PR #9 review).
+    const grades = {
+      silhouette: 3,
+      proportions: 3,
+      parts_present: 3,
+      parts_placed: 3,
+      surfaces: 3,
+    };
+    expect(parseJudge(JSON.stringify({ grades: { ...grades, likeness: null } }))).toBeNull();
+    expect(parseJudge(JSON.stringify({ grades: { ...grades, likeness: ' ' } }))).toBeNull();
   });
 
   it('damage removes the two biggest parts that are not the body', () => {

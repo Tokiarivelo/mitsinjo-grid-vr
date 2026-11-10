@@ -89,7 +89,10 @@ export function parseJudge(content: string): Judgement | null {
   if (!g || typeof g !== 'object') return null;
   const grades = {} as Record<JudgeCriterion, number>;
   for (const c of JUDGE_CRITERIA) {
-    const v = Number(g[c]);
+    // A number or a numeric string only: `Number(null)` is 0 and would pass for the grade 1.
+    const given = g[c];
+    const v =
+      typeof given === 'number' ? given : typeof given === 'string' && given.trim() ? +given : NaN;
     if (!Number.isFinite(v)) return null;
     grades[c] = Math.min(5, Math.max(1, Math.round(v)));
   }

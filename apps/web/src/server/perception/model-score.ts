@@ -143,6 +143,9 @@ export function edgeMap(grid: RgbGrid, region?: Mask, share = 1): Mask {
   return m;
 }
 
+/** Colour term of the score: 1 at ΔE 0, 0 from `SCORE_DELTA_E_MAX` up. */
+const colorTerm = (dE: number) => Math.max(0, 1 - dE / SCORE_DELTA_E_MAX);
+
 /** Share of `a`'s pixels within `tol` of a pixel of `b` (1 when `a` is empty). */
 export function matched(a: Mask, bDistance: Float32Array, tol: number): number {
   let n = 0;
@@ -238,7 +241,7 @@ export function scoreRender(
     n += count;
   });
   const dE = n ? total / n : 100;
-  const color = Math.max(0, 1 - dE / SCORE_DELTA_E_MAX);
+  const color = colorTerm(dE);
   const landmark = scoreLandmarks(render, landmarks, cols);
   if (landmark === undefined) {
     const w = SCORE_WEIGHTS;
@@ -310,7 +313,7 @@ export function weightDetail(s: ModelScore): ModelScore {
   );
   if (!p.length) return s;
   const parts = p.reduce((a, b) => a + b, 0) / p.length;
-  const color = Math.max(0, 1 - s.deltaE / SCORE_DELTA_E_MAX);
+  const color = colorTerm(s.deltaE);
   const w = SCORE_WEIGHTS_DETAIL;
   const score = 100 * (w.iou * s.iou + w.edge * s.edgeF1 + w.color * color + w.parts * parts);
   return { ...s, score: Math.round(score) };

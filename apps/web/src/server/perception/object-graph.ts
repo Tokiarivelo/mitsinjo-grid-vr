@@ -256,9 +256,10 @@ export interface GraphRepair {
 }
 
 /**
- * Hard geometry gates (PQ-T37), fixed by rule without asking a model: a part touching neither its graph
- * parent nor the ground is pulled against its parent; two parts of the same kind at one place (centres
- * within `FUSED_DIST`, sizes within `FUSED_SIZE`) keep only the first. Same reference when clean. Pure.
+ * Hard geometry gates (PQ-T37), fixed by rule without asking a model: a part held by nothing (it touches
+ * neither the ground, nor its graph parent, nor a part that is itself held: a roof tier on the tier
+ * below) is pulled against its parent; two parts of the same kind at one place (centres within
+ * `FUSED_DIST`, sizes within `FUSED_SIZE`) keep only the first. Same reference when clean. Pure.
  */
 export function repairGraph(archetype: KitArchetype, recipe: ObjectRecipe): GraphRepair {
   const kinds = detailParts(recipe).map((d, i) => {
@@ -286,16 +287,34 @@ export function repairGraph(archetype: KitArchetype, recipe: ObjectRecipe): Grap
   const graph = buildGraph(archetype, kept);
   const ground = Math.min(...kept.parts.map((p) => box3(p).lo[1]));
   const pulled: number[] = [];
-  const parts = kept.parts.map((p, i) => {
-    const parent = graph.nodes[i]!.parent;
-    if (parent === null) return p;
-    const a = box3(p);
-    if (a.lo[1] <= ground + TOUCH_EPS) return p;
-    const shift = gapShift(a, box3(kept.parts[parent]!));
-    if (shift.every((v) => v === 0)) return p;
+  const parts = [...kept.parts];
+  const touches = (i: number, j: number) =>
+    gapShift(box3(parts[i]!), box3(parts[j]!)).every((v) => v === 0);
+  // Held = the body, a part on the ground, or a part touching a held one (stacked tiers, arm → head).
+  const held = new Set<number>();
+  const spread = () => {
+    for (let grew = true; grew;) {
+      grew = false;
+      parts.forEach((p, i) => {
+        if (held.has(i)) return;
+        const rooted = graph.nodes[i]!.parent === null || box3(p).lo[1] <= ground + TOUCH_EPS;
+        if (rooted || [...held].some((j) => touches(i, j))) {
+          held.add(i);
+          grew = true;
+        }
+      });
+    }
+  };
+  spread();
+  for (let i = 0; i < parts.length; i++) {
+    if (held.has(i)) continue;
+    const p = parts[i]!;
+    const shift = gapShift(box3(p), box3(parts[graph.nodes[i]!.parent!]!));
+    parts[i] = { ...p, at: p.at.map((v, k) => v + shift[k]!) as RecipePart['at'] };
     pulled.push(keptIndex[i]!);
-    return { ...p, at: p.at.map((v, k) => v + shift[k]!) as RecipePart['at'] };
-  });
+    held.add(i);
+    spread();
+  }
   return {
     recipe: pulled.length ? { ...kept, parts } : kept,
     pulled,

@@ -32,5 +32,7 @@
 
 - Real photos come from Wikimedia Commons (free licences), stay local; hard set: hidden car, small pole, backlit panel.
 - Detail weights replace the landmark set when part masks exist; goldens keep their scores.
-- No extra SAM phrasings in the live path yet (each miss costs up to 16 s): that is PQ-T9.
+- Live SAM retries: full label, then a measured lookalike, only when SAM answered without a match (a timeout,
+  a failure or a mock ends the walk: each word costs up to 16 s). More phrasings: PQ-T9.
+- PR #9 review: `repairGraph` counts a part held by another held part (stepped roof tiers were pulled flat).
 - No test scenario: developer tooling and pipeline internals, nothing new visible in the app.

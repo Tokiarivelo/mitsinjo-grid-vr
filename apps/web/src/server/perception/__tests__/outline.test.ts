@@ -192,6 +192,31 @@ describe('fetchOutlineForBox label fallback (PQ-T1)', () => {
       warn.mockRestore();
     }
   });
+  it('no retry when SAM never answered: a timeout or a failed call is not a wrong word (PR #9 review)', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const asked: string[] = [];
+      const failing = async (_url: string, concept: string) => {
+        asked.push(concept);
+        throw new Error('offline');
+      };
+      expect(
+        await fetchOutlineForBox(failing, 'data:x', 'pole', pole, { retries: ['utility pole'] })
+      ).toBeNull();
+      expect(asked).toEqual(['pole']);
+      asked.length = 0;
+      const mock = async (_url: string, concept: string) => {
+        asked.push(concept);
+        return { ...samResult(concept), source: 'mock' as const };
+      };
+      expect(
+        await fetchOutlineForBox(mock, 'data:x', 'pole', pole, { retries: ['utility pole'] })
+      ).toBeNull();
+      expect(asked).toEqual(['pole']);
+    } finally {
+      warn.mockRestore();
+    }
+  });
   it('no second call when the label is the concept', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {

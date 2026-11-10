@@ -28,6 +28,7 @@ import {
   rescoreCapture,
   writeCapture,
   type ShapeCapture,
+  captureMasks,
 } from '../shape-capture';
 import { KIT_PROMPT_VERSION } from '../shape';
 import { writeGoldenCapture } from './golden-run';
@@ -226,6 +227,14 @@ describe('criticReplay (PR-0.6)', () => {
 });
 
 const LIVE = process.env.SHAPE_CAPTURE === '1';
+
+describe('captureMasks (PR #9 review)', () => {
+  it('keeps the valid part masks, drops malformed ones, empty without any', () => {
+    const good = { concept: 'wheel', box: { x: 0.1, y: 0.6, w: 0.2, h: 0.3 } };
+    expect(captureMasks({ partMasks: [good, { concept: 'wheel' }, null, 'x'] })).toEqual([good]);
+    expect(captureMasks({})).toEqual([]);
+  });
+});
 
 describe('pickDetection (PQ-T1)', () => {
   const det = (id: string, label: string, w: number) => ({ id, label, box: { w, h: w } });
