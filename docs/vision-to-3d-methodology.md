@@ -3,8 +3,8 @@
 > **Scope.** How one object on a photo becomes a 3D model on `/village`: what the code does today, where the
 > quality is lost, and what to change to get the strongest image-to-3D the Meta models allow.
 > **Companions.** Prompt-ready knowledge for each Muse call: `vision-to-3d-muse-skills.md`. Step-by-step
-> checklist (tasks, files, tests, gates): `tasks/PV-vision-quality.md`. The sky of `/simulation` (clouds, sun):
-> `vision-to-3d-atmosphere.md`.
+> checklist for model quality: `tasks/PV-vision-quality.md`. Capture feel, hologram and the editing Lab with its AI
+> assistant: `tasks/PV-capture-lab.md`. The sky of `/simulation` (clouds, sun): `vision-to-3d-atmosphere.md`.
 > **Status words.** « As built » = in the code on 2026-11-10. « Target » = planned in PV-Q, not built.
 > Nothing under « Target » is a fact about the app yet.
 

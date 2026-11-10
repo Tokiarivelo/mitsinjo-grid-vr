@@ -19,15 +19,15 @@
 
 ## Next
 
-1. **PQ-T1** real reference set: ≥ 12 photos with `make shape-capture PHOTO=… ID=…` (costs Meta API calls; needs
-   the user's photos). Then **PQ-T2** detail score, **PQ-T3** flat render draws details.
-2. Only after Q0: Q1 (pixels, SAM agreement) → Q2 (skill cards, one family at a time, each with an eval).
+1. **PQ-T1** real photo set (`make shape-capture`, API calls, needs the user's photos), then PQ-T2, T3, T36.
+2. **PV-C** (`docs/tasks/PV-capture-lab.md`, PC-T1…T31, planned): instant capture (feedback ≤ 100 ms, ghost ≤ 1 s),
+   elastic grab for mouse / controller / hand, hologram, 3D Lab tools, AI assistant by chat. Start: PC-T1, PC-T9.
 3. VR backlog as before: real Quest check, tour links, headset static text → i18n keys, VS-T9 audio.
 
 ## Files touched
 
 - `docs/vision-to-3d-methodology.md` (rewrite), `docs/vision-to-3d-muse-skills.md` (new),
-  `docs/vision-to-3d-atmosphere.md` (new, split), `docs/tasks/PV-vision-quality.md` (new), `docs/tasks/README.md`
+  `docs/vision-to-3d-atmosphere.md` (new, split), `docs/tasks/PV-vision-quality.md` + `PV-capture-lab.md` (new), `docs/tasks/README.md`
 - `.claude/skills/shape-3d/SKILL.md`, `.claude/skills/shape-loop/SKILL.md`, `CLAUDE.md` (doc map row)
 
 ## Decisions
