@@ -43,6 +43,7 @@ import {
   useFullscreen,
   useSceneQuality,
   useWebXR,
+  EmulatedXRExit,
   type CameraPreset,
   type SceneQuality,
 } from '@/features/microgrid-3d';
@@ -204,6 +205,7 @@ export function VillageViewport({
           : cn('min-h-[360px] sm:min-h-[460px]', className)
       )}
     >
+      <EmulatedXRExit active={xrActive} label={tSim('vrExit')} onExit={handleVRExit} />
       {/* Top Floating HUD bar */}
       <div className="absolute top-3 left-3 right-3 flex items-center justify-between z-10 pointer-events-none flex-wrap gap-2">
         {/* Left: Mode Title & Time Status */}

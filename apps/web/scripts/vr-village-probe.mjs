@@ -202,6 +202,35 @@ try {
   await sleep(1500);
   check('↑ walks to the room ahead (lounge)', (await tour())?.room === 'lounge');
   await shot('8-lounge');
+  // Outdoor walk (houses, trees, forest) through the hall window.
+  const walkTo = async (to) => {
+    const arrow = (await tour())?.arrows.find((a) => a.to === to);
+    if (!arrow) return false;
+    const at = { x: arrow.position[0], y: arrow.position[1], z: arrow.position[2] };
+    await rc('look_at', { device: 'headset', target: { x: at.x, y: 1.2, z: at.z } });
+    await sleep(400);
+    await fire('controller-right', at, { x: 0.2, y: 1.2, z: -0.1 });
+    await sleep(1200);
+    return (await tour())?.room === to;
+  };
+  let outdoor = await walkTo('hall');
+  for (const to of ['terrace', 'street', 'house', 'garden', 'avenue', 'forest']) {
+    outdoor = outdoor && (await walkTo(to));
+    if (outdoor) {
+      await rc('look_at', { device: 'headset', target: { x: 0, y: 1.6, z: -3 } });
+      await sleep(900);
+      await shot(`9-out-${to}`);
+    }
+  }
+  check('walks outside: terrace → street → house → garden → avenue → forest', outdoor);
+  check(
+    'IWER DevUI panels (controllers, Play Mode) are mounted',
+    await page.evaluate(() => !!window.__IWER_DEVICE__?.devui?.devUIContainer?.isConnected)
+  );
+  check(
+    'an Exit VR button stays on screen during the emulated session',
+    await page.evaluate(() => !!document.querySelector('[data-xr-exit]'))
+  );
   check('no page errors', errors.length === 0);
   if (errors.length) console.log(errors.slice(0, 10).join('\n'));
 } finally {

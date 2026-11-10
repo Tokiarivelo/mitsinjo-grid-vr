@@ -13,6 +13,7 @@ vi.mock('@/features/microgrid-3d', () => ({
   }),
   installWebGLContextSafetyPolyfill: vi.fn(),
   isDevXREmulated: () => false,
+  EmulatedXRExit: () => null,
 }));
 
 import { VillageXRViewport } from '../village-xr-viewport';

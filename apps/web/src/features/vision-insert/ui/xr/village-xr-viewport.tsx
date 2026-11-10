@@ -16,6 +16,7 @@ import {
   useContextLoss,
   installWebGLContextSafetyPolyfill,
   isDevXREmulated,
+  EmulatedXRExit,
 } from '@/features/microgrid-3d';
 import { TOUR_EYE } from './tour/tour-nav';
 import { VillageXRStudio } from './village-xr-studio';
@@ -129,6 +130,7 @@ export const VillageXRViewport = memo(function VillageXRViewport({
       className="relative w-full h-[600px] md:h-[700px] xl:h-[760px] rounded-3xl overflow-hidden border border-border/80 bg-slate-950 shadow-xl"
       data-testid="village-xr-viewport"
     >
+      <EmulatedXRExit active={xrActive} label={t('vrExit')} onExit={onExitVR} />
       {/* 2D Overlay HUD (Visible on Desktop Screen / Mirror) */}
       <div className="absolute top-4 left-4 right-4 z-20 flex items-center justify-between pointer-events-none">
         <div className="flex items-center gap-2 pointer-events-auto">

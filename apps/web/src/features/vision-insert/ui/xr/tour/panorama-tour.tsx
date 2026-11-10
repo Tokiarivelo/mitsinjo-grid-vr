@@ -137,7 +137,6 @@ export const PanoramaTour = memo(function PanoramaTour({
       tex.dispose();
       texturesRef.current.delete(id);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [room]);
 
   useEffect(

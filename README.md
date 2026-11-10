@@ -488,7 +488,7 @@ make deploy        # Manual production deployment from clean origin/main
 ### Future Roadmap
 
 - **VR control room (this fork)**: browser-delivered VR (WebXR) targeting Meta Quest — walkable village twin, hand-operated EMS dispatch shelter and feeder breakers, in-place copilot proposal approvals, and strategy comparison inside VR. Same deterministic engine, same simulated-data guarantees.
-- **/village VR test space**: without a real headset (desktop or IWER emulator), the VR view is a walkable 360° tour of six real rooms (CC0 photos, Street View-like floor arrows, ↑/W/Z or stick to walk, fade between rooms); scans photograph the view you aim at. On a real Quest the webcam stays (flat screen).
+- **/village VR test space**: without a real headset (desktop or IWER emulator), the VR view is a walkable 360° tour of six real rooms plus an outdoor walk (terrace with solar panels, street of houses, garden, tree-lined road, forest; CC0 photos, Street View-like floor arrows, ↑/W/Z or stick to walk, fade between rooms); scans photograph the view you aim at. On a real Quest the webcam stays (flat screen).
 - **Hardware Gateway (SCADA/IoT)**: MQTT / Modbus TCP ingestion adapters for physical microgrid telemetry in Madagascar.
 
 ---

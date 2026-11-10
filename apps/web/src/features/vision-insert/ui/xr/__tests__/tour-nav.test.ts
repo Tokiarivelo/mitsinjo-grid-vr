@@ -12,7 +12,7 @@ import { equirectUv, dirFromYawPitch } from '../tour/equirect';
 describe('tour data (six real rooms)', () => {
   it('links every room both ways, and every image path is under /tour/', () => {
     for (const room of Object.values(TOUR_ROOMS)) {
-      expect(room.src).toMatch(/^\/tour\/studio\/\w+\.jpg$/);
+      expect(room.src).toMatch(/^\/tour\/(studio|outdoor)\/\w+\.jpg$/);
       for (const link of room.links) {
         expect(TOUR_ROOMS[link.to].links.some((l) => l.to === room.id)).toBe(true);
       }
@@ -63,5 +63,36 @@ describe('ground truth in a scan photo', () => {
   it('keeps scan photos level-ish (no floor-only or ceiling-only photo)', () => {
     expect(captureViewAt(0, -1.5).pitch).toBeGreaterThanOrEqual(-0.6);
     expect(captureViewAt(0, 1.5).pitch).toBeLessThanOrEqual(0.6);
+  });
+});
+
+describe('outdoor walk (houses, trees, forest)', () => {
+  it('leaves the studio through the hall window onto the terrace, and reaches the forest', () => {
+    expect(TOUR_ROOMS.hall.links.some((l) => l.to === 'terrace')).toBe(true);
+    const seen = new Set<string>(['terrace']);
+    const queue = ['terrace'] as (keyof typeof TOUR_ROOMS)[];
+    while (queue.length) {
+      for (const l of TOUR_ROOMS[queue.shift()!].links) {
+        if (!seen.has(l.to)) {
+          seen.add(l.to);
+          queue.push(l.to);
+        }
+      }
+    }
+    for (const id of ['street', 'house', 'garden', 'avenue', 'forest', 'woods']) {
+      expect(seen.has(id)).toBe(true);
+    }
+  });
+
+  it('reports houses, cars and trees as scenery (no load), solar panels and lamps as objects', () => {
+    const uFront = 0.55;
+    const street = tourExpectedDetections(TOUR_ROOMS.street, uFront, captureViewAt(0, -0.05));
+    const car = street.find((d) => d.id === 'street-car-white');
+    expect(car).toMatchObject({ kind: 'scenery', scenery: 'vehicle', category: 'other' });
+    expect(street.find((d) => d.id === 'street-house-1')?.scenery).toBe('building');
+    const terrace = tourExpectedDetections(TOUR_ROOMS.terrace, 0.2, captureViewAt(0, -0.2));
+    const solar = terrace.find((d) => d.id === 'terrace-solar');
+    expect(solar?.labels?.fr).toBe('Panneaux solaires');
+    expect(solar?.kind).toBeUndefined();
   });
 });

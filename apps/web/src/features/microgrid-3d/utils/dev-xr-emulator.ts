@@ -3,11 +3,19 @@
  * import from `useWebXR` in development only, so production ships zero emulator code.
  * Never throws: `false` means "no emulation" and the VR button stays hidden.
  */
-let installed = false;
+let installing: Promise<boolean> | null = null;
 
-export async function installDevXREmulator(): Promise<boolean> {
-  if (installed) return true;
-  if (typeof window === 'undefined') return false;
+/** Installs once: concurrent callers (React effects run twice in dev) share the same install. */
+export function installDevXREmulator(): Promise<boolean> {
+  if (typeof window === 'undefined') return Promise.resolve(false);
+  installing ??= install().then((ok) => {
+    if (!ok) installing = null;
+    return ok;
+  });
+  return installing;
+}
+
+async function install(): Promise<boolean> {
   try {
     const { XRDevice, metaQuest3 } = await import('iwer');
     const device = new XRDevice(metaQuest3);
@@ -19,13 +27,14 @@ export async function installDevXREmulator(): Promise<boolean> {
     // through IWER's remote API (`device.remote.dispatch`), like the IWER MCP does.
     (window as Window & { __IWER_DEVICE__?: unknown }).__IWER_DEVICE__ = device;
     try {
-      // The overlay needs WebGL; the emulated runtime works without it.
+      // The overlay needs WebGL; the emulated runtime works without it. Installed through the
+      // device (not `new DevUI(device)`): IWER only mounts the panels (controllers, Play Mode,
+      // exit) of a DevUI it knows about, when the session starts.
       const { DevUI } = await import('@iwer/devui');
-      new DevUI(device);
+      device.installDevUI(DevUI);
     } catch {
       console.warn('[vr] DevUI overlay unavailable; emulated runtime active without it.');
     }
-    installed = true;
     return true;
   } catch {
     return false;

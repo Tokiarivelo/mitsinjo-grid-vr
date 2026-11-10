@@ -185,3 +185,10 @@
 - [x] Page web masquée pendant l'immersion émulée (`data-xr-emulated`).
 - [x] **Done when :** `make vr-probe` → 11 PASS (loft, scan du frigo, flèche → hall, ↑ → séjour) ; « MARRY » lisible à l'endroit.
 - [ ] Vérifier sur un vrai Quest que la webcam plate garde le tir aligné.
+
+### VS-T15 : Espace extérieur (maisons, arbres, forêt) & contrôles de l'émulateur
+
+- [x] 7 lieux extérieurs réels CC0 reliés depuis la fenêtre du hall : terrasse (panneaux solaires), rue, maison, jardin, allée d'arbres, forêt, sous-bois.
+- [x] Vérité terrain : maisons, voitures, arbres en décor (`scenery`) ; panneaux solaires, lampadaire, applique en objets.
+- [x] Panneaux IWER DevUI de retour (`installDevUI`) ; bouton « Quitter l'immersion VR » visible pendant la session émulée.
+- [x] **Done when :** `make vr-probe` → 14 PASS (promenade terrasse → forêt, DevUI monté, bouton de sortie présent).

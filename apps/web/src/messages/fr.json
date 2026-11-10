@@ -1219,7 +1219,14 @@
       "tourRoom_bedroom": "Chambre",
       "tourRoom_bath": "Salle de bain",
       "tourRoom_salon": "Salon",
-      "tourRoom_lounge": "Séjour"
+      "tourRoom_lounge": "Séjour",
+      "tourRoom_terrace": "Terrasse",
+      "tourRoom_street": "Rue",
+      "tourRoom_house": "Maison",
+      "tourRoom_garden": "Jardin",
+      "tourRoom_avenue": "Allée d’arbres",
+      "tourRoom_forest": "Forêt",
+      "tourRoom_woods": "Sous-bois"
     },
     "dispatch": {
       "modeLabel": "Mode de dispatch",

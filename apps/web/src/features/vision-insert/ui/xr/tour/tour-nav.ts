@@ -88,6 +88,7 @@ export function tourExpectedDetections(
       label: o.label,
       labels: o.labels,
       category: o.category,
+      ...(o.kind ? { kind: o.kind, scenery: o.scenery } : {}),
       confidence: 0.9,
       box,
     });
