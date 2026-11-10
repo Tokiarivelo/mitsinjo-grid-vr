@@ -15,17 +15,17 @@
 The previous version (git history, before 2026-11-10) described a cloud layer and a five-agent Meta loop. Checked
 against the repository:
 
-| Claim in the old file                                                 | What the repository shows                                                                                                                                                         | Action                                   |
-| --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
-| The pipeline is clouds: shells, puffs, wrapped diffuse                | True for the `/simulation` sky only. The photo → 3D object pipeline (`server/perception/`, 60+ modules) was not mentioned                                                         | Cloud maths moved to the atmosphere file |
-| `node scratch/test-orbit.mjs` verifies the result                     | The script does not exist. Scene audits are `make scene-audit` and `make shape-report`                                                                                            | Replaced by real commands (§8)           |
-| Acceptance table « Passed » (1 draw call, 0 bytes / frame, ΔE < 8)    | No run backs it. Scene budget is < 150 draw calls (`performance.md`), not 1                                                                                                       | Removed                                  |
-| 13 test files prove each phase                                        | The files exist but test other things: `region-colors` = median colour per SAM mask, `spark-critic` = kit patch round, `autonomous-perf` = dispatch engine timing, not WebGL heap | Test matrix rewritten (§8)               |
-| SAM 3.1 takes a role prompt and returns morphology JSON and 3D bounds | SAM is called with an image and a concept word and returns 2D boxes and masks (`client.segmentImage`)                                                                             | Removed                                  |
-| Muse Image draws top-down and side views to recover depth             | Spike PR-4.1 (2026-11-02): 2 of 3 generated views were wrong (top-down returned a front view), 9–26.5 s each. Only a guarded side view is used                                    | Rewritten (§5, row 11)                   |
-| Muse Wonder orchestrates, Muse Glimmer runs Playwright                | The orchestrator is TypeScript (`runObjectShape`). Wonder does one background final check. Glimmer is the copilot chat fallback (`GLIMMER_BASE_URL`), it runs no tools here       | Rewritten (§2)                           |
-| Prices, context sizes, « converges in ≤ 3 iterations »                | Not sourced anywhere in the repository                                                                                                                                            | Removed until measured                   |
-| Contract 4 telemetry JSON (ΔE 6.84, IoU 0.892)                        | Sample values, not measurements                                                                                                                                                   | Removed                                  |
+| Claim in the old file                                                 | What the repository shows                                                                                                                                                                                                                               | Action                                    |
+| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| The pipeline is clouds: shells, puffs, wrapped diffuse                | True for the `/simulation` sky only. The photo → 3D object pipeline (`server/perception/`, 60+ modules) was not mentioned                                                                                                                               | Cloud maths moved to the atmosphere file  |
+| `node scratch/test-orbit.mjs` verifies the result                     | The script does not exist. Scene audits are `make scene-audit` and `make shape-report`                                                                                                                                                                  | Replaced by real commands (§8)            |
+| Acceptance table « Passed » (1 draw call, 0 bytes / frame, ΔE < 8)    | No run backs it. Scene budget is < 150 draw calls (`performance.md`), not 1                                                                                                                                                                             | Removed                                   |
+| 13 test files prove each phase                                        | The files exist but test other things: `region-colors` = median colour per SAM mask, `spark-critic` = kit patch round, `autonomous-perf` = dispatch engine timing, not WebGL heap                                                                       | Test matrix rewritten (§8)                |
+| SAM 3.1 takes a role prompt and returns morphology JSON and 3D bounds | SAM is called with an image and a concept word and returns 2D boxes and masks (`client.segmentImage`)                                                                                                                                                   | Removed                                   |
+| Muse Image draws top-down and side views to recover depth             | Spike PR-4.1 (2026-11-02): 2 of 3 generated views were wrong (top-down returned a front view), 9–26.5 s each. Only a guarded side view is used                                                                                                          | Rewritten (§5, row 11)                    |
+| Muse Wonder orchestrates, Muse Glimmer runs Playwright                | The orchestrator is TypeScript (`runObjectShape`). Wonder does one background final check. Glimmer is the copilot chat fallback (`GLIMMER_BASE_URL`), it runs no tools here                                                                             | Rewritten (§2)                            |
+| Prices, context sizes, « converges in ≤ 3 iterations »                | Prices and the 1M context of Wonder and Spark match the saved Model API page (Wonder $4.00 in, $0.20 cached; Spark 1.3 $1.25 in; Muse Image $0.01 per image; SAM $2.50 per 1 000 images). The Glimmer « 32K » and the convergence claim are not sourced | Convergence claim removed; costs in §11.4 |
+| Contract 4 telemetry JSON (ΔE 6.84, IoU 0.892)                        | Sample values, not measurements                                                                                                                                                                                                                         | Removed                                   |
 
 Kept from the old file because they are right: analyse the photo before building, build from parametric primitives
 instead of one dense mesh, never let a part fall to black, verify with a render compared to the reference, and
@@ -319,3 +319,69 @@ is reported with the sheet and the blocking cause (`/shape-loop`).
 - Sides the photo does not show are inferred by symmetry and rules. They are plausible, never measured.
 - Generated views are drawings by a model. They are used only after consistency checks and can still be wrong.
 - Photo swatches are small tileable patches (≈ 64 px). The photo is never projected on the model.
+
+---
+
+## 11. Rendering: every step from recipe to pixels
+
+Added 2026-11-10 after reading the viewer code, `tasks/PT-studio-look.md` (done except PT-7), the S1 tasks of
+`PV-shape-realism.md` and `performance.md`. The same recipe is drawn by four renderers, and they are not equal.
+
+### 11.1 The four renderers (as built)
+
+| Renderer                    | File                                                                       | Maps and swatches                             | Environment light      | Shadows                          | Post                               |
+| --------------------------- | -------------------------------------------------------------------------- | --------------------------------------------- | ---------------------- | -------------------------------- | ---------------------------------- |
+| Object viewer `/village`    | `vision-insert/ui/object-editor-3d.tsx`                                    | Yes                                           | Softbox studio (PMREM) | Ground contact shadow only       | Neutral tone mapping, ink, 4× MSAA |
+| Village scene `/simulation` | `microgrid-3d/utils/placed-models-geometry.ts`, `ui/appliance-markers.tsx` | To check (PQ-T32)                             | HDRI (high tier)       | Sun shadow map, cast and receive | N8AO, bloom, ACES, ink (high tier) |
+| VR spawned object           | `vision-insert/ui/xr/spawned-object-3d.tsx`                                | **No**: plain `surfaceMaterial`, white colour | Scene default          | Casts only                       | None (kept off for headset speed)  |
+| Judge render (server)       | `server/perception/flat-render.ts`                                         | No                                            | None (flat shade)      | None                             | None                               |
+
+### 11.2 Viewer chain, step by step (as built)
+
+1. **Geometry** (`object-geometry.ts` `recipeMesh`): one merged mesh, one group per material. Rounded boxes
+   (2 segments), bevelled extrude, lathe, hull and prism (`EDGE_BEVEL` 0.06), round parts 24 segments, spheres
+   18 × 12, roof overhang 0.03. Hip roofs have no bevel.
+2. **Normals**: computed per vertex; bevel rings give the highlight on edges.
+3. **UVs** (`surface-maps.ts` `planarUvs`): box projection in object units, one repeat per 0.25 of the object;
+   roof slopes mapped along the fall line.
+4. **Colour**: measured colour per part as vertex colour, times a grey shade map or a 64 px photo swatch, with a
+   gain so the surface does not darken.
+5. **Material** (`surface-look.ts`): roughness and metalness per material; clearcoat on painted, plastic, tile,
+   glass, metal; procedural normal and roughness maps (128 px, mipmaps, anisotropy 4) on textured materials.
+6. **Light**: softbox studio baked once as environment (intensity 0.9), one key light, one rim light. **No light
+   casts a shadow.**
+7. **Ground**: one baked contact shadow under the object.
+8. **Post**: Neutral tone mapping (keeps measured colours), ink outline 0.6, 4× MSAA, half-float buffer.
+9. **Output**: transparent canvas over the themed backdrop, pixel ratio 1 to 1.5, drawn on demand, faded in after
+   shader warm-up.
+
+### 11.3 What is missing in the rendering (target)
+
+| #   | Gap                                     | Evidence                                                                        | Target                                                                                                                                                             | Task   |
+| --- | --------------------------------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------ |
+| R1  | Parts do not shade each other           | Viewer composer holds only tone mapping and ink; no light has `castShadow`      | Ambient occlusion pass in the viewer (it draws on demand, so the cost is paid only on change) plus one soft shadow map on the key light                            | PQ-T33 |
+| R2  | VR object looks flatter than the viewer | `spawned-object-3d.tsx` builds materials without maps, swatches or studio light | Same material builder as the viewer; a small baked environment; no post pass (headset budget)                                                                      | PQ-T32 |
+| R3  | Village copy may lose the look          | `placed-models-geometry.ts` merges all placed models into one mesh              | Check which maps survive the merge; keep at least vertex colour, roughness per material and joint shadow                                                           | PQ-T32 |
+| R4  | Lamps and screens never glow            | No emissive anywhere in `surface-look.ts`                                       | Emissive on lamp heads, screens and headlights, driven by the engine's running state in the village (the « emissive = data » rule), a fixed low glow in the viewer | PQ-T34 |
+| R5  | Textures repeat visibly on large parts  | Every part uses the same UV origin and a 64 or 128 px tile                      | Seeded UV offset and quarter-turn per part; second, larger noise layer in the shade map                                                                            | PQ-T35 |
+| R6  | One roughness per material              | `SURFACE_LOOK` table                                                            | Gloss measured on the photo (PQ-T26)                                                                                                                               | PQ-T26 |
+| R7  | Uniform colour inside a part            | One vertex colour per part                                                      | Joint and ground darkening baked in vertex colours (PQ-T27), which also reaches VR and the village at no frame cost                                                | PQ-T27 |
+| R8  | Judge render shows less than the viewer | Flat render has no assemblies                                                   | PQ-T3                                                                                                                                                              | PQ-T3  |
+| R9  | Hip roof edges are sharp                | PT-1e left them to the ink                                                      | Leave; ink carries them (measured decision)                                                                                                                        | —      |
+
+Not proposed, on purpose: glass transmission, depth of field, real-time reflections and bloom in the viewer. They
+cost frame time or change measured colours, and none of them fixes a fault a person would name first.
+
+### 11.4 Cost of one object (from the saved Model API page, standard pricing)
+
+Muse Image $0.01 per image; SAM 3.1 $2.50 per 1 000 images (each concept on each image is one call); Spark 1.3
+$1.25 per million input tokens and $4.25 output; Wonder $4.00 and $20.00. The spend per object is dominated by
+Spark and Wonder rounds, not by SAM or Muse Image, so extra SAM phrasings (PQ-T9) and a second generated view
+(PQ-T16) are cheap, while extra critic and final-check rounds are where the budget goes. PQ-T31 measures it.
+
+### 11.5 Research not done
+
+I read the repository docs, the viewer code and the saved model catalogue page. I did **not** read Meta's
+per-model API documentation (accepted `reasoning_effort` values, image size limits, Muse Image edit parameters):
+the saved page is the catalogue only. PQ-T17 and PQ-T8 start by checking those. I also did not read
+`docs/design/3d-scene.md`, `docs/setup/example-3D-workflow.md` or `docs/ideas-meta-models.md` in full.

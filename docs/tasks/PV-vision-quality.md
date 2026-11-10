@@ -239,6 +239,28 @@ Meta API calls; all others run offline.
       only in compare view).
       **Done when:** the operator reads photo and model more alike in compare view; cut first if time is short.
 
+- [ ] **PQ-T32 Same look in the three views.** `vision-insert/ui/xr/spawned-object-3d.tsx` and
+      `microgrid-3d/utils/placed-models-geometry.ts` use the viewer's material builder (one shared
+      `recipeMaterials(recipe, opts)` extracted from `object-editor-3d.tsx`, no copy): maps and swatches in VR
+      with a small baked environment and no post pass; in the village, first list which maps survive the merge.
+      **Test:** shared builder unit test; `make vr-probe`; `make scene-audit` draw calls unchanged.
+      **Done when:** the same object reads alike in the viewer, the village and VR (three shots side by side).
+- [ ] **PQ-T33 Parts shade each other in the viewer.** `object-editor-3d.tsx`: N8AO in the existing composer
+      and one soft shadow map on the key light (cast and receive on the object). Drawn on demand, so no cost
+      at rest. Colours must stay as measured.
+      **Test:** viewer test (pass present, shadow flags set); `make shape-shots` before / after.
+      **Done when:** `/designer-3d` grade not lower on any object, dark and light, 320 px and desktop; ΔE of the
+      lit faces against the measured colours not higher by more than 2.
+- [ ] **PQ-T34 Lamps and screens glow.** `surface-look.ts`: emissive for part kinds lamp, display, headlight.
+      Village: on only when the engine says the appliance runs (data-driven, bloom rule of `/designer-3d`);
+      viewer: fixed low glow under 1.
+      **Test:** `surface-look.test.ts` (emissive only on those kinds, under 1 in the viewer).
+      **Done when:** a lamp post reads as a lamp in the viewer and lights up in the village when powered.
+- [ ] **PQ-T35 Break texture repetition.** `surface-maps.ts` `planarUvs`: seeded offset and quarter-turn per
+      part; a second, larger noise layer in the shade map.
+      **Test:** `surface-maps.test.ts` (two equal parts get different UV origins, same seed → same result).
+      **Done when:** no visible grid of repeats on walls and roofs in `make shape-shots`.
+
 **Exit Q4:** surfaces differ by measured colour and gloss, and parts read as assembled.
 
 ---
