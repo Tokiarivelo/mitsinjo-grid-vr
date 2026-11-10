@@ -11,10 +11,8 @@ import {
 import { HULL_LEVELS, HULL_SLICES, hullLoops } from '@/lib/hull';
 import { SURFACE_LOOK, SURFACES, surfaceIndex } from './surface-look';
 import { holedBox } from './holed-wall';
-import { type AssemblyDetail, layoutOpenings } from './openings';
-import { expandChimneyCaps, expandRoofTrim } from './roof-trim';
-import { expandViewAssemblies } from './view-assemblies';
-import { timberBeams } from './timber';
+import { expandAssemblies } from './assembly-parts';
+import type { AssemblyDetail } from './openings';
 import { planarUvs } from './surface-maps';
 import { type ApplianceDetection, type NormBox, type SceneryType } from '@/lib/vision';
 
@@ -492,20 +490,10 @@ export function recipeMesh(
 function buildMesh(recipe: ObjectRecipe, detail: AssemblyDetail): THREE.BufferGeometry {
   const dims = [recipe.proportions.w, recipe.proportions.h, recipe.proportions.d] as const;
   // Windows and doors drawn with frame, glass, bars and sill (PG-T8), cut into their wall (PG-T11).
-  const { parts: laid, holes } = layoutOpenings(recipe, detail);
   // Roofs with a bulge end in a rounded eave roll (PG-T12), chimneys may wear a cap (PG-T10);
-  // half-timbered walls get their beams.
-  // Objects from their 2D view: wheel rims, solar cell lines (PG-T21).
-  const sorted = [
-    ...expandViewAssemblies(
-      expandChimneyCaps(
-        expandRoofTrim(laid, recipe.proportions, ROOF_OVERHANG),
-        recipe.proportions
-      ),
-      detail
-    ),
-    ...timberBeams(recipe),
-  ]
+  // half-timbered walls get their beams. Objects from their 2D view: wheel rims, solar cell lines (PG-T21).
+  const { parts: expanded, holes } = expandAssemblies(recipe, detail, ROOF_OVERHANG);
+  const sorted = expanded
     .map((p) => ({ p, surface: surfaceIndex(p.material) }))
     .sort((a, b) => a.surface - b.surface);
   const parts = sorted.map(({ p, surface }) => {

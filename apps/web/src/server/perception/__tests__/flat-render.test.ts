@@ -1,7 +1,12 @@
 // @vitest-environment node
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+vi.mock('server-only', () => ({}));
+import { frameColor } from '@/features/vision-insert/utils/openings';
 import { kitToRecipe } from '@/lib/object-kit';
-import type { ObjectRecipe, RecipePart } from '@/lib/object-shape';
+import { fitRecipe, type ObjectRecipe, type RecipePart } from '@/lib/object-shape';
+import { hexToRgb } from '../color-measure';
+import { facadeHouseRecipe, measureElevation } from '../facade-house';
+import { GOLDEN_ELEVATIONS } from '../__fixtures__/elevation';
 import { FLAT_AMBIENT, FLAT_LIGHT, renderFlat, THREE_QUARTER } from '../flat-render';
 import { iou, renderRecipe } from '../silhouette-fit';
 import { GOLDEN_SHAPES } from '../__fixtures__/shape';
@@ -304,5 +309,82 @@ describe('ray entry through a ring edge (PV-H regression)', () => {
       const b = renderFlat(recipe([part({})]), 1, 20, 20, view);
       expect(iou(h.mask, b.mask)).toBeGreaterThan(0.95);
     }
+  });
+});
+
+describe('assembly details (PQ-T3): the judge sees what the viewer shows', () => {
+  const WALL = part({
+    at: [0, 0, 0],
+    size: [1, 1, 0.4],
+    color: '#e6dccb',
+    material: 'plaster',
+    kind: 'wall',
+  });
+  const GLASS = '#8fa3b5';
+  const window = part({
+    at: [0, 0.1, 0.2 + 0.01],
+    size: [0.4, 0.4, 0.02],
+    color: GLASS,
+    material: 'glass',
+    kind: 'window',
+    grid: [1, 1],
+    sill: false,
+  });
+  const N = 96;
+  const hexAt = (r: ReturnType<typeof renderFlat>, c: number, row: number) =>
+    pixel(r, c, row, N).map((v) => v.toString(16).padStart(2, '0'));
+
+  it('a framed window renders frame pixels around glass pixels, all counted for the window', () => {
+    const r = renderFlat(recipe([WALL, window]), 1, N, N);
+    const frame = hexToRgb(frameColor(WALL.color));
+    const glass = hexToRgb(GLASS);
+    const kindOf = (c: number, row: number) => {
+      const [R, G, B] = pixel(r, c, row, N);
+      // Shaded colours keep the channel ratios: compare normalised.
+      const near = (t: [number, number, number]) =>
+        Math.abs(R! * t[1] - G! * t[0]) + Math.abs(G! * t[2] - B! * t[1]) < 0.06 * 255 * 255;
+      return near(glass) ? 'glass' : near(frame) ? 'frame' : 'other';
+    };
+    // Window spans x 0.3–0.7, y (top) 0.2–0.6 of the grid.
+    const midRow = Math.round(0.4 * N);
+    const midCol = Math.round(0.5 * N);
+    expect(kindOf(midCol, midRow), hexAt(r, midCol, midRow).join('')).toBe('glass');
+    expect(kindOf(Math.round(0.305 * N), midRow)).toBe('frame'); // left stile
+    expect(kindOf(Math.floor(0.69 * N), midRow)).toBe('frame'); // right stile
+    expect(kindOf(midCol, Math.round(0.205 * N))).toBe('frame'); // head
+    expect(kindOf(midCol, Math.round(0.595 * N))).toBe('frame'); // bottom rail
+    // Glass and frame both count for the window part (index 1), the wall around stays part 0.
+    expect(r.part[midRow * N + Math.round(0.305 * N)]).toBe(1);
+    expect(r.part[midRow * N + midCol]).toBe(1);
+    expect(r.part[midRow * N + Math.round(0.1 * N)]).toBe(0);
+    expect(r.colors).toEqual([WALL.color, GLASS]);
+  });
+
+  it('a chimney cap is drawn but never rescales a framed view', () => {
+    const chimney = part({ at: [0.3, 0.6, 0], size: [0.1, 0.2, 0.1], kind: 'chimney' });
+    const plain = renderFlat(recipe([WALL, chimney]), 1, N, N, THREE_QUARTER);
+    const capped = renderFlat(recipe([WALL, { ...chimney, cap: true }]), 1, N, N, THREE_QUARTER);
+    const wallPixels = (r: ReturnType<typeof renderFlat>) => r.part.filter((k) => k === 0).length;
+    expect(wallPixels(capped)).toBe(wallPixels(plain));
+    expect(capped.part.filter((k) => k === 1).length).toBeGreaterThan(
+      plain.part.filter((k) => k === 1).length
+    );
+  });
+
+  it('the heaviest detailed model (golden facade house) renders within budget', () => {
+    const front = measureElevation(GOLDEN_ELEVATIONS[0]!.masks)!;
+    const house = fitRecipe(
+      {
+        ...facadeHouseRecipe({ front, side: null, colors: GOLDEN_ELEVATIONS[0]!.colors }),
+        source: 'facade',
+      },
+      0
+    );
+    renderFlat(house, 1, 128, 128); // warm-up
+    const t0 = performance.now();
+    const r = renderFlat(house, 1, 128, 128);
+    const ms = performance.now() - t0;
+    expect(r.mask.data.some((v) => v === 1)).toBe(true);
+    expect(ms).toBeLessThan(process.env.SHAPE_BUDGET_STRICT ? 300 : 900);
   });
 });

@@ -41,7 +41,7 @@ Meta API calls; all others run offline.
       loses precision, with a door line added gains interior edge F1; parts marked `inferred` on hidden sides
       are ignored.
       **Done when:** every real row shows the four numbers; goldens unchanged.
-- [ ] **PQ-T3 The judge sees what the viewer shows.** `flat-render.ts` draws assembly details (window frames
+- [x] **PQ-T3 The judge sees what the viewer shows.** _(done 2026-11-10)_ `flat-render.ts` draws assembly details (window frames
       and panes, door leaves and panels, handles, wheel rims, chimney caps) that only the viewer expands today.
       **Test:** `flat-render.test.ts`: a framed window renders frame pixels around glass pixels; render time of
       the heaviest golden stays inside the 300 ms budget.

@@ -2,9 +2,13 @@
  * Flat renderer (PR-0.1): a recipe drawn at the photo view as colour, so the shape loop can compare it with
  * the photo crop. Orthographic, turned by the yaw, same frame as `renderRecipe` (the model's height fills the
  * rows, its width spans `h·aspect` across the columns, centred). One ray per pixel, exact primitives in
- * their unit space, nearest hit wins (z-buffer), Lambert shade of the part colour.
+ * their unit space, nearest hit wins (z-buffer), Lambert shade of the part colour. Assemblies are drawn
+ * as the viewer expands them (PQ-T3: frames, panes, sills, rims, caps, eave rolls, cell lines, beams),
+ * glass seen through the hole cut in its wall; each pixel still names the recipe part it comes from.
  * Pure and deterministic; geometry and colours only.
  */
+import { expandAssemblies } from '@/features/vision-insert/utils/assembly-parts';
+import type { WallHole } from '@/features/vision-insert/utils/openings';
 import { HIP_CLIP_MAX, type ObjectRecipe, type RecipePart } from '@/lib/object-shape';
 import { hexToRgb } from './color-measure';
 import {
@@ -27,7 +31,7 @@ export interface FlatRender {
   mask: Mask;
   /** sRGB, 3 bytes per pixel, row-major; 0 outside the mask. */
   rgb: Uint8ClampedArray;
-  /** Index of the visible part per pixel, −1 outside. */
+  /** Index of the visible recipe part per pixel (an assembly detail counts for its part), −1 outside. */
   part: Int16Array;
   /** Unshaded colour of each part (`#rrggbb`), by part index. */
   colors: readonly string[];
@@ -487,6 +491,18 @@ export interface ViewFrame {
   fh: number;
 }
 
+type Dims = readonly [number, number, number];
+
+/** True when a hit at `local` (unit space of `wall`) falls in one of its cut holes: the ray goes through. */
+function inHole(local: V3, wall: RecipePart, holes: ReadonlyArray<WallHole>, dims: Dims): boolean {
+  const off = local.map((v, i) => v * wall.size[i]! * dims[i]!);
+  return holes.some((h) => {
+    if (h.sign * local[h.axis] < 0.5 - 1e-3) return false;
+    const u = h.axis === 2 ? off[0]! : off[2]!;
+    return Math.abs(u - h.u) <= h.w / 2 && Math.abs(off[1]! - h.v) <= h.h / 2;
+  });
+}
+
 /**
  * The recipe drawn on a `cols` × `rows` grid. Default: at the photo view (`aspect` = box width / height in
  * pixels, same frame as `renderRecipe`). With `view`: turned around the model and framed on its bounds
@@ -505,14 +521,20 @@ export function renderFlat(
   const rgb = new Uint8ClampedArray(n * 3);
   const part = new Int16Array(n).fill(-1);
   const depth = new Float64Array(n).fill(Infinity);
-  const transforms = recipe.parts.map((p) => {
+  const dims: Dims = [recipe.proportions.w, recipe.proportions.h, recipe.proportions.d];
+  const { parts: drawn, holes, origin } = expandAssemblies(recipe);
+  const transforms = drawn.map((p) => {
     const t = partTransform(recipe, p);
     return view ? turned(t, view) : t;
   });
   // Frame: centre and size in view units.
   let [cx, cy, fw, fh] = [0, 0, recipe.proportions.h * aspect, recipe.proportions.h];
   if (view) {
-    const pts = transforms.flatMap((t) => CORNERS.map((c) => applyTransform(t, c)));
+    // Framed on the recipe parts: details (a chimney cap, a sill) never rescale the picture.
+    const kept = transforms.filter((_, j) => drawn[j] === recipe.parts[origin[j]!]);
+    const pts = (kept.length ? kept : transforms).flatMap((t) =>
+      CORNERS.map((c) => applyTransform(t, c))
+    );
     const [x0, x1] = [Math.min(...pts.map((q) => q[0])), Math.max(...pts.map((q) => q[0]))];
     const [y0, y1] = [Math.min(...pts.map((q) => q[1])), Math.max(...pts.map((q) => q[1]))];
     if (frameOf) ({ cx, cy, fw, fh } = frameOf({ x0, x1, y0, y1 }));
@@ -525,8 +547,10 @@ export function renderFlat(
   const toRow = (y: number) => ((cy + fh / 2 - y) / fh) * rows - 0.5;
   const EYE = 100; // in front of every part (recipes stay within ±2)
 
-  recipe.parts.forEach((p, k) => {
-    const tf = transforms[k]!;
+  drawn.forEach((p, j) => {
+    const k = origin[j]!;
+    const tf = transforms[j]!;
+    const cut = holes.get(p);
     const inv = invert(tf.m);
     if (!inv) return;
     const box = CORNERS.map((c) => applyTransform(tf, c));
@@ -546,6 +570,10 @@ export function renderFlat(
         const i = r * cols + c;
         // Ties (a wheel flush with the body front) go to the later part: details come after the body.
         if (!hit || hit.tin > depth[i]! + TIE) continue;
+        if (cut?.length) {
+          const local: V3 = [o[0] + d[0] * hit.tin, o[1] + d[1] * hit.tin, o[2] + d[2] * hit.tin];
+          if (inHole(local, p, cut, dims)) continue;
+        }
         depth[i] = hit.tin;
         // Normals map by the inverse transpose.
         const [nx, ny, nz] = hit.n!;
