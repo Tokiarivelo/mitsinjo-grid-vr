@@ -4,9 +4,10 @@
  * Reported next to the weighted score, never inside it until the real-set baseline is known (PQ-T6).
  * Pure and deterministic; everything on the fit grid of `scoreModel`.
  */
-import type { DimStatus, PartKind } from '@/lib/object-shape';
+import type { KitArchetype } from '@/lib/object-kit';
+import type { DimStatus, ObjectRecipe, PartKind } from '@/lib/object-shape';
 import { deltaE2000, linearToLab, srgbToLinear } from './color-measure';
-import type { FlatRender } from './flat-render';
+import { renderFlat, type FlatRender, type ViewFrame } from './flat-render';
 import {
   edgeMap,
   edgeTolerance,
@@ -55,6 +56,85 @@ export interface DetailScore {
   interiorEdgeF1?: number;
   /** Mean ΔE2000 of each matched part: its SAM box on the photo against the same pixels on the render. */
   partDeltaE?: number;
+  /** PQ-T36: the outline cut in `DETAIL_BANDS` height bands; SSIM of the worst band (lowest), 0–1. */
+  bandSsim?: number;
+  /** Mean ΔE2000 photo vs render in that worst band. */
+  bandDeltaE?: number;
+  /** Index of the worst band, 0 = top. */
+  worstBand?: number;
+  /** Bands where the model covers under half of the outline (a blank band). */
+  blankBands?: number;
+}
+
+/** Height bands inside the outline (PQ-T36). */
+export const DETAIL_BANDS = 8;
+/** A band is blank when the render covers less than this share of its outline pixels. */
+export const BLANK_BAND_COVER = 0.5;
+const SSIM_C1 = 0.01 ** 2;
+const SSIM_C2 = 0.03 ** 2;
+
+const lum = (rgb: ArrayLike<number>, i: number) =>
+  (0.299 * rgb[i * 3]! + 0.587 * rgb[i * 3 + 1]! + 0.114 * rgb[i * 3 + 2]!) / 255;
+
+/** SSIM of two luminance samples (one window = the whole band). */
+export function ssim(a: ArrayLike<number>, b: ArrayLike<number>): number {
+  const n = a.length;
+  if (!n) return 1;
+  let [ma, mb] = [0, 0];
+  for (let i = 0; i < n; i++) [ma, mb] = [ma + a[i]!, mb + b[i]!];
+  [ma, mb] = [ma / n, mb / n];
+  let [va, vb, cov] = [0, 0, 0];
+  for (let i = 0; i < n; i++) {
+    const [da, db] = [a[i]! - ma, b[i]! - mb];
+    va += da * da;
+    vb += db * db;
+    cov += da * db;
+  }
+  [va, vb, cov] = [va / n, vb / n, cov / n];
+  return (
+    ((2 * ma * mb + SSIM_C1) * (2 * cov + SSIM_C2)) /
+    ((ma * ma + mb * mb + SSIM_C1) * (va + vb + SSIM_C2))
+  );
+}
+
+/** Per height band inside the outline: SSIM, mean ΔE2000 and render coverage (PQ-T36). */
+export function bandDifference(
+  render: FlatRender,
+  crop: RgbGrid,
+  outline: Mask,
+  bands = DETAIL_BANDS
+): Array<{ ssim: number; deltaE: number; cover: number }> | null {
+  const { cols, rows } = outline;
+  let [top, bottom] = [rows, -1];
+  for (let r = 0; r < rows; r++)
+    for (let c = 0; c < cols; c++)
+      if (outline.data[r * cols + c]) [top, bottom] = [Math.min(top, r), Math.max(bottom, r)];
+  if (bottom - top + 1 < bands) return null;
+  const toLab = (rgb: ArrayLike<number>, i: number) =>
+    linearToLab(...srgbToLinear(rgb[i * 3]!, rgb[i * 3 + 1]!, rgb[i * 3 + 2]!));
+  const out: Array<{ ssim: number; deltaE: number; cover: number }> = [];
+  const height = bottom - top + 1;
+  for (let k = 0; k < bands; k++) {
+    const r0 = top + Math.floor((k * height) / bands);
+    const r1 = top + Math.floor(((k + 1) * height) / bands);
+    const [a, b] = [[] as number[], [] as number[]];
+    let [dE, covered] = [0, 0];
+    for (let r = r0; r < r1; r++)
+      for (let c = 0; c < cols; c++) {
+        const i = r * cols + c;
+        if (!outline.data[i]) continue;
+        a.push(lum(crop.rgb, i));
+        b.push(lum(render.rgb, i));
+        dE += deltaE2000(toLab(crop.rgb, i), toLab(render.rgb, i));
+        covered += render.mask.data[i]!;
+      }
+    out.push(
+      a.length
+        ? { ssim: ssim(a, b), deltaE: dE / a.length, cover: covered / a.length }
+        : { ssim: 1, deltaE: 0, cover: 1 }
+    );
+  }
+  return out;
 }
 
 interface Box {
@@ -185,6 +265,8 @@ export function scoreDetail(input: {
     return seen && drawn ? [deltaE2000(drawn, seen)] : [];
   });
   const interior = interiorF1(render, crop, interiorMask(outline, 2 * edgeTolerance(cols)));
+  const bandRows = bandDifference(render, crop, outline);
+  const worst = bandRows?.reduce((w, b, k) => (b.ssim < bandRows[w]!.ssim ? k : w), 0);
 
   return {
     ...(sam.length ? { partRecall: round(matches.length / sam.length, 2) } : {}),
@@ -195,5 +277,94 @@ export function scoreDetail(input: {
     ...(colours.length
       ? { partDeltaE: round(colours.reduce((a, b) => a + b, 0) / colours.length, 1) }
       : {}),
+    ...(bandRows && worst !== undefined
+      ? {
+          bandSsim: round(bandRows[worst]!.ssim, 2),
+          bandDeltaE: round(bandRows[worst]!.deltaE, 1),
+          worstBand: worst,
+          blankBands: bandRows.filter((b) => b.cover < BLANK_BAND_COVER).length,
+        }
+      : {}),
   };
+}
+
+/** Archetypes that are flat by nature: thin from the side is right for them (PQ-T36). */
+export const FLAT_ARCHETYPES: ReadonlySet<KitArchetype> = new Set(['screen', 'panel', 'water']);
+/** Side silhouette under this share of the front one → a paper-thin model. */
+export const THIN_SIDE_SHARE = 0.15;
+/** A 45° silhouette piece counts as detached from this share of the silhouette up. */
+export const DETACHED_MIN_SHARE = 0.005;
+const VIEW_GRID = 96;
+
+export interface ViewCheck {
+  /** Side (90°) silhouette area ÷ front (0°) one. */
+  sideShare: number;
+  /** Separate pieces of the 45° silhouette (1 = one body). */
+  pieces45: number;
+  /** null = passes; else why the model is degenerate. */
+  fail: 'thin' | 'detached' | null;
+}
+
+/** Connected pieces (4-neighbour) of a mask with at least `min` pixels. */
+function pieces(m: Mask, min: number): number {
+  const seen = new Uint8Array(m.data.length);
+  let count = 0;
+  for (let s = 0; s < m.data.length; s++) {
+    if (!m.data[s] || seen[s]) continue;
+    let size = 0;
+    const stack = [s];
+    seen[s] = 1;
+    while (stack.length) {
+      const i = stack.pop()!;
+      size++;
+      const [c, r] = [i % m.cols, Math.floor(i / m.cols)];
+      for (const [dc, dr] of [
+        [1, 0],
+        [-1, 0],
+        [0, 1],
+        [0, -1],
+      ] as const) {
+        const [nc, nr] = [c + dc, r + dr];
+        if (nc < 0 || nr < 0 || nc >= m.cols || nr >= m.rows) continue;
+        const j = nr * m.cols + nc;
+        if (m.data[j] && !seen[j]) {
+          seen[j] = 1;
+          stack.push(j);
+        }
+      }
+    }
+    if (size >= min) count++;
+  }
+  return count;
+}
+
+/**
+ * Degenerate view (PQ-T36, methodology §12.2): the model seen at 0°, 45° and 90° on one fixed frame.
+ * Fails when the side silhouette is under `THIN_SIDE_SHARE` of the front one (not for flat archetypes),
+ * or when the 45° view falls apart in pieces (a part floating off the body). Needs no photo.
+ */
+export function degenerateView(recipe: ObjectRecipe, archetype: KitArchetype): ViewCheck {
+  const { w, h, d } = recipe.proportions;
+  const span = 1.2 * Math.hypot(w, h, d);
+  const frame = (): ViewFrame => ({ cx: 0, cy: 0, fw: span, fh: span });
+  const at = (deg: number) =>
+    renderFlat(
+      { ...recipe, yaw: 0 },
+      1,
+      VIEW_GRID,
+      VIEW_GRID,
+      { yaw: (deg * Math.PI) / 180, pitch: 0 },
+      frame
+    ).mask;
+  const area = (m: Mask) => m.data.reduce((s, v) => s + v, 0);
+  const [front, diag, side] = [at(0), at(45), at(90)];
+  const sideShare = area(front) ? area(side) / area(front) : 0;
+  const pieces45 = pieces(diag, Math.max(1, Math.round(DETACHED_MIN_SHARE * area(diag))));
+  const fail =
+    !FLAT_ARCHETYPES.has(archetype) && sideShare < THIN_SIDE_SHARE
+      ? 'thin'
+      : pieces45 > 1
+        ? 'detached'
+        : null;
+  return { sideShare: round(sideShare, 2), pieces45, fail };
 }

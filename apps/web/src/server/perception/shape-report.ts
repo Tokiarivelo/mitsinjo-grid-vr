@@ -6,6 +6,7 @@ import sharp from 'sharp';
 import type { KitArchetype } from '@/lib/object-kit';
 import type { ObjectRecipe } from '@/lib/object-shape';
 import type { RealCase } from './__fixtures__/shape';
+import { degenerateView, type ViewCheck } from './detail-score';
 import type { ElevationScore } from './elevation-score';
 import { renderFlat, THREE_QUARTER, type FlatRender } from './flat-render';
 import type { ModelScore, RgbGrid } from './model-score';
@@ -32,6 +33,8 @@ export interface ReportRow {
   violations: number;
   /** Part dimension statuses, non-zero counts (PR-2.15). */
   statusCounts: { measured: number; estimated: number; inferred: number; unknown: number };
+  /** Model seen at 0° / 45° / 90° (PQ-T36); absent when not checked. */
+  view?: ViewCheck;
 }
 
 /** Compact counts cell: `M1 I11` (zeros omitted). */
@@ -77,12 +80,28 @@ function detailCells(s: ModelScore): string {
     .join(' | ');
 }
 
+/** Worst height band (PQ-T36): `SSIM@band`, ✗ with the count when bands are blank. */
+function bandCell(s: ModelScore): string {
+  const d = s.detail;
+  if (d?.bandSsim === undefined) return '—';
+  const blank = d.blankBands ? ` ✗ ${d.blankBands} blank` : '';
+  return `${d.bandSsim}@${d.worstBand}${blank}`;
+}
+
+/** Degenerate view (PQ-T36): ✓ with the side share, or ✗ thin / detached. */
+function viewCell(v: ViewCheck | undefined): string {
+  if (!v) return '—';
+  if (v.fail === 'thin') return `✗ thin ${v.sideShare}`;
+  if (v.fail === 'detached') return `✗ ${v.pieces45} pieces`;
+  return `✓ ${v.sideShare}`;
+}
+
 const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
 const ok = (pass: boolean) => (pass ? '✓' : '✗');
 
 const HEADER = [
-  '| Object | Score | IoU | Edge F1 | ΔE | Recall | Prec | Int F1 | Part ΔE | Parts | ms | Viol | Status | Worst |',
-  '| ------ | ----- | --- | ------- | -- | ------ | ---- | ------ | ------- | ----- | -- | ---- | ------ | ----- |',
+  '| Object | Score | IoU | Edge F1 | ΔE | Recall | Prec | Int F1 | Part ΔE | Band | Views | Parts | ms | Viol | Status | Worst |',
+  '| ------ | ----- | --- | ------- | -- | ------ | ---- | ------ | ------- | ---- | ----- | ----- | -- | ---- | ------ | ----- |',
 ];
 
 /** One table: a row per object and the means. */
@@ -94,13 +113,13 @@ function scoreTable(rows: ReadonlyArray<ReportRow>): string[] {
     const ms = r.ms === undefined ? '—' : String(Math.round(r.ms));
     lines.push(
       `| ${r.name} | ${s.score} | ${s.iou} ${ok(s.iou >= STOP.iou)} | ${s.edgeF1} ${ok(s.edgeF1 >= STOP.edgeF1)} | ` +
-        `${s.deltaE} ${ok(s.deltaE <= STOP.deltaE)} | ${detailCells(s)} | ${r.parts} | ${ms} | ${r.violations} | ${statusCell(r.statusCounts)} | ${w.gap > 0 ? w.metric : '—'} |`
+        `${s.deltaE} ${ok(s.deltaE <= STOP.deltaE)} | ${detailCells(s)} | ${bandCell(s)} | ${viewCell(r.view)} | ${r.parts} | ${ms} | ${r.violations} | ${statusCell(r.statusCounts)} | ${w.gap > 0 ? w.metric : '—'} |`
     );
   }
   const avg = (f: (s: ModelScore) => number) => mean(rows.map((r) => f(r.score)));
   lines.push(
     `| **mean** | ${Math.round(avg((s) => s.score))} | ${avg((s) => s.iou).toFixed(2)} | ` +
-      `${avg((s) => s.edgeF1).toFixed(2)} | ${avg((s) => s.deltaE).toFixed(1)} | | | | | | | | | |`,
+      `${avg((s) => s.edgeF1).toFixed(2)} | ${avg((s) => s.deltaE).toFixed(1)} | | | | | | | | | | | |`,
     ''
   );
   return lines;
@@ -137,6 +156,7 @@ export function reportMarkdown(rows: ReportRow[], date: string, real?: RealSecti
     '',
     `Stop criteria: IoU ≥ ${STOP.iou} · edge F1 ≥ ${STOP.edgeF1} · ΔE ≤ ${STOP.deltaE}. Sheet: \`contact-sheet.png\` (photo | flat | ¾).`,
     'Detail (PQ-T2, not in the score yet): part recall · precision · interior edge F1 · part ΔE; « — » without SAM part masks.',
+    'Band (PQ-T36): SSIM of the worst of 8 height bands inside the outline @ band (0 = top), blank bands ✗. Views: side ÷ front silhouette, ✗ thin (< 0.15) or detached at 45°.',
     '',
     '## Synthetic (drawn streets)',
     '',
@@ -177,6 +197,7 @@ export function reportRow(
     ...(ms !== undefined ? { ms } : {}),
     violations: checkConstraints(archetype, recipe),
     statusCounts,
+    view: degenerateView(recipe, archetype),
   };
 }
 

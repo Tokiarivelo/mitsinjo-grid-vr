@@ -2,7 +2,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ObjectRecipe, RecipePart } from '@/lib/object-shape';
 vi.mock('server-only', () => ({}));
-import { scoreDetail, type GridPart } from '../detail-score';
+import { bandDifference, degenerateView, scoreDetail, ssim, type GridPart } from '../detail-score';
+import { kitToRecipe } from '@/lib/object-kit';
+import { iou } from '../silhouette-fit';
 import { renderFlat, type FlatRender } from '../flat-render';
 import { detailParts, gridParts, scoreRecipe } from '../score-shape';
 import { GOLDEN_SHAPES } from '../__fixtures__/shape';
@@ -180,5 +182,75 @@ describe('detail score (PQ-T2)', () => {
     const s = (await scoreRecipe(p, target, shape.recipe!))!;
     expect(s.score.detail?.interiorEdgeF1).toBeGreaterThanOrEqual(0);
     expect(s.score.detail?.partRecall).toBeUndefined();
+  });
+});
+
+describe('inside the outline, by height band (PQ-T36)', () => {
+  it('SSIM is 1 on equal samples and drops on a flat copy of a contrasted one', () => {
+    expect(ssim([0.2, 0.8, 0.2, 0.8], [0.2, 0.8, 0.2, 0.8])).toBeCloseTo(1, 6);
+    expect(ssim([0.2, 0.8, 0.2, 0.8], [0.5, 0.5, 0.5, 0.5])).toBeLessThan(0.1);
+  });
+
+  it('a model with its window deleted drops in the window band while IoU stays', () => {
+    const without = [BODY, wheel(-0.3), wheel(0.3), DOOR];
+    const r = render(without);
+    expect(iou(r.mask, photo.mask)).toBeGreaterThan(0.99);
+    const full = bandDifference(render(TRUTH), crop, photo.mask)!;
+    const holed = bandDifference(r, crop, photo.mask)!;
+    expect(full.every((b) => b.ssim > 0.99)).toBe(true);
+    // The body spans y −0.2…0.3 and the window 0.07…0.23: bands 0–2 of 8 from the top.
+    const d = detail(without);
+    expect(d.bandSsim).toBeLessThan(0.9);
+    expect([0, 1, 2]).toContain(d.worstBand);
+    expect(holed.slice(3).every((b) => b.ssim > 0.99)).toBe(true);
+    expect(holed[d.worstBand!]!.ssim).toBeLessThan(full[d.worstBand!]!.ssim);
+    expect(d.blankBands).toBe(0);
+  });
+
+  it('counts a band the model leaves blank', () => {
+    const low = render([{ ...BODY, at: [0, -0.1, 0], size: [0.9, 0.3, 0.6] }]);
+    const d = scoreDetail({
+      render: low,
+      crop,
+      outline: photo.mask,
+      parts: detailParts(recipe([BODY])),
+      samParts: [],
+    });
+    expect(d.blankBands).toBeGreaterThan(0);
+  });
+});
+
+describe('degenerate view (PQ-T36)', () => {
+  it('a paper-thin car fails, the same car with its depth passes', () => {
+    const car = recipe(TRUTH);
+    expect(degenerateView(car, 'vehicle').fail).toBeNull();
+    const thin = {
+      ...car,
+      proportions: { ...car.proportions, d: 0.04 },
+    };
+    const v = degenerateView(thin, 'vehicle');
+    expect(v.fail).toBe('thin');
+    expect(v.sideShare).toBeLessThan(0.15);
+  });
+
+  it('a TV is flat by nature and passes', () => {
+    const tv = kitToRecipe({
+      archetype: 'screen',
+      proportions: { w: 1, h: 0.6, d: 0.05 },
+      colors: { main: '#111111', secondary: '#222222', accent: '#333333' },
+    });
+    expect(degenerateView(tv, 'screen').fail).toBeNull();
+  });
+
+  it('a part floating off the body at 45° is caught', () => {
+    const floating: RecipePart = {
+      ...BODY,
+      at: [0, 0.5, 0],
+      size: [0.1, 0.1, 0.1],
+      kind: 'light',
+    };
+    const v = degenerateView(recipe([BODY, floating]), 'vehicle');
+    expect(v.pieces45).toBeGreaterThan(1);
+    expect(v.fail).toBe('detached');
   });
 });

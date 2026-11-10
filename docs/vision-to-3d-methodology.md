@@ -174,6 +174,13 @@ is greedy one-to-one on visible bounding boxes (largest SAM part first). Part Δ
 with the same pixels on the shaded render. Recall, precision and part ΔE are absent without part masks (every
 synthetic golden today); interior edge F1 always shows.
 
+**As built (PQ-T36):** `bandDifference` cuts the outline in 8 height bands and reports the worst band's SSIM
+(luminance, one window per band, range −1…1) with its ΔE and the count of blank bands (render covers < 50 %).
+`degenerateView(recipe, archetype)` renders the model at 0°, 45° and 90° on one fixed frame: ✗ thin when the side
+silhouette is under 0.15 of the front (not screen, panel, water), ✗ detached when the 45° silhouette has more than
+one piece (≥ 0.5 % of it). Both are report columns. First run: the real fan falls apart at 45°, the real lamp leaves
+4 bands blank. Band SSIM is low on the synthetic goldens too: their flat colours have no shading, the render does.
+
 ### 6.2 Rubric judge (PQ-T4)
 
 Muse Wonder receives one sheet (photo, model front, model ¾) and grades six criteria from 1 to 5: silhouette,

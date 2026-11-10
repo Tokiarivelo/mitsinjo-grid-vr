@@ -70,7 +70,7 @@ Meta API calls; all others run offline.
       keep their scores).
       **Done when:** methodology §9 and `/shape-loop` quote the same gates as the code.
 
-- [ ] **PQ-T36 Inside the outline, and from other angles.** `detail-score.ts`: (a) interior difference:
+- [x] **PQ-T36 Inside the outline, and from other angles.** _(done 2026-11-10; fan ✗ detached, lamp ✗ 4 blank bands)_ `detail-score.ts`: (a) interior difference:
       SSIM and mean colour difference between photo and render inside the outline, in 8 height bands, the
       worst band reported (methodology §12.2); (b) `degenerateView(recipe)`: render the silhouette at 0°, 45°
       and 90°; fail when the 90° silhouette area is under 15 % of the 0° one for an archetype that is not flat
