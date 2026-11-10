@@ -437,9 +437,16 @@ export async function runObjectShape(
       const elev =
         found.kit && ELEVATION_ARCHETYPES.includes(found.kit.archetype) ? await elevations : null;
       // PG-T22: half-timbered walls take their plaster colour, not plaster + beams averaged.
+      let shadowShare = 0;
       const plaster = !!elev && !!wallTimber(elev.front, found.kit?.details);
       const measuredColors =
-        found.kit && px ? measureKitColors(px, found.kit.archetype, { plaster }) : null;
+        found.kit && px
+          ? measureKitColors(px, found.kit.archetype, {
+              plaster,
+              litSurface: !plaster,
+              onShadowShare: (share) => (shadowShare = share),
+            })
+          : null;
       const conf = {
         colors: px
           ? Math.round(
@@ -458,7 +465,7 @@ export async function runObjectShape(
           : null;
       if (found.kit && colors) {
         console.info(
-          `[vision] 3D colours measured for "${target.label}" (${px!.y.length} px${target.outline ? ', outline' : ''}): ${colors.main} ${colors.secondary} ${colors.accent}`
+          `[vision] 3D colours measured for "${target.label}" (${px!.y.length} px${target.outline ? ', outline' : ''}): ${colors.main} ${colors.secondary} ${colors.accent}${shadowShare > 0 ? `, ${Math.round(shadowShare * 100)} % shadow read apart` : ''}`
         );
       }
       if (found.kit && elev) {

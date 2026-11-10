@@ -154,6 +154,11 @@ Meta API calls; all others run offline.
       `measureKitColors` already does for `plaster`, and extend that logic instead of adding a second one.
       **Test:** `color-measure.test.ts`: a wall half in shadow reads the lit colour within ΔE 5 (before: the mix).
       **Done when:** mean colour-per-part ΔE on the real set is lower than at baseline.
+      _Built 2026-11-10, unticked:_ `measureKitColors` reads each group on its brightest 60 % (`LIT_SHARE`) and, with
+      `litSurface` (off for plaster), folds a darker same-hue group outside the secondary band into the lit one
+      (`onShadowShare` reports the share; logged). `region-colors.ts` not touched. `make shape-report` after Q1:
+      real mean 53 (PQ-T1 baseline ≈ 54), colour ΔE 10.1; no per-part baseline was saved, so « lower than baseline »
+      is not shown yet.
 
 **Exit Q1:** fewer cascades from a missed outline; kit calls see the object large and alone.
 
