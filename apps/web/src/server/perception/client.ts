@@ -16,6 +16,7 @@ import type { StageSheet } from './shape-script-prompt';
 import type {
   ShapeOpsResult,
   CriticResult,
+  JudgeResult,
   DetectionResult,
   PerceptionSource,
   SegmentResult,
@@ -147,6 +148,10 @@ export class PerceptionClient {
 
   criticizeShape(imageUrl: string, question: string, signal?: AbortSignal): Promise<CriticResult> {
     return this.run('criticizeShape', (b) => b.criticizeShape(imageUrl, question, signal));
+  }
+
+  judgeShape(imageUrl: string, question: string, signal?: AbortSignal): Promise<JudgeResult> {
+    return this.run('judgeShape', (b) => b.judgeShape(imageUrl, question, signal));
   }
 
   checkViews(imageUrl: string, question: string, signal?: AbortSignal): Promise<ViewsCheckResult> {

@@ -77,6 +77,10 @@ features/copilot/          # ChatPanel, ChatMessage, ToolActivity, ConfirmPropos
   Every object is modelled, scenery too (`scenery` sent with the target; silhouette depth per scenery type).
   Mock: fixed recipes (fridge, TV, fan, lamp; house, tree, plant, car, person, animal, water; else a box), not checked.
   Image generation stays in `providers/meta.ts` (`/responses`, model `META_IMAGE_MODEL`).
+  **Rubric judge (PQ-T4, `rubric-judge.ts` + `judgeShape`):** Muse Wonder (`META_JUDGE_MODEL`) grades the model 1–5
+  on silhouette, proportions, parts present, parts placed, surfaces, likeness from one sheet (photo | front | ¾);
+  offline only (`make shape-judge`), never in a live answer; mock = grade 3. Trusted by the loop only after its
+  calibration (damaged models lower in ≥ 90 % of pairs); not run yet.
   **Prompt versions (PQ-T5):** `KIT_PROMPT_VERSION`, `CRITIC_PROMPT_VERSION` (`shape.ts`),
   `VIEWS_CHECK_PROMPT_VERSION` (`views-check.ts`), `SIDE_VIEW_PROMPT_VERSION` (`facade-views.ts`), all 1, beside
   `SHAPE_SCRIPT_PROMPT_VERSION`. Each call logs its `promptVersion` in the `[vision] 3D … → params` line; captures

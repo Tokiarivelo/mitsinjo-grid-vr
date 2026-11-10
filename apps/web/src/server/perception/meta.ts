@@ -29,6 +29,13 @@ import { maskToOutline } from './mask-outline';
 import { timeoutSignal } from './abort';
 import { inlineImageUrl } from './inline-image';
 import {
+  JUDGE_CRITERIA,
+  JUDGE_JSON_SCHEMA,
+  JUDGE_PROMPT_VERSION,
+  JUDGE_SYSTEM_PROMPT,
+  parseJudge,
+} from './rubric-judge';
+import {
   VIEWS_CHECK_JSON_SCHEMA,
   VIEWS_CHECK_PROMPT_VERSION,
   VIEWS_CHECK_SYSTEM_PROMPT,
@@ -59,6 +66,7 @@ import { redactDataUrls, redactDataUrlsInText, type VisionCallLog } from './visi
 import {
   ObservationSchema,
   type CriticResult,
+  type JudgeResult,
   type ViewsCheckResult,
   type ShapeOpsResult,
   type DetectionResult,
@@ -431,6 +439,29 @@ export class MetaPerceptionBackend implements PerceptionBackend {
       `[vision] 3D critic from ${model}: ${patch ? Object.keys(patch).join(',') : 'no patch'}`
     );
     return { model, usage, result: { patch } };
+  }
+
+  async judgeShape(
+    imageUrl: string,
+    question: string,
+    signal?: AbortSignal
+  ): Promise<PerceptionCall<JudgeResult>> {
+    const { content, model, usage } = await this.visionJson(
+      JUDGE_SYSTEM_PROMPT,
+      question,
+      imageUrl,
+      JUDGE_JSON_SCHEMA,
+      signal,
+      false,
+      { kind: 'judgeShape', params: { promptVersion: JUDGE_PROMPT_VERSION } },
+      [],
+      env.META_JUDGE_MODEL
+    );
+    const judgement = parseJudge(content);
+    console.info(
+      `[vision] 3D judge from ${model}: ${judgement ? JUDGE_CRITERIA.map((c) => `${c} ${judgement.grades[c]}`).join(', ') : 'unusable'}`
+    );
+    return { model, usage, result: { judgement } };
   }
 
   async checkViews(

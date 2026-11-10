@@ -197,6 +197,12 @@ It is trusted only after calibration: on every real capture, remove two parts fr
 The judge must grade the damaged model lower in at least 90 % of the pairs. Below that, the judge stays out of the
 loop and only its text is shown to the developer.
 
+**As built (PQ-T4):** `rubric-judge.ts` (Judge card word for word, `JUDGE_PROMPT_VERSION` 1, strict schema,
+`parseJudge` clamps grades to 1–5, `damage` drops the two biggest non-body parts, `judgeSheet` photo | front | ¾,
+`calibration`); `judgeShape` on the Meta backend (`META_JUDGE_MODEL`), client and mock (grade 3 everywhere).
+`make shape-judge` judges every real capture intact and damaged and stores `<id>.judge.json` beside it (replayed
+when model and prompt version match; `REPLAY=1` never calls the API). **Calibration not run yet** (API spend).
+
 ### 6.3 Observe-then-commit kit (PQ-T12)
 
 The schema gains an `evidence` object placed **before** the kit fields, so the model writes what it sees before
