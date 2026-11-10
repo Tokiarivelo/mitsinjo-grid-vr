@@ -98,7 +98,8 @@ Meta API calls; all others run offline.
       **Done when:** the report has a « Not built » column and it is empty or explained for every real object.
       _Partly done 2026-11-10:_ `repairGraph` (floating part = held by neither the ground, its parent, nor a held part; pulled against its parent, fused twin merged, by rule,
       before the statuses; log `[vision] 3D graph repair …`), `notBuilt` (SAM masks beyond the parts that draw them + listed names; log `[vision] 3D seen, not built …`), « Not built » report column (— without masks: every
-      current capture). **Open:** `evidence.visibleParts` waits for PQ-T12; the panel has no part list yet (UI task).
+      current capture). **Open, to redo after PQ-T12 (Q1):** wire `evidence.visibleParts` into `notBuilt` / `partCoverage`, then tick. _Panel part list done 2026-11-10:_ `ObjectShape.coverage`
+      (`partCoverage`, SAM masks on the object vs built parts) → « Parts seen on the photo: Wheels 2/2 · Windows 1/3 ⚠ not built: 2 ».
       _« Not built » explained 2026-11-10 (15 real captures):_ SAM masks outside the object's outline no longer count
       (`masksOnObject`: car-side « window ×8 » was 5 windows of the car behind and the building). Left, all real:
       car-side window ×3 (yaw mis-measured 53° on a side view → the yaw correction pushes the windows off the body,
@@ -170,6 +171,8 @@ Meta API calls; all others run offline.
       still valid), `fusion.test.ts` (an unsure field is led by the measurement).
       **Done when:** `make eval-shape PROMPT=<new>` against the current version: agreement not lower, median
       ≤ 30 s; detail score on the real set not lower. Bump `KIT_PROMPT_VERSION`.
+      **Then finish PQ-T37 (same PR):** pass `evidence.visibleParts` to `notBuilt` / `partCoverage`, so every
+      listed part is built or shown « not built » in the panel and the report; then tick PQ-T37.
 - [ ] **PQ-T13 Archetype cards, one family at a time** _(API)_. Enable the cards in this order, each with its
       own eval and loop row: vehicle → house → cabinet → screen → lamp post / pole → machine → tank → panel →
       tree / bush → fan → building → person / animal → water. A card that does not help its family on the

@@ -11,6 +11,7 @@ import {
   buildGraph,
   checkConstraints,
   notBuilt,
+  partCoverage,
   repairGraph,
 } from '../object-graph';
 import { cropRectForShape } from '../shape-crop';
@@ -299,5 +300,15 @@ describe('repairGraph + notBuilt (PQ-T37)', () => {
     expect(notBuilt(r, masks)).toEqual(['wheel ×1']);
     expect(notBuilt(r, masks.slice(0, 2), ['mirror', 'wheel'])).toEqual(['mirror']);
     expect(notBuilt(r)).toEqual([]);
+  });
+
+  it('partCoverage: seen vs built per SAM concept, for the panel (built never above seen)', () => {
+    const r = car([body, wheel(-0.3), wheel(0.3)]);
+    const m = (concept: string) => ({ concept, box: { x: 0.1, y: 0.1, w: 0.1, h: 0.1 } });
+    expect(partCoverage(r, [m('wheel'), m('window'), m('window')])).toEqual([
+      { concept: 'wheel', seen: 1, built: 1 },
+      { concept: 'window', seen: 2, built: 0 },
+    ]);
+    expect(partCoverage(r, [])).toEqual([]);
   });
 });

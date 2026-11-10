@@ -1180,6 +1180,16 @@
         "scale": "refy"
       },
       "model3dHiddenNote": "Misy ampahany miafina amin'ny sary: heverina fa tsy voarefy.",
+      "model3dCoverage": "Ampahany hita amin'ny sary:",
+      "model3dCoverageItem": "{name} {built}/{seen}",
+      "model3dCoverageMissing": "tsy naorina: {count}",
+      "model3dPart": {
+        "wheel": "Kodia",
+        "window": "Varavarankely",
+        "door": "Varavarana",
+        "chimney": "Fivoahan-tsetroka",
+        "lamp": "Jiro"
+      },
       "model3dImprove": {
         "label": "Fandrosoan'ny fanatsarana ny modely",
         "running": "Fanatsarana: dingana {index}/{total} — {stage}",

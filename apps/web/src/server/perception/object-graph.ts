@@ -5,6 +5,7 @@ import {
   frontPartIndex,
   type DimStatus,
   type ObjectRecipe,
+  type PartCoverage,
   type PartMask,
   type RecipePart,
 } from '@/lib/object-shape';
@@ -332,20 +333,33 @@ export function notBuilt(
   masks: ReadonlyArray<PartMask> = [],
   listed: ReadonlyArray<string> = []
 ): string[] {
-  const kinds = detailParts(recipe).map((d) => d.kinds);
-  const drawing = (concept: string) => {
-    const want = CONCEPT_KINDS[concept] ?? [concept];
-    return kinds.filter((ks) => ks.some((k) => (want as ReadonlyArray<string>).includes(k))).length;
-  };
-  const out: string[] = [];
-  const seen = new Map<string, number>();
-  for (const m of masks) seen.set(m.concept, (seen.get(m.concept) ?? 0) + 1);
-  for (const [concept, n] of seen) {
-    const missing = n - drawing(concept);
-    if (missing > 0) out.push(`${concept} ×${missing}`);
-  }
+  const coverage = partCoverage(recipe, masks);
+  const out = coverage
+    .filter((c) => c.seen > c.built)
+    .map((c) => `${c.concept} ×${c.seen - c.built}`);
+  const seen = new Set(coverage.map((c) => c.concept));
   for (const name of new Set(listed)) {
-    if (!seen.has(name) && drawing(name) === 0) out.push(name);
+    if (!seen.has(name) && builtCount(recipe, name) === 0) out.push(name);
   }
   return out;
+}
+
+/** Model parts that can draw `concept` (its `CONCEPT_KINDS`, else the concept as a kind). */
+function builtCount(recipe: ObjectRecipe, concept: string): number {
+  const want: ReadonlyArray<string> = CONCEPT_KINDS[concept] ?? [concept];
+  return detailParts(recipe).filter((d) => d.kinds.some((k) => want.includes(k))).length;
+}
+
+/**
+ * Per SAM concept, how many parts the photo shows and how many the model builds (PQ-T37), in the
+ * order SAM answered: the panel's part list. Pass only the masks on the object (`masksOnObject`). Pure.
+ */
+export function partCoverage(recipe: ObjectRecipe, masks: ReadonlyArray<PartMask>): PartCoverage[] {
+  const seen = new Map<string, number>();
+  for (const m of masks) seen.set(m.concept, (seen.get(m.concept) ?? 0) + 1);
+  return [...seen].map(([concept, n]) => ({
+    concept,
+    seen: n,
+    built: Math.min(n, builtCount(recipe, concept)),
+  }));
 }
