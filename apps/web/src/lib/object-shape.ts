@@ -329,6 +329,14 @@ export const PartMaskSchema = z.object({
 });
 export type PartMask = z.infer<typeof PartMaskSchema>;
 
+/** One SAM part concept on the object (PQ-T37): parts seen on the photo vs built by the model. Computed. */
+export const PartCoverageSchema = z.object({
+  concept: z.string(),
+  seen: z.number().int().min(0),
+  built: z.number().int().min(0),
+});
+export type PartCoverage = z.infer<typeof PartCoverageSchema>;
+
 export const ObjectShapeSchema = z.object({
   detectionId: z.string(),
   mode: z.enum(['recipe', 'silhouette']),
@@ -348,6 +356,8 @@ export const ObjectShapeSchema = z.object({
   kit: z.custom<ObjectKit>().optional(),
   /** SAM outline the recipe was fitted and scored against (PR-0.6; fetched ones included). */
   outline: z.string().optional(),
+  /** Parts seen on the photo vs built, per SAM concept (PQ-T37); absent without part masks. Computed, not AI. */
+  coverage: z.array(PartCoverageSchema).optional(),
 });
 export type ObjectShape = z.infer<typeof ObjectShapeSchema>;
 

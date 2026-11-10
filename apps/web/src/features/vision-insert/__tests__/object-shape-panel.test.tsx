@@ -158,6 +158,28 @@ describe('ObjectShapePanel (PV-T10)', () => {
     expect(screen.getByText('Drag to turn · pinch or scroll to zoom')).toBeTruthy();
   });
 
+  it('recipe with part masks: parts seen vs built, missing ones flagged (PQ-T37)', () => {
+    renderPanel({
+      shape: {
+        ...shape('recipe'),
+        coverage: [
+          { concept: 'wheel', seen: 2, built: 2 },
+          { concept: 'window', seen: 3, built: 1 },
+        ],
+      },
+    });
+    expect(screen.getByText('Parts seen on the photo:')).toBeTruthy();
+    expect(screen.getByText(/Wheels 2\/2/)).toBeTruthy();
+    expect(screen.getByText(/Windows 1\/3/)).toBeTruthy();
+    expect(screen.getByText('not built: 2')).toBeTruthy();
+    expect(screen.queryByText(/not built: 0/)).toBeNull();
+  });
+
+  it('no part masks: no parts line', () => {
+    renderPanel();
+    expect(screen.queryByText('Parts seen on the photo:')).toBeNull();
+  });
+
   it('silhouette: outline badge, why, and a retry button', async () => {
     const onRetry = vi.fn();
     renderPanel({ shape: shape('silhouette'), onRetry });

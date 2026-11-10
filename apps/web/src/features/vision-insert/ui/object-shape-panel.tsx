@@ -28,6 +28,7 @@ import {
   type ShapeStep,
 } from '@/lib/object-shape';
 import type { ApplianceDetection } from '@/lib/vision';
+import { PartCoverageLine } from './part-coverage-line';
 import { cn } from '@/lib/utils';
 import { useElapsedSeconds } from '../hooks/use-elapsed-seconds';
 import type { ObjectShapeState } from '../hooks/use-object-shape';
@@ -416,6 +417,9 @@ export function ObjectShapePanel({
             </p>
           )}
           {shape.mode === 'recipe' && shape.recipe && <DimStatusLine recipe={shape.recipe} />}
+          {shape.mode === 'recipe' && shape.coverage && (
+            <PartCoverageLine coverage={shape.coverage} />
+          )}
           {webgl && (
             <p className="flex items-center gap-1.5 text-xs text-text-muted">
               <Move3d className="h-3 w-3 shrink-0" aria-hidden="true" />

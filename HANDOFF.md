@@ -1,38 +1,33 @@
 # HANDOFF — read first, overwrite at end of session (≤40 lines)
 
-**Updated:** 2026-11-10 · **By:** Claude Code · **Branch:** feat/pq-t2-detail-score (Q0, PR #9 open)
+**Updated:** 2026-11-10 · **By:** Claude Code · **Branch:** feat/pq-t37-part-list (PR open; Q0 PR #9 merged)
 
 ## Current state
 
-- **PV-Q phase Q0:** PQ-T1–T6, T36 done; PQ-T37 partial (needs Q1 PQ-T12 + a UI task). Judge calibrated:
-  77 % of 13 pairs < 90 % → developer note only (it grades most models 1–2).
-- **Real baseline (12 captures, Wikimedia Commons photos, local only):** mean 55 vs synthetic 93 (IoU 0.72,
-  edge F1 0.38, ΔE 9.9). Worst lamp 32, car-hidden 38, motorbike 40; best fridge 92. Gates `STOP_DETAIL`.
-- Photos: `resources/real-photos/` (copy to check) and `__fixtures__/shape/real/photos/` (+ `SOURCES.md`), gitignored.
-- Fixes found by the live captures: parts clamped into the schema, capture keeps the on-demand outline,
-  SAM gets the head noun + one retry with the full label (`make sam-probe` measures words).
-- Machine: shared `node_modules` broken since the full disk (React typings) → `make install`.
+- **PV-Q phase Q0:** PQ-T1–T6, T36 done. PQ-T37 almost done: « Not built » explained for every real object,
+  panel part list shipped; only `evidence.visibleParts` left (waits for Q1 PQ-T12).
+- **Real baseline (15 of 16 scored, Wikimedia Commons photos, local only):** mean ≈ 54 vs synthetic 93. Judge
+  77 % of 13 pairs < 90 % → developer note only. Only the solar street light has no outline (PQ-T9).
+- Photos: `resources/real-photos/` and `__fixtures__/shape/real/photos/` (+ `SOURCES.md`), gitignored.
+- Machine: if dev says `Can't resolve 'three'` → stop dev, `make install` (broken install since the full disk).
 
-## Next (user first) — French guide: `docs/tasks/PV-Q0-a-faire.md`
+## Next
 
-1. Real set complete: 15 of 16 scored (mean 54), only the solar street light has no outline (PQ-T9).
-2. Then Q1 from PQ-T7; PQ-T9 has the SAM evidence (solar street light returns one part).
-3. PQ-T37 open: `evidence.visibleParts` (PQ-T12), part list in the panel (UI task).
+1. Review + merge the PQ-T37 part-list PR.
+2. Q1 from PQ-T7; PQ-T12 brings `evidence.visibleParts` (then close PQ-T37); PQ-T9 has the SAM evidence.
 
-## Files touched (this session, after the Q0 code)
+## Files touched (this session, after PR #9)
 
-- `server/perception/`: `outline.ts` (head noun, label retry), `object-shape.ts` (clamp, retry), `shape-capture.ts`
-  (`pickDetection`), `model-score.ts` (`weightDetail`), `score-shape.ts`, `shape-report.ts` (`STOP_DETAIL`),
-  tests incl. `sam-probe.test.ts`; `lib/object-shape.ts` (`clampParts`)
-- `Makefile` (`sam-probe`, `shape-capture LABEL=`), `.gitignore` (`/resources/`), `README.md`, `docs/copilot.md`,
-  methodology §9 + tools table, `.claude/skills/shape-loop`, `docs/tasks/PV-vision-quality.md`, `PV-shape-realism.md`,
-  `PV-Q0-a-faire.md` (new, French)
+- `server/perception/mask-geometry.ts` (`masksOnObject`), `score-shape.ts`, `shape-report.ts`: only SAM masks on
+  the object's outline count as seen (commit 1086347, on main).
+- `server/perception/object-graph.ts` (`partCoverage`), `object-shape.ts` (`coverage` on the result),
+  `lib/object-shape.ts` (`PartCoverageSchema`, `ObjectShape.coverage?`).
+- `features/vision-insert/ui/part-coverage-line.tsx` (new) + `object-shape-panel.tsx`, messages en/fr/mg, tests.
+- Docs: `contracts.md`, `design/screens/village.md`, `design/stitch-map.md`, `tasks/PV-vision-quality.md`.
 
 ## Decisions
 
-- Real photos come from Wikimedia Commons (free licences), stay local; hard set: hidden car, small pole, backlit panel.
-- Detail weights replace the landmark set when part masks exist; goldens keep their scores.
-- Live SAM retries: full label, then a measured lookalike, only when SAM answered without a match (a timeout,
-  a failure or a mock ends the walk: each word costs up to 16 s). More phrasings: PQ-T9.
-- PR #9 review: `repairGraph` counts a part held by another held part (stepped roof tiers were pulled flat).
-- No test scenario: developer tooling and pipeline internals, nothing new visible in the app.
+- Part list = per SAM concept « built/seen »; missing ones get « not built: n » with a `warning-amber` icon only
+  (amber text fails AA on light). Shown only for AI shapes with part masks; no plurals (no ICU in the i18n wrapper).
+- Built without mockup; gate-out 1440 + 390, dark + light, stubbed shape (temp script deleted).
+- Test scenarios V233–V234 (`test-scenarios/06-village.md`, local).

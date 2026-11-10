@@ -12,6 +12,7 @@ import {
   type DimStatus,
   type ObjectRecipe,
   type ObjectShape,
+  type PartCoverage,
   type ShapeStep,
   type ShapeTarget,
 } from '@/lib/object-shape';
@@ -33,7 +34,7 @@ import {
   sampleObjectRgb,
 } from './shape-colors';
 import { conceptOf, fetchOutlineForBox, samRetries, type OutlineCrop } from './outline';
-import { applyConstraints, buildGraph, notBuilt, repairGraph } from './object-graph';
+import { applyConstraints, buildGraph, notBuilt, partCoverage, repairGraph } from './object-graph';
 import { deduceHiddenSides } from './hidden-sides';
 import { enforcePartBudget, masksOnObject } from './mask-geometry';
 import { cropForShape, cropRectForShape } from './shape-crop';
@@ -877,6 +878,7 @@ export async function runObjectShape(
       // PR-2.15: dimension statuses from the final measurements, never the LLM. Template and
       // fit values read estimated, a single view never measures depth, the box-fit scale is
       // estimated (metric scale arrives with free placement).
+      let coverage: PartCoverage[] | undefined;
       if (finalKit) {
         // PQ-T37: hard geometry gates fixed by rule (floating parts pulled in, fused twins merged).
         const repair = repairGraph(finalKit.archetype, recipe);
@@ -901,6 +903,7 @@ export async function runObjectShape(
               )
             : (partMasks ?? []);
         const missing = notBuilt(recipe, onObject);
+        if (onObject.length) coverage = partCoverage(recipe, onObject);
         if (missing.length)
           console.info(`[vision] 3D seen, not built for "${target.label}": ${missing.join(', ')}`);
         const graph = buildGraph(finalKit.archetype, recipe, {
@@ -970,6 +973,7 @@ export async function runObjectShape(
         ...(partMasks ? { partMasks } : {}),
         ...(found.kit ? { kit: found.kit } : {}),
         ...(shaped.outline ? { outline: shaped.outline } : {}),
+        ...(coverage ? { coverage } : {}),
         ...source,
       };
     }

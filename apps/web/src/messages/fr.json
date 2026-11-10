@@ -1180,6 +1180,16 @@
         "scale": "échelle"
       },
       "model3dHiddenNote": "Des parties sont cachées sur la photo : elles sont inférées, pas mesurées.",
+      "model3dCoverage": "Pièces vues sur la photo :",
+      "model3dCoverageItem": "{name} {built}/{seen}",
+      "model3dCoverageMissing": "non construites : {count}",
+      "model3dPart": {
+        "wheel": "Roues",
+        "window": "Fenêtres",
+        "door": "Portes",
+        "chimney": "Cheminées",
+        "lamp": "Lampes"
+      },
       "model3dImprove": {
         "label": "Progression de l'amélioration du modèle",
         "running": "Amélioration : étape {index}/{total} — {stage}",

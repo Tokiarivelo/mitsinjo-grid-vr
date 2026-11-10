@@ -98,7 +98,8 @@ Meta API calls; all others run offline.
       **Done when:** the report has a « Not built » column and it is empty or explained for every real object.
       _Partly done 2026-11-10:_ `repairGraph` (floating part = held by neither the ground, its parent, nor a held part; pulled against its parent, fused twin merged, by rule,
       before the statuses; log `[vision] 3D graph repair …`), `notBuilt` (SAM masks beyond the parts that draw them + listed names; log `[vision] 3D seen, not built …`), « Not built » report column (— without masks: every
-      current capture). **Open:** `evidence.visibleParts` waits for PQ-T12; the panel has no part list yet (UI task).
+      current capture). **Open:** `evidence.visibleParts` waits for PQ-T12. _Panel part list done 2026-11-10:_ `ObjectShape.coverage`
+      (`partCoverage`, SAM masks on the object vs built parts) → « Parts seen on the photo: Wheels 2/2 · Windows 1/3 ⚠ not built: 2 ».
       _« Not built » explained 2026-11-10 (15 real captures):_ SAM masks outside the object's outline no longer count
       (`masksOnObject`: car-side « window ×8 » was 5 windows of the car behind and the building). Left, all real:
       car-side window ×3 (yaw mis-measured 53° on a side view → the yaw correction pushes the windows off the body,

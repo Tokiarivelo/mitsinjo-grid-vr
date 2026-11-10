@@ -1180,6 +1180,16 @@
         "scale": "scale"
       },
       "model3dHiddenNote": "Some parts are hidden in the photo: they are inferred, not measured.",
+      "model3dCoverage": "Parts seen on the photo:",
+      "model3dCoverageItem": "{name} {built}/{seen}",
+      "model3dCoverageMissing": "not built: {count}",
+      "model3dPart": {
+        "wheel": "Wheels",
+        "window": "Windows",
+        "door": "Doors",
+        "chimney": "Chimneys",
+        "lamp": "Lamps"
+      },
       "model3dImprove": {
         "label": "Model improvement progress",
         "running": "Improving: stage {index}/{total} — {stage}",
