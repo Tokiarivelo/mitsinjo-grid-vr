@@ -395,3 +395,104 @@ Still unverified, because no local document holds it (`ideas-meta-models.md` its
 « to check in the Meta docs »): the values `reasoning_effort` accepts, the largest image a call takes, and the
 parameters of Muse Image edits with reference images. PQ-T8, PQ-T16 and PQ-T17 start by checking them on the live
 API. No outside web research on rendering was done: the proposals come from this code and from three.js practice.
+
+---
+
+## 12. Web research: the standard steps of making a 3D object, and how this pipeline follows them
+
+Searched 2026-11-10. Sources are listed in §12.5. Tutorials and vendor guides agree on the order of the steps;
+none is a formal standard. Numbers from Adobe's PBR guide are the ones the guide says come from measured data.
+
+### 12.1 The steps a 3D artist follows, mapped to this pipeline
+
+| #   | Step in a studio pipeline          | What it is for                                              | Here today                                                                | Gap → task                                       |
+| --- | ---------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------ |
+| 1   | Reference gathering and admission  | Enough clear views; reject unusable references              | One photo; no check of size, blur or hidden share                         | PQ-T7 (conditions, hint to the operator)         |
+| 2   | Detail inventory                   | List every part to build before modelling                   | None: the kit is three colours and seven counts                           | PQ-T12 (`evidence`), PQ-T37 (coverage gate)      |
+| 3   | Camera match                       | Model and reference seen from the same view                 | Yaw from vanishing lines (`perspective.ts`), flat render in the photo box | Done; pitch is not solved (noted, no task)       |
+| 4   | Blockout                           | Main silhouette and proportions first                       | Kit template + silhouette fit, body from the outline                      | Done                                             |
+| 5   | Structure, then form               | Secondary volumes, then edges and curvature                 | Part masks, bevels, staged loop on the 2D path only                       | PQ-T19 (staged loop on photos), PQ-T20 (details) |
+| 6   | Topology and budget                | Clean, light mesh                                           | Parametric parts, ≤ 5 000 triangles, merged                               | Done                                             |
+| 7   | UV unwrap                          | Texture without stretching                                  | Box projection in object units, roof slopes along the fall line           | PQ-T35 (repetition)                              |
+| 8   | Baking (normal, ambient occlusion) | Small detail and contact shade without triangles            | Procedural normal maps; **no occlusion of any kind in the viewer**        | PQ-T33 (AO pass), PQ-T27 (baked joints)          |
+| 9   | PBR texturing                      | Base colour, metalness, roughness that obey physical ranges | Measured colour, one look per material; **no range check; metal at 0.6**  | PQ-T39 (PBR rules), PQ-T10, PQ-T26               |
+| 10  | Look development                   | Check materials under several lights                        | One studio light, dark and light theme                                    | PQ-T40 (three-light sheet)                       |
+| 11  | Lighting and render                | Environment light, shadows, tone mapping                    | Softbox studio, Neutral tone mapping, ink, contact shadow                 | PQ-T33, PQ-T34                                   |
+| 12  | Quality check                      | Compare with the reference from several views, gate by gate | Score on the photo view only; no check from other angles                  | PQ-T2, PQ-T36, PQ-T38                            |
+| 13  | Delivery to every target           | Same asset in every engine                                  | Viewer, village and VR draw it differently                                | PQ-T32                                           |
+
+### 12.2 What comparable systems do that this one does not yet
+
+- **Measure inside the outline.** The img2threejs project reports that silhouette IoU read about 11 % of the
+  figure and gave a model with its face deleted the same score as a finished one; it added a difference measure
+  inside the silhouette, in height bands, required on every pass. This matches the finding of §3 and gives the
+  detail score a fourth term (PQ-T36).
+- **Check from more than one angle.** The same project flags a « degenerate view »: a flat plane that looks like a
+  volume from the reference view. Its check needs no reference, only the model seen from other angles. A model
+  that fits the photo but is paper-thin or lopsided from the side fails (PQ-T36).
+- **Hard gates are never overruled by a model's opinion.** Geometry failures (outline, scale, missing or fused
+  parts, parts in mid-air) send the work back without asking the vision model; the vision model may only rescue
+  a near miss on a soft signal. Here the critic and judge are advisory already; the missing piece is the part
+  coverage gate (PQ-T37).
+- **A critic that prefers « no fix ».** 3DCodeBench instructs its visual critic to answer « no fix needed » when
+  the render is good enough, because critics break working models, and reverts any fix whose render fails.
+  3D-PreMise reports the vision model contradicting itself when shown renders. This pipeline already keeps only
+  measured gains; it adds the « prefer no fix » wording and loop stops on a repeated defect, a back-and-forth or
+  a plateau (PQ-T38).
+- **Several renders for the critic.** LL3M's critic reads multi-view renders. The critic sheet of PQ-T14 has two
+  model views; the judge sheet has two.
+- **Ask instead of guessing.** img2threejs asks the user when its routing confidence is under 0.82. Here a
+  low-confidence archetype is built anyway (PQ-T41).
+- **Buildings as layout tree plus components.** A NeurIPS 2026 poster recovers a split-and-repeat layout tree and
+  per-component parameters from one facade photo, refined with rendered feedback, then compiles them to a
+  program. The house path here (repetition measurement, `repeat` ops, openings as components, staged loop) has
+  the same shape; no change proposed.
+
+### 12.3 Physical rules for materials (target, PQ-T39)
+
+From Adobe's PBR guide, metal / roughness workflow:
+
+- Base colour of a non-metal stays between 30 and 240 sRGB (50 for the strict limit); nothing is pure black or
+  pure white.
+- Metalness is 0 or 1. Bare metal: metalness 1 and a bright base colour (180–255 sRGB). Paint, rust and dirt on
+  metal are non-metal.
+- No light or shadow in the base colour (hence PQ-T10); occlusion is its own channel and must not darken
+  reflections.
+
+Against the code: `SURFACE_LOOK.metal` uses metalness 0.6 with the colour measured on the photo, which is why the
+loop log of 2026-11-01 notes that metal parts render darker than measured. A car body or a fridge is painted
+metal, so it should be `painted` (metalness 0, clearcoat), and only bare metal (galvanised sheet, chrome,
+aluminium) should be `metal` with metalness 1. `painted` exists in the viewer's surfaces but not in
+`RECIPE_MATERIALS`, so Muse cannot name it today.
+
+One consequence for PQ-T27: darkening vertex colours near joints is occlusion written into the base colour, which
+the guide lists as a mistake. It is kept only as the cheap path for the village and VR, bounded at 0.6, and the
+viewer uses the occlusion pass of PQ-T33 instead.
+
+### 12.4 Metrics used in research, and what can be used here
+
+Papers on single-image 3D report Chamfer distance and F-score (need a true 3D model: not available here), and
+LPIPS, SSIM, CLIP and DINO similarity between renders and images. SSIM is plain arithmetic and enters the detail
+score (PQ-T36). LPIPS and CLIP need other vendors' networks: out. DINO is a Meta model with open weights; using it
+locally as an offline report metric would respect « Meta models only » in spirit, but it is not on the Meta API and
+adds a model runtime to the repository. **Open decision for the user; no task until decided.**
+
+### 12.5 Sources
+
+- [Stages of a game-ready asset (Kaedim docs)](https://docs.kaedim3d.com/creating-assets/game-ready-assets/stages-of-a-game-ready-asset)
+- [Create game-ready assets in a real-time pipeline (The Rookies)](https://discover.therookies.co/2021/07/21/create-game-ready-assets-using-unreal-engine/)
+- [The PBR Guide, part 2 (Adobe Substance 3D)](https://www.adobe.com/learn/substance-3d-designer/web/the-pbr-guide-part-2)
+- [PBR Material, metal / rough (Autodesk)](https://help.autodesk.com/cloudhelp/2023/ENU/3DSMax-Lighting-Shading/files/GUID-A16234A5-6500-4662-8B20-A5EC9FE1B255.htm)
+- [Material reference (Roblox Creator docs)](https://create.roblox.com/docs/art/modeling/material-reference)
+- [Realistic render (Three.js Journey)](https://threejs-journey.com/lessons/realistic-render)
+- [img2threejs: image → procedural, quality-gated Three.js model](https://github.com/img2threejs/img2threejs)
+- [LL3M: Large Language 3D Modelers (arXiv 2508.08228)](https://arxiv.org/pdf/2508.08228)
+- [3DCodeBench: agentic procedural 3D modeling via code (arXiv 2606.01057)](https://arxiv.org/pdf/2606.01057)
+- [3D-PreMise (arXiv 2401.06437)](https://arxiv.org/pdf/2401.06437)
+- [Visual-to-Executable Procedural Reconstruction of Buildings (NeurIPS 2026 poster)](https://neurips.cc/virtual/2026/poster/155329)
+- [FaçAID: neuro-symbolic facade reconstruction (arXiv 2406.01829)](https://arxiv.org/abs/2406.01829v2)
+- [SPAR3D (arXiv 2501.04689)](https://arxiv.org/pdf/2501.04689) and [What do single-view 3D reconstruction networks learn? (arXiv 1905.03678)](https://arxiv.org/pdf/1905.03678), for metrics
+
+Read as search summaries and page extracts, not in full: threshold values of img2threejs other than its 0.7 global
+vision score and 0.82 routing confidence were not published in the pages read, and the NeurIPS paper was read
+from its abstract only.

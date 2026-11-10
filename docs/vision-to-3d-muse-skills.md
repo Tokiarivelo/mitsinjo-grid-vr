@@ -117,10 +117,15 @@ Material cues
 - plaster: flat matt wall, often white or pale, may show cracks · concrete: grey, flat, form lines
 - wood: grain, planks, beams · thatch: thick soft grey-brown roof with a rounded edge
 - tile: rows of small curved or flat pieces, orange / red / brown · slate: thin dark grey flat pieces
-- metal: sharp highlight, flat panels, corrugated sheet, paint with gloss · glass: dark or mirror
-  patch inside a frame · plastic: smooth, uniform colour, soft highlight · rubber: matt black
+- metal: BARE metal only (galvanised or corrugated sheet, chrome, aluminium, steel pipe)
+- painted: any surface under a coat of paint (car body, fridge, gate), whatever is underneath
+- glass: dark or mirror patch inside a frame · plastic: smooth, uniform colour, soft highlight
+- rubber: matt black
 - fabric: folds · foliage: leaves, uneven green edge · water: flat, reflects the sky
 ```
+
+`painted` is not in `RECIPE_MATERIALS` today: the `painted` line and its entry in the Base card's material list
+ship with PQ-T39 (methodology §12.3). Until then a painted surface is sent as `metal` or `plastic`, as now.
 
 ---
 

@@ -67,6 +67,23 @@ Meta API calls; all others run offline.
       keep their scores).
       **Done when:** methodology §9 and `/shape-loop` quote the same gates as the code.
 
+- [ ] **PQ-T36 Inside the outline, and from other angles.** `detail-score.ts`: (a) interior difference:
+      SSIM and mean colour difference between photo and render inside the outline, in 8 height bands, the
+      worst band reported (methodology §12.2); (b) `degenerateView(recipe)`: render the silhouette at 0°, 45°
+      and 90°; fail when the 90° silhouette area is under 15 % of the 0° one for an archetype that is not flat
+      (not `screen`, `panel`, `water`), or when the 45° view shows a part detached from the body.
+      **Test:** `detail-score.test.ts` (a model with its windows deleted drops in the window band while IoU
+      stays; a paper-thin car fails, a TV does not).
+      **Done when:** both show in the report; no real object passes with a blank band or a degenerate view.
+- [ ] **PQ-T37 Part coverage gate.** After the build, compare `evidence.visibleParts` (PQ-T12) and the SAM
+      parts with the recipe: every listed part is built, or reported as « seen, not built » in the log and
+      the panel's part list. Hard checks in `object-graph.ts`: no part floating (each touches its parent or
+      the ground), no two parts of the same kind fused at one place. Hard failures go back to the builder
+      without asking a model.
+      **Test:** `object-graph.test.ts` (floating wheel caught and pulled in; duplicate window merged; a listed
+      mirror with no geometry is reported).
+      **Done when:** the report has a « Not built » column and it is empty or explained for every real object.
+
 **Exit Q0:** the report ranks real photos by a score that drops when a recognisable part is missing.
 
 ---
@@ -163,6 +180,19 @@ Meta API calls; all others run offline.
       **Test:** `object-shape.test.ts` (agreeing samples → one kit; split archetype → the better-scoring one;
       one sample late → the other is used alone).
       **Done when:** on the real set, kit field agreement across two runs of the same photo is higher than with 1.
+
+- [ ] **PQ-T38 A critic that prefers « no fix », and a loop that knows when to stop.** Critic, stage ops
+      and final check cards gain: « when the model is good enough, answer no change; a needless fix can break a
+      correct model ». `shape-stages.ts`: besides gate, no gain, rounds and timeout, stop a stage on a repeated
+      defect (same op proposed twice with no gain) and on a back-and-forth (an op that undoes the previous
+      kept op). Soft signals only may be rescued by a model's answer; hard geometry checks never.
+      **Test:** `shape-stages.test.ts` (repeat and back-and-forth stop the stage with their own stop reason).
+      **Done when:** `make eval-stages`: fewer wasted rounds on the recorded loops, no stage score lower.
+- [ ] **PQ-T41 Ask instead of guessing.** When the kit's archetype confidence (PQ-T12) is under 0.5, or two
+      samples disagree (PQ-T18), the panel asks the operator to pick between the two best families before the
+      build (one tap, three languages, both themes, mobile; design gate).
+      **Test:** panel test (question shown only under the gate; the choice becomes the hint of the next call).
+      **Done when:** on the hard real photos, no model is built from a family the operator would reject.
 
 **Exit Q2:** each Muse call starts with the knowledge of its object family, and every prompt change is a measured choice.
 
@@ -266,6 +296,23 @@ Meta API calls; all others run offline.
       **Test:** `surface-maps.test.ts` (shade map has energy below the tile frequency; same seed → same result;
       mean brightness unchanged so the gain still holds).
       **Done when:** no visible grid of repeats on walls and roofs in `make shape-shots`.
+
+- [ ] **PQ-T39 Physical material rules.** `lib/object-shape.ts`: add `painted` to `RECIPE_MATERIALS`
+      (contract change → `docs/contracts.md`; not stored in Neon as a new field, so no migration: say so in
+      the commit). `surface-look.ts`: `metal` = bare metal, metalness 1, base colour lifted into 180–255 sRGB;
+      `painted` = metalness 0 with clearcoat; `water` metalness 0. New `server/perception/pbr-rules.ts`: clamp
+      non-metal base colours into 30–240 sRGB and report each clamp. Kit card: « metal = bare metal only
+      (galvanised sheet, chrome, aluminium); a painted car body, fridge or gate is painted ». Templates in
+      `object-kit.ts`: vehicle body and cabinet default to `painted`.
+      **Test:** `pbr-rules.test.ts` (black #000000 → 30, white → 240, metal lifted, clamp logged),
+      `surface-look.test.ts` (metalness is 0 or 1 for every surface).
+      **Done when:** the red car body renders at its measured colour (ΔE lower than at baseline) and bare
+      metal reads as metal in `make shape-shots`.
+- [ ] **PQ-T40 Look-development sheet.** `make shape-shots` gains `LOOKDEV=1`: each object under three lights
+      (the studio, a low side light, a back light), dark and light theme, one sheet per object.
+      **Test:** script smoke test in mock mode (three shots per object written).
+      **Done when:** `/designer-3d` reviews the sheet and no material turns black, blown out or plastic-looking
+      under any of the three lights.
 
 **Exit Q4:** surfaces differ by measured colour and gloss, and parts read as assembled.
 

@@ -11,9 +11,9 @@
   under 70 on a 256 px sheet. Nothing can be judged until the ruler is fixed.
 - **New:** `docs/vision-to-3d-muse-skills.md` (prompt-ready cards: base, look, kit, 13 archetype cards, critic,
   stage ops, views check, final check, judge, Muse Image views, SAM wording). Target texts, not in the code yet.
-- **New:** `docs/tasks/PV-vision-quality.md` (PV-Q, PQ-T1…T35: task, files, test, done-when).
+- **New:** `docs/tasks/PV-vision-quality.md` (PV-Q, PQ-T1…T41: task, files, test, done-when).
 - **Rendering audit** (methodology § 11): four renderers draw the same recipe unequally. Viewer has no
-  part-on-part shadow or AO; the village draws all placed objects with one material; VR has no maps. Tasks PQ-T32–T35.
+  part-on-part shadow or AO; the village draws all placed objects with one material; VR has no maps. Tasks PQ-T32–T35. § 12: web research mapped to 13 studio steps (PQ-T36–T41).
 - **Moved:** cloud and sun maths → `docs/vision-to-3d-atmosphere.md` (word for word, not re-audited).
 - VR state unchanged (merged in `main`): /village walkable 360° tour, outdoor walk, `make vr-probe` 15 PASS.
 
