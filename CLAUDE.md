@@ -37,6 +37,7 @@ Demo path that must always work: **solar drop → strategy comparison → AI exp
 | LLM provider, tools, prompts, fallback         | `docs/copilot.md`                                         |
 | Code rules, naming, tests, commits             | `docs/conventions.md`                                     |
 | Fluidity budgets & perf techniques             | `docs/performance.md`                                     |
+| Photo → 3D method, Muse skill cards            | `docs/vision-to-3d-methodology.md` → `-muse-skills.md`    |
 | UI tokens, components, screens, Stitch         | `docs/design/README.md` → one file                        |
 | Which mockup belongs to which screen           | `docs/design/stitch-map.md` (exports in `design/stitch/`) |
 | Phase plan / tasks                             | `docs/tasks/README.md`                                    |
