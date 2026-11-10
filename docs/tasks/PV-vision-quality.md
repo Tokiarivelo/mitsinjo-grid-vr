@@ -128,6 +128,9 @@ Meta API calls; all others run offline.
       **Test:** `shape-crop.test.ts` (tight crop bounds, grey outside the outline, no outline → one image as today).
       **Done when:** `make eval-shape` agreement is not lower and counts (windows, wheels) are not worse on the
       real set; else revert and log why.
+      _Built 2026-11-10, **off** (`KIT_TIGHT_CROP = false` in `shape-crop.ts`): `tightCropForShape`, tight image sent
+      first, question names both. Left unticked: the paid `make eval-shape` on the real set is still to run; flip the
+      flag if agreement and counts hold, else delete the code and log why._
 - [ ] **PQ-T9 SAM agreement.** New `server/perception/sam-consensus.ts` (methodology §6.5), used by
       `outline.ts` (`fetchOutlineForBox`) and for the parts whose first answer is empty in `part-masks.ts`;
       `PART_MASKS_TIMEOUT_MS` becomes a share of the time left instead of a fixed 5 s.

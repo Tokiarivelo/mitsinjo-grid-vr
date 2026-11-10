@@ -375,7 +375,7 @@ export class MetaPerceptionBackend implements PerceptionBackend {
       signal,
       false,
       { kind: 'describeShape', params: { ...target, promptVersion } },
-      target.facadeUrl ? [target.facadeUrl] : []
+      [target.tightUrl, target.facadeUrl].filter((u): u is string => Boolean(u))
     );
     const kit = parseKit(content, hint);
     if (!kit) console.info(`[vision] ${model} gave no usable 3D kit: ${content.slice(0, 300)}`);
