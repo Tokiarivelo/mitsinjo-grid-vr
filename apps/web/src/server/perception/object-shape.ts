@@ -32,7 +32,7 @@ import {
   sampleObjectPixels,
   sampleObjectRgb,
 } from './shape-colors';
-import { conceptOf, fetchOutlineForBox, type OutlineCrop } from './outline';
+import { conceptOf, fetchOutlineForBox, samRetries, type OutlineCrop } from './outline';
 import { applyConstraints, buildGraph, notBuilt, repairGraph } from './object-graph';
 import { deduceHiddenSides } from './hidden-sides';
 import { enforcePartBudget } from './mask-geometry';
@@ -290,7 +290,7 @@ export async function runObjectShape(
             fullImageUrl,
             conceptOf(target),
             target.box,
-            { ...(outlineCrop ? { crop: outlineCrop } : {}), fallback: target.label }
+            { ...(outlineCrop ? { crop: outlineCrop } : {}), retries: samRetries(target) }
           ).then(
             (hit) => hit ?? undefined,
             () => undefined

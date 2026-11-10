@@ -1,6 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import { MAX_DETECTIONS } from '../detect';
-import { conceptOf, fetchOutlineForBox, iou, refineDetections, samBoxToNorm } from '../outline';
+import {
+  conceptOf,
+  fetchOutlineForBox,
+  iou,
+  refineDetections,
+  samBoxToNorm,
+  samRetries,
+} from '../outline';
 import { boxUnionCoverage, parseSamOutput } from '../parse-sam';
 import type { ApplianceDetection, SegmentResult } from '../schemas';
 
@@ -133,6 +140,35 @@ describe('fetchOutlineForBox (PR-2.20)', () => {
   });
 });
 
+describe('samRetries (PQ-T9)', () => {
+  it('full label first, then the lookalike SAM knows; never the noun itself', () => {
+    expect(samRetries({ label: 'utility pole' })).toEqual(['utility pole']);
+    expect(samRetries({ label: 'hand water pump' })).toEqual(['hand water pump', 'fire hydrant']);
+    expect(samRetries({ label: 'pump' })).toEqual(['fire hydrant']);
+    expect(samRetries({ label: 'tv' })).toEqual([]);
+  });
+  it('walks the retries in order until one hits', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const OUTLINE = 'M0.61 0.46L0.99 0.46L0.99 0.84L0.61 0.84Z';
+      const asked: string[] = [];
+      const seg = async (_url: string, concept: string) => {
+        asked.push(concept);
+        const r = samResult(concept);
+        if (concept !== 'fire hydrant') return { ...r, instances: [], count: 0 };
+        r.instances[0] = { ...r.instances[0]!, outline: OUTLINE };
+        return r;
+      };
+      const box = { x: 0.6, y: 0.45, w: 0.4, h: 0.4 };
+      const retries = samRetries({ label: 'hand water pump' });
+      expect(await fetchOutlineForBox(seg, 'data:x', 'pump', box, { retries })).toBe(OUTLINE);
+      expect(asked).toEqual(['pump', 'hand water pump', 'fire hydrant']);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+});
+
 describe('fetchOutlineForBox label fallback (PQ-T1)', () => {
   const OUTLINE = 'M0.61 0.46L0.99 0.46L0.99 0.84L0.61 0.84Z';
   const pole = { x: 0.6, y: 0.45, w: 0.4, h: 0.4 };
@@ -148,7 +184,7 @@ describe('fetchOutlineForBox label fallback (PQ-T1)', () => {
         return r;
       };
       const out = await fetchOutlineForBox(seg, 'data:x', 'pole', pole, {
-        fallback: 'Utility Pole',
+        retries: ['Utility Pole'],
       });
       expect(out).toBe(OUTLINE);
       expect(asked).toEqual(['pole', 'utility pole']);
@@ -165,7 +201,7 @@ describe('fetchOutlineForBox label fallback (PQ-T1)', () => {
         return { ...samResult(concept), instances: [], count: 0 };
       };
       expect(
-        await fetchOutlineForBox(seg, 'data:x', 'pump', pole, { fallback: 'pump' })
+        await fetchOutlineForBox(seg, 'data:x', 'pump', pole, { retries: ['pump'] })
       ).toBeNull();
       expect(calls).toBe(1);
     } finally {

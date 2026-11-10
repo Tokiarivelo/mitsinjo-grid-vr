@@ -83,6 +83,23 @@ export function conceptOf(d: Pick<ApplianceDetection, 'label'>): string {
   return best?.noun ?? label;
 }
 
+/**
+ * Words SAM does not know, and the lookalike it outlines instead (measured with `make sam-probe`, PQ-T9):
+ * no pump word finds anything on two photos, « fire hydrant » outlines the hand pump (IoU 0.89).
+ */
+const SAM_LOOKALIKES: Readonly<Record<string, string>> = { pump: 'fire hydrant' };
+
+/**
+ * What to ask SAM after `conceptOf(d)` misses, in order: the full label (« utility pole » finds what
+ * « pole » does not, 0.86 vs 0.19), then the lookalike of its noun. Duplicates and the noun itself dropped.
+ */
+export function samRetries(d: Pick<ApplianceDetection, 'label'>): string[] {
+  const noun = conceptOf(d);
+  const label = d.label.trim().toLowerCase();
+  const out = [label, SAM_LOOKALIKES[noun]].filter((c): c is string => !!c && c !== noun);
+  return [...new Set(out)];
+}
+
 /** Words that start a complement after the head noun (EN, FR). */
 const HEAD_CUT =
   /\s(?:with|on|near|in|at|under|beside|next to|behind|avec|sur|près de|devant|derrière)\s/;
@@ -213,12 +230,12 @@ export async function fetchOutlineForBox(
   {
     timeoutMs = SEGMENT_TIMEOUT_MS,
     crop,
-    fallback,
+    retries = [],
   }: {
     timeoutMs?: number;
     crop?: OutlineCrop;
-    /** Second concept tried once when `concept` misses (the full label: « utility pole » finds what « pole » does not). */
-    fallback?: string;
+    /** Concepts tried in order while `concept` misses (`samRetries`: the full label, then a lookalike). */
+    retries?: ReadonlyArray<string>;
   } = {}
 ): Promise<string | null> {
   const full = await withTimeout((signal) => segmentImage(imageUrl, concept, signal), timeoutMs);
@@ -264,11 +281,12 @@ export async function fetchOutlineForBox(
   }
   // Every miss logs its cause: a silent null here used to cost a whole investigation session.
   console.warn(`[vision] 3D outline missed for "${concept}": ${miss}`);
-  const next = fallback?.trim().toLowerCase();
-  if (next && next !== concept) {
-    return fetchOutlineForBox(segmentImage, imageUrl, next, box, {
+  const rest = retries.map((r) => r.trim().toLowerCase()).filter((r) => r && r !== concept);
+  if (rest.length) {
+    return fetchOutlineForBox(segmentImage, imageUrl, rest[0]!, box, {
       timeoutMs,
       ...(crop ? { crop } : {}),
+      retries: rest.slice(1),
     });
   }
   return null;
