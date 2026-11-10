@@ -4,7 +4,8 @@
 
 ## Current state
 
-- **PV-Q phase Q0:** PQ-T1, T2, T3, T5, T6, T36 done; PQ-T4 judge coded, calibration not run (API); PQ-T37 partial.
+- **PV-Q phase Q0:** PQ-T1–T6, T36 done; PQ-T37 partial (needs Q1 PQ-T12 + a UI task). Judge calibrated:
+  73 % of 11 pairs < 90 % → developer note only (it grades most models 1–2).
 - **Real baseline (12 captures, Wikimedia Commons photos, local only):** mean 55 vs synthetic 93 (IoU 0.72,
   edge F1 0.38, ΔE 9.9). Worst lamp 32, car-hidden 38, motorbike 40; best fridge 92. Gates `STOP_DETAIL`.
 - Photos: `resources/real-photos/` (copy to check) and `__fixtures__/shape/real/photos/` (+ `SOURCES.md`), gitignored.
@@ -14,10 +15,10 @@
 
 ## Next (user first) — French guide: `docs/tasks/PV-Q0-a-faire.md`
 
-1. Re-capture `utility-pole` (label fix) and `car-corner` (no LABEL needed now): `make shape-capture …`.
-2. **PQ-T4:** `make shape-judge` (API, ~2 calls per capture) → calibration in the loop log.
-3. Then Q1 from PQ-T7; PQ-T9 has the SAM evidence (pump unknown to SAM, solar light returns a part).
-4. PQ-T37 open: `evidence.visibleParts` (PQ-T12), part list in the panel (UI task).
+1. Re-capture `pump` and `car-corner` when the Meta API stops timing out on image calls (ETIMEDOUT
+   2026-11-10 evening; pump's outline now found via the « fire hydrant » lookalike). Pole re-captured (33).
+2. Then Q1 from PQ-T7; PQ-T9 has the SAM evidence (solar street light returns one part).
+3. PQ-T37 open: `evidence.visibleParts` (PQ-T12), part list in the panel (UI task).
 
 ## Files touched (this session, after the Q0 code)
 
