@@ -59,8 +59,9 @@ Rules in `.claude/rules/three.md`. Two quality tiers (`useSceneQuality`, toggle 
   fades out from 22 to 45 units (`scene-ink` token). GPU audit: fps and draw calls unchanged.
 - Object editor (PT-5): its own `EffectComposer` (4× MSAA, half float) with Neutral tone mapping + ink 0.6;
   `frameloop="demand"` so it costs only when the view changes. Studio light = softbox scene baked once (PMREM).
-- Shader warm-up (PT-7, `useShaderWarmup`): `gl.compileAsync(scene, camera)` once per canvas, canvas fades in
-  on resolve (≤ 1 s). The ~1.2 s long task at village mount is scene building, not shaders (open).
+- Shader warm-up (PT-7, `useShaderWarmup`): `gl.compile(scene, camera)` once per canvas, then our own poll of
+  `program.isReady()` (parallel compile), canvas fades in when all are linked (≤ 1 s). Not `compileAsync`: three
+  r174 reads `currentProgram.isReady()` unguarded, so a material disposed mid-compile threw `reading 'isReady'`. The ~1.2 s long task at village mount is scene building, not shaders (open).
 - Auto-downgrade: a 3.5 s fps probe after the high tier mounts switches to `low` when the median
   is < 28 fps, unless the user picked a tier (saved in `localStorage`). `?quality=high|low`
   forces a tier (audits, screenshots). The probe gives up after 8 s (`MAX_PROBE_MS`) and downgrades
