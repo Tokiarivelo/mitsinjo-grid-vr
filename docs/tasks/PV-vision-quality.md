@@ -49,7 +49,7 @@ Meta API calls; all others run offline.
       **Test:** `flat-render.test.ts`: a framed window renders frame pixels around glass pixels; render time of
       the heaviest golden stays inside the 300 ms budget.
       **Done when:** the elevation sheet shows frames and panes; no golden score down by more than 2.
-- [ ] **PQ-T4 Rubric judge (Muse Wonder)** _(API)_. New `server/perception/rubric-judge.ts` (sheet photo |
+- [x] **PQ-T4 Rubric judge (Muse Wonder)** _(API)_. New `server/perception/rubric-judge.ts` (sheet photo |
       front | ¾, question, JSON schema, parser, `damage(recipe)` for calibration) with the Judge card (skills
       §11); `judgeShape` on `meta.ts`, `client.ts`, `mock.ts`; `META_JUDGE_MODEL` (default `muse-wonder-1.0`) in
       `lib/env.ts` and `.env.example`; `scripts/shape-judge.mjs` + `make shape-judge`; answers stored beside
@@ -59,7 +59,9 @@ Meta API calls; all others run offline.
       **Done when:** calibration is run and written in the loop log: damaged models graded lower in ≥ 90 % of
       pairs → the judge may be used by the loop; under 90 % → it stays a developer note, and that is logged.
       _Code done 2026-11-10_ (live tool is a vitest block like `make eval-shape`, not a `.mjs` script: it runs the
-      TS server code directly). **Open (user, API spend):** `make shape-judge` on the real set, then log it.
+      TS server code directly). _Calibrated 2026-11-10:_ damaged lower in 73 % of 11 pairs → developer note only (logged). The judge
+      grades most current models 1–2 / 5, so removing parts barely moves an already-low grade; it separates
+      well on decent models (fridge 4.0 → 2.8, fan 3.0 → 1.3). Re-run once the real mean rises (Q1–Q2).
 - [x] **PQ-T5 A version on every prompt.** _(done 2026-11-10)_ `KIT_PROMPT_VERSION`, `CRITIC_PROMPT_VERSION`,
       `VIEWS_CHECK_PROMPT_VERSION`, `SIDE_VIEW_PROMPT_VERSION` next to their prompts; logged by `visionJson`
       (`params.promptVersion`), stored in captures (`shape-capture.ts`, `stage-capture.ts`); `eval-shape.ts`

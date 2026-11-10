@@ -12,6 +12,7 @@ import {
   calibration,
   damage,
   judgeMean,
+  liveJudgement,
   judgeQuestion,
   judgeSheet,
   JUDGE_CRITERIA,
@@ -118,6 +119,27 @@ describe('rubric judge (PQ-T4)', () => {
  * `META_JUDGE_MODEL`; answers stored beside the captures (`<id>.judge.json`) and replayed offline when
  * the model and prompt version match (`SHAPE_JUDGE_REPLAY=1` refuses any live call).
  */
+describe('liveJudgement (PQ-T4)', () => {
+  const j: Judgement = {
+    grades: {
+      silhouette: 4,
+      proportions: 4,
+      parts_present: 4,
+      parts_placed: 4,
+      surfaces: 4,
+      likeness: 4,
+    },
+    notes: {},
+  };
+  it('keeps only a real Meta answer: a mock or a fallback (network timeout) is never a grade', () => {
+    expect(liveJudgement({ source: 'meta', model: 'muse-wonder-1.0', judgement: j })).toBe(j);
+    expect(liveJudgement({ source: 'mock', model: 'mock', judgement: j })).toBeNull();
+    expect(
+      liveJudgement({ source: 'mock', model: 'mock', fallback: 'provider_error', judgement: j })
+    ).toBeNull();
+  });
+});
+
 describe.runIf(process.env.SHAPE_JUDGE)('make shape-judge', () => {
   it('judges the real set and prints the calibration', async () => {
     const dir =
@@ -128,8 +150,16 @@ describe.runIf(process.env.SHAPE_JUDGE)('make shape-judge', () => {
     if (!replayOnly && !client.callsMeta)
       throw new Error('Refusing to judge with mock: set LLM_PROVIDER=meta');
     const pairs: Array<{ id: string; intact: Judgement; damaged: Judgement }> = [];
+    const skipped: string[] = [];
+    const undamageable: string[] = [];
     for (const c of REAL_SHAPES) {
       if (!existsSync(join(dir, `${c.id}.capture.json`))) continue;
+      const { capture } = await readCapture(dir, c.id);
+      // Fewer than three parts: `damage` removes nothing, the pair would compare a model with itself.
+      if (!capture.recipe || damage(capture.recipe) === capture.recipe) {
+        undamageable.push(c.id);
+        continue;
+      }
       const file = join(dir, `${c.id}.judge.json`);
       const stored = existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : null;
       if (stored?.promptVersion === JUDGE_PROMPT_VERSION && stored.model === env.META_JUDGE_MODEL) {
@@ -137,20 +167,23 @@ describe.runIf(process.env.SHAPE_JUDGE)('make shape-judge', () => {
         continue;
       }
       if (replayOnly) continue;
-      const { capture } = await readCapture(dir, c.id);
       const s = await rescoreCapture(dir, c.id);
-      if (!s || !capture.recipe) continue;
+      if (!s) continue;
       const box = capture.cropTarget.box;
       const aspect = s.crop.cols / s.crop.rows || box.w / box.h;
       const ask = async (recipe: ObjectRecipe) =>
-        (
+        liveJudgement(
           await client.judgeShape(
             await judgeSheet(s.crop, recipe, aspect),
             judgeQuestion(capture.target.label)
           )
-        ).judgement;
+        );
       const [intact, damaged] = [await ask(capture.recipe), await ask(damage(capture.recipe))];
-      if (!intact || !damaged) continue;
+      // A fallback answer is never stored nor counted: the capture is retried on the next run.
+      if (!intact || !damaged) {
+        skipped.push(c.id);
+        continue;
+      }
       writeFileSync(
         file,
         JSON.stringify(
@@ -167,7 +200,7 @@ describe.runIf(process.env.SHAPE_JUDGE)('make shape-judge', () => {
         `| ${p.id} | ${judgeMean(p.intact).toFixed(2)} | ${judgeMean(p.damaged).toFixed(2)} | ${judgeMean(p.damaged) < judgeMean(p.intact) ? '✓' : '✗'} |`
     );
     console.info(
-      `\n## Judge calibration (${env.META_JUDGE_MODEL}, prompt v${JUDGE_PROMPT_VERSION})\n\n| Capture | Intact | Damaged | Lower |\n| --- | --- | --- | --- |\n${lines.join('\n')}\n\nDamaged lower in ${Math.round(cal.share * 100)} % of ${pairs.length} pairs → ${cal.trusted ? 'trusted by the loop' : 'developer note only'}.`
+      `\n## Judge calibration (${env.META_JUDGE_MODEL}, prompt v${JUDGE_PROMPT_VERSION})\n\n| Capture | Intact | Damaged | Lower |\n| --- | --- | --- | --- |\n${lines.join('\n')}\n\nDamaged lower in ${Math.round(cal.share * 100)} % of ${pairs.length} pairs → ${cal.trusted ? 'trusted by the loop' : 'developer note only'}.${skipped.length ? `\n\nNo live answer (not counted, rerun): ${skipped.join(', ')}.` : ''}${undamageable.length ? `\n\nToo few parts to damage (not counted): ${undamageable.join(', ')}.` : ''}`
     );
     expect(pairs.length).toBeGreaterThan(0);
   }, 900_000);

@@ -4,6 +4,7 @@ import sharp from 'sharp';
 import { frontPartIndex, type ObjectRecipe } from '@/lib/object-shape';
 import { renderFlat, THREE_QUARTER, type FlatRender } from './flat-render';
 import type { RgbGrid } from './model-score';
+import type { JudgeResult } from './schemas';
 
 /**
  * Rubric judge (PQ-T4, methodology §6.2, Judge card §11 of the skills file): Muse Wonder grades six
@@ -100,6 +101,13 @@ export function parseJudge(content: string): Judgement | null {
   }
   return { grades, notes };
 }
+
+/**
+ * The judgement only when Muse Wonder gave it: a mock answer or a provider fallback (network, spend cap)
+ * grades a fixed 3 and would pass for a real grade in the calibration and the stored replays.
+ */
+export const liveJudgement = (r: JudgeResult): Judgement | null =>
+  r.source === 'meta' && !r.fallback ? r.judgement : null;
 
 /** Mean grade of a judgement, 1–5. */
 export const judgeMean = (j: Judgement): number =>
