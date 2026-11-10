@@ -181,6 +181,12 @@ silhouette is under 0.15 of the front (not screen, panel, water), ✗ detached w
 one piece (≥ 0.5 % of it). Both are report columns. First run: the real fan falls apart at 45°, the real lamp leaves
 4 bands blank. Band SSIM is low on the synthetic goldens too: their flat colours have no shading, the render does.
 
+**As built (PQ-T37):** `object-graph.ts` `repairGraph` runs before the statuses: a part whose box touches neither
+its graph parent nor the ground (gap > 0.01) is moved against its parent; two parts of one kind with centres within
+0.02 and sizes within 10 % keep the first. `notBuilt(recipe, masks, listed)` lists SAM concepts with more masks
+than parts that draw them, and listed names no part kind draws. Box tests are coarse: the real fan passes them but
+its 45° render still falls in 2 pieces (PQ-T36 sees what the boxes miss).
+
 ### 6.2 Rubric judge (PQ-T4)
 
 Muse Wonder receives one sheet (photo, model front, model ¾) and grades six criteria from 1 to 5: silhouette,

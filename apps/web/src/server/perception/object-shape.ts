@@ -32,7 +32,7 @@ import {
   sampleObjectRgb,
 } from './shape-colors';
 import { conceptOf, fetchOutlineForBox, type OutlineCrop } from './outline';
-import { applyConstraints, buildGraph } from './object-graph';
+import { applyConstraints, buildGraph, notBuilt, repairGraph } from './object-graph';
 import { deduceHiddenSides } from './hidden-sides';
 import { enforcePartBudget } from './mask-geometry';
 import { cropForShape, cropRectForShape } from './shape-crop';
@@ -877,6 +877,17 @@ export async function runObjectShape(
       // fit values read estimated, a single view never measures depth, the box-fit scale is
       // estimated (metric scale arrives with free placement).
       if (finalKit) {
+        // PQ-T37: hard geometry gates fixed by rule (floating parts pulled in, fused twins merged).
+        const repair = repairGraph(finalKit.archetype, recipe);
+        if (repair.recipe !== recipe) {
+          console.info(
+            `[vision] 3D graph repair for "${target.label}": pulled ${repair.pulled.length} floating part(s), merged ${repair.merged.length} duplicate(s)`
+          );
+          recipe = repair.recipe;
+        }
+        const missing = notBuilt(recipe, partMasks ?? []);
+        if (missing.length)
+          console.info(`[vision] 3D seen, not built for "${target.label}": ${missing.join(', ')}`);
         const graph = buildGraph(finalKit.archetype, recipe, {
           outline: !!shaped.outline,
           photo: !!photo,

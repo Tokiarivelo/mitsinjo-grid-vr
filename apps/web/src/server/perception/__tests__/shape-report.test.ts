@@ -120,6 +120,7 @@ describe('shape report (PR-0.3)', () => {
           },
         }),
         view: { sideShare: 0.05, pieces45: 1, fail: 'thin' },
+        notBuilt: ['wheel ×1'],
         parts: 7,
         ms: 80,
         violations: 2,
@@ -129,9 +130,9 @@ describe('shape report (PR-0.3)', () => {
     const md = reportMarkdown(rows, '2026-11-01');
     expect(md).toContain('| car | 60 | 0.9 ✓ | 0.4 ✗ |');
     expect(md).toContain(
-      '| 0.5 | 1 | 0.31 | 6.2 | 0.42@3 ✗ 1 blank | ✗ thin 0.05 | 7 | 80 | 2 | I5 U2 | edgeF1 |'
+      '| 0.5 | 1 | 0.31 | 6.2 | 0.42@3 ✗ 1 blank | ✗ thin 0.05 | wheel ×1 | 7 | 80 | 2 | I5 U2 | edgeF1 |'
     );
-    expect(md).toContain('| — | — | — | — | — | — | 3 | 40 |');
+    expect(md).toContain('| — | — | — | — | — | — | — | 3 | 40 |');
     expect(md).toContain('| **mean** | 79 |');
     expect(md).toContain('**Next:** car (score 60) — edgeF1');
   });
@@ -162,7 +163,7 @@ describe('shape report (PR-0.3)', () => {
     expect(md).toContain('Not scorable (capture without outline or recipe): TV.');
     expect(md).toContain('## Real (1 captured, 1 missing)');
     expect(md).toContain('| fan | 70 |');
-    expect(md).toContain('| — | — | 4 | — | 0 | U4 | deltaE |');
+    expect(md).toContain('| — | — | — | 4 | — | 0 | U4 | deltaE |');
     expect(md).toContain('Missing (`make shape-capture PHOTO=… ID=<id>`): car-side.');
     expect(md).toContain('**Next:** fan (score 70) — deltaE');
     // Without real rows, « Next » stays on the synthetic table.

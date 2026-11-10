@@ -5,7 +5,13 @@ vi.mock('server-only', () => ({}));
 
 import type { ObjectRecipe, PartMask, RecipePart } from '@/lib/object-shape';
 import type { MaskMapGeom } from '../mask-geometry';
-import { applyConstraints, buildGraph, checkConstraints } from '../object-graph';
+import {
+  applyConstraints,
+  buildGraph,
+  checkConstraints,
+  notBuilt,
+  repairGraph,
+} from '../object-graph';
 import { cropRectForShape } from '../shape-crop';
 
 const box = (
@@ -207,5 +213,57 @@ describe('applyConstraints + checkConstraints (PR-2.14)', () => {
     // Outside the largest strip's span, yet coherent: no clamp, no violation.
     expect(checkConstraints('house', recipe)).toBe(0);
     expect(applyConstraints('house', recipe)).toBe(recipe);
+  });
+});
+
+describe('repairGraph + notBuilt (PQ-T37)', () => {
+  const body = box([0, 0.05, 0], [0.9, 0.5, 0.6], { front: true, kind: 'body' });
+  const wheel = (x: number, y = -0.25): RecipePart => ({
+    shape: 'cylinder',
+    axis: 'z',
+    at: [x, y, 0.3],
+    size: [0.2, 0.2, 0.1],
+    color: '#1c1c1c',
+    kind: 'wheel',
+  });
+  const car = (parts: RecipePart[]): ObjectRecipe => ({
+    proportions: { w: 1, h: 0.5, d: 0.5 },
+    parts,
+  });
+
+  it('a floating wheel is caught and pulled against the body', () => {
+    // Wheel hanging in front of the body, 0.2 off its front face.
+    const floating = { ...wheel(0.3, -0.1), at: [0.3, -0.1, 0.55] as RecipePart['at'] };
+    const r = repairGraph('vehicle', car([body, wheel(-0.3), floating]));
+    expect(r.pulled).toEqual([2]);
+    const moved = r.recipe.parts[2]!;
+    expect(moved.at[2] - moved.size[2] / 2).toBeCloseTo(0.3, 9);
+  });
+
+  it('a duplicate window at one place is merged', () => {
+    const win = box([-0.2, 0.15, 0.31], [0.2, 0.15, 0.02], { kind: 'window' });
+    const twin = { ...win, at: [-0.19, 0.15, 0.31] as RecipePart['at'] };
+    const other = { ...win, at: [0.2, 0.15, 0.31] as RecipePart['at'] };
+    const r = repairGraph('vehicle', car([body, win, twin, other]));
+    expect(r.merged).toEqual([2]);
+    expect(r.recipe.parts).toHaveLength(3);
+  });
+
+  it('clean recipes pass through untouched (same reference)', () => {
+    const clean = car([body, wheel(-0.3), wheel(0.3)]);
+    const r = repairGraph('vehicle', clean);
+    expect(r.recipe).toBe(clean);
+    expect(r.pulled).toEqual([]);
+  });
+
+  it('reports what was seen but not built, and a listed mirror with no geometry', () => {
+    const masks: PartMask[] = [0.1, 0.4, 0.7].map((x) => ({
+      concept: 'wheel',
+      box: { x, y: 0.7, w: 0.15, h: 0.25 },
+    }));
+    const r = car([body, wheel(-0.3), wheel(0.3)]);
+    expect(notBuilt(r, masks)).toEqual(['wheel ×1']);
+    expect(notBuilt(r, masks.slice(0, 2), ['mirror', 'wheel'])).toEqual(['mirror']);
+    expect(notBuilt(r)).toEqual([]);
   });
 });

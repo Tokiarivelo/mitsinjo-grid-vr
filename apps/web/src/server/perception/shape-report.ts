@@ -4,13 +4,13 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import sharp from 'sharp';
 import type { KitArchetype } from '@/lib/object-kit';
-import type { ObjectRecipe } from '@/lib/object-shape';
+import { PartMaskSchema, type ObjectRecipe, type PartMask } from '@/lib/object-shape';
 import type { RealCase } from './__fixtures__/shape';
 import { degenerateView, type ViewCheck } from './detail-score';
 import type { ElevationScore } from './elevation-score';
 import { renderFlat, THREE_QUARTER, type FlatRender } from './flat-render';
 import type { ModelScore, RgbGrid } from './model-score';
-import { checkConstraints } from './object-graph';
+import { checkConstraints, notBuilt } from './object-graph';
 import { readCapture, rescoreCapture } from './shape-capture';
 
 /**
@@ -35,6 +35,8 @@ export interface ReportRow {
   statusCounts: { measured: number; estimated: number; inferred: number; unknown: number };
   /** Model seen at 0° / 45° / 90° (PQ-T36); absent when not checked. */
   view?: ViewCheck;
+  /** Parts SAM saw that the model does not build (PQ-T37); absent without part masks. */
+  notBuilt?: string[];
 }
 
 /** Compact counts cell: `M1 I11` (zeros omitted). */
@@ -100,8 +102,8 @@ const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.l
 const ok = (pass: boolean) => (pass ? '✓' : '✗');
 
 const HEADER = [
-  '| Object | Score | IoU | Edge F1 | ΔE | Recall | Prec | Int F1 | Part ΔE | Band | Views | Parts | ms | Viol | Status | Worst |',
-  '| ------ | ----- | --- | ------- | -- | ------ | ---- | ------ | ------- | ---- | ----- | ----- | -- | ---- | ------ | ----- |',
+  '| Object | Score | IoU | Edge F1 | ΔE | Recall | Prec | Int F1 | Part ΔE | Band | Views | Not built | Parts | ms | Viol | Status | Worst |',
+  '| ------ | ----- | --- | ------- | -- | ------ | ---- | ------ | ------- | ---- | ----- | --------- | ----- | -- | ---- | ------ | ----- |',
 ];
 
 /** One table: a row per object and the means. */
@@ -113,13 +115,13 @@ function scoreTable(rows: ReadonlyArray<ReportRow>): string[] {
     const ms = r.ms === undefined ? '—' : String(Math.round(r.ms));
     lines.push(
       `| ${r.name} | ${s.score} | ${s.iou} ${ok(s.iou >= STOP.iou)} | ${s.edgeF1} ${ok(s.edgeF1 >= STOP.edgeF1)} | ` +
-        `${s.deltaE} ${ok(s.deltaE <= STOP.deltaE)} | ${detailCells(s)} | ${bandCell(s)} | ${viewCell(r.view)} | ${r.parts} | ${ms} | ${r.violations} | ${statusCell(r.statusCounts)} | ${w.gap > 0 ? w.metric : '—'} |`
+        `${s.deltaE} ${ok(s.deltaE <= STOP.deltaE)} | ${detailCells(s)} | ${bandCell(s)} | ${viewCell(r.view)} | ${r.notBuilt === undefined ? '—' : r.notBuilt.join(', ') || '✓'} | ${r.parts} | ${ms} | ${r.violations} | ${statusCell(r.statusCounts)} | ${w.gap > 0 ? w.metric : '—'} |`
     );
   }
   const avg = (f: (s: ModelScore) => number) => mean(rows.map((r) => f(r.score)));
   lines.push(
     `| **mean** | ${Math.round(avg((s) => s.score))} | ${avg((s) => s.iou).toFixed(2)} | ` +
-      `${avg((s) => s.edgeF1).toFixed(2)} | ${avg((s) => s.deltaE).toFixed(1)} | | | | | | | | | | | |`,
+      `${avg((s) => s.edgeF1).toFixed(2)} | ${avg((s) => s.deltaE).toFixed(1)} | | | | | | | | | | | | |`,
     ''
   );
   return lines;
@@ -156,7 +158,7 @@ export function reportMarkdown(rows: ReportRow[], date: string, real?: RealSecti
     '',
     `Stop criteria: IoU ≥ ${STOP.iou} · edge F1 ≥ ${STOP.edgeF1} · ΔE ≤ ${STOP.deltaE}. Sheet: \`contact-sheet.png\` (photo | flat | ¾).`,
     'Detail (PQ-T2, not in the score yet): part recall · precision · interior edge F1 · part ΔE; « — » without SAM part masks.',
-    'Band (PQ-T36): SSIM of the worst of 8 height bands inside the outline @ band (0 = top), blank bands ✗. Views: side ÷ front silhouette, ✗ thin (< 0.15) or detached at 45°.',
+    'Band (PQ-T36): SSIM of the worst of 8 height bands inside the outline @ band (0 = top), blank bands ✗. Views: side ÷ front silhouette, ✗ thin (< 0.15) or detached at 45°. Not built (PQ-T37): SAM parts the model lacks, ✓ none.',
     '',
     '## Synthetic (drawn streets)',
     '',
@@ -186,7 +188,8 @@ export function reportRow(
   score: ModelScore,
   recipe: ObjectRecipe,
   archetype: KitArchetype,
-  ms?: number
+  ms?: number,
+  masks?: ReadonlyArray<PartMask>
 ): ReportRow {
   const statusCounts = { measured: 0, estimated: 0, inferred: 0, unknown: 0 };
   for (const p of recipe.parts) statusCounts[p.status ?? 'unknown'] += 1;
@@ -198,6 +201,7 @@ export function reportRow(
     violations: checkConstraints(archetype, recipe),
     statusCounts,
     view: degenerateView(recipe, archetype),
+    ...(masks?.length ? { notBuilt: notBuilt(recipe, masks) } : {}),
   };
 }
 
@@ -234,7 +238,17 @@ export async function scoreRealSet(
     }
     const name = c.hard ? `${c.id} (${c.hard})` : c.id;
     scored.push({
-      row: reportRow(name, s.score, capture.recipe, capture.kit.archetype),
+      row: reportRow(
+        name,
+        s.score,
+        capture.recipe,
+        capture.kit.archetype,
+        undefined,
+        (capture.partMasks ?? []).flatMap((m) => {
+          const parsed = PartMaskSchema.safeParse(m);
+          return parsed.success ? [parsed.data] : [];
+        })
+      ),
       sheet: {
         name: `${name} — ${s.score.score}`,
         crop: s.crop,
