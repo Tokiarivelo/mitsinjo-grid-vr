@@ -26,7 +26,9 @@ flowchart TD
     B --> C["3. Un bouton spatial flotte dans les airs ('Scanner la pièce')"]
     C --> D["4. Clic dans l'air (gâchette / pinch) → Capture & Analyse Vision"]
     D --> E["5. Des cibles holographiques 3D apparaissent autour des objets détectés"]
-    E --> F["6. L'utilisateur vise une cible et tire (laser blaster)"]
+    E --> F["6. L'utilisateur vise l'objet dans la vidéo et tire (laser blaster)"]
+    B --> F2["Raccourci : tirer sur un objet de la vidéo sans scan préalable"]
+    F2 --> D
     F --> G["7. Impact lumineux + Audio FX → Génération procédurale du modèle 3D"]
     G --> H["8. L'objet 3D final apparaît et s'anime à l'emplacement exact dans la pièce"]
     H --> I["9. Deuxième tir : Raccordement au microgrid + Conduit d'énergie 3D + HUD Holo"]
@@ -63,14 +65,14 @@ flowchart TD
   2. **Sur casque réel (Meta Quest Browser) :** Capture de l'environnement virtuel ou webcam USB/caméra autorisée.
 - **Traitement & Réticules spatiaux :**
   - L'image capturée est envoyée à `POST /api/vision` (ou mockperception en `dev-mock`).
-  - `spatial-projection.ts` projette les boîtes 2D normalisées en positions 3D $(x, y, z)$ réparties sur un arc devant l'utilisateur ($z \approx -1.8\text{ m}$ à $-2.4\text{ m}$).
+  - `spatial-projection.ts` projette chaque boîte 2D sur **l'écran webcam incurvé, à l'endroit où l'objet apparaît dans la vidéo** (géométrie partagée `webcam-screen.ts`) : le cadre holographique se pose sur l'objet vu depuis l'œil (25 cm devant l'écran), et le modèle 3D sort de l'image sur la même ligne de visée à 1,6 m de l'œil (côté max 0,9 m).
   - Cibles `<HoloDetectionTarget />` : cadre filaire cyan animé, étiquette textuelle billboard 3D (ex: _"Réfrigérateur · 180W"_), collider invisible.
 
 #### Checklist Phase 2 :
 
 - [x] Méthode `captureLiveOrSample()` combinant webcam locale et fallback `/samples/vision-room.jpg`.
 - [x] Hook ou session de détection connectée à l'API de vision perception.
-- [x] Algorithme de projection spatiale 2D $\rightarrow$ 3D (`spatial-projection.ts`) avec espacement sur arc radial.
+- [x] Algorithme de projection spatiale 2D $\rightarrow$ 3D (`spatial-projection.ts`) alignée sur l'objet dans la vidéo (`webcam-screen.ts`).
 - [x] Composant `<HoloDetectionTarget />` avec double boîte filaire cyan, texture canvas billboard et gestion du hover.
 - [x] Tests unitaires pour `spatial-projection.ts` et `<HoloDetectionTarget />`.
 
@@ -85,9 +87,18 @@ flowchart TD
   - Réticule d'impact (pip dot) projeté à la distance exacte d'intersection avec les cibles.
   - Raycaster Three.js en boucle `useFrame` testant les intersections cibles.
   - Unprojection souris desktop intégrée (`_raycaster.setFromCamera`) pour viser et cliquer directement sur les boutons 3D sans casque.
+- **Menu au poignet (VS-T13) :** à l'entrée, aucun panneau flottant. Un petit bouton (Ø 4,4 cm, étiquette « Menu » / « Fermer »)
+  est porté sur le poignet gauche (joint `wrist` en suivi des mains, poignée gauche avec manettes ; sans entrée gauche
+  suivie, en bas à gauche de la vue). Le doigt de l'autre main, le laser, le pincement ou la souris l'ouvre / le ferme.
+  Le menu (bouton de scan, guide, HUD) apparaît à 0,9 m devant, 32 cm sous les yeux, dans le monde (règle Meta : menu
+  lancé _depuis_ le poignet, jamais accroché au poignet ; ≥ 0,8 m pour le rayon) et **suit la personne en différé**
+  (`wrist-menu.ts`, `updateLazyFollow`) : il reste immobile, puis se recentre en douceur si l'on tourne la tête
+  de plus de ~35° ou si l'on s'éloigne de plus de 35 cm. Fermé, le bouton pulse en orange à chaque nouvel événement.
+- **Source d'entrée unique :** `XRBlasterController` gère manettes, mains, doigt et souris. Les composants (bouton, cibles, HUD) n'ont plus de `onClick` R3F propre (un clic tirait deux fois).
+- **Visée sur la vidéo :** le rayon coupe l'écran webcam → point image $(u, v)$ → la plus petite boîte de détection qui le contient (une prise sur une table gagne sur la table). Hors de toute boîte : avant tout scan, le tir lance le scan puis transforme en 3D l'objet sous ce point ; après un scan, notification « Aucun objet détecté à cet endroit ».
 - **Action de tir :**
-  - Appui sur la gâchette ou geste de pincement pouce-index (_Index Pinch_) : trait laser rapide avec décharge de projectile vers le point d'impact.
-  - Flash blanc, onde de choc circulaire cyan, retours haptiques `hapticActuators.pulse()`.
+  - Un tir par appui : `selectstart` seulement (gâchette, ou pincement natif des mains). Le rayon des mains est celui du système (`getController(i)`), pas un rayon poignet → index ; plus de détection de pincement maison (elle doublait le tir).
+  - Flash blanc, onde de choc circulaire cyan, retour haptique `hapticActuators.pulse()` sur la manette qui a tiré.
   - Sons synthétisés procéduraux pour le tir et l'impact (`playLaserShootSound()`, `playTargetHitSound()`).
 
 #### Checklist Phase 3 :
@@ -107,17 +118,23 @@ flowchart TD
 
 - **Appel de génération :**
   - Génération de géométrie procédurale via `recipeMesh` / `silhouetteMesh` (`object-geometry.ts`) à l'échelle de la scène.
-- **Séquence d'apparition animée (Spawn Sequence) :**
-  - $0\text{s} \rightarrow 0.3\text{s}$ : Implosion de la cible filaire.
-  - $0.3\text{s} \rightarrow 0.8\text{s}$ : Matérialisation des arêtes d'encre verte/cyan.
-  - $0.8\text{s} \rightarrow 1.4\text{s}$ : Extrusion du volume plein avec rebond élastique (`spring scale`).
-  - $1.4\text{s}+$ : Textures PBR, ombres de contact au sol (`ContactShadows`), anneau d'aura d'énergie.
+- **Miniature 3D à portée de main (VS-T12) :**
+  - Le modèle sort de l'objet dans la vidéo et vole en 0,7 s jusqu'à un socle devant l'utilisateur
+    (`miniatureSlot` dans `xr-layout.ts` : ~0,55 m, sous les yeux, à droite puis à gauche, 6 par rangée).
+  - Miniature de 22 cm (plus grand côté, proportions gardées), anneau de socle cyan / vert si raccordée.
+  - Elle tourne seule (`turntable.ts`, ~12 s par tour) ; pas d'ombre de contact (cible de rendu en plus = FFR/MSAA cassés).
+- **Manipulation (spécs « grab » Meta : objet laissé en place, cinématique, un seul geste « select ») :**
+  - Gâchette, pincement ou clic **maintenu** sur la miniature → prise ; tourner / déplacer la manette ou la main
+    (ou glisser la souris) la fait tourner (lacet + inclinaison ≤ 60°) ; relâcher → elle reprend sa rotation après 1,5 s.
+  - **Tap** (relâché sans rotation, < 0,15 rad, en moins de 1,2 s) → raccorde / déconnecte l'appareil.
+  - Un pincement la main posée sur la miniature (origine du rayon dedans) la saisit aussi.
 
 #### Checklist Phase 4 :
 
 - [x] Composant `<SpawnedObject3D />` liant les recettes d'archetypes (`ObjectRecipe`).
 - [x] Séquence temporelle élastique de matérialisation in-situ.
-- [x] Anneau d'aura émissif à la base et ombres de contact au sol.
+- [x] Anneau d'aura émissif au socle (plus d'ombres de contact en XR).
+- [x] Miniature tournante à portée de main, saisie et rotation manette / main / souris, tap = raccorder.
 - [x] Maintien de l'ancrage spatial et interaction continue avec le blaster.
 - [x] Tests de rendu et de mise à l'échelle pour objets multiples.
 
@@ -182,7 +199,8 @@ flowchart TD
 ### Phase 8 : Écran Panoramique Studio à Focus Plat & Prévention du Vertige (Anti-Vertigo Planar Cinema Screen)
 
 - **Vision :** Afficher le décor d'atelier et la webcam sans déformation sphérique pour éliminer les nausées de mouvement et le conflit vestibulaire :
-  - **Focus central plat ($R = 11{,}5\text{ m}$) :** Courbure géante centrée à $4{,}2\text{ m}$ devant le regard. La flèche de courbure sur les $6\text{ m}$ centraux est $< 38\text{ cm}$, offrant une vue optiquement 100 % plane où les lignes horizontales ne sont pas déformées en œil de poisson.
+  - **Géométrie actuelle (`WEBCAM_SCREEN`, VS-T14) :** écran **plat** (`ImageSurface` : centre, axes droite/haut, largeur, hauteur), 4,2 m de haut (16:9), centre à 2,6 m devant, **bord bas posé au sol**. L'ancien écran courbe (rayon 8,5 m) déformait la vidéo en cylindre ; `screenHitFromRay` est maintenant une intersection rayon-plan. Le menu du poignet (bouton de scan, guide, HUD) s'ouvre sous la ligne des yeux à 0,9 m et la pastille caméra est à ~1 m (`xr-layout.ts`) : le centre de la vidéo reste dégagé.
+  - _Historique —_ **Focus central plat ($R = 11{,}5\text{ m}$) :** Courbure géante centrée à $4{,}2\text{ m}$ devant le regard. La flèche de courbure sur les $6\text{ m}$ centraux est $< 38\text{ cm}$, offrant une vue optiquement 100 % plane où les lignes horizontales ne sont pas déformées en œil de poisson.
   - **Grand angle panoramique étendu ($153^\circ$) :** Arc horizontal de $153^\circ$ (`thetaLength = Math.PI * 0.85`), permettant à l'utilisateur de tourner la tête librement de gauche à droite pour inspecter les cibles périphériques sans sentiment d'enfermement.
   - **Suppression du dôme sphérique 360° :** Remplacé par un mur architectural droit sombre (`name="studio-backdrop-wall"`, `<planeGeometry args={[26, 9]} />`) et un sol étendu stable (`circleGeometry args={[9, 48]}`), assurant un ancrage gravitationnel solide.
   - **Texture vidéo GPU directe & Fallback HD :** Utilise `THREE.VideoTexture` pour le flux matériel et fallback instantané sur `/samples/vision-room.jpg`.
@@ -201,16 +219,28 @@ flowchart TD
 
 ---
 
+### Phase 9 : Espace de test 360° navigable (VS-T14, émulateur et PC)
+
+- **Quand :** hors vrai casque (pas de session XR, ou émulateur IWER `isDevXREmulated()`), la webcam est remplacée par une visite de **6 pièces réelles** (photos équirectangulaires 4K, Poly Haven CC0, `public/tour/CREDITS.md`) : loft cuisine, hall, chambre, salle de bain, salon, séjour, reliées en boucle. Sur un vrai Quest, la webcam (écran plat) reste.
+- **Rendu :** sphère r = 9 m centrée sur l'œil (`TOUR_EYE` 1,6 m), shader équirect (`tour/equirect.ts`, lacet 0 = −Z, u croît vers la droite), dessinée en dernier sans écriture de profondeur : panneaux, étiquettes et cibles ne sont jamais coupés. Pièce courante + voisines chargées, les autres libérées.
+- **Dehors (VS-T15) :** par la fenêtre du hall (« Aller : Terrasse ») : terrasse avec champ de panneaux solaires, rue de maisons, façade de maison, jardin, allée d'arbres, forêt et sous-bois (7 lieux réels CC0, reliés en une promenade, `public/tour/outdoor/`). Maisons, voitures, arbres = décor (`kind: 'scenery'`, sans charge) ; panneaux solaires, lampadaire, applique = objets.
+- **Marcher pour de vrai (VS-T16) :** photo « posée au sol » (shader : sol à 1,6 m sous l'œil + mur à 4 m dedans, 14 m dehors) : en s'éloignant du point de prise de vue, le sol glisse sous les pieds et le proche bouge plus que le lointain (parallaxe ; la tête dans le casque aussi). Maintenir ↑ / W / Z (S recule, A / Q / D de côté, flèches clavier) ou le stick = marche continue à 1,4 m/s dans la direction du regard, dans un disque de 2,1 m (4 m dehors). Clavier sur PC : seulement pointeur sur la scène (sinon la page défile) ; Play Mode de l'émulateur (pointeur verrouillé) : l'émulateur déplace lui-même le casque. Marcher sur une flèche au sol (ou la viser et tirer/cliquer : on y marche) = traverser : l'ancienne photo continue d'avancer pendant que la suivante arrive de derrière (fondu enchaîné 0,75 s, pas de noir). On arrive dos à la porte d'où l'on vient. Confort : vitesse constante, vignette pendant la marche (plus forte dans un vrai casque), balancement de tête seulement hors vrai casque. Limites : les cadres de scan restent là où le scan les a posés (photo de scan prise depuis le point de prise de vue), et la photo s'étire si l'on va loin du point (d'où le disque).
+- **Regarder (PC sans session) :** glisser = tourner la tête (`OrbitControls`, pas de zoom/pan), boutons zoom = champ de vision 30–90°, clic sans glisser (≤ 6 px) = tir.
+- **Scanner :** bouton du menu (regard) ou tir direct sur la photo avant tout scan (`onShootOutside`) → photo 1280×720, 80° de champ, centrée sur la visée (`renderView`, projection gnomonique) ; les cibles sont posées sur un plan à 3 m dans cette direction (`surfaceFromView`). Un objet tiré avant le scan est résolu à la fin du scan.
+- **Vérité terrain hors ligne :** chaque pièce porte des objets délimités à la main sur la photo (`tour-data.ts`) ; `tourExpectedDetections` les projette dans la photo du scan et les envoie dans `expected` à `/api/vision` (mock seulement).
+- **Page web masquée en immersion émulée :** `markEmulatedImmersion` pose `data-xr-emulated` sur `<html>` ; `[data-app-root]` passe en `visibility: hidden` sauf le canvas. Le bouton « Quitter l'immersion VR » reste visible en haut à droite (`EmulatedXRExit`, porté sur `<body>` au-dessus de la couche plein écran d'IWER, z 999).
+- **Panneaux de l'émulateur :** l'overlay DevUI s'installe par `device.installDevUI(DevUI)` (pas `new DevUI(device)` : IWER ne monte alors jamais les panneaux Controller [L]/[R], Play Mode, gizmos). Installation unique partagée par les appels concurrents (effets React doublés en dev).
+
 ## 4. Modalités de contrôle & Interaction (Casque VR, Hand Tracking & Émulateur PC)
 
 Le système supporte 4 manières complètes d'interagir avec les boutons flottants dans les airs et les cibles 3D :
 
-| Plateforme / Équipement            | Représentation Visuelle                                        | Déplacement / Orientation                | Visée & Clic dans les Airs                                                            |
-| :--------------------------------- | :------------------------------------------------------------- | :--------------------------------------- | :------------------------------------------------------------------------------------ |
-| **Meta Quest (Manettes Touch)**    | Modèle 3D complet de manette Touch avec anneau et grip         | Suivi 6DoF dans l'espace physique        | Viser avec le laser cyan + presser la gâchette index (_Trigger_) ou bouton A/X        |
-| **Meta Quest (Hand Tracking)**     | Main 3D articulée 25 articulations (poignet, paume, phalanges) | Suivi optique direct des mains           | Pointer l'index (laser émis du doigt) + pincer pouce et index (**Index Pinch**)       |
-| **PC (Émulateur IWER DevUI)**      | Manette virtuelle 3D / Mains                                   | Touches `ZQSD` / `WASD` pour se déplacer | Maintenir `Alt` (manette droite) ou `Shift` (manette gauche) + Clic gauche / `Espace` |
-| **PC (Navigation Souris Directe)** | Pointeur souris standard                                       | Clic glissé pour tourner la vue          | Survol direct du bouton 3D + Clic gauche (détection unprojectée caméra)               |
+| Plateforme / Équipement            | Représentation Visuelle                                | Déplacement / Orientation                | Visée & Clic dans les Airs                                                              |
+| :--------------------------------- | :----------------------------------------------------- | :--------------------------------------- | :-------------------------------------------------------------------------------------- |
+| **Meta Quest (Manettes Touch)**    | Modèle 3D complet de manette Touch avec anneau et grip | Suivi 6DoF dans l'espace physique        | Viser avec le laser cyan + presser la gâchette index (_Trigger_) ou bouton A/X          |
+| **Meta Quest (Hand Tracking)**     | Main 3D articulée 25 articulations (sphères cyan)      | Suivi optique direct des mains           | Rayon système de la main + pincer pouce et index ; toucher le bouton du bout de l'index |
+| **PC (Émulateur IWER DevUI)**      | Manette virtuelle 3D / Mains                           | Touches `ZQSD` / `WASD` pour se déplacer | Maintenir `Alt` (manette droite) ou `Shift` (manette gauche) + Clic gauche / `Espace`   |
+| **PC (Navigation Souris Directe)** | Pointeur souris standard                               | Clic glissé pour tourner la vue          | Survol direct du bouton 3D + Clic gauche (détection unprojectée caméra)                 |
 
 ### Comment tester sur PC sans casque physique :
 
@@ -242,12 +272,17 @@ Le système supporte 4 manières complètes d'interagir avec les boutons flottan
 | `village-xr-studio.tsx`         | Scène d'atelier 3D, orchestration de session, gestion des objets et liaison `@mitsinjo/engine`.    | [x]  |
 | `spatial-air-button.tsx`        | Bouton 3D flottant avec pulsation lumineuse et texture interactive pour scanner.                   | [x]  |
 | `spatial-air-button-texture.ts` | Générateur de texture canvas 2D haute résolution pour le bouton de scan spatial.                   | [x]  |
+| `webcam-screen.ts`              | Géométrie de l'écran webcam : point 3D d'un pixel, pixel visé par un rayon, cible sous un pixel.   | [x]  |
+| `xr-layout.ts`                  | Positions des panneaux dans le casque (contenu du menu, pastille caméra, socles miniatures).       | [x]  |
+| `wrist-menu.ts`                 | Menu du poignet : état partagé, placement du bouton (main / manette / vue), suivi différé du menu. | [x]  |
+| `xr-wrist-menu.tsx`             | Bouton du poignet (icône + étiquette) et panneau du menu qui suit l'utilisateur.                   | [x]  |
 | `spatial-projection.ts`         | Algorithme de projection des boîtes 2D normalisées en coordonnées sphériques/arc 3D.               | [x]  |
 | `holo-detection-target.tsx`     | Cible holographique 3D réactive au tir, avec texture billboard et mode raccordement.               | [x]  |
 | `holo-target-texture.ts`        | Générateur de texture canvas pour les cibles de détection et statuts de raccordement réseau.       | [x]  |
 | `xr-blaster-controller.tsx`     | Rayon laser continu, réticule d'impact, raycast d'intersections et décharges de tir à la gâchette. | [x]  |
 | `xr-audio-fx.ts`                | Synthétiseur procédural Web Audio API (tir, impact, radar, connexion/déconnexion réseau).          | [x]  |
-| `spawned-object-3d.tsx`         | Rendu 3D de l'équipement matérialisé avec séquence d'extrusion élastique et aura d'énergie.        | [x]  |
+| `spawned-object-3d.tsx`         | Miniature 3D : vol depuis la vidéo vers son socle, rotation auto, agrandie au survol / en main.    | [x]  |
+| `turntable.ts`                  | État de rotation d'une miniature : rotation auto, prise, rotation, tap ou glissé au relâcher.      | [x]  |
 | `power-connection-beam.tsx`     | Conduit d'énergie 3D courbe en tube Catmull-Rom reliant l'appareil au microgrid du village.        | [x]  |
 | `village-spatial-hud.tsx`       | Tableau de bord télémétrique holographique flottant (Batterie, Solaire, Demande, Alertes).         | [x]  |
 | `spatial-hud-texture.ts`        | Générateur de texture canvas pour le tableau de bord holographique dans les airs.                  | [x]  |
@@ -256,6 +291,8 @@ Le système supporte 4 manières complètes d'interagir avec les boutons flottan
 ---
 
 ## 6. Vérifications et critères de succès
+
+Vérification automatique dans l'émulateur (serveur dev lancé, ffmpeg requis) : `make vr-probe` (webcam simulée = pièce d'exemple ; tir manette sur le frigo sans scan, raccordement, pincement main sur le ventilateur, manette gauche sur la TV ; captures dans `test-results/vr-probe/`). En dev, l'appareil IWER est exposé sur `window.__IWER_DEVICE__` (`remote.dispatch`, comme l'IWER MCP).
 
 - [x] `make dev-mock` permet d'entrer en VR sur `/village` via l'émulateur IWER sans erreur console.
 - [x] Le bouton 3D « Scanner la pièce » flotte dans le champ de vision et réagit au survol du curseur.

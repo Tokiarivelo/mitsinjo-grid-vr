@@ -1,69 +1,102 @@
 import type { ApplianceDetection } from '@/lib/vision';
+import { screenPoint, WEBCAM_SCREEN, type ImageSurface } from './webcam-screen';
+
+type Vec3 = [number, number, number];
 
 export interface SpatialTarget {
   id: string;
   detection: ApplianceDetection;
-  /** Center coordinates in 3D world space [x, y, z] */
-  position: [number, number, number];
-  /** Approximate bounding box dimensions [width, height, depth] in meters */
-  dimensions: [number, number, number];
-  /** Hit radius for raycasting / projectile collision */
+  /** Centre of the hologram frame, laid over the object as seen in the webcam video. */
+  position: Vec3;
+  /** Hologram frame size [width, height, depth] in metres. */
+  dimensions: Vec3;
+  /** Hit radius (m) around the frame centre. */
   hitRadius: number;
+  /** Where the 3D model pops out of the video, between the viewer and the screen. */
+  spawnPosition: Vec3;
+  /** Size of the popped-out 3D model [width, height, depth] in metres. */
+  spawnDimensions: Vec3;
 }
 
 export interface SpatialProjectionOptions {
-  /** Distance from the observer (radius of the viewing arc). Default: 2.2m */
-  radius?: number;
-  /** Horizontal angular field of view for distribution (in radians). Default: ~75 deg (1.3 rad) */
-  horizontalSpanRad?: number;
-  /** Minimum target elevation above ground (y). Default: 0.6m */
-  minY?: number;
-  /** Maximum target elevation above ground (y). Default: 1.8m */
-  maxY?: number;
+  /** Viewer eye position the frames are aligned for. Default: standing head [0, 1.6, 0]. */
+  eye?: Vec3;
+  /** Gap between the frame and the screen surface (m). Default: 0.25. */
+  frameOffset?: number;
+  /** Distance from the eye where the 3D model appears (m). Default: 1.6. */
+  spawnDistance?: number;
+  /** Largest side of a spawned model (m). Default: 0.9. */
+  maxSpawnSize?: number;
+  /** Surface the scanned image sits on: webcam wall, or a 360° tour scan plane. */
+  screen?: ImageSurface;
 }
 
+const round = (n: number) => Number(n.toFixed(3));
+
 /**
- * Projects 2D normalized detection boxes ({ x, y, w, h } in [0, 1])
- * into an ergonomic 3D arc array directly in front of the viewer facing -Z.
+ * Projects normalized detection boxes ({ x, y, w, h } in [0, 1] of the scanned webcam frame)
+ * onto the flat image surface (webcam wall or tour scan plane), so each hologram frame covers its object in the video
+ * from the viewer's eye, and the spawned 3D model pops out along the same line of sight.
  */
 export function projectDetectionsTo3D(
   detections: ApplianceDetection[],
   options: SpatialProjectionOptions = {}
 ): SpatialTarget[] {
-  const { radius = 2.2, horizontalSpanRad = 1.3, minY = 0.6, maxY = 1.8 } = options;
-
+  const {
+    eye = [0, 1.6, 0],
+    frameOffset = 0.25,
+    spawnDistance = 1.6,
+    maxSpawnSize = 0.9,
+    screen = WEBCAM_SCREEN,
+  } = options;
   if (!detections || detections.length === 0) return [];
 
+  const arcWidth = screen.width;
+
   return detections.map((det, index) => {
-    const { x: bx, y: by, w: bw, h: bh } = det.box;
-    const xCenter = THREE_CLAMP(bx + bw / 2, 0, 1);
-    const yCenter = THREE_CLAMP(by + bh / 2, 0, 1);
+    const { x, y, w, h } = det.box;
+    const u = clamp01(x + w / 2);
+    const v = clamp01(y + h / 2);
+    const onScreen = screenPoint(u, v, screen);
 
-    // If multiple items share similar centers, distribute them slightly to avoid overlap
-    const angleOffset = detections.length > 1 ? (xCenter - 0.5) * horizontalSpanRad : 0;
+    const dx = onScreen[0] - eye[0];
+    const dy = onScreen[1] - eye[1];
+    const dz = onScreen[2] - eye[2];
+    const dist = Math.hypot(dx, dy, dz);
+    const along = (d: number): Vec3 => [
+      eye[0] + (dx * d) / dist,
+      eye[1] + (dy * d) / dist,
+      eye[2] + (dz * d) / dist,
+    ];
 
-    const x = radius * Math.sin(angleOffset);
-    const z = -radius * Math.cos(angleOffset);
-    // Invert yCenter so top of image (by ~ 0) maps to higher elevation
-    const y = minY + (1 - yCenter) * (maxY - minY);
+    // Frame: same angular size as the object in the video, slightly in front of the screen.
+    const frameDist = Math.max(0.5, dist - frameOffset);
+    const frameScale = frameDist / dist;
+    const frameW = Math.max(0.12, w * arcWidth * frameScale);
+    const frameH = Math.max(0.12, h * screen.height * frameScale);
+    const frameD = Math.min(0.4, Math.max(0.1, Math.min(frameW, frameH) * 0.4));
 
-    // Estimate physical dimensions from 2D relative span
-    const spanX = Math.max(0.15, bw * 1.4);
-    const spanY = Math.max(0.15, bh * 1.4);
-    const spanZ = Math.min(0.8, Math.max(0.2, (spanX + spanY) / 2.5));
-
-    const hitRadius = Math.max(0.25, Math.hypot(spanX, spanY, spanZ) / 2);
+    // Spawned model: keeps the object's proportions, capped to a comfortable size.
+    const spawnScale = Math.min(spawnDistance, dist) / dist;
+    let sw = w * arcWidth * spawnScale;
+    let sh = h * screen.height * spawnScale;
+    const fit = Math.min(1, maxSpawnSize / Math.max(sw, sh, 1e-6));
+    sw = Math.max(0.15, sw * fit);
+    sh = Math.max(0.15, sh * fit);
+    const sd = Math.max(0.15, Math.min(sw, sh) * 0.8);
 
     return {
       id: det.id || `target-${index}`,
       detection: det,
-      position: [Number(x.toFixed(3)), Number(y.toFixed(3)), Number(z.toFixed(3))],
-      dimensions: [Number(spanX.toFixed(3)), Number(spanY.toFixed(3)), Number(spanZ.toFixed(3))],
-      hitRadius: Number(hitRadius.toFixed(3)),
+      position: along(frameDist).map(round) as Vec3,
+      dimensions: [round(frameW), round(frameH), round(frameD)],
+      hitRadius: round(Math.max(0.2, Math.hypot(frameW, frameH) / 2)),
+      spawnPosition: along(Math.min(spawnDistance, dist)).map(round) as Vec3,
+      spawnDimensions: [round(sw), round(sh), round(sd)],
     };
   });
 }
 
-function THREE_CLAMP(val: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, val));
+function clamp01(n: number): number {
+  return Math.max(0, Math.min(1, n));
 }

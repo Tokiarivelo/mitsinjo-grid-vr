@@ -128,17 +128,54 @@ export function createLaserRayModel(): THREE.Group {
  * Creates 25 articulated joint spheres for realistic hand tracking.
  */
 export function createHandMesh(): THREE.InstancedMesh {
-  const geo = new THREE.SphereGeometry(1, 10, 10);
+  // Unit sphere scaled per joint; 0.8 × joint radius keeps fingers distinct.
+  const geo = new THREE.SphereGeometry(0.8, 10, 10);
+  // Holographic cyan reads as "your hand" against both the video and the dark studio.
   const mat = new THREE.MeshStandardMaterial({
-    color: '#e2e8f0',
-    roughness: 0.35,
-    metalness: 0.2,
+    color: '#7dd3fc',
+    emissive: '#0ea5e9',
+    emissiveIntensity: 0.35,
+    roughness: 0.4,
+    metalness: 0.1,
+    transparent: true,
+    opacity: 0.9,
   });
   const mesh = new THREE.InstancedMesh(geo, mat, HAND_JOINTS.length);
   mesh.frustumCulled = false;
   mesh.castShadow = true;
   mesh.name = 'hand-joints-mesh';
   return mesh;
+}
+
+const _handMatrix = new THREE.Matrix4();
+const _handScale = new THREE.Vector3();
+const DEFAULT_JOINT_RADIUS = 0.009;
+
+type HandGroup = THREE.Group & {
+  joints?: Record<string, THREE.Group & { jointRadius?: number }>;
+};
+
+/**
+ * Copies the tracked joints of one XR hand into its instanced sphere mesh.
+ * Visible joints are packed from index 0, so a missing joint never leaves a stale
+ * (identity, 1 m) instance on screen. Returns how many joints are tracked.
+ */
+export function updateHandMesh(group: HandGroup, mesh: THREE.InstancedMesh): number {
+  const joints = group.joints;
+  let count = 0;
+  if (joints) {
+    for (const name of HAND_JOINTS) {
+      const joint = joints[name];
+      if (!joint || !joint.visible) continue;
+      _handScale.setScalar(joint.jointRadius || DEFAULT_JOINT_RADIUS);
+      _handMatrix.compose(joint.position, joint.quaternion, _handScale);
+      mesh.setMatrixAt(count++, _handMatrix);
+    }
+  }
+  mesh.count = count;
+  mesh.visible = count > 0;
+  if (count > 0) mesh.instanceMatrix.needsUpdate = true;
+  return count;
 }
 
 interface HandData {
@@ -174,8 +211,6 @@ export function setupXRHandsAndControllers(
   const hands: HandData[] = [];
   const modelRefs: ModelRef[] = [];
   const selectListeners: Array<{ controller: THREE.XRTargetRaySpace; listener: () => void }> = [];
-  const matrixTmp = new THREE.Matrix4();
-  const scaleTmp = new THREE.Vector3();
 
   for (let i = 0; i < 2; i++) {
     // 1. Hands (Joint tracking)
@@ -258,31 +293,7 @@ export function setupXRHandsAndControllers(
   }
 
   const update = () => {
-    for (const h of hands) {
-      const joints = h.group.joints;
-      if (!joints || Object.keys(joints).length === 0) {
-        h.mesh.visible = false;
-        continue;
-      }
-      let activeCount = 0;
-      const defaultRadius = 0.009;
-      for (let j = 0; j < HAND_JOINTS.length; j++) {
-        const name = HAND_JOINTS[j];
-        if (!name) continue;
-        const joint = joints[name];
-        if (joint && joint.visible) {
-          scaleTmp.setScalar(joint.jointRadius || defaultRadius);
-          matrixTmp.compose(joint.position, joint.quaternion, scaleTmp);
-          h.mesh.setMatrixAt(j, matrixTmp);
-          activeCount++;
-        }
-      }
-      h.mesh.count = activeCount;
-      h.mesh.visible = activeCount > 0;
-      if (activeCount > 0) {
-        h.mesh.instanceMatrix.needsUpdate = true;
-      }
-    }
+    for (const h of hands) updateHandMesh(h.group, h.mesh);
   };
 
   const dispose = () => {

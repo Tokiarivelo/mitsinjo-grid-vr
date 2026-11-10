@@ -138,6 +138,16 @@
 - [x] Tests unitaires Vitest pour le backdrop webcam et la gestion du flux.
 - [x] **Done when :** En immersion VR, la webcam affiche le flux vidéo en direct devant l'utilisateur, l'espace 360° est entouré d'une atmosphère studio sans aucun vide noir, et le scan s'effectue directement sur l'image vue.
 
+### VS-T11 : Tir direct sur les objets de la vidéo webcam (alignement, entrées, confort)
+
+- [x] Géométrie partagée de l'écran webcam (`webcam-screen.ts`) : bord bas au sol, point 3D d'un pixel, pixel visé par un rayon.
+- [x] Cibles posées sur l'objet vu dans la vidéo ; modèle 3D qui sort de l'image vers l'utilisateur (≤ 0,9 m).
+- [x] Tir sur la vidéo sans scan préalable → scan → l'objet sous le tir devient 3D (un seul geste).
+- [x] Une seule source d'entrée (`XRBlasterController`) : `selectstart` seulement, pincement natif des mains, plus de double tir souris / gâchette / pincement.
+- [x] Panneaux sous la ligne des yeux à ~1 m (`xr-layout.ts`) ; mains en sphères cyan, index compactés (`updateHandMesh`).
+- [x] `make vr-probe` : vérification dans l'émulateur IWER (manettes + mains + webcam simulée).
+- [x] **Done when :** dans l'émulateur, viser le frigo de la vidéo et tirer le transforme en 3D ; un 2ᵉ tir le raccorde ; pincement main et manette gauche fonctionnent.
+
 ---
 
 ## Exit criteria
@@ -150,3 +160,44 @@
 - [x] Tirer sur un modèle 3D matérialisé le raccorde ou le déconnecte du microgrid avec câble d'énergie 3D dynamique.
 - [x] Quitter la session VR restaure proprement la page 2D sans fuite de contexte WebGL ni erreur console.
 - [x] `make check-i18n` passe à 100 % et les tests unitaires sont verts.
+
+### VS-T12 : Miniature 3D tournante et manipulable devant l'utilisateur
+
+- [x] Le modèle tiré vole de la vidéo vers un socle à ~0,55 m, sous les yeux (`miniatureSlot`), en miniature de 22 cm.
+- [x] Rotation automatique (`turntable.ts`), arrêtée en main et 1,5 s après le relâcher.
+- [x] Saisie au select maintenu (gâchette, pincement, clic) ; mouvement de la manette / main / souris → rotation.
+- [x] Tap sur la miniature = raccorder / déconnecter ; `make vr-probe` raccorde le frigo par sa miniature.
+- [x] **Done when :** dans l'émulateur, frigo, ventilateur et TV deviennent des miniatures devant soi qui tournent ; tap sur le frigo le raccorde.
+
+### VS-T13 : Menu au poignet (boutons flottants masqués à l'entrée)
+
+- [x] Aucun panneau flottant à l'entrée ; petit bouton sur le poignet gauche (main : joint `wrist`, manette : poignée gauche, sinon bas-gauche de la vue).
+- [x] Doigt de l'autre main, laser, pincement ou souris sur le bouton → ouvre / ferme le menu (bouton de scan, guide, HUD).
+- [x] Menu dans le monde à 0,9 m, sous les yeux, suivi différé (recentrage après ~35° de rotation ou 35 cm de déplacement).
+- [x] Bouton de scan inactif menu fermé ; bouton qui pulse quand un événement arrive menu fermé.
+- [x] **Done when :** `make vr-probe` → 8 PASS (menu fermé à l'entrée, ouvert puis fermé depuis le poignet, sans scan).
+
+### VS-T14 : Espace de test 360° navigable (photos réelles, hors vrai casque)
+
+- [x] Écran webcam plat (`ImageSurface`) au lieu de l'écran cylindrique ; étiquettes jamais coupées.
+- [x] Émulateur / PC : 6 pièces réelles en 360° (`tour/`), flèches au sol, ↑/W/Z, stick, fondu entre pièces.
+- [x] Scan = photo de la vue centrée sur la visée ; tir direct sur la photo ; vérité terrain mock (`expected`).
+- [x] Page web masquée pendant l'immersion émulée (`data-xr-emulated`).
+- [x] **Done when :** `make vr-probe` → 11 PASS (loft, scan du frigo, flèche → hall, ↑ → séjour) ; « MARRY » lisible à l'endroit.
+- [ ] Vérifier sur un vrai Quest que la webcam plate garde le tir aligné.
+
+### VS-T15 : Espace extérieur (maisons, arbres, forêt) & contrôles de l'émulateur
+
+- [x] 7 lieux extérieurs réels CC0 reliés depuis la fenêtre du hall : terrasse (panneaux solaires), rue, maison, jardin, allée d'arbres, forêt, sous-bois.
+- [x] Vérité terrain : maisons, voitures, arbres en décor (`scenery`) ; panneaux solaires, lampadaire, applique en objets.
+- [x] Panneaux IWER DevUI de retour (`installDevUI`) ; bouton « Quitter l'immersion VR » visible pendant la session émulée.
+- [x] **Done when :** `make vr-probe` → 14 PASS (promenade terrasse → forêt, DevUI monté, bouton de sortie présent).
+
+### VS-T16 : Marcher pour de vrai dans l'espace 360°
+
+- [x] Photo posée au sol (sol + mur, parallaxe) : marche continue clavier (↑/W/Z, S, A/Q/D) et stick, dans un disque autour du point de prise de vue.
+- [x] Marcher sur une flèche (ou tirer dessus = y marcher) → traversée en fondu enchaîné vers le lieu suivant, sans écran noir.
+- [x] Confort : vitesse constante, vignette en marche, pas de balancement de tête dans un vrai casque.
+- [x] Extension « Immersive Web Emulator » reconnue comme émulateur (visite 360° au lieu de la webcam).
+- [x] **Done when :** `make vr-probe` → 15 PASS (↑ maintenu : la flèche se rapproche puis séjour).
+- [ ] Vrai Quest : confort de la marche continue (vignette), réglage du mur par pièce si la parallaxe paraît fausse.

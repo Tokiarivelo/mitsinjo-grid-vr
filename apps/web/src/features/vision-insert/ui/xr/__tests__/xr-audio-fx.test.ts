@@ -9,8 +9,9 @@ import {
 } from '../xr-audio-fx';
 
 describe('XR Audio FX', () => {
-  let fakeContext: any;
-  let originalAudioContext: any;
+  let fakeContext: { createOscillator: ReturnType<typeof vi.fn> } & Record<string, unknown>;
+  let originalAudioContext: unknown;
+  const g = globalThis as unknown as { AudioContext?: unknown };
 
   beforeEach(() => {
     _resetAudioContextForTesting();
@@ -38,12 +39,12 @@ describe('XR Audio FX', () => {
       resume: vi.fn(),
     };
 
-    originalAudioContext = (globalThis as any).AudioContext;
-    (globalThis as any).AudioContext = vi.fn(() => fakeContext);
+    originalAudioContext = g.AudioContext;
+    g.AudioContext = vi.fn(() => fakeContext);
   });
 
   afterEach(() => {
-    (globalThis as any).AudioContext = originalAudioContext;
+    g.AudioContext = originalAudioContext;
   });
 
   it('plays laser blaster shoot sound without error', () => {

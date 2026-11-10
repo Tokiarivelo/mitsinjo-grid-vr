@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three';
-import { HAND_JOINTS, setupXRHandsAndControllers } from '../xr-hands';
+import {
+  createHandMesh,
+  HAND_JOINTS,
+  setupXRHandsAndControllers,
+  updateHandMesh,
+} from '../xr-hands';
 
 describe('setupXRHandsAndControllers', () => {
   it('immediately attaches hand, controller ray, and grip objects to the rig and cleans up on dispose', () => {
@@ -143,5 +148,44 @@ describe('setupXRHandsAndControllers', () => {
 
     consoleErrorSpy.mockRestore();
     handle.dispose();
+  });
+});
+
+describe('updateHandMesh', () => {
+  it('packs tracked joints from index 0 so a missing joint leaves no stale instance', () => {
+    // Regression: joints were written at their joint index while count = tracked joints,
+    // so one untracked joint drew a 1 m identity sphere and dropped the pinky tip.
+    const hand = new THREE.Group() as THREE.Group & {
+      joints?: Record<string, THREE.Group & { jointRadius?: number }>;
+    };
+    hand.joints = {};
+    HAND_JOINTS.forEach((name, i) => {
+      if (name === 'wrist') return; // untracked this frame
+      const j = Object.assign(new THREE.Group(), { jointRadius: 0.01 });
+      j.position.set(i * 0.01, 1.2, -0.3);
+      hand.joints![name] = j;
+    });
+    const mesh = createHandMesh();
+
+    expect(updateHandMesh(hand, mesh)).toBe(HAND_JOINTS.length - 1);
+    expect(mesh.count).toBe(HAND_JOINTS.length - 1);
+    const m = new THREE.Matrix4();
+    const p = new THREE.Vector3();
+    const q = new THREE.Quaternion();
+    const s = new THREE.Vector3();
+    mesh.getMatrixAt(0, m);
+    m.decompose(p, q, s);
+    expect(p.x).toBeCloseTo(0.01); // thumb-metacarpal, not the missing wrist
+    expect(s.x).toBeCloseTo(0.01);
+    mesh.getMatrixAt(mesh.count - 1, m);
+    m.decompose(p, q, s);
+    expect(p.x).toBeCloseTo((HAND_JOINTS.length - 1) * 0.01); // pinky tip kept
+  });
+
+  it('hides the mesh when no joint is tracked', () => {
+    const hand = Object.assign(new THREE.Group(), { joints: {} });
+    const mesh = createHandMesh();
+    expect(updateHandMesh(hand, mesh)).toBe(0);
+    expect(mesh.visible).toBe(false);
   });
 });

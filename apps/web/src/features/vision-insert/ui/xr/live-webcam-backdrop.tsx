@@ -5,16 +5,14 @@ import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
 import { useTranslations } from '@/lib/i18n';
 import { CameraUtils, XRCameraSource, type CameraState } from './xr-camera-source';
+import { LIVE_PILL_POSITION } from './xr-layout';
+import { WEBCAM_SCREEN, type ImageSurface } from './webcam-screen';
 
 export interface LiveWebcamBackdropProps {
   /** Optional callback to register the frame capture function with the parent scene. */
   onRegisterCapture?: (captureFn: () => string | null) => void;
-  /** Radius of curvature in meters. Default: 11.5m for gentle planar central focus (eliminates spherical vertigo). */
-  radius?: number;
-  /** Height of the screen in meters. Default: 6.8m for comfortable vertical view without overhead wrap. */
-  height?: number;
-  /** Distance in meters in front of the viewer for the center of the planar screen. Default: 4.2m. */
-  distance?: number;
+  /** Screen geometry; shared with target projection and blaster raycast. */
+  screen?: ImageSurface;
 }
 
 const SAMPLE_ROOM_SRC = '/samples/vision-room.jpg';
@@ -23,15 +21,13 @@ const SAMPLE_ROOM_SRC = '/samples/vision-room.jpg';
  * Meta IWSDK-aligned Live Camera & Studio Surroundings (Chapter 13: Camera Access).
  * Displays studio background across an expansive planar panoramic screen:
  * - Planar Central Focus: Flat, natural perspective in front of the operator (zero spherical distortion or vertigo).
- * - Wide Horizontal Angle: Spans 150° left-to-right, allowing natural head turns with full peripheral context.
+ * - Wide Horizontal Angle: ~125° seen from the viewer, bottom edge on the floor (WEBCAM_SCREEN).
  * - Flat Architectural Horizon: Eliminates disorienting 360° domes to prevent vestibular mismatch.
  * - Zero GPU texture flood: Static HD studio panorama loaded once; webcam frames captured on-demand for AI.
  */
 export const LiveWebcamBackdrop = memo(function LiveWebcamBackdrop({
   onRegisterCapture,
-  radius = 8.5,
-  height = 5.6,
-  distance = 2.6,
+  screen = WEBCAM_SCREEN,
 }: LiveWebcamBackdropProps) {
   const t = useTranslations('features.visionInsert');
 
@@ -177,30 +173,15 @@ export const LiveWebcamBackdrop = memo(function LiveWebcamBackdrop({
     };
   }, [isLive, cameraState, pillText]);
 
-  // Calculate immersive zoomed cinema arc with true 16:9 video aspect ratio:
-  // With height = 5.6m and radius = 8.5m at distance = 2.6m, arc width = 5.6 * (16/9) = 9.95m (thetaLength ~ 1.17 rad / 67°).
-  // At distance 2.6m, this subtends ~125° of direct horizontal FOV and 94° vertical, filling the user's view
-  // with a large, crisp, zoomed-in cinema display having natural 16:9 proportions and flat central focus (sagitta < 24cm).
-  const thetaLength = (height * (16 / 9)) / radius;
-  const thetaStart = Math.PI - thetaLength / 2;
-  const cylinderCenterZ = radius - distance;
+  // Flat 16:9 wall, bottom edge on the floor: detections map back to it 1:1
+  // (webcam-screen.ts), so a shot at an object in the video lands on that object.
+  const { center, width, height } = screen;
 
   return (
     <group name="live-webcam-backdrop-root">
-      {/* 1. Zoomed-In Planar Panoramic Cinema Screen (Flat central focus, wide horizontal span, unmirrored interior projection) */}
-      <mesh position={[0, 1.5, cylinderCenterZ]} scale={[-1, 1, 1]} name="curved-webcam-screen">
-        <cylinderGeometry
-          args={[
-            radius,
-            radius,
-            height,
-            64,
-            1,
-            true, // open ended
-            thetaStart,
-            thetaLength,
-          ]}
-        />
+      {/* 1. Flat webcam wall (a cylinder bent the image: straight lines curved) */}
+      <mesh position={center} name="webcam-screen">
+        <planeGeometry args={[width, height]} />
         <meshBasicMaterial
           ref={screenMaterialRef}
           map={activeTexture}
@@ -210,7 +191,7 @@ export const LiveWebcamBackdrop = memo(function LiveWebcamBackdrop({
       </mesh>
 
       {/* 2. Flat Architectural Backdrop Wall (Eliminates vertigo-inducing 360° spherical dome) */}
-      <mesh position={[0, 1.5, -distance - 0.3]} name="studio-backdrop-wall">
+      <mesh position={[0, center[1], center[2] - 0.3]} name="studio-backdrop-wall">
         <planeGeometry args={[26, 12]} />
         <meshBasicMaterial color="#081022" side={THREE.DoubleSide} toneMapped={false} />
       </mesh>
@@ -237,9 +218,9 @@ export const LiveWebcamBackdrop = memo(function LiveWebcamBackdrop({
         <meshBasicMaterial color="#0284c7" transparent opacity={0.15} side={THREE.DoubleSide} />
       </mesh>
 
-      {/* 5. Live Camera Status Pill in front of the operator */}
+      {/* 5. Live Camera Status Pill, beside the scan button so it never covers the video */}
       {pillTexture && (
-        <group position={[0, 2.35, -1.8]}>
+        <group position={LIVE_PILL_POSITION} rotation={[0, -0.45, 0]}>
           <mesh>
             <planeGeometry args={[0.7, 0.12]} />
             <meshBasicMaterial

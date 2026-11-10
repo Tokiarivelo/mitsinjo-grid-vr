@@ -14,6 +14,7 @@ import {
 } from '../utils/weather-atmosphere';
 import { mulberry32 } from '../utils/noise';
 import { useAmbientFrame } from '../hooks/use-ambient-frame';
+import { setUniformValue } from '../utils/uniforms';
 
 export interface WeatherEffectsProps {
   weather: WeatherId;
@@ -271,9 +272,9 @@ function CloudLayer({
     []
   );
 
-  if (cloudUniformsRef) {
-    cloudUniformsRef.current = uniforms;
-  }
+  useLayoutEffect(() => {
+    if (cloudUniformsRef) cloudUniformsRef.current = uniforms;
+  }, [cloudUniformsRef, uniforms]);
 
   useLayoutEffect(() => {
     if (sunDirection) {
@@ -294,7 +295,7 @@ function CloudLayer({
     }
     uniforms.uCloudBase.value.set(WEATHER_HEX.cloudLight);
     uniforms.uCloudShadow.value.set(WEATHER_HEX.cloudShadow);
-    uniforms.uDarkness.value = darkness;
+    setUniformValue(uniforms.uDarkness, darkness);
     invalidate();
   }, [uniforms, palette, sunDirection, isDaytime, darkness, invalidate]);
 
@@ -327,7 +328,7 @@ function CloudLayer({
       groupRef.current.position.x = Math.sin(state.clock.elapsedTime * 0.18) * 1.2;
     }
     if (hasLightning) {
-      uniforms.uLightning.value = lightningFlash(state.clock.elapsedTime);
+      setUniformValue(uniforms.uLightning, lightningFlash(state.clock.elapsedTime));
     }
     requestFrame();
   });
@@ -394,8 +395,7 @@ void main() {
 }`;
 
 function setUniform(material: THREE.ShaderMaterial, name: string, value: number) {
-  const u = material.uniforms[name];
-  if (u) u.value = value;
+  setUniformValue(material.uniforms[name], value);
 }
 
 /** GPU-animated rain streaks: one draw call, only a time uniform changes per frame. */

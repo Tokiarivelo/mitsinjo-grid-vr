@@ -15,28 +15,28 @@ export interface HoloDetectionTargetProps {
   hovered: boolean;
   isMaterialized: boolean;
   isConnected?: boolean;
-  onHoverChange: (id: string, isHovered: boolean) => void;
-  onShootTarget: (id: string) => void;
 }
 
 /**
- * 3D Holographic Detection Target Box with floating Billboard tag and hit cylinder.
- * Changes glow on hover / lock-on; triggers shooting impact on trigger pull or click.
+ * 3D Holographic Detection Target Box with a floating Billboard tag.
+ * Laid over its object in the webcam video. Hover and shots come from XRBlasterController,
+ * which picks the target from the image point the laser hits (no collider of its own).
  */
 export const HoloDetectionTarget = memo(function HoloDetectionTarget({
   target,
   hovered,
   isMaterialized,
   isConnected = false,
-  onHoverChange,
-  onShootTarget,
 }: HoloDetectionTargetProps) {
   const { locale } = useAppLocale();
   const t = useTranslations('features.visionInsert');
   const groupRef = useRef<THREE.Group>(null);
   const ringRef = useRef<THREE.Mesh>(null);
 
-  const { detection, position, dimensions, hitRadius, id } = target;
+  const { detection, position, dimensions, id } = target;
+  // Lock ring sized to the frame, label grown with distance so it reads the same at 1 m or 3 m.
+  const ringRadius = Math.min(dimensions[0], dimensions[1]) * 0.35;
+  const labelScale = Math.max(1, Math.hypot(position[0], position[1] - 1.6, position[2]) / 1.6);
 
   const catalogWatts = useMemo(() => {
     const cat = (detection.category ?? 'other') as ApplianceCategory;
@@ -94,29 +94,6 @@ export const HoloDetectionTarget = memo(function HoloDetectionTarget({
 
   return (
     <group ref={groupRef} position={position} name={`holo-target-${id}`}>
-      {/* Interactive Click & Raycast Collider (Active before and after materialization) */}
-      <mesh
-        userData={{
-          onSelect: () => onShootTarget(id),
-          onClick: () => onShootTarget(id),
-        }}
-        onPointerOver={(e) => {
-          e.stopPropagation();
-          onHoverChange(id, true);
-        }}
-        onPointerOut={(e) => {
-          e.stopPropagation();
-          onHoverChange(id, false);
-        }}
-        onClick={(e) => {
-          e.stopPropagation();
-          onShootTarget(id);
-        }}
-      >
-        <sphereGeometry args={[hitRadius * 1.35, 12, 12]} />
-        <meshBasicMaterial transparent opacity={0.001} depthWrite={false} />
-      </mesh>
-
       {/* Hologram Box Wireframe (visible prior to materialization) */}
       {!isMaterialized && (
         <group>
@@ -132,7 +109,7 @@ export const HoloDetectionTarget = memo(function HoloDetectionTarget({
 
           {/* Pulsing Target Lock Ring in the center */}
           <mesh ref={ringRef} position={[0, 0, 0]}>
-            <torusGeometry args={[hitRadius * 0.7, 0.005, 8, 24]} />
+            <torusGeometry args={[ringRadius, 0.006 * labelScale, 8, 24]} />
             <meshBasicMaterial color={accentColor} transparent opacity={hovered ? 0.9 : 0.5} />
           </mesh>
 
@@ -152,7 +129,8 @@ export const HoloDetectionTarget = memo(function HoloDetectionTarget({
 
       {/* 3D Facing Billboard Information Tag (Hovering above the target) */}
       <Billboard
-        position={[0, dimensions[1] / 2 + 0.22, 0]}
+        position={[0, dimensions[1] / 2 + 0.22 * labelScale, 0]}
+        scale={labelScale}
         follow
         lockX={false}
         lockY={false}

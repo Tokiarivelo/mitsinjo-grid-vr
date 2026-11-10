@@ -1,3 +1,4 @@
+import type { ApplianceDetection } from '@/lib/vision';
 import type { VisionImage } from '@/server/storage/media';
 import type { PerceptionClient } from './client';
 import { refineDetections } from './outline';
@@ -49,4 +50,25 @@ export async function runVisionPipeline(
     console.warn('[vision] pipeline failed:', err instanceof Error ? err.message : err);
     emit('vision_error', { code: 'VISION_FAILED', message: 'Appliance detection failed' });
   }
+}
+
+type Detector = Pick<PerceptionClient, 'detectAppliances' | 'segmentImage'>;
+
+/**
+ * Mock answers + 360° test tour (VS-T14): the client sends the hand-labelled objects in view
+ * (`expected`); a mock answer (mock mode or Meta fallback) returns them instead of the sample-room
+ * fixture, so offline boxes land on the real objects. Meta answers are never touched.
+ */
+export function withExpectedDetections<P extends Detector>(
+  perception: P,
+  expected: ApplianceDetection[] | undefined
+): Detector {
+  if (!expected) return perception;
+  return {
+    segmentImage: (...args) => perception.segmentImage(...args),
+    detectAppliances: async (...args) => {
+      const found = await perception.detectAppliances(...args);
+      return found.source === 'mock' ? { ...found, detections: expected } : found;
+    },
+  };
 }

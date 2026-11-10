@@ -6,721 +6,727 @@ import { useFrame, useThree } from '@react-three/fiber';
 import {
   createControllerGripModel,
   createHandMesh,
-  HAND_JOINTS,
+  updateHandMesh,
 } from '@/features/microgrid-3d/utils/xr-hands';
 import type { SpatialTarget } from './spatial-projection';
+import {
+  pickTargetAtUv,
+  screenHitFromRay,
+  WEBCAM_SCREEN,
+  type ImageSurface,
+} from './webcam-screen';
+import { AIR_BUTTON_RADIUS, AIR_BUTTON_TOUCH_RADIUS, MINIATURE_GRAB_RADIUS } from './xr-layout';
+import {
+  WRIST_BUTTON_ID,
+  WRIST_RAY_RADIUS,
+  WRIST_TOUCH_RADIUS,
+  type WristMenu,
+} from './wrist-menu';
 import { playLaserShootSound, playScanRadarSound, playTargetHitSound } from './xr-audio-fx';
+import { grabTurntable, releaseTurntable, rotateTurntable, type Turntable } from './turntable';
+
+export const AIR_BUTTON_ID = 'spatial-air-button';
+
+/** A 3D miniature the viewer can hold and rotate. */
+export interface MiniatureHandle {
+  id: string;
+  position: [number, number, number];
+  turntable: Turntable;
+}
 
 export interface XRBlasterControllerProps {
   targets: SpatialTarget[];
-  materializedIds: Set<string>;
-  connectedIds: Set<string>;
+  /** Wrist menu: its wrist button toggles it; the scan button is live only while it is open. */
+  menu: WristMenu;
+  /** Miniatures in reach: a held select rotates them, a quick tap calls `onTapMiniature`. */
+  miniatures?: MiniatureHandle[];
+  onTapMiniature?: (id: string) => void;
   onHoverTarget: (id: string | null) => void;
+  /** A detection was hit (its box contains the image point under the laser). */
   onShootTarget: (id: string) => void;
   onTriggerScan?: () => void;
+  /** The webcam video was hit outside every detection box, at image coords (u, v). */
+  onShootScreen?: (u: number, v: number) => void;
+  /** Where the scanned image sits (webcam wall, or a 360° tour scan photo); null = none yet. */
+  surface?: ImageSurface | null;
+  /** Floor arrows of the 360° tour: a shot on one calls `onHotspot(id)`. */
+  hotspots?: readonly Hotspot[];
+  onHotspot?: (id: string) => void;
+  /** A shot that hit nothing (no surface, panel or arrow): 360° tour scans that direction. */
+  onShootOutside?: (origin: THREE.Vector3, direction: THREE.Vector3) => void;
 }
 
-// Module-level reusable singletons to eliminate all heap allocations at 90 FPS
+export interface Hotspot {
+  id: string;
+  position: [number, number, number];
+}
+
+/** Pick radius around a floor arrow (m). */
+const HOTSPOT_RADIUS = 0.38;
+
+type AimKind = 'wrist' | 'miniature' | 'button' | 'hotspot' | 'target' | 'screen' | 'none';
+interface Aim {
+  kind: AimKind;
+  id: string | null;
+  u: number;
+  v: number;
+  miniature?: MiniatureHandle;
+}
+
+type InputKey = 0 | 1 | 'mouse';
+/** One input holding a miniature: last pointer pose, to turn its motion into rotation. */
+interface Grab {
+  miniature: MiniatureHandle;
+  yaw: number;
+  pitch: number;
+  x: number;
+  y: number;
+}
+
+// Module-level scratch objects: no allocation in the frame loop.
 const _raycaster = new THREE.Raycaster();
 const _tempMatrix = new THREE.Matrix4();
 const _vOrigin = new THREE.Vector3();
 const _vDirection = new THREE.Vector3();
-const _vHitEndpoint = new THREE.Vector3();
-const _vTargetPos = new THREE.Vector3();
+const _vEnd = new THREE.Vector3();
+const _vTip = new THREE.Vector3();
 const _vCurPos = new THREE.Vector3();
+const _mouse = new THREE.Vector2();
 const _FORWARD = new THREE.Vector3(0, 0, -1);
-const _mouseVec = new THREE.Vector2();
+const BEAM_LENGTH = 3;
+const TOUCH_COOLDOWN_MS = 750;
+/** Mouse travel (px) under which a press + release is a click, not a drag. */
+const CLICK_SLOP_PX = 6;
 
-const _vTipPos = new THREE.Vector3();
-const _vThumbPos = new THREE.Vector3();
-const _vWristPos = new THREE.Vector3();
-const _vHandRayDir = new THREE.Vector3();
-const _vCtrlPos = new THREE.Vector3();
+const BEAM_IDLE = '#38bdf8';
+const BEAM_WRIST = '#e9d5ff';
+const BEAM_HOTSPOT = '#a5f3fc';
+const BEAM_BUTTON = '#c084fc';
+const BEAM_TARGET = '#f59e0b';
+const BEAM_SCREEN = '#7dd3fc';
+const BEAM_MINIATURE = '#4ade80';
+/** Rotation per radian of pointer turn, and per metre of hand move (direct pinch). */
+const RAY_GAIN = 3;
+const MOVE_GAIN = 9;
+/** Rotation per pixel of mouse drag. */
+const MOUSE_GAIN = 0.012;
 
-const AIR_BUTTON_ID = 'spatial-air-button';
-const AIR_BUTTON_POS = new THREE.Vector3(0, 1.45, -1.2);
-const AIR_BUTTON_RADIUS = 0.55;
-const DIRECT_TOUCH_RADIUS = 0.22;
+/** Horizontal / vertical angle of a ray direction. */
+const yawOf = (d: THREE.Vector3) => Math.atan2(d.x, -d.z);
+const pitchOf = (d: THREE.Vector3) => Math.asin(Math.max(-1, Math.min(1, d.y)));
+const wrapPi = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
+
+function createDot(radius: number, color: string): THREE.Mesh {
+  const mesh = new THREE.Mesh(
+    new THREE.SphereGeometry(radius, 12, 12),
+    new THREE.MeshBasicMaterial({ color })
+  );
+  mesh.visible = false;
+  return mesh;
+}
+
+function createImpactRing(): THREE.Mesh {
+  const mesh = new THREE.Mesh(
+    new THREE.RingGeometry(0.05, 0.28, 24),
+    new THREE.MeshBasicMaterial({
+      color: BEAM_TARGET,
+      transparent: true,
+      opacity: 1,
+      side: THREE.DoubleSide,
+    })
+  );
+  mesh.visible = false;
+  return mesh;
+}
 
 function createPointerLine(): THREE.Line {
   const geo = new THREE.BufferGeometry();
-  const positions = new Float32Array([0, 0, 0, 0, 0, -2.5]);
-  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-  const mat = new THREE.LineBasicMaterial({
-    color: '#38bdf8',
-    transparent: true,
-    opacity: 0.65,
-  });
+  geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
+  const mat = new THREE.LineBasicMaterial({ color: BEAM_IDLE, transparent: true, opacity: 0.65 });
   const line = new THREE.Line(geo, mat);
   line.visible = false;
+  line.frustumCulled = false;
   return line;
 }
 
+/** Ray origin + direction of an XR target-ray space (controller or hand pointer). */
+function rayFrom(space: THREE.Object3D, origin: THREE.Vector3, direction: THREE.Vector3) {
+  space.updateMatrixWorld(true);
+  _tempMatrix.identity().extractRotation(space.matrixWorld);
+  origin.setFromMatrixPosition(space.matrixWorld);
+  direction.copy(_FORWARD).applyMatrix4(_tempMatrix).normalize();
+}
+
+/** Nearest miniature along the ray (or around its origin, for a pinch right on it). */
+function miniatureOnRay(
+  origin: THREE.Vector3,
+  direction: THREE.Vector3,
+  miniatures: readonly MiniatureHandle[]
+): MiniatureHandle | null {
+  let best: MiniatureHandle | null = null;
+  let bestAlong = Infinity;
+  for (const m of miniatures) {
+    _vCurPos.set(...m.position);
+    const along = _vCurPos.sub(origin).dot(direction);
+    if (along < -MINIATURE_GRAB_RADIUS || along >= bestAlong) continue;
+    _vCurPos.set(...m.position);
+    if (_raycaster.ray.distanceToPoint(_vCurPos) <= MINIATURE_GRAB_RADIUS) {
+      best = m;
+      bestAlong = along;
+    }
+  }
+  return best;
+}
+
+/** True when the ray passes within `radius` of `point`, in front of its origin. */
+function rayNear(
+  origin: THREE.Vector3,
+  direction: THREE.Vector3,
+  point: THREE.Vector3,
+  radius: number
+) {
+  return (
+    _vCurPos.subVectors(point, origin).dot(direction) > 0 &&
+    _raycaster.ray.distanceToPoint(point) <= radius
+  );
+}
+
+/** Everything a ray can hit besides scene panels (`userData.onSelect`). */
+interface AimScene {
+  targets: readonly SpatialTarget[];
+  menu: WristMenu;
+  miniatures?: readonly MiniatureHandle[];
+  surface: ImageSurface | null;
+  hotspots: readonly Hotspot[];
+}
+
+const _vHot = new THREE.Vector3();
+
 /**
- * MultiPointer XR Blaster & Pointer Interaction Controller (VS-T4).
- * Aligned with Meta IWSDK MultiPointer specifications:
- * - Dual Controller Tracking (Controller 0 and 1) with dual independent aiming lasers.
- * - Articulated Hand Tracking with Direct Touch (index fingertip touch) and Far Interaction (Pinch).
- * - Interactive scene fallback with userData.onSelect / userData.onClick.
- * - Desktop mirror / mouse pointer forwarding fallback.
+ * What a ray points at, nearest first: the wrist button, a miniature, the scan button (menu
+ * open), a tour floor arrow, then the scanned image (resolved to the detection whose box holds
+ * that image point). Writes the beam end to `end`.
+ */
+function aimAt(
+  origin: THREE.Vector3,
+  direction: THREE.Vector3,
+  end: THREE.Vector3,
+  { targets, menu, miniatures = [], surface, hotspots }: AimScene
+): Aim {
+  _raycaster.ray.origin.copy(origin);
+  _raycaster.ray.direction.copy(direction);
+
+  if (menu.buttonVisible && rayNear(origin, direction, menu.button, WRIST_RAY_RADIUS)) {
+    end.copy(menu.button);
+    return { kind: 'wrist', id: WRIST_BUTTON_ID, u: 0, v: 0 };
+  }
+
+  const mini = miniatureOnRay(origin, direction, miniatures);
+  if (mini) {
+    end.set(...mini.position);
+    return { kind: 'miniature', id: mini.id, u: 0, v: 0, miniature: mini };
+  }
+
+  if (menu.open && rayNear(origin, direction, menu.scan, AIR_BUTTON_RADIUS)) {
+    end.copy(menu.scan);
+    return { kind: 'button', id: AIR_BUTTON_ID, u: 0, v: 0 };
+  }
+
+  for (const h of hotspots) {
+    _vHot.set(...h.position);
+    if (rayNear(origin, direction, _vHot, HOTSPOT_RADIUS)) {
+      end.copy(_vHot);
+      return { kind: 'hotspot', id: h.id, u: 0, v: 0 };
+    }
+  }
+
+  const hit = surface ? screenHitFromRay(origin, direction, surface) : null;
+  if (hit) {
+    const target = pickTargetAtUv(targets, hit.u, hit.v);
+    if (target) {
+      end.set(...target.position);
+      return { kind: 'target', id: target.id, u: hit.u, v: hit.v };
+    }
+    end.set(...hit.point);
+    return { kind: 'screen', id: null, u: hit.u, v: hit.v };
+  }
+
+  end.copy(origin).addScaledVector(direction, BEAM_LENGTH);
+  return { kind: 'none', id: null, u: 0, v: 0 };
+}
+
+function beamColor(kind: AimKind): string {
+  if (kind === 'wrist') return BEAM_WRIST;
+  if (kind === 'hotspot') return BEAM_HOTSPOT;
+  if (kind === 'miniature') return BEAM_MINIATURE;
+  if (kind === 'button') return BEAM_BUTTON;
+  if (kind === 'target') return BEAM_TARGET;
+  if (kind === 'screen') return BEAM_SCREEN;
+  return BEAM_IDLE;
+}
+
+/**
+ * Single input source of the /village VR studio (VS-T4).
+ * - Controllers and hands share the system pointer ray (`getController(i)`): one shot per
+ *   `selectstart` (trigger press or native pinch), never `select` too.
+ * - Fingertip touch presses the wrist button (other hand) and, menu open, the scan button.
+ * - Mouse: desktop preview and the IWER emulator.
+ * Shots at the webcam video hit the object under the laser; elsewhere fall back to
+ * scene objects carrying `userData.onSelect` (HUD toggle).
+ * Miniatures: select held on one grabs it in place; turning or moving the controller / hand
+ * (or dragging the mouse) rotates it; a quick tap calls `onTapMiniature` (connect).
  */
 export const XRBlasterController = memo(function XRBlasterController({
   targets,
-  materializedIds: _materializedIds,
-  connectedIds: _connectedIds,
+  menu,
+  miniatures = [],
+  onTapMiniature,
   onHoverTarget,
   onShootTarget,
   onTriggerScan,
+  onShootScreen,
+  surface = WEBCAM_SCREEN,
+  hotspots = [],
+  onHotspot,
+  onShootOutside,
 }: XRBlasterControllerProps) {
   const { gl, camera, scene } = useThree();
   const hoveredRef = useRef<string | null>(null);
   const mouseNdcRef = useRef<{ x: number; y: number } | null>(null);
-
   const handsRef = useRef<
-    Array<{
-      group: THREE.Group & { joints?: Record<string, THREE.Group & { jointRadius?: number }> };
-      mesh: THREE.InstancedMesh;
-    }>
+    Array<{ group: Parameters<typeof updateHandMesh>[0]; mesh: THREE.InstancedMesh }>
   >([]);
   const gripsRef = useRef<THREE.Object3D[]>([]);
-  const modelRefs = useRef<Array<{ parent: THREE.Object3D; child: THREE.Object3D }>>([]);
+  const lastTouchRef = useRef(0);
+  const grabsRef = useRef(new Map<InputKey, Grab>());
+  const blastRef = useRef<{ origin: THREE.Vector3; to: THREE.Vector3; progress: number } | null>(
+    null
+  );
 
-  const lastTouchTimeRef = useRef(0);
-  const pinchActiveRef = useRef<[boolean, boolean]>([false, false]);
+  // Imperative Three objects, mutated in the frame loop without React renders.
+  const fx = useMemo(
+    () => ({
+      pointers: [createPointerLine(), createPointerLine()] as const,
+      pips: [createDot(0.022, BEAM_IDLE), createDot(0.022, BEAM_IDLE)] as const,
+      projectile: createDot(0.035, BEAM_IDLE),
+      impact: createImpactRing(),
+    }),
+    []
+  );
+  const { pointers, pips, projectile, impact } = fx;
 
-  // Imperative active blast tracking (zero React state updates in useFrame)
-  const activeBlastRef = useRef<{
-    origin: THREE.Vector3;
-    targetPos: THREE.Vector3;
-    progress: number;
-  } | null>(null);
-
-  const projectileMeshRef = useRef<THREE.Mesh>(null);
-  const impactMeshRef = useRef<THREE.Mesh>(null);
-  const pointerPip0Ref = useRef<THREE.Mesh>(null);
-  const pointerPip1Ref = useRef<THREE.Mesh>(null);
-
-  const pointer0 = useMemo(() => createPointerLine(), []);
-  const pointer1 = useMemo(() => createPointerLine(), []);
-
-  useEffect(() => {
-    return () => {
-      pointer0.geometry.dispose();
-      (pointer0.material as THREE.Material).dispose();
-      pointer1.geometry.dispose();
-      (pointer1.material as THREE.Material).dispose();
-    };
-  }, [pointer0, pointer1]);
-
-  // Shared shoot resolution function (invoked by controllers, pinch gestures, or mouse)
-  const triggerShot = useCallback(
-    (origin: THREE.Vector3, direction: THREE.Vector3) => {
-      _raycaster.ray.origin.copy(origin);
-      _raycaster.ray.direction.copy(direction);
-      if (camera) _raycaster.camera = camera;
-
-      // 1. Test Air Button hit
-      const distToAirButton = _raycaster.ray.distanceToPoint(AIR_BUTTON_POS);
-      if (distToAirButton <= AIR_BUTTON_RADIUS && onTriggerScan) {
-        activeBlastRef.current = {
-          origin: origin.clone(),
-          targetPos: AIR_BUTTON_POS.clone(),
-          progress: 0,
-        };
-        playLaserShootSound();
-        playScanRadarSound();
-        onTriggerScan();
-        return;
+  useEffect(
+    () => () => {
+      for (const o of [...fx.pointers, ...fx.pips, fx.projectile, fx.impact]) {
+        o.geometry.dispose();
+        (o.material as THREE.Material).dispose();
       }
+    },
+    [fx]
+  );
 
-      // 2. Test detected appliance targets
-      let closestTarget: SpatialTarget | null = null;
-      let closestDist = Infinity;
+  const startBlast = (origin: THREE.Vector3, to: THREE.Vector3) => {
+    blastRef.current = { origin: origin.clone(), to: to.clone(), progress: 0 };
+  };
 
-      for (const t of targets) {
-        _vTargetPos.set(t.position[0], t.position[1], t.position[2]);
-        const dist = _raycaster.ray.distanceToPoint(_vTargetPos);
-        const radius = t.hitRadius * 1.35;
-        if (dist <= radius && dist < closestDist) {
-          closestDist = dist;
-          closestTarget = t;
-        }
+  const toggleMenu = useCallback(() => {
+    playTargetHitSound();
+    menu.toggle();
+  }, [menu]);
+
+  const pressButton = useCallback(() => {
+    playLaserShootSound();
+    playScanRadarSound();
+    onTriggerScan?.();
+  }, [onTriggerScan]);
+
+  /** Starts holding the miniature the input points at; false when it points at none. */
+  const tryGrab = useCallback(
+    (key: InputKey, origin: THREE.Vector3, direction: THREE.Vector3, haptics?: Gamepad | null) => {
+      const aim = aimAt(origin, direction, _vEnd, { targets, menu, miniatures, surface, hotspots });
+      if (aim.kind !== 'miniature' || !aim.miniature) return false;
+      grabTurntable(aim.miniature.turntable, key, performance.now());
+      grabsRef.current.set(key, {
+        miniature: aim.miniature,
+        yaw: yawOf(direction),
+        pitch: pitchOf(direction),
+        x: origin.x,
+        y: origin.y,
+      });
+      try {
+        haptics?.hapticActuators?.[0]?.pulse(0.4, 40);
+      } catch {
+        // No haptics on the desktop emulator.
       }
+      return true;
+    },
+    [targets, miniatures, menu, surface, hotspots]
+  );
 
-      if (closestTarget) {
-        const hitTargetPos = new THREE.Vector3(...closestTarget.position);
-
-        activeBlastRef.current = {
-          origin: origin.clone(),
-          targetPos: hitTargetPos,
-          progress: 0,
-        };
-
-        // Play laser blast and impact sounds
-        playLaserShootSound();
+  const release = useCallback(
+    (key: InputKey) => {
+      const grab = grabsRef.current.get(key);
+      if (!grab) return;
+      grabsRef.current.delete(key);
+      if (releaseTurntable(grab.miniature.turntable, performance.now())) {
         playTargetHitSound();
+        onTapMiniature?.(grab.miniature.id);
+      }
+    },
+    [onTapMiniature]
+  );
 
-        // Haptic feedback
-        try {
-          const session = gl.xr?.getSession?.();
-          const source = session?.inputSources?.[0];
-          const actuator = source?.gamepad?.hapticActuators?.[0];
-          actuator?.pulse(0.8, 120);
-        } catch {
-          // Non-critical if haptic actuator is unavailable (desktop emulator)
-        }
+  /** Resolves one shot. `haptics` is the gamepad of the input that fired, if any. */
+  const triggerShot = useCallback(
+    (origin: THREE.Vector3, direction: THREE.Vector3, haptics?: Gamepad | null) => {
+      const aim = aimAt(origin, direction, _vEnd, { targets, menu, surface, hotspots });
 
-        onShootTarget(closestTarget.id);
+      if (aim.kind === 'wrist') {
+        toggleMenu();
+        return;
+      }
+      if (aim.kind === 'hotspot' && aim.id) {
+        playTargetHitSound();
+        onHotspot?.(aim.id);
+        return;
+      }
+      if (aim.kind === 'button') {
+        startBlast(origin, _vEnd);
+        pressButton();
         return;
       }
 
-      // 3. Fallback: Raycast scene children for interactive objects (HUD toggle, diegetic controls)
+      // Panels in front of the video (HUD) take the shot first.
       if (scene) {
-        let intersects: THREE.Intersection[] = [];
+        _raycaster.ray.origin.copy(origin);
+        _raycaster.ray.direction.copy(direction);
+        if (camera) _raycaster.camera = camera;
+        let hits: THREE.Intersection[] = [];
         try {
-          intersects = _raycaster.intersectObjects(scene.children, true);
+          hits = _raycaster.intersectObjects(scene.children, true);
         } catch {
-          intersects = [];
+          hits = [];
         }
-        for (const hit of intersects) {
-          let curr: THREE.Object3D | null = hit.object;
-          while (curr) {
-            const handler = curr.userData?.onSelect || curr.userData?.onClick;
+        for (const hit of hits) {
+          for (let o: THREE.Object3D | null = hit.object; o; o = o.parent) {
+            const handler = o.userData?.onSelect;
             if (typeof handler === 'function') {
               playLaserShootSound();
-              handler({ stopPropagation: () => {} });
+              handler();
               return;
             }
-            curr = curr.parent;
           }
         }
       }
+
+      if (aim.kind === 'none') {
+        if (onShootOutside) {
+          playLaserShootSound();
+          onShootOutside(origin, direction);
+        }
+        return;
+      }
+      startBlast(origin, _vEnd);
+      playLaserShootSound();
+      if (aim.kind === 'target' && aim.id) {
+        playTargetHitSound();
+        try {
+          haptics?.hapticActuators?.[0]?.pulse(0.8, 120);
+        } catch {
+          // No haptics on the desktop emulator.
+        }
+        onShootTarget(aim.id);
+        return;
+      }
+      onShootScreen?.(aim.u, aim.v);
     },
-    [camera, gl, targets, onShootTarget, onTriggerScan, scene]
+    [
+      camera,
+      scene,
+      targets,
+      menu,
+      surface,
+      hotspots,
+      toggleMenu,
+      pressButton,
+      onHotspot,
+      onShootTarget,
+      onShootScreen,
+      onShootOutside,
+    ]
   );
 
-  // Setup WebXR Controllers & Articulated Hands
+  // XR pointers (controllers and hands), grips and articulated hands.
   useEffect(() => {
     if (!gl?.xr?.getController) return;
+    const added: Array<{ parent: THREE.Object3D; child: THREE.Object3D }> = [];
+    const listeners: Array<{
+      space: THREE.XRTargetRaySpace;
+      type: 'selectstart' | 'selectend';
+      fn: (e: THREE.Event) => void;
+    }> = [];
 
-    const c0 = gl.xr.getController(0);
-    const c1 = gl.xr.getController(1);
+    for (const i of [0, 1] as const) {
+      const space = gl.xr.getController(i);
+      scene?.add(space);
+      const onStart = (e: THREE.Event) => {
+        rayFrom(space, _vOrigin, _vDirection);
+        const gamepad = (e as { data?: XRInputSource }).data?.gamepad ?? null;
+        if (tryGrab(i, _vOrigin, _vDirection, gamepad)) return;
+        triggerShot(_vOrigin, _vDirection, gamepad);
+      };
+      const onEnd = () => release(i);
+      space.addEventListener('selectstart', onStart as never);
+      space.addEventListener('selectend', onEnd as never);
+      listeners.push({ space, type: 'selectstart', fn: onStart });
+      listeners.push({ space, type: 'selectend', fn: onEnd });
 
-    if (scene) {
-      scene.add(c0);
-      scene.add(c1);
-    }
+      if (gl.xr.getHand && scene) {
+        const hand = gl.xr.getHand(i) as Parameters<typeof updateHandMesh>[0];
+        const mesh = createHandMesh();
+        hand.add(mesh);
+        scene.add(hand);
+        handsRef.current.push({ group: hand, mesh });
+        added.push({ parent: hand, child: mesh });
+      }
 
-    const onSelect0 = () => {
-      c0.updateMatrixWorld(true);
-      _tempMatrix.identity().extractRotation(c0.matrixWorld);
-      _vOrigin.setFromMatrixPosition(c0.matrixWorld);
-      _vDirection.copy(_FORWARD).applyMatrix4(_tempMatrix).normalize();
-      triggerShot(_vOrigin, _vDirection);
-    };
-
-    const onSelect1 = () => {
-      c1.updateMatrixWorld(true);
-      _tempMatrix.identity().extractRotation(c1.matrixWorld);
-      _vOrigin.setFromMatrixPosition(c1.matrixWorld);
-      _vDirection.copy(_FORWARD).applyMatrix4(_tempMatrix).normalize();
-      triggerShot(_vOrigin, _vDirection);
-    };
-
-    c0.addEventListener('selectstart', onSelect0);
-    c0.addEventListener('select', onSelect0);
-    c1.addEventListener('selectstart', onSelect1);
-    c1.addEventListener('select', onSelect1);
-
-    // Attach Hand Tracking meshes & Touch Controller Grip visuals
-    if (gl.xr.getHand && scene) {
-      for (let i = 0; i < 2; i++) {
-        // Articulated Hand tracking joints (25 joints)
-        const handGroup = gl.xr.getHand(i) as THREE.Group & {
-          joints?: Record<string, THREE.Group & { jointRadius?: number }>;
-        };
-        const handMesh = createHandMesh();
-        handGroup.add(handMesh);
-        scene.add(handGroup);
-        handsRef.current.push({ group: handGroup, mesh: handMesh });
-        modelRefs.current.push({ parent: handGroup, child: handMesh });
-
-        // Touch Controller 3D Model
-        const getGrip = (gl.xr as unknown as { getControllerGrip?: (idx: number) => THREE.Group })
-          .getControllerGrip;
-        if (typeof getGrip === 'function') {
-          const grip = getGrip.call(gl.xr, i);
-          const gripModel = createControllerGripModel();
-          gripModel.visible = false;
-          grip.add(gripModel);
-          scene.add(grip);
-          gripsRef.current.push(gripModel);
-          modelRefs.current.push({ parent: grip, child: gripModel });
-        }
+      const getGrip = (gl.xr as unknown as { getControllerGrip?: (idx: number) => THREE.Group })
+        .getControllerGrip;
+      if (typeof getGrip === 'function' && scene) {
+        const grip = getGrip.call(gl.xr, i);
+        const model = createControllerGripModel();
+        model.visible = false;
+        grip.add(model);
+        scene.add(grip);
+        gripsRef.current.push(model);
+        added.push({ parent: grip, child: model });
       }
     }
 
     return () => {
-      c0.removeEventListener('selectstart', onSelect0);
-      c0.removeEventListener('select', onSelect0);
-      c1.removeEventListener('selectstart', onSelect1);
-      c1.removeEventListener('select', onSelect1);
-
-      if (scene) {
-        scene.remove(c0);
-        scene.remove(c1);
+      for (const { space, type, fn } of listeners) {
+        space.removeEventListener(type, fn as never);
+        scene?.remove(space);
       }
-
-      for (const { parent, child } of modelRefs.current) {
+      for (const { parent, child } of added) {
         parent.remove(child);
-      }
-      for (const h of handsRef.current) {
-        if (scene) scene.remove(h.group);
+        scene?.remove(parent);
       }
       handsRef.current = [];
       gripsRef.current = [];
-      modelRefs.current = [];
     };
-  }, [gl, scene, triggerShot]);
+  }, [gl, scene, triggerShot, tryGrab, release]);
 
-  // Desktop Mouse Cursor Aiming and Direct Clicking (Fallback when on PC)
+  // Mouse: aim on move, shoot on left click (desktop preview and IWER emulator).
   useEffect(() => {
     const dom = gl.domElement;
     if (!dom) return;
-
-    const onPointerMove = (e: MouseEvent) => {
-      if (!camera) return;
+    const toNdc = (e: MouseEvent) => {
       const rect = dom.getBoundingClientRect();
-      const w = rect.width > 0 ? rect.width : window.innerWidth || 800;
-      const h = rect.height > 0 ? rect.height : window.innerHeight || 600;
-      const clientX = typeof e.clientX === 'number' ? e.clientX : w / 2;
-      const clientY = typeof e.clientY === 'number' ? e.clientY : h / 2;
-      const left = rect.left || 0;
-      const top = rect.top || 0;
-      mouseNdcRef.current = {
-        x: ((clientX - left) / w) * 2 - 1,
-        y: -((clientY - top) / h) * 2 + 1,
+      const w = rect.width || window.innerWidth || 800;
+      const h = rect.height || window.innerHeight || 600;
+      const cx = typeof e.clientX === 'number' ? e.clientX : w / 2;
+      const cy = typeof e.clientY === 'number' ? e.clientY : h / 2;
+      return {
+        x: ((cx - (rect.left || 0)) / w) * 2 - 1,
+        y: -((cy - (rect.top || 0)) / h) * 2 + 1,
       };
     };
-
-    const onPointerDown = (e: MouseEvent) => {
+    const px = (e: MouseEvent) => (typeof e.clientX === 'number' ? e.clientX : 0);
+    const py = (e: MouseEvent) => (typeof e.clientY === 'number' ? e.clientY : 0);
+    const onMove = (e: MouseEvent) => {
+      mouseNdcRef.current = toNdc(e);
+      const grab = grabsRef.current.get('mouse');
+      if (!grab) return;
+      const dx = px(e) - grab.x;
+      const dy = py(e) - grab.y;
+      grab.x = px(e);
+      grab.y = py(e);
+      rotateTurntable(grab.miniature.turntable, dx * MOUSE_GAIN, dy * MOUSE_GAIN);
+    };
+    const rayAt = (e: MouseEvent) => {
+      const ndc = toNdc(e);
+      _mouse.set(ndc.x, ndc.y);
+      _raycaster.setFromCamera(_mouse, camera!);
+      _vOrigin.copy(_raycaster.ray.origin);
+      _vDirection.copy(_raycaster.ray.direction);
+    };
+    // A click (press + release without dragging) shoots; a drag looks around (desktop controls).
+    let press: { x: number; y: number } | null = null;
+    const onDown = (e: MouseEvent) => {
       if ((typeof e.button === 'number' && e.button !== 0) || !camera) return;
-      const rect = dom.getBoundingClientRect();
-      const w = rect.width > 0 ? rect.width : window.innerWidth || 800;
-      const h = rect.height > 0 ? rect.height : window.innerHeight || 600;
-      const clientX = typeof e.clientX === 'number' ? e.clientX : w / 2;
-      const clientY = typeof e.clientY === 'number' ? e.clientY : h / 2;
-      const left = rect.left || 0;
-      const top = rect.top || 0;
-      const mouseX = ((clientX - left) / w) * 2 - 1;
-      const mouseY = -((clientY - top) / h) * 2 + 1;
-      _mouseVec.set(mouseX, mouseY);
-      _raycaster.setFromCamera(_mouseVec, camera);
-      triggerShot(_raycaster.ray.origin, _raycaster.ray.direction);
+      rayAt(e);
+      if (tryGrab('mouse', _vOrigin, _vDirection)) {
+        const grab = grabsRef.current.get('mouse')!;
+        grab.x = px(e);
+        grab.y = py(e);
+        return;
+      }
+      press = { x: px(e), y: py(e) };
     };
-
-    dom.addEventListener('pointermove', onPointerMove);
-    dom.addEventListener('pointerdown', onPointerDown);
+    const onUp = (e: MouseEvent) => {
+      release('mouse');
+      const p = press;
+      press = null;
+      if (!p || !camera || Math.hypot(px(e) - p.x, py(e) - p.y) > CLICK_SLOP_PX) return;
+      rayAt(e);
+      triggerShot(_vOrigin, _vDirection);
+    };
+    const onLeave = () => {
+      press = null;
+      release('mouse');
+    };
+    dom.addEventListener('pointermove', onMove);
+    dom.addEventListener('pointerdown', onDown);
+    dom.addEventListener('pointerup', onUp);
+    dom.addEventListener('pointerleave', onLeave);
     return () => {
-      dom.removeEventListener('pointermove', onPointerMove);
-      dom.removeEventListener('pointerdown', onPointerDown);
+      dom.removeEventListener('pointermove', onMove);
+      dom.removeEventListener('pointerdown', onDown);
+      dom.removeEventListener('pointerup', onUp);
+      dom.removeEventListener('pointerleave', onLeave);
     };
-  }, [gl, camera, triggerShot]);
+  }, [gl, camera, triggerShot, tryGrab, release]);
 
-  // Frame update for controllers, articulated hands, direct touch, & blaster projectiles
+  const drawBeam = (
+    index: 0 | 1,
+    origin: THREE.Vector3,
+    direction: THREE.Vector3
+  ): string | null => {
+    const aim = aimAt(origin, direction, _vEnd, { targets, menu, miniatures, surface, hotspots });
+    const pointer = pointers[index];
+    const pip = pips[index];
+    const color = beamColor(aim.kind);
+    const attr = pointer.geometry.attributes.position as THREE.BufferAttribute;
+    attr.setXYZ(0, origin.x, origin.y, origin.z);
+    attr.setXYZ(1, _vEnd.x, _vEnd.y, _vEnd.z);
+    attr.needsUpdate = true;
+    (pointer.material as THREE.LineBasicMaterial).color.set(color);
+    pointer.visible = true;
+    pip.visible = true;
+    pip.position.copy(_vEnd);
+    (pip.material as THREE.MeshBasicMaterial).color.set(color);
+    return aim.id;
+  };
+
+  const hideBeam = (index: 0 | 1) => {
+    pointers[index].visible = false;
+    pips[index].visible = false;
+  };
+
   useFrame((_, delta) => {
-    const isPresenting = !!gl.xr?.isPresenting;
+    const presenting = !!gl.xr?.isPresenting;
     const now = performance.now();
-    const canTouch = now - lastTouchTimeRef.current > 750;
+    let hovered: string | null = null;
 
-    let anyHandActive = false;
-    let hoveredFromInteraction: string | null = null;
-
-    // -------------------------------------------------------------
-    // 0. Update Hand Tracking Joints & Direct Touch / Pinch Detection
-    // -------------------------------------------------------------
-    if (handsRef.current.length > 0) {
-      const scaleTmp = new THREE.Vector3();
-      const defaultRadius = 0.009;
-
-      for (let hIdx = 0; hIdx < handsRef.current.length; hIdx++) {
-        const h = handsRef.current[hIdx];
-        if (!h) continue;
-        const joints = h.group.joints;
-        if (!joints || Object.keys(joints).length === 0) {
-          h.mesh.visible = false;
-          continue;
-        }
-
-        let activeCount = 0;
-        for (let j = 0; j < HAND_JOINTS.length; j++) {
-          const name = HAND_JOINTS[j];
-          if (!name) continue;
-          const joint = joints[name];
-          if (joint && joint.visible) {
-            scaleTmp.setScalar(joint.jointRadius || defaultRadius);
-            _tempMatrix.compose(joint.position, joint.quaternion, scaleTmp);
-            h.mesh.setMatrixAt(j, _tempMatrix);
-            activeCount++;
-          }
-        }
-        h.mesh.count = activeCount;
-        h.mesh.instanceMatrix.needsUpdate = true;
-        const isThisHandActive = activeCount > 0 && isPresenting;
-        h.mesh.visible = isThisHandActive;
-
-        if (isThisHandActive) {
-          anyHandActive = true;
-
-          // Detect Direct Touch (Near Interaction with Index Fingertip or Wrist)
-          const indexJoint = joints['index-finger-tip'] || joints['wrist'];
-          const thumbJoint = joints['thumb-tip'];
-          const wristJoint = joints['wrist'];
-
-          if (indexJoint) {
-            indexJoint.getWorldPosition(_vTipPos);
-
-            // A. Check Direct Touch on Air Button
-            const distAir = _vTipPos.distanceTo(AIR_BUTTON_POS);
-            if (distAir <= AIR_BUTTON_RADIUS) {
-              hoveredFromInteraction = AIR_BUTTON_ID;
-              if (distAir <= DIRECT_TOUCH_RADIUS && canTouch && onTriggerScan) {
-                lastTouchTimeRef.current = now;
-                playLaserShootSound();
-                playScanRadarSound();
-                onTriggerScan();
-              }
-            }
-
-            // B. Check Direct Touch on Targets
-            for (const t of targets) {
-              _vTargetPos.set(t.position[0], t.position[1], t.position[2]);
-              const distT = _vTipPos.distanceTo(_vTargetPos);
-              const hitR = Math.max(0.35, t.hitRadius * 1.4);
-              if (distT <= hitR) {
-                hoveredFromInteraction = t.id;
-                if (distT <= Math.max(DIRECT_TOUCH_RADIUS, t.hitRadius) && canTouch) {
-                  lastTouchTimeRef.current = now;
-                  playLaserShootSound();
-                  playTargetHitSound();
-                  onShootTarget(t.id);
-                }
-              }
-            }
-          }
-
-          // C. Detect Pinch Gesture (Far Interaction)
-          if (indexJoint && thumbJoint && wristJoint) {
-            thumbJoint.getWorldPosition(_vThumbPos);
-            const pinchDist = _vTipPos.distanceTo(_vThumbPos);
-            const isPinching = pinchDist < 0.032;
-            const wasPinching = pinchActiveRef.current[hIdx] ?? false;
-
-            if (isPinching && !wasPinching && canTouch) {
-              lastTouchTimeRef.current = now;
-              wristJoint.getWorldPosition(_vWristPos);
-              _vHandRayDir.subVectors(_vTipPos, _vWristPos).normalize();
-              if (_vHandRayDir.lengthSq() < 0.001) _vHandRayDir.set(0, 0, -1);
-              triggerShot(_vWristPos, _vHandRayDir);
-            }
-            pinchActiveRef.current[hIdx] = isPinching;
-          }
-        }
-      }
-    }
-
-    // Mutually exclude controller grip models when Hand Tracking is active
-    for (const gripModel of gripsRef.current) {
-      gripModel.visible = isPresenting && !anyHandActive;
-    }
-
-    // -------------------------------------------------------------
-    // 1. Imperative animation of active projectile and impact shockwave
-    // -------------------------------------------------------------
-    if (activeBlastRef.current) {
-      const b = activeBlastRef.current;
-      b.progress += delta * 3.5;
-      if (b.progress >= 1.0) {
-        activeBlastRef.current = null;
-        if (projectileMeshRef.current) projectileMeshRef.current.visible = false;
-        if (impactMeshRef.current) impactMeshRef.current.visible = false;
-      } else {
-        _vCurPos.lerpVectors(b.origin, b.targetPos, Math.min(1, b.progress));
-        if (projectileMeshRef.current) {
-          projectileMeshRef.current.visible = b.progress < 0.8;
-          projectileMeshRef.current.position?.copy?.(_vCurPos);
-        }
-        if (impactMeshRef.current) {
-          impactMeshRef.current.visible = b.progress >= 0.7;
-          if (b.progress >= 0.7) {
-            impactMeshRef.current.position?.copy?.(b.targetPos);
-            const scale = Math.max(0.01, (b.progress - 0.7) * 4.0);
-            impactMeshRef.current.scale?.set?.(scale, scale, scale);
-            const mat = impactMeshRef.current.material as THREE.MeshBasicMaterial | undefined;
-            if (mat) mat.opacity = Math.max(0, 1 - (b.progress - 0.7) / 0.3);
-          }
-        }
-      }
-    }
-
-    // -------------------------------------------------------------
-    // 2. Controller & Hand Ray Aiming Beams (MultiPointer Support)
-    // -------------------------------------------------------------
-    if (isPresenting && !anyHandActive) {
-      // Controllers Mode: Update Controller 0 and Controller 1 rays
-      const c0 = gl.xr?.getController(0);
-      const c1 = gl.xr?.getController(1);
-
-      const updateCtrlBeam = (
-        ctrl: THREE.Group | undefined,
-        pointer: THREE.Line,
-        pip: THREE.Mesh | null
-      ) => {
-        if (!ctrl || ctrl.matrixWorld.elements[15] === 0) {
-          pointer.visible = false;
-          if (pip) pip.visible = false;
+    // 1. Hands: joints mesh + fingertip press on the wrist button (other hand) and,
+    //    menu open, on the scan button.
+    let anyHand = false;
+    handsRef.current.forEach((h, index) => {
+      const tracked = updateHandMesh(h.group, h.mesh) > 0 && presenting;
+      h.mesh.visible = tracked;
+      if (!tracked) return;
+      anyHand = true;
+      const tip = h.group.joints?.['index-finger-tip'];
+      if (!tip) return;
+      tip.getWorldPosition(_vTip);
+      const cooled = now - lastTouchRef.current > TOUCH_COOLDOWN_MS;
+      if (menu.buttonVisible && menu.wearer !== index) {
+        const dw = _vTip.distanceTo(menu.button);
+        if (dw <= WRIST_RAY_RADIUS) hovered = WRIST_BUTTON_ID;
+        if (dw <= WRIST_TOUCH_RADIUS && cooled) {
+          lastTouchRef.current = now;
+          toggleMenu();
           return;
         }
-
-        ctrl.updateMatrixWorld(true);
-        _tempMatrix.identity().extractRotation(ctrl.matrixWorld);
-        _vOrigin.setFromMatrixPosition(ctrl.matrixWorld);
-        _vDirection.copy(_FORWARD).applyMatrix4(_tempMatrix).normalize();
-
-        // Check direct touch proximity from controller
-        _vCtrlPos.setFromMatrixPosition(ctrl.matrixWorld);
-        const distAir = _vCtrlPos.distanceTo(AIR_BUTTON_POS);
-        if (distAir <= AIR_BUTTON_RADIUS) {
-          hoveredFromInteraction = AIR_BUTTON_ID;
-          if (distAir <= DIRECT_TOUCH_RADIUS && canTouch && onTriggerScan) {
-            lastTouchTimeRef.current = now;
-            playLaserShootSound();
-            playScanRadarSound();
-            onTriggerScan();
-          }
-        }
-
-        _raycaster.ray.origin.copy(_vOrigin);
-        _raycaster.ray.direction.copy(_vDirection);
-        if (camera) _raycaster.camera = camera;
-
-        let ctrlHover: string | null = null;
-        let minDist = Infinity;
-        _vHitEndpoint.copy(_vOrigin).addScaledVector(_vDirection, 2.5);
-
-        // Raycast Air Button
-        const distAirButton = _raycaster.ray.distanceToPoint(AIR_BUTTON_POS);
-        if (distAirButton <= AIR_BUTTON_RADIUS) {
-          ctrlHover = AIR_BUTTON_ID;
-          minDist = distAirButton;
-          _vHitEndpoint.copy(AIR_BUTTON_POS);
-        }
-
-        // Raycast Targets
-        for (const t of targets) {
-          _vTargetPos.set(t.position[0], t.position[1], t.position[2]);
-          const dist = _raycaster.ray.distanceToPoint(_vTargetPos);
-          const radius = t.hitRadius * 1.35;
-          if (dist <= radius && dist < minDist) {
-            minDist = dist;
-            ctrlHover = t.id;
-            _vHitEndpoint.copy(_vTargetPos);
-          }
-        }
-
-        if (ctrlHover) hoveredFromInteraction = ctrlHover;
-
-        pointer.visible = true;
-        const attr = pointer.geometry.attributes.position as THREE.BufferAttribute | undefined;
-        if (attr) {
-          attr.setXYZ(0, _vOrigin.x, _vOrigin.y, _vOrigin.z);
-          attr.setXYZ(1, _vHitEndpoint.x, _vHitEndpoint.y, _vHitEndpoint.z);
-          attr.needsUpdate = true;
-        }
-        const beamColor =
-          ctrlHover === AIR_BUTTON_ID ? '#c084fc' : ctrlHover ? '#f59e0b' : '#38bdf8';
-        (pointer.material as THREE.LineBasicMaterial).color.set(beamColor);
-
-        if (pip) {
-          pip.visible = true;
-          pip.position?.copy?.(_vHitEndpoint);
-          (pip.material as THREE.MeshBasicMaterial | undefined)?.color?.set?.(beamColor);
-        }
-      };
-
-      updateCtrlBeam(c0, pointer0, pointerPip0Ref.current);
-      updateCtrlBeam(c1, pointer1, pointerPip1Ref.current);
-    } else if (isPresenting && anyHandActive) {
-      // Hand Tracking Mode: Hand Ray from wrist to index finger tip
-      pointer1.visible = false;
-      if (pointerPip1Ref.current) pointerPip1Ref.current.visible = false;
-
-      const activeHand = handsRef.current.find((h) => h.mesh.visible);
-      const joints = activeHand?.group.joints;
-      const indexTip = joints?.['index-finger-tip'];
-      const wrist = joints?.['wrist'];
-
-      if (indexTip && wrist) {
-        wrist.getWorldPosition(_vOrigin);
-        indexTip.getWorldPosition(_vTipPos);
-        _vDirection.subVectors(_vTipPos, _vOrigin).normalize();
-
-        _raycaster.ray.origin.copy(_vOrigin);
-        _raycaster.ray.direction.copy(_vDirection);
-        if (camera) _raycaster.camera = camera;
-
-        let handHover: string | null = null;
-        let minDist = Infinity;
-        _vHitEndpoint.copy(_vOrigin).addScaledVector(_vDirection, 2.5);
-
-        const distAirButton = _raycaster.ray.distanceToPoint(AIR_BUTTON_POS);
-        if (distAirButton <= AIR_BUTTON_RADIUS) {
-          handHover = AIR_BUTTON_ID;
-          minDist = distAirButton;
-          _vHitEndpoint.copy(AIR_BUTTON_POS);
-        }
-
-        for (const t of targets) {
-          _vTargetPos.set(t.position[0], t.position[1], t.position[2]);
-          const dist = _raycaster.ray.distanceToPoint(_vTargetPos);
-          if (dist <= t.hitRadius * 1.35 && dist < minDist) {
-            minDist = dist;
-            handHover = t.id;
-            _vHitEndpoint.copy(_vTargetPos);
-          }
-        }
-
-        if (handHover) hoveredFromInteraction = handHover;
-
-        pointer0.visible = true;
-        const attr = pointer0.geometry.attributes.position as THREE.BufferAttribute | undefined;
-        if (attr) {
-          attr.setXYZ(0, _vOrigin.x, _vOrigin.y, _vOrigin.z);
-          attr.setXYZ(1, _vHitEndpoint.x, _vHitEndpoint.y, _vHitEndpoint.z);
-          attr.needsUpdate = true;
-        }
-        const beamColor =
-          handHover === AIR_BUTTON_ID ? '#c084fc' : handHover ? '#f59e0b' : '#38bdf8';
-        (pointer0.material as THREE.LineBasicMaterial).color.set(beamColor);
-
-        if (pointerPip0Ref.current) {
-          pointerPip0Ref.current.visible = true;
-          pointerPip0Ref.current.position?.copy?.(_vHitEndpoint);
-          (pointerPip0Ref.current.material as THREE.MeshBasicMaterial | undefined)?.color?.set?.(
-            beamColor
-          );
-        }
-      } else {
-        pointer0.visible = false;
-        if (pointerPip0Ref.current) pointerPip0Ref.current.visible = false;
       }
-    } else {
-      // Desktop Preview Mode: Camera Mouse Ray
-      pointer1.visible = false;
-      if (pointerPip1Ref.current) pointerPip1Ref.current.visible = false;
-
-      let hasAim = false;
-      if (mouseNdcRef.current && camera) {
-        _mouseVec.set(mouseNdcRef.current.x, mouseNdcRef.current.y);
-        _raycaster.setFromCamera(_mouseVec, camera);
-        _vOrigin.copy(_raycaster.ray.origin);
-        _vDirection.copy(_raycaster.ray.direction);
-        hasAim = true;
-      } else if (camera) {
-        _vOrigin.copy(camera.position);
-        camera.getWorldDirection(_vDirection);
-        hasAim = true;
+      if (!menu.open) return;
+      const d = _vTip.distanceTo(menu.scan);
+      if (d <= AIR_BUTTON_RADIUS) hovered = AIR_BUTTON_ID;
+      if (d <= AIR_BUTTON_TOUCH_RADIUS && cooled) {
+        lastTouchRef.current = now;
+        pressButton();
       }
+    });
+    for (const grip of gripsRef.current) grip.visible = presenting && !anyHand;
 
-      if (hasAim) {
-        _raycaster.ray.origin.copy(_vOrigin);
-        _raycaster.ray.direction.copy(_vDirection);
-        if (camera) _raycaster.camera = camera;
-
-        let mouseHover: string | null = null;
-        let minDist = Infinity;
-        _vHitEndpoint.copy(_vOrigin).addScaledVector(_vDirection, 2.5);
-
-        const distAirButton = _raycaster.ray.distanceToPoint(AIR_BUTTON_POS);
-        if (distAirButton <= AIR_BUTTON_RADIUS) {
-          mouseHover = AIR_BUTTON_ID;
-          minDist = distAirButton;
-          _vHitEndpoint.copy(AIR_BUTTON_POS);
-        }
-
-        for (const t of targets) {
-          _vTargetPos.set(t.position[0], t.position[1], t.position[2]);
-          const dist = _raycaster.ray.distanceToPoint(_vTargetPos);
-          if (dist <= t.hitRadius * 1.35 && dist < minDist) {
-            minDist = dist;
-            mouseHover = t.id;
-            _vHitEndpoint.copy(_vTargetPos);
-          }
-        }
-
-        if (mouseHover) hoveredFromInteraction = mouseHover;
-
-        pointer0.visible = true;
-        const attr = pointer0.geometry.attributes.position as THREE.BufferAttribute | undefined;
-        if (attr) {
-          attr.setXYZ(0, _vOrigin.x, _vOrigin.y, _vOrigin.z);
-          attr.setXYZ(1, _vHitEndpoint.x, _vHitEndpoint.y, _vHitEndpoint.z);
-          attr.needsUpdate = true;
-        }
-        const beamColor =
-          mouseHover === AIR_BUTTON_ID ? '#c084fc' : mouseHover ? '#f59e0b' : '#38bdf8';
-        (pointer0.material as THREE.LineBasicMaterial).color.set(beamColor);
-
-        if (pointerPip0Ref.current) {
-          pointerPip0Ref.current.visible = true;
-          pointerPip0Ref.current.position?.copy?.(_vHitEndpoint);
-          (pointerPip0Ref.current.material as THREE.MeshBasicMaterial | undefined)?.color?.set?.(
-            beamColor
-          );
-        }
+    // 2. Projectile and impact ring.
+    const blast = blastRef.current;
+    if (blast) {
+      blast.progress += delta * 3.5;
+      if (blast.progress >= 1) {
+        blastRef.current = null;
+        projectile.visible = false;
+        impact.visible = false;
       } else {
-        pointer0.visible = false;
-        if (pointerPip0Ref.current) pointerPip0Ref.current.visible = false;
+        _vCurPos.lerpVectors(blast.origin, blast.to, blast.progress);
+        projectile.visible = blast.progress < 0.8;
+        projectile.position.copy(_vCurPos);
+        impact.visible = blast.progress >= 0.7;
+        if (impact.visible) {
+          impact.position.copy(blast.to);
+          const s = Math.max(0.01, (blast.progress - 0.7) * 4);
+          impact.scale.set(s, s, s);
+          (impact.material as THREE.MeshBasicMaterial).opacity = 1 - (blast.progress - 0.7) / 0.3;
+        }
       }
     }
 
-    // Dispatch hover change if state altered
-    if (hoveredFromInteraction !== hoveredRef.current) {
-      hoveredRef.current = hoveredFromInteraction;
-      onHoverTarget(hoveredFromInteraction);
+    // 3. Beams: both XR pointers in the headset, the mouse/camera ray otherwise.
+    //    A pointer holding a miniature turns its motion into rotation instead.
+    if (presenting) {
+      for (const i of [0, 1] as const) {
+        const space = gl.xr.getController(i);
+        if (!space || !space.visible || space.matrixWorld.elements[15] === 0) {
+          hideBeam(i);
+          release(i); // tracking lost while holding: let go
+          continue;
+        }
+        rayFrom(space, _vOrigin, _vDirection);
+        const grab = grabsRef.current.get(i);
+        if (grab) {
+          const yaw = yawOf(_vDirection);
+          const pitch = pitchOf(_vDirection);
+          rotateTurntable(
+            grab.miniature.turntable,
+            wrapPi(yaw - grab.yaw) * RAY_GAIN + (_vOrigin.x - grab.x) * MOVE_GAIN,
+            -(pitch - grab.pitch) * RAY_GAIN - (_vOrigin.y - grab.y) * MOVE_GAIN
+          );
+          grab.yaw = yaw;
+          grab.pitch = pitch;
+          grab.x = _vOrigin.x;
+          grab.y = _vOrigin.y;
+        }
+        hovered = drawBeam(i, _vOrigin, _vDirection) ?? hovered;
+      }
+    } else if (camera) {
+      hideBeam(1);
+      if (mouseNdcRef.current) {
+        _mouse.set(mouseNdcRef.current.x, mouseNdcRef.current.y);
+        _raycaster.setFromCamera(_mouse, camera);
+        _vOrigin.copy(_raycaster.ray.origin);
+        _vDirection.copy(_raycaster.ray.direction);
+      } else {
+        _vOrigin.copy(camera.position);
+        camera.getWorldDirection(_vDirection);
+      }
+      hovered = drawBeam(0, _vOrigin, _vDirection) ?? hovered;
+    }
+
+    if (hovered !== hoveredRef.current) {
+      hoveredRef.current = hovered;
+      onHoverTarget(hovered);
     }
   });
 
   return (
     <group name="xr-blaster-controller-root">
-      {/* Aiming Laser Line 0 (Controller 0 / Hand / Desktop Mouse) */}
-      <primitive object={pointer0} />
-
-      {/* Target Aiming Reticle Dot 0 */}
-      <mesh ref={pointerPip0Ref} visible={false}>
-        <sphereGeometry args={[0.022, 16, 16]} />
-        <meshBasicMaterial color="#38bdf8" />
-      </mesh>
-
-      {/* Aiming Laser Line 1 (Controller 1) */}
-      <primitive object={pointer1} />
-
-      {/* Target Aiming Reticle Dot 1 */}
-      <mesh ref={pointerPip1Ref} visible={false}>
-        <sphereGeometry args={[0.022, 16, 16]} />
-        <meshBasicMaterial color="#38bdf8" />
-      </mesh>
-
-      {/* Imperatively Animated Blaster Projectile & Impact Burst (Zero React Re-renders) */}
-      <mesh ref={projectileMeshRef} visible={false}>
-        <sphereGeometry args={[0.035, 12, 12]} />
-        <meshBasicMaterial color="#38bdf8" />
-      </mesh>
-
-      <mesh ref={impactMeshRef} visible={false}>
-        <ringGeometry args={[0.05, 0.28, 24]} />
-        <meshBasicMaterial color="#f59e0b" transparent opacity={1} side={THREE.DoubleSide} />
-      </mesh>
+      <primitive object={pointers[0]} />
+      <primitive object={pointers[1]} />
+      <primitive object={pips[0]} />
+      <primitive object={pips[1]} />
+      <primitive object={projectile} />
+      <primitive object={impact} />
     </group>
   );
 });

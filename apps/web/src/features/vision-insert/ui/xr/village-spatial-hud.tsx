@@ -7,11 +7,12 @@ import { useTranslations } from '@/lib/i18n';
 import { useSimulationStore, selectInput, selectStepAtTime } from '@/stores';
 import { useSimulationAppliances } from '../../hooks/use-simulation-appliances';
 import { getSpatialHUDTexture } from './spatial-hud-texture';
+import { MENU_HUD_OFFSET, MENU_HUD_ROTATION } from './xr-layout';
 
 export interface VillageSpatialHUDProps {
-  /** 3D position [x, y, z] in VR world coordinates. Default: [-0.95, 1.55, -1.2]. */
+  /** Position inside the wrist menu. Default: MENU_HUD_OFFSET. */
   position?: [number, number, number];
-  /** 3D Euler rotation [x, y, z]. Default angled towards viewer: [0.05, 0.45, 0]. */
+  /** Euler rotation inside the menu. Default: MENU_HUD_ROTATION (angled toward the viewer). */
   rotation?: [number, number, number];
   /** Optional transient event notification message (e.g. "+180 W · Fridge connected"). */
   recentEvent?: string | null;
@@ -19,12 +20,12 @@ export interface VillageSpatialHUDProps {
 
 /**
  * Diegetic Holographic Microgrid HUD in WebXR (VS-T8).
- * Floats in the air on the operator's left side, showing real-time battery SoC,
+ * Shown on the left of the wrist menu (open from the wrist button), showing real-time battery SoC,
  * solar production, demand, and in-situ appliance load updates.
  */
 export const VillageSpatialHUD = memo(function VillageSpatialHUD({
-  position = [-0.95, 1.55, -1.2],
-  rotation = [0.05, 0.45, 0],
+  position = MENU_HUD_OFFSET,
+  rotation = MENU_HUD_ROTATION,
   recentEvent = null,
 }: VillageSpatialHUDProps) {
   const t = useTranslations('features.visionInsert');
@@ -120,10 +121,9 @@ export const VillageSpatialHUD = memo(function VillageSpatialHUD({
       {/* Interactive HUD Surface Plane */}
       <mesh
         ref={meshRef}
-        userData={{
-          onSelect: () => setIsExpanded((prev) => !prev),
-          onClick: () => setIsExpanded((prev) => !prev),
-        }}
+        // Toggled by XRBlasterController's scene raycast (laser, pinch or mouse), never by
+        // an R3F onClick too: both would fire on one click and cancel each other.
+        userData={{ onSelect: () => setIsExpanded((prev) => !prev) }}
         onPointerOver={(e) => {
           e.stopPropagation();
           setIsHovered(true);
@@ -131,10 +131,6 @@ export const VillageSpatialHUD = memo(function VillageSpatialHUD({
         onPointerOut={(e) => {
           e.stopPropagation();
           setIsHovered(false);
-        }}
-        onClick={(e) => {
-          e.stopPropagation();
-          setIsExpanded((prev) => !prev);
         }}
       >
         <planeGeometry args={[planeWidth, planeHeight]} />

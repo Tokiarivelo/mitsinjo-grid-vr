@@ -59,8 +59,9 @@ Rules in `.claude/rules/three.md`. Two quality tiers (`useSceneQuality`, toggle 
   fades out from 22 to 45 units (`scene-ink` token). GPU audit: fps and draw calls unchanged.
 - Object editor (PT-5): its own `EffectComposer` (4× MSAA, half float) with Neutral tone mapping + ink 0.6;
   `frameloop="demand"` so it costs only when the view changes. Studio light = softbox scene baked once (PMREM).
-- Shader warm-up (PT-7, `useShaderWarmup`): `gl.compileAsync(scene, camera)` once per canvas, canvas fades in
-  on resolve (≤ 1 s). The ~1.2 s long task at village mount is scene building, not shaders (open).
+- Shader warm-up (PT-7, `useShaderWarmup`): `gl.compile(scene, camera)` once per canvas, then our own poll of
+  `program.isReady()` (parallel compile), canvas fades in when all are linked (≤ 1 s). Not `compileAsync`: three
+  r174 reads `currentProgram.isReady()` unguarded, so a material disposed mid-compile threw `reading 'isReady'`. The ~1.2 s long task at village mount is scene building, not shaders (open).
 - Auto-downgrade: a 3.5 s fps probe after the high tier mounts switches to `low` when the median
   is < 28 fps, unless the user picked a tier (saved in `localStorage`). `?quality=high|low`
   forces a tier (audits, screenshots). The probe gives up after 8 s (`MAX_PROBE_MS`) and downgrades
@@ -103,6 +104,10 @@ them after mount (re-targeting races React root unmounts and can leave a label e
   Rounded boxes (PR-1.2): 300 triangles each, plain 12-triangle box under 0.005 radius; spheres 18 × 12 (396 triangles, PR-1.3);
   ≤ 5 k triangles per object. Surface maps (PR-1.4): 128² normal + roughness + shade per used material,
   generated in JS on first use (~1 ms each) and cached for the session.
+- /village VR studio (WebXR): no extra render target in the eye pass (no `ContactShadows` on spawned
+  models, no post-processing) so fixed foveation and MSAA stay on (Meta WebXR perf guidance). Blaster beams,
+  pips and blast FX are Three objects built once and mutated in `useFrame`; hand joints are one
+  `InstancedMesh` per hand, packed by `updateHandMesh`.
 - Charts in a hidden tab are not mounted (Recharts can't measure a `display:none` parent).
 
 ## 6. Loading & navigation
@@ -124,3 +129,11 @@ them after mount (re-targeting races React root unmounts and can leave a label e
 - Static generation for every route (no request-time data except `/api/copilot`).
 - Vercel: copilot route `runtime = 'nodejs'`, `maxDuration = 30`.
 - Docker Compose (`compose.yaml` + `Dockerfile`, `make docker-up` / `docker-down` / `docker-logs`): one `web` service, `pnpm install --frozen-lockfile` → `next build` → `next start` on :3000 (host `HOST_PORT`, default 3000), healthcheck on `/overview`; root `.env` optional, `LLM_PROVIDER=mock` without it.
+
+## /village 360° tour (VS-T14)
+
+- Photos 4K (4096×2048 JPEG, sans mipmaps à cause de la couture u) : seules la pièce courante et ses voisines restent en mémoire GPU, les autres sont `dispose()`.
+- Sphère dessinée en dernier (`renderOrder` 1000, `depthWrite: false`) : pas de surdessin derrière les panneaux, rien n'est coupé.
+- Extérieur : 7 photos 4096×2048 JPEG q72 (0,7–2,3 Mo, feuillages lourds) ; même règle pièce courante + voisines (le jardin en a 4).
+- Marche (VS-T16) : tout dans le shader de la sphère (intersection rayon / sol + mur, 2 textures seulement pendant la traversée), aucune géométrie ni allocation par image ; positions des flèches mutées sur place.
+- Photo de scan (1280×720) calculée sur CPU au tir seulement (pixels de la pièce mis en cache), jamais par image.

@@ -1,28 +1,39 @@
 # HANDOFF — read first, overwrite at end of session (≤40 lines)
 
-**Updated:** 2026-11-09 · **By:** Antigravity · **Branch:** feat/vr-village-spatial-shoot
+**Updated:** 2026-11-10 · **By:** Claude Code · **Branch:** feat/vr-village-outdoor-tour (on top of feat/vr-village-360-tour, not merged yet)
 
 ## Current state
 
-- Implemented comprehensive dual-controller and hand-tracking interactions across 3D scene on `/village`:
-  - Controllers 0 & 1: Both registered in `scene`, dual independent laser aiming beams (`pointer0` & `pointer1`), reticle lock-on, trigger dispatch (`selectstart`/`select`), and direct-touch proximity.
-  - Hand Tracking: Direct touch detection with index fingertip (`AIR_BUTTON_POS` and targets), far interaction pinch gesture detection (thumb & index tip $< 3.2\text{cm}$), hand pointing ray.
-  - Surrounding Space: Transparent raycast colliders and `userData.onSelect`/`onClick` attached to `HoloDetectionTarget` and `VillageSpatialHUD`.
-  - Desktop mouse fallback preserved without overriding in-VR controller/hand tracking.
-  - Added dedicated test suite `xr-blaster-controller.test.tsx` (8/8 tests pass).
-- 100% key parity across `en.json`, `fr.json`, `mg.json` (`make check-i18n`).
-- 0 TypeScript errors (`tsc --noEmit`), 43/43 vision-insert test files pass (297/297 tests).
+- VS-T14: without a real headset (desktop or IWER emulator), /village VR is a **walkable 360° tour** of real photos.
+  VS-T16: **real walking**: grounded photo (floor + wall in the shader, parallax); hold ↑/W/Z/S/A/Q/D or stick,
+  walk onto a floor arrow (or shoot it) → cross-fade walk-through. Desktop: drag = look, click = shoot.
+- VS-T15: **outdoor walk** from the hall window: terrace (solar panels), street of houses, house front, garden,
+  tree-lined road, forest, woods (7 real CC0 sites, `public/tour/outdoor/`, 11 MB). Houses/cars/trees = scenery.
+- Scan = gnomonic photo of the aimed view; mock ground truth = hand-labelled boxes (`tour-data.ts`) sent as `expected`.
+- Real headset keeps the webcam, on a **flat** screen (`ImageSurface`).
+- Emulated immersion hides the page (`data-xr-emulated`); `EmulatedXRExit` keeps « Exit VR » on screen (portal).
+- DevUI via `device.installDevUI(DevUI)` (single-flight). The IWE browser extension counts as emulated too
+  (`window.__IWE_XR_DEVICE__`; it fakes a Quest UA). `make vr-probe` → 15 PASS.
 
 ## Next
 
-1. Hard-refresh browser (`Ctrl+F5`) on `http://localhost:3001/village` and test both controllers, hands (direct touch & pinch), and surrounding space targets.
-2. Review scenarios V196–V203 in `test-scenarios/06-village.md`.
-3. VS-T9: 3D positional audio panner (`PannerNode` / `PositionalAudio`).
+1. Real Quest: check the flat webcam keeps shots aligned; wrist button offsets.
+2. Tour links/boxes are hand-placed; refine doors if arrows feel off. Outdoor sites are different places (no geography).
+3. Static text in headset (HUD « Charge / Décharge », « 720p LIVE ») → i18n keys. VS-T9 spatial audio.
 
 ## Files touched
 
-- `apps/web/src/features/vision-insert/ui/xr/xr-blaster-controller.tsx`
-- `apps/web/src/features/vision-insert/ui/xr/holo-detection-target.tsx`
-- `apps/web/src/features/vision-insert/ui/xr/village-spatial-hud.tsx`
-- `apps/web/src/features/vision-insert/ui/xr/__tests__/xr-blaster-controller.test.tsx`
-- `HANDOFF.md`
+- `features/vision-insert/ui/xr/tour/` (`panorama-tour` walking shader, `tour-nav` walk helpers, `equirect`, `tour-data`, `tour-nav`, `panorama-tour`, `use-panorama-tour`) + tests;
+  `webcam-screen`, `xr-blaster-controller`, `village-xr-studio`, `village-xr-viewport` + tests
+- `microgrid-3d/ui/emulated-xr-exit.tsx` (new), `utils/dev-xr-emulator.ts`, `hooks/use-webxr.ts`,
+  `simulation/ui/village-viewport.tsx`; `lib/vision.ts`, `/api/vision` (`expected`); `app/layout.tsx`, `globals.css`
+- `messages/*` (`tourGoTo`, `tourRoom_*`), `scripts/vr-village-probe.mjs`, `public/tour/{studio,outdoor}` + `CREDITS.md`
+- Docs: `contracts.md`, `vr-village-spatial-detection.md` (Phase 9), `tasks/VR-village-spatial-shoot.md` (VS-T14/15),
+  `vr-immersion-guide.md`, `vr-testing-guide.md`, `performance.md`, `README.md`
+
+## Decisions
+
+- Sphere r 9 m drawn last, no depth write → labels/panels never cut. No mipmaps (u seam).
+- Smooth walking asked for by the user (not teleport): constant speed, vignette, no head bob in a real headset;
+  arrive facing away from the door. Scan boxes stay where the scan put them while you walk.
+- `expected` never overrides Meta answers; perception golden tests time out in the full suite (pre-existing).

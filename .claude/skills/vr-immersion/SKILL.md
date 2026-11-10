@@ -95,6 +95,9 @@ If code and doc disagree, ask before "fixing" either (`maintenance` rule).
 - Non-XR fallback when `navigator.xr` is missing (HTTP non-localhost, no WebGL).
 - Search (`rg`) existing helpers in `features/vision-insert/ui/xr/` and `features/microgrid-3d/{hooks,utils}`
   before adding one. Every new hook/util ships a Vitest test.
+- /village input: `XRBlasterController` is the only input source (no R3F `onClick` on panels, or one click fires
+  twice); shots on `selectstart` only; hands use the system ray `getController(i)`, pinch is native `select`.
+  Anything placed over the webcam video goes through `webcam-screen.ts` (`screenPoint` / `screenHitFromRay`).
 
 ## 4. Measure (perf work)
 
@@ -107,6 +110,8 @@ Meta VR MCP `perf_trace_*`. Record before/after numbers in the PR.
 
 1. `/verify` (typecheck, lint, tests) and `make check-i18n`.
 2. Emulator: `make dev-mock`, enter VR via IWER (MCP or devui), exercise the changed flow with controllers and hands.
+   Scripted: `make vr-probe` (fake webcam + IWER driven through `window.__IWER_DEVICE__.remote.dispatch`, dev only;
+   same API as the IWER MCP, works when the MCP is down). `make dev-stop` frees the port for good.
 3. Headset when available: Meta VR MCP screenshot + logcat; perf trace if frame-heavy; hold 72 fps.
 4. Update the doc you read in step 2 (and `docs/performance.md` for new budgets/techniques), task checkboxes,
    and `test-scenarios/` (`02-simulation.md` or the /village page file) per the `test-scenarios` rule.

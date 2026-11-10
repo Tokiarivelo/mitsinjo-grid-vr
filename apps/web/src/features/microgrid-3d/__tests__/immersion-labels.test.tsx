@@ -8,7 +8,11 @@ import { AirOptionBeacon, ImmersionLabels } from '../ui/immersion-labels';
 
 // Mock Drei Billboard and R3F
 vi.mock('@react-three/drei', () => ({
-  Billboard: ({ children, position, ...props }: any) => (
+  Billboard: ({
+    children,
+    position,
+    ...props
+  }: React.HTMLAttributes<HTMLDivElement> & { position?: unknown }) => (
     <div data-testid="mock-billboard" data-position={JSON.stringify(position)} {...props}>
       {children}
     </div>

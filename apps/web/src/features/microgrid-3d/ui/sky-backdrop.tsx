@@ -5,6 +5,7 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { fbm2d, mulberry32 } from '../utils/noise';
 import { useAmbientFrame } from '../hooks/use-ambient-frame';
+import { setUniformValue } from '../utils/uniforms';
 import type { SkyPalette } from '../utils/sky-palette';
 
 export const SKY_RADIUS = 420;
@@ -208,11 +209,11 @@ function StarField({ opacity, animate = true }: { opacity: number; animate?: boo
     []
   );
 
-  uniforms.uOpacity.value = opacity;
+  useLayoutEffect(() => setUniformValue(uniforms.uOpacity, opacity), [uniforms, opacity]);
 
   useFrame((state) => {
     if (!animate || opacity <= 0.01) return;
-    uniforms.uTime.value = state.clock.elapsedTime;
+    setUniformValue(uniforms.uTime, state.clock.elapsedTime);
     requestFrame();
   });
 
@@ -254,9 +255,9 @@ export function SkyBackdrop({
     []
   );
 
-  if (skyUniformsRef) {
-    skyUniformsRef.current = uniforms;
-  }
+  useLayoutEffect(() => {
+    if (skyUniformsRef) skyUniformsRef.current = uniforms;
+  }, [skyUniformsRef, uniforms]);
 
   const activeCelestialDir = isDaytime ? sunDirection : (moonDirection ?? sunDirection);
   uniforms.uZenith.value.set(palette.zenith);

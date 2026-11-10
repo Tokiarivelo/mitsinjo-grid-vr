@@ -12,12 +12,14 @@ vi.mock('@/features/microgrid-3d', () => ({
     reportCreationFailed: vi.fn(),
   }),
   installWebGLContextSafetyPolyfill: vi.fn(),
+  isDevXREmulated: () => false,
+  EmulatedXRExit: () => null,
 }));
 
 import { VillageXRViewport } from '../village-xr-viewport';
 
 vi.mock('@react-three/fiber', () => ({
-  Canvas: ({ onCreated }: any) => {
+  Canvas: ({ onCreated }: { onCreated?: (state: unknown) => void }) => {
     onCreated?.({ gl: { xr: { getController: vi.fn() } } });
     return <div data-testid="mock-r3f-canvas" />;
   },
@@ -30,7 +32,9 @@ vi.mock('@react-three/fiber', () => ({
 }));
 
 vi.mock('@react-three/drei', () => ({
-  Billboard: ({ children }: any) => <div data-testid="mock-billboard">{children}</div>,
+  Billboard: ({ children }: { children?: React.ReactNode }) => (
+    <div data-testid="mock-billboard">{children}</div>
+  ),
   OrbitControls: () => null,
   ContactShadows: () => null,
 }));

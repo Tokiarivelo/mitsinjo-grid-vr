@@ -202,6 +202,9 @@ Voici les **4 modalités de contrôle** supportées selon votre équipement :
 
 #### B. Comment orienter et déplacer les contrôleurs virtuels sur PC
 
+- **Sans touche clavier (le plus fiable, surtout sous Linux) :** cliquez sur la manette ou la main dans la vue DevUI : un gizmo apparaît. Les **flèches** déplacent, les **anneaux** font tourner. Les champs `Pos` / `Rot` des panneaux `Controller [L]` / `[R]` règlent une valeur exacte ; l'icône ✋ / 🎮 bascule mains ↔ manettes ; « Play Mode » capture la souris pour regarder.
+- **Marcher dans l'espace 360° de /village (VS-T16) :** maintenez ↑ / W / Z (S recule, A / Q / D de côté) ou poussez le stick : on avance dans la direction du regard, le sol défile. Marchez sur une flèche au sol (ou visez-la et tirez) pour passer au lieu suivant.
+
 - **Manette droite (`Controller [R]`) :** Maintenez la touche **`Alt`** (ou `Option` sur Mac) du clavier enfoncée tout en déplaçant votre souris. La manette droite s'oriente immédiatement et suit vos mouvements.
 - **Manette gauche (`Controller [L]`) :** Maintenez la touche **`Shift`** du clavier enfoncée tout en déplaçant votre souris.
 - **Profondeur avant / arrière (Axe Z) :** Tout en maintenant `Alt` ou `Shift`, faites rouler la **molette de votre souris** pour approcher ou éloigner la manette.

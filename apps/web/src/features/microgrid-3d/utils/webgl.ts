@@ -82,10 +82,12 @@ export function resetWebGLSupportForTests() {
  */
 let safetyInstalled = false;
 export function installWebGLContextSafetyPolyfill(targetProto?: unknown) {
-  const patchContext = (proto: any) => {
-    if (!proto || typeof proto.getParameter !== 'function') return;
-    const originalGetParameter = proto.getParameter;
-    proto.getParameter = function (this: { isContextLost?: () => boolean }, pname: number) {
+  const patchContext = (proto: unknown) => {
+    if (!proto || typeof proto !== 'object') return;
+    const ctx = proto as Record<string, unknown>;
+    const originalGetParameter = ctx.getParameter;
+    if (typeof originalGetParameter !== 'function') return;
+    ctx.getParameter = function (this: { isContextLost?: () => boolean }, pname: number) {
       if (typeof this.isContextLost === 'function' && this.isContextLost()) {
         if (pname === 0x0c22) return new Float32Array([0, 0, 0, 0]);
         if (pname === 0x0b73) return 1.0;
@@ -106,9 +108,9 @@ export function installWebGLContextSafetyPolyfill(targetProto?: unknown) {
       return res;
     };
 
-    const originalClearColor = proto.clearColor;
+    const originalClearColor = ctx.clearColor;
     if (typeof originalClearColor === 'function') {
-      proto.clearColor = function (
+      ctx.clearColor = function (
         this: { isContextLost?: () => boolean },
         r: number,
         g: number,

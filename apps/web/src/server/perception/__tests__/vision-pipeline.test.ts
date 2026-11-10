@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { MOCK_DETECTIONS } from '../mock';
 import type { DetectionResult, SegmentResult } from '../schemas';
-import { runVisionPipeline } from '../vision-pipeline';
+import { runVisionPipeline, withExpectedDetections } from '../vision-pipeline';
 
 const meta = (detections = MOCK_DETECTIONS): DetectionResult => ({
   source: 'meta',
@@ -133,5 +133,36 @@ describe('runVisionPipeline (PV-T6)', () => {
     expect(segmentImage.mock.calls.every((c) => c[0] === 'https://r2.example/vision/a.jpg')).toBe(
       true
     );
+  });
+});
+
+describe('withExpectedDetections (VS-T14, 360° test tour)', () => {
+  const fridge = {
+    ...MOCK_DETECTIONS[0]!,
+    id: 'loft-fridge',
+    box: { x: 0.6, y: 0.4, w: 0.05, h: 0.2 },
+  };
+  const segmentImage = vi.fn();
+
+  it('replaces a mock answer with the labelled objects in view', async () => {
+    const detectAppliances = vi.fn(async (): Promise<DetectionResult> => ({
+      source: 'mock',
+      model: 'mock',
+      detections: MOCK_DETECTIONS,
+    }));
+    const out = await withExpectedDetections({ detectAppliances, segmentImage }, [
+      fridge,
+    ]).detectAppliances('img');
+    expect(out.detections).toEqual([fridge]);
+    expect(out.source).toBe('mock');
+  });
+
+  it('never touches a Meta answer, and is a no-op without expected objects', async () => {
+    const detectAppliances = vi.fn(async () => meta());
+    const p = { detectAppliances, segmentImage };
+    expect((await withExpectedDetections(p, [fridge]).detectAppliances('img')).detections).toEqual(
+      MOCK_DETECTIONS
+    );
+    expect(withExpectedDetections(p, undefined)).toBe(p);
   });
 });

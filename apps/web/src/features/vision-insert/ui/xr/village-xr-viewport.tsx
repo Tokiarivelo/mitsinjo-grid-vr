@@ -15,7 +15,10 @@ import {
   useWebGLAvailable,
   useContextLoss,
   installWebGLContextSafetyPolyfill,
+  isDevXREmulated,
+  EmulatedXRExit,
 } from '@/features/microgrid-3d';
+import { TOUR_EYE } from './tour/tour-nav';
 import { VillageXRStudio } from './village-xr-studio';
 
 export interface VillageXRViewportProps {
@@ -57,19 +60,18 @@ export const VillageXRViewport = memo(function VillageXRViewport({
   const hasAutoEnteredRef = useRef(false);
   const controlsRef = useRef<ComponentRef<typeof OrbitControls> | null>(null);
 
-  const handleZoomIn = useCallback(() => {
-    if (controlsRef.current) {
-      controlsRef.current.dollyIn(1.2);
-      controlsRef.current.update();
-    }
-  }, []);
+  // 360° tour off a real headset (desktop preview, IWER emulator); real headset = webcam wall.
+  const tourMode = !xrActive || isDevXREmulated();
 
-  const handleZoomOut = useCallback(() => {
-    if (controlsRef.current) {
-      controlsRef.current.dollyOut(1.2);
-      controlsRef.current.update();
-    }
+  // Desktop look-around turns in place (Street View): zoom = narrower field of view, not dolly.
+  const zoomBy = useCallback((factor: number) => {
+    const camera = controlsRef.current?.object;
+    if (!(camera instanceof THREE.PerspectiveCamera)) return;
+    camera.fov = Math.max(30, Math.min(90, camera.fov * factor));
+    camera.updateProjectionMatrix();
   }, []);
+  const handleZoomIn = useCallback(() => zoomBy(1 / 1.2), [zoomBy]);
+  const handleZoomOut = useCallback(() => zoomBy(1.2), [zoomBy]);
 
   // Trigger enter session once renderer is ready on initial mount
   const handleCreated = useCallback(
@@ -128,6 +130,7 @@ export const VillageXRViewport = memo(function VillageXRViewport({
       className="relative w-full h-[600px] md:h-[700px] xl:h-[760px] rounded-3xl overflow-hidden border border-border/80 bg-slate-950 shadow-xl"
       data-testid="village-xr-viewport"
     >
+      <EmulatedXRExit active={xrActive} label={t('vrExit')} onExit={onExitVR} />
       {/* 2D Overlay HUD (Visible on Desktop Screen / Mirror) */}
       <div className="absolute top-4 left-4 right-4 z-20 flex items-center justify-between pointer-events-none">
         <div className="flex items-center gap-2 pointer-events-auto">
@@ -157,7 +160,7 @@ export const VillageXRViewport = memo(function VillageXRViewport({
 
           <span
             className="hidden md:inline-flex items-center gap-1.5 rounded-full border border-energy-cyan/30 bg-energy-cyan/10 px-2.5 py-1 text-xs font-medium text-energy-cyan backdrop-blur-md cursor-help"
-            title={`${t('vrInteractionHelpQuest')}\n${t('vrInteractionHelpIWER')}\n${t('vrInteractionHelpDesktop')}`}
+            title={`${t('vrInteractionHelpWalk')}\n${t('vrInteractionHelpWrist')}\n${t('vrInteractionHelpQuest')}\n${t('vrInteractionHelpIWER')}\n${t('vrInteractionHelpDesktop')}`}
           >
             <HelpCircle className="h-3.5 w-3.5" aria-hidden="true" />
             <span>{xrActive ? t('vrInteractionGuideVR') : t('vrInteractionGuideDesktop')}</span>
@@ -224,19 +227,21 @@ export const VillageXRViewport = memo(function VillageXRViewport({
               alpha: true,
             });
           }}
-          camera={{ position: [0, 1.45, 0.35], fov: 65 }}
+          camera={{ position: [TOUR_EYE[0], TOUR_EYE[1], TOUR_EYE[2] + 0.01], fov: 70 }}
           onCreated={handleCreated}
           className="w-full h-full"
         >
-          {/* Orbit controls for desktop preview when not presenting in headset */}
+          {/* Desktop preview: drag to look around from the eye (Street View), no dolly or pan */}
           {!xrActive && (
             <OrbitControls
               ref={controlsRef}
               enableDamping
-              maxPolarAngle={Math.PI / 2 + 0.1}
-              minDistance={0.3}
-              maxDistance={3.5}
-              target={[0, 1.35, -1.3]}
+              enableZoom={false}
+              enablePan={false}
+              rotateSpeed={-0.35}
+              minPolarAngle={0.25}
+              maxPolarAngle={Math.PI - 0.25}
+              target={TOUR_EYE}
             />
           )}
 
@@ -247,6 +252,7 @@ export const VillageXRViewport = memo(function VillageXRViewport({
             onTriggerScan={onTriggerScan}
             onSelectAppliance={onSelectAppliance}
             photoKey={photoKey}
+            tourMode={tourMode}
           />
         </Canvas>
       </CanvasCreationBoundary>

@@ -8,7 +8,7 @@ vi.mock('@react-three/fiber', () => ({
 }));
 
 describe('LiveWebcamBackdrop (VS-T10)', () => {
-  it('renders 360 atmosphere dome, curved video screen, and registers frame capture callback', () => {
+  it('renders the flat webcam wall (no cylinder), floor rings, and registers frame capture callback', () => {
     const onRegister = vi.fn();
 
     const { container } = render(
@@ -20,8 +20,9 @@ describe('LiveWebcamBackdrop (VS-T10)', () => {
     const root = container.querySelector('[name="live-webcam-backdrop-root"]');
     expect(root).toBeTruthy();
 
-    const curvedScreen = root?.querySelector('[name="curved-webcam-screen"]');
-    expect(curvedScreen).toBeTruthy();
+    const screen = root?.querySelector('[name="webcam-screen"]');
+    expect(screen?.querySelector('planeGeometry')).toBeTruthy();
+    expect(root?.querySelector('cylinderGeometry')).toBeNull();
 
     // Verify atmosphere meshes (dome, horizon rings, floor)
     const meshes = root?.querySelectorAll('mesh');

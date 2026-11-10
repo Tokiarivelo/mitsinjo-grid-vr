@@ -46,6 +46,9 @@ dev: ## Run the web app in dev mode (port from PORT in .env, default 3000)
 port: ## Print the web app port (PORT from shell or .env, default 3000)
 	@echo $(PORT)
 
+dev-stop: ## Stop the dev server on $(PORT) for good (next dev respawns a killed next-server; this stops turbo/pnpm too)
+	@bash scripts/dev-stop.sh $(PORT)
+
 dev-mock: ## Run dev with the offline mock LLM provider
 	$(need_ws)
 	LLM_PROVIDER=mock $(PNPM) dev
@@ -93,6 +96,10 @@ test-shape: ## Run the 3D shape golden set (5 photos, IoU / colour / gables / 30
 shape-shots: ## Real 3D viewer shots of the shape-report recipes, dark + light (dev server must run; SHOT_WIDTH=320 phone, SHOT_LOG=1 console)
 	$(need_ws)
 	@$(PNPM) --filter $(WEB) exec node scripts/object-viewer-shot.mjs $(URL) $(CURDIR)/test-results/shape-report
+
+vr-probe: ## /village VR check in the IWER emulator: wrist menu, shoot objects in the fake-webcam video with controllers + hands (dev server must run; needs ffmpeg)
+	$(need_ws)
+	@$(PNPM) --filter $(WEB) exec node scripts/vr-village-probe.mjs $(URL) $(CURDIR)/test-results/vr-probe
 
 improve-shot: ## Improvement chip shots (running + finalised), desktop + mobile, dark + light (dev server; stubbed API)
 	$(need_ws)

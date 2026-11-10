@@ -59,7 +59,12 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         className="h-full overflow-hidden bg-canvas text-text-primary antialiased font-sans"
       >
         <ThemeProvider>
-          <I18nProvider>{children}</I18nProvider>
+          <I18nProvider>
+            {/* Hidden during an emulated VR session (globals.css `data-xr-emulated`). */}
+            <div data-app-root className="contents">
+              {children}
+            </div>
+          </I18nProvider>
         </ThemeProvider>
       </body>
     </html>
