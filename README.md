@@ -201,12 +201,12 @@ Port 3000 busy? `HOST_PORT=8080 docker compose up -d --build` → http://localho
 ### Option B: Node + pnpm
 
 Requires **Node.js ≥ 20.12** (22 LTS recommended) and **pnpm 10** (`corepack enable` installs the pinned
-version, 10.29.3).
+version, 12.18.0).
 
 ```bash
 git clone https://github.com/Tokiarivelo/mitsinjo-grid-vr.git
 cd mitsinjo-grid-vr
-corepack enable                     # provides pnpm 10.29.3
+corepack enable                     # provides pnpm 12.18.0
 pnpm install                        # or: make install
 cp .env.example .env                # offline mock by default
 pnpm dev                            # or: make dev
@@ -293,7 +293,7 @@ checklist: [docs/setup/env.md](docs/setup/env.md). `.env` (root) and `apps/web/.
   cap is reached. Check the server log (`[copilot:meta] …` lines mean live calls).
 - **Changed `.env` but nothing changed:** restart `pnpm dev`; with Docker, rerun `docker compose up -d --build`.
 - **No 3D (old GPU / no WebGL):** the app shows the 2D schematic instead; everything else works.
-- **`pnpm: command not found`:** run `corepack enable` (ships with Node), or `npm i -g pnpm@10.29.3`.
+- **`pnpm: command not found`:** run `corepack enable` (ships with Node), or `npm i -g pnpm@12.18.0`.
 
 ### Benchmarks
 

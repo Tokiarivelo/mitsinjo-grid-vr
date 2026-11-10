@@ -39,7 +39,12 @@ export function disableIWERFrameClear(session: XRSession | unknown) {
     const symbols = Object.getOwnPropertySymbols(session);
     for (const sym of symbols) {
       if (String(sym).includes('session')) {
-        const internal = (session as Record<symbol, any>)[sym];
+        const internal = (
+          session as unknown as Record<
+            symbol,
+            { device?: { frameClearEnabled?: boolean } } | undefined
+          >
+        )[sym];
         if (internal?.device && 'frameClearEnabled' in internal.device) {
           internal.device.frameClearEnabled = false;
         }
