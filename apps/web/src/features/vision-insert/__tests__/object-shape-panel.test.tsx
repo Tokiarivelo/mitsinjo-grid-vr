@@ -189,6 +189,27 @@ describe('ObjectShapePanel (PV-T10)', () => {
     expect(screen.queryByText(/model3dPart|mirror/)).toBeNull();
   });
 
+  it('small or blurred photo: a hint; a good photo: none (PQ-T7)', () => {
+    renderPanel({
+      shape: { ...shape('recipe'), conditions: { widthPx: 90, heightPx: 120, sharpness: 'high' } },
+    });
+    expect(screen.getByText(/Object too small on the photo/)).toBeTruthy();
+  });
+
+  it('blurred photo hint (PQ-T7)', () => {
+    renderPanel({
+      shape: { ...shape('recipe'), conditions: { widthPx: 400, heightPx: 300, sharpness: 'low' } },
+    });
+    expect(screen.getByText(/Photo blurred/)).toBeTruthy();
+  });
+
+  it('good photo: no hint (PQ-T7)', () => {
+    renderPanel({
+      shape: { ...shape('recipe'), conditions: { widthPx: 400, heightPx: 300, sharpness: 'high' } },
+    });
+    expect(screen.queryByText(/too small|blurred/)).toBeNull();
+  });
+
   it('no part masks: no parts line', () => {
     renderPanel();
     expect(screen.queryByText('Parts seen on the photo:')).toBeNull();

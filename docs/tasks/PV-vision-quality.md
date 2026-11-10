@@ -113,7 +113,7 @@ Meta API calls; all others run offline.
 
 ## Q1 — Better pixels and steadier measurements
 
-- [ ] **PQ-T7 Photo conditions.** New `server/perception/photo-conditions.ts`, pure: object size in pixels,
+- [x] **PQ-T7 Photo conditions.** New `server/perception/photo-conditions.ts`, pure: object size in pixels,
       sharpness (variance of the Laplacian inside the box, classed low / medium / high), exposure (share of
       clipped pixels), hidden share (outline area against the box and the archetype's usual fill), view class
       from the measured yaw. Used three ways: the « Measured: » line of the question (skills §14), confidences

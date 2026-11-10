@@ -26,6 +26,7 @@ import { measureRepetition, type GrayGrid, type Repetition } from './repetition'
 import { measureRoof, type RoofMeasure } from './roofline';
 import { confidence, mixColors, mixNumber, mixRecipe, pickCount } from './fusion';
 import { coverageForBox, needsFreeParts } from './free-recipe';
+import { conditionsFacts, conditionsTrust, measurePhotoConditions } from './photo-conditions';
 import { fitSilhouette } from './silhouette-fit';
 import {
   EDGE_COLUMNS,
@@ -297,6 +298,18 @@ export async function runObjectShape(
             () => undefined
           )
         : Promise.resolve(target.outline);
+    // PQ-T7: size, sharpness and exposure of the box, measured before the call so Spark is told them.
+    const preGrid: GrayGrid | null = photo
+      ? await sampleObjectGray(photo, target.box, target.outline, EDGE_COLUMNS).catch(() => null)
+      : null;
+    const preConditions = photo
+      ? measurePhotoConditions({
+          widthPx: target.box.w * photo.width,
+          heightPx: target.box.h * photo.height,
+          grid: preGrid,
+          hasOutline: false,
+        })
+      : null;
     onStep?.('model');
     const started = Date.now();
     const timeout = AbortSignal.timeout(Math.max(0, timeoutMs));
@@ -307,6 +320,7 @@ export async function runObjectShape(
         category: target.category,
         ...(target.scenery ? { scenery: target.scenery } : {}),
         ...(aspect > 0 ? { aspect } : {}),
+        ...(preConditions ? { facts: conditionsFacts(preConditions) } : {}),
         ...(target.facadeUrl ? { facadeUrl: target.facadeUrl } : {}),
       },
       signal ? AbortSignal.any([signal, timeout]) : timeout
@@ -358,6 +372,7 @@ export async function runObjectShape(
       ? sampleObjectGray(photo, shaped.box, shaped.outline, EDGE_COLUMNS).catch(() => null)
       : Promise.resolve(null);
     const found = await shapeCall;
+    const finalGrid = await edges;
     const seconds = ((Date.now() - started) / 1000).toFixed(1);
     if (found.kit) onKit?.(found.kit);
     const source = {
@@ -416,7 +431,13 @@ export async function runObjectShape(
       const measuredColors =
         found.kit && px ? measureKitColors(px, found.kit.archetype, { plaster }) : null;
       const conf = {
-        colors: px ? confidence.colors(px.y.length, !!shaped.outline) : 0,
+        colors: px
+          ? Math.round(
+              confidence.colors(px.y.length, !!shaped.outline) *
+                conditionsTrust(preConditions ?? undefined) *
+                100
+            ) / 100
+          : 0,
         yaw: 0,
         fit: 0,
       };
@@ -879,6 +900,22 @@ export async function runObjectShape(
       // fit values read estimated, a single view never measures depth, the box-fit scale is
       // estimated (metric scale arrives with free placement).
       let coverage: PartCoverage[] | undefined;
+      const conditions =
+        photo && preConditions
+          ? measurePhotoConditions({
+              widthPx: target.box.w * photo.width,
+              heightPx: target.box.h * photo.height,
+              grid: finalGrid,
+              hasOutline: !!shaped.outline,
+              ...(finalKit ? { archetype: finalKit.archetype } : {}),
+              yaw: recipe.yaw ?? null,
+            })
+          : undefined;
+      if (conditions) {
+        console.info(
+          `[vision] 3D photo conditions for "${target.label}": ${conditionsFacts(conditions).join(', ')}`
+        );
+      }
       if (finalKit) {
         // PQ-T37: hard geometry gates fixed by rule (floating parts pulled in, fused twins merged).
         const repair = repairGraph(finalKit.archetype, recipe);
@@ -974,6 +1011,7 @@ export async function runObjectShape(
         ...(found.kit ? { kit: found.kit } : {}),
         ...(shaped.outline ? { outline: shaped.outline } : {}),
         ...(coverage ? { coverage } : {}),
+        ...(conditions ? { conditions } : {}),
         ...source,
       };
     }

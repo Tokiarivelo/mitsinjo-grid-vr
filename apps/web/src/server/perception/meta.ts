@@ -369,7 +369,7 @@ export class MetaPerceptionBackend implements PerceptionBackend {
     const promptVersion = target.promptVersion ?? KIT_PROMPT_VERSION;
     const { content, model, usage } = await this.visionJson(
       kitPrompt(promptVersion),
-      shapeQuestion(target.label, target.aspect, hint, Boolean(target.facadeUrl)),
+      shapeQuestion(target.label, target.aspect, hint, Boolean(target.facadeUrl), target.facts),
       imageUrl,
       SHAPE_JSON_SCHEMA,
       signal,

@@ -1183,6 +1183,8 @@
       "model3dCoverage": "Ampahany hita amin'ny sary:",
       "model3dCoverageItem": "{name} {built}/{seen}",
       "model3dCoverageMissing": "tsy naorina: {count}",
+      "photoTooSmall": "Kely loatra ilay zavatra eo amin'ny sary: mety hisy ampahany tsy hita. Sary akaiky kokoa no mahasoa.",
+      "photoBlurred": "Manjavozavo ny sary: mety hisy antsipiriany tsy hita. Sary mazava kokoa no mahasoa.",
       "model3dPart": {
         "wheel": "Kodia",
         "window": "Varavarankely",

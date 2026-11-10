@@ -52,11 +52,18 @@ describe('runObjectShape (PV-T9)', () => {
       recipe: { ...tall, proportions: { w: 2 / 3, h: 1, d: 0.5 } },
       source: 'meta',
       model: 'muse-spark-1.3',
+      conditions: { widthPx: 40, heightPx: 60, sharpness: 'low', exposure: 'low' },
     });
     const [url, subject, signal] = p.describeShape.mock.calls[0]!;
     expect(url).toMatch(/^data:image\/jpeg;base64,/);
     expect(url).not.toBe('data:full');
-    expect(subject).toEqual({ label: 'Fridge', category: 'fridge', aspect: 2 / 3 });
+    expect(subject).toEqual({
+      label: 'Fridge',
+      category: 'fridge',
+      aspect: 2 / 3,
+      // PQ-T7: facts measured by code, sent as the « Measured: » line.
+      facts: ['object 40 × 60 px', 'sharpness low'],
+    });
     expect(signal).toBeInstanceOf(AbortSignal);
   });
 

@@ -1183,6 +1183,8 @@
       "model3dCoverage": "Pièces vues sur la photo :",
       "model3dCoverageItem": "{name} {built}/{seen}",
       "model3dCoverageMissing": "non construites : {count}",
+      "photoTooSmall": "Objet trop petit sur la photo : des parties peuvent manquer. Une photo plus proche aide.",
+      "photoBlurred": "Photo floue : des détails peuvent manquer. Une photo plus nette aide.",
       "model3dPart": {
         "wheel": "Roues",
         "window": "Fenêtres",
