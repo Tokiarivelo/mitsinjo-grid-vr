@@ -6,26 +6,26 @@ import { useFrame } from '@react-three/fiber';
 import { Billboard } from '@react-three/drei';
 import { useTranslations } from '@/lib/i18n';
 import { getSpatialAirButtonTexture } from './spatial-air-button-texture';
-import { AIR_BUTTON_POSITION } from './xr-layout';
+import { MENU_SCAN_OFFSET } from './xr-layout';
 
 export interface SpatialAirButtonProps {
   status: 'idle' | 'scanning' | 'detected';
   detectedCount: number;
-  /** In-air 3D coordinates. Default: AIR_BUTTON_POSITION. */
+  /** Position inside the wrist menu. Default: MENU_SCAN_OFFSET. */
   position?: [number, number, number];
   /** External hover state driven by WebXR laser pointer raycast */
   isHovered?: boolean;
 }
 
 /**
- * 3D Floating Interactive Option in the air (Spatial Air Beacon & Action Button).
- * Placed in front of the user at eye level in the virtual room.
+ * Scan button (Spatial Air Beacon & Action Button), shown inside the wrist menu once the
+ * viewer opens it from the wrist button.
  * Pressed through XRBlasterController (laser, pinch, fingertip or mouse), the single input source.
  */
 export const SpatialAirButton = memo(function SpatialAirButton({
   status,
   detectedCount,
-  position = AIR_BUTTON_POSITION,
+  position = MENU_SCAN_OFFSET,
   isHovered = false,
 }: SpatialAirButtonProps) {
   const t = useTranslations('features.visionInsert');

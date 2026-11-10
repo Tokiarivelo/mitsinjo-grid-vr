@@ -10,12 +10,13 @@ import {
 } from '@/features/microgrid-3d/utils/xr-hands';
 import type { SpatialTarget } from './spatial-projection';
 import { pickTargetAtUv, screenHitFromRay } from './webcam-screen';
+import { AIR_BUTTON_RADIUS, AIR_BUTTON_TOUCH_RADIUS, MINIATURE_GRAB_RADIUS } from './xr-layout';
 import {
-  AIR_BUTTON_POSITION,
-  AIR_BUTTON_RADIUS,
-  AIR_BUTTON_TOUCH_RADIUS,
-  MINIATURE_GRAB_RADIUS,
-} from './xr-layout';
+  WRIST_BUTTON_ID,
+  WRIST_RAY_RADIUS,
+  WRIST_TOUCH_RADIUS,
+  type WristMenu,
+} from './wrist-menu';
 import { playLaserShootSound, playScanRadarSound, playTargetHitSound } from './xr-audio-fx';
 import { grabTurntable, releaseTurntable, rotateTurntable, type Turntable } from './turntable';
 
@@ -30,6 +31,8 @@ export interface MiniatureHandle {
 
 export interface XRBlasterControllerProps {
   targets: SpatialTarget[];
+  /** Wrist menu: its wrist button toggles it; the scan button is live only while it is open. */
+  menu: WristMenu;
   /** Miniatures in reach: a held select rotates them, a quick tap calls `onTapMiniature`. */
   miniatures?: MiniatureHandle[];
   onTapMiniature?: (id: string) => void;
@@ -41,7 +44,7 @@ export interface XRBlasterControllerProps {
   onShootScreen?: (u: number, v: number) => void;
 }
 
-type AimKind = 'miniature' | 'button' | 'target' | 'screen' | 'none';
+type AimKind = 'wrist' | 'miniature' | 'button' | 'target' | 'screen' | 'none';
 interface Aim {
   kind: AimKind;
   id: string | null;
@@ -70,11 +73,11 @@ const _vTip = new THREE.Vector3();
 const _vCurPos = new THREE.Vector3();
 const _mouse = new THREE.Vector2();
 const _FORWARD = new THREE.Vector3(0, 0, -1);
-const BUTTON_POS = new THREE.Vector3(...AIR_BUTTON_POSITION);
 const BEAM_LENGTH = 3;
 const TOUCH_COOLDOWN_MS = 750;
 
 const BEAM_IDLE = '#38bdf8';
+const BEAM_WRIST = '#e9d5ff';
 const BEAM_BUTTON = '#c084fc';
 const BEAM_TARGET = '#f59e0b';
 const BEAM_SCREEN = '#7dd3fc';
@@ -152,19 +155,39 @@ function miniatureOnRay(
   return best;
 }
 
+/** True when the ray passes within `radius` of `point`, in front of its origin. */
+function rayNear(
+  origin: THREE.Vector3,
+  direction: THREE.Vector3,
+  point: THREE.Vector3,
+  radius: number
+) {
+  return (
+    _vCurPos.subVectors(point, origin).dot(direction) > 0 &&
+    _raycaster.ray.distanceToPoint(point) <= radius
+  );
+}
+
 /**
- * What a ray points at, nearest first: a miniature, the scan button, then the webcam video
- * (resolved to the detection whose box holds that image point). Writes the beam end to `end`.
+ * What a ray points at, nearest first: the wrist button, a miniature, the scan button (menu
+ * open), then the webcam video (resolved to the detection whose box holds that image point).
+ * Writes the beam end to `end`.
  */
 function aimAt(
   origin: THREE.Vector3,
   direction: THREE.Vector3,
   targets: readonly SpatialTarget[],
   end: THREE.Vector3,
+  menu: WristMenu,
   miniatures: readonly MiniatureHandle[] = []
 ): Aim {
   _raycaster.ray.origin.copy(origin);
   _raycaster.ray.direction.copy(direction);
+
+  if (menu.buttonVisible && rayNear(origin, direction, menu.button, WRIST_RAY_RADIUS)) {
+    end.copy(menu.button);
+    return { kind: 'wrist', id: WRIST_BUTTON_ID, u: 0, v: 0 };
+  }
 
   const mini = miniatureOnRay(origin, direction, miniatures);
   if (mini) {
@@ -172,9 +195,8 @@ function aimAt(
     return { kind: 'miniature', id: mini.id, u: 0, v: 0, miniature: mini };
   }
 
-  const toButton = _vCurPos.subVectors(BUTTON_POS, origin).dot(direction);
-  if (toButton > 0 && _raycaster.ray.distanceToPoint(BUTTON_POS) <= AIR_BUTTON_RADIUS) {
-    end.copy(BUTTON_POS);
+  if (menu.open && rayNear(origin, direction, menu.scan, AIR_BUTTON_RADIUS)) {
+    end.copy(menu.scan);
     return { kind: 'button', id: AIR_BUTTON_ID, u: 0, v: 0 };
   }
 
@@ -194,6 +216,7 @@ function aimAt(
 }
 
 function beamColor(kind: AimKind): string {
+  if (kind === 'wrist') return BEAM_WRIST;
   if (kind === 'miniature') return BEAM_MINIATURE;
   if (kind === 'button') return BEAM_BUTTON;
   if (kind === 'target') return BEAM_TARGET;
@@ -205,7 +228,7 @@ function beamColor(kind: AimKind): string {
  * Single input source of the /village VR studio (VS-T4).
  * - Controllers and hands share the system pointer ray (`getController(i)`): one shot per
  *   `selectstart` (trigger press or native pinch), never `select` too.
- * - Fingertip touch presses the scan button directly.
+ * - Fingertip touch presses the wrist button (other hand) and, menu open, the scan button.
  * - Mouse: desktop preview and the IWER emulator.
  * Shots at the webcam video hit the object under the laser; elsewhere fall back to
  * scene objects carrying `userData.onSelect` (HUD toggle).
@@ -214,6 +237,7 @@ function beamColor(kind: AimKind): string {
  */
 export const XRBlasterController = memo(function XRBlasterController({
   targets,
+  menu,
   miniatures = [],
   onTapMiniature,
   onHoverTarget,
@@ -260,6 +284,11 @@ export const XRBlasterController = memo(function XRBlasterController({
     blastRef.current = { origin: origin.clone(), to: to.clone(), progress: 0 };
   };
 
+  const toggleMenu = useCallback(() => {
+    playTargetHitSound();
+    menu.toggle();
+  }, [menu]);
+
   const pressButton = useCallback(() => {
     playLaserShootSound();
     playScanRadarSound();
@@ -269,7 +298,7 @@ export const XRBlasterController = memo(function XRBlasterController({
   /** Starts holding the miniature the input points at; false when it points at none. */
   const tryGrab = useCallback(
     (key: InputKey, origin: THREE.Vector3, direction: THREE.Vector3, haptics?: Gamepad | null) => {
-      const aim = aimAt(origin, direction, targets, _vEnd, miniatures);
+      const aim = aimAt(origin, direction, targets, _vEnd, menu, miniatures);
       if (aim.kind !== 'miniature' || !aim.miniature) return false;
       grabTurntable(aim.miniature.turntable, key, performance.now());
       grabsRef.current.set(key, {
@@ -286,7 +315,7 @@ export const XRBlasterController = memo(function XRBlasterController({
       }
       return true;
     },
-    [targets, miniatures]
+    [targets, miniatures, menu]
   );
 
   const release = useCallback(
@@ -305,8 +334,12 @@ export const XRBlasterController = memo(function XRBlasterController({
   /** Resolves one shot. `haptics` is the gamepad of the input that fired, if any. */
   const triggerShot = useCallback(
     (origin: THREE.Vector3, direction: THREE.Vector3, haptics?: Gamepad | null) => {
-      const aim = aimAt(origin, direction, targets, _vEnd);
+      const aim = aimAt(origin, direction, targets, _vEnd, menu);
 
+      if (aim.kind === 'wrist') {
+        toggleMenu();
+        return;
+      }
       if (aim.kind === 'button') {
         startBlast(origin, _vEnd);
         pressButton();
@@ -351,7 +384,7 @@ export const XRBlasterController = memo(function XRBlasterController({
       }
       onShootScreen?.(aim.u, aim.v);
     },
-    [camera, scene, targets, pressButton, onShootTarget, onShootScreen]
+    [camera, scene, targets, menu, toggleMenu, pressButton, onShootTarget, onShootScreen]
   );
 
   // XR pointers (controllers and hands), grips and articulated hands.
@@ -475,7 +508,7 @@ export const XRBlasterController = memo(function XRBlasterController({
     origin: THREE.Vector3,
     direction: THREE.Vector3
   ): string | null => {
-    const aim = aimAt(origin, direction, targets, _vEnd, miniatures);
+    const aim = aimAt(origin, direction, targets, _vEnd, menu, miniatures);
     const pointer = pointers[index];
     const pip = pips[index];
     const color = beamColor(aim.kind);
@@ -501,23 +534,35 @@ export const XRBlasterController = memo(function XRBlasterController({
     const now = performance.now();
     let hovered: string | null = null;
 
-    // 1. Hands: joints mesh + fingertip press on the scan button.
+    // 1. Hands: joints mesh + fingertip press on the wrist button (other hand) and,
+    //    menu open, on the scan button.
     let anyHand = false;
-    for (const h of handsRef.current) {
+    handsRef.current.forEach((h, index) => {
       const tracked = updateHandMesh(h.group, h.mesh) > 0 && presenting;
       h.mesh.visible = tracked;
-      if (!tracked) continue;
+      if (!tracked) return;
       anyHand = true;
       const tip = h.group.joints?.['index-finger-tip'];
-      if (!tip) continue;
+      if (!tip) return;
       tip.getWorldPosition(_vTip);
-      const d = _vTip.distanceTo(BUTTON_POS);
+      const cooled = now - lastTouchRef.current > TOUCH_COOLDOWN_MS;
+      if (menu.buttonVisible && menu.wearer !== index) {
+        const dw = _vTip.distanceTo(menu.button);
+        if (dw <= WRIST_RAY_RADIUS) hovered = WRIST_BUTTON_ID;
+        if (dw <= WRIST_TOUCH_RADIUS && cooled) {
+          lastTouchRef.current = now;
+          toggleMenu();
+          return;
+        }
+      }
+      if (!menu.open) return;
+      const d = _vTip.distanceTo(menu.scan);
       if (d <= AIR_BUTTON_RADIUS) hovered = AIR_BUTTON_ID;
-      if (d <= AIR_BUTTON_TOUCH_RADIUS && now - lastTouchRef.current > TOUCH_COOLDOWN_MS) {
+      if (d <= AIR_BUTTON_TOUCH_RADIUS && cooled) {
         lastTouchRef.current = now;
         pressButton();
       }
-    }
+    });
     for (const grip of gripsRef.current) grip.visible = presenting && !anyHand;
 
     // 2. Projectile and impact ring.

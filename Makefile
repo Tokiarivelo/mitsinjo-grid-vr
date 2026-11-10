@@ -97,7 +97,7 @@ shape-shots: ## Real 3D viewer shots of the shape-report recipes, dark + light (
 	$(need_ws)
 	@$(PNPM) --filter $(WEB) exec node scripts/object-viewer-shot.mjs $(URL) $(CURDIR)/test-results/shape-report
 
-vr-probe: ## /village VR check in the IWER emulator: shoot objects in the fake-webcam video with controllers + hands (dev server must run; needs ffmpeg)
+vr-probe: ## /village VR check in the IWER emulator: wrist menu, shoot objects in the fake-webcam video with controllers + hands (dev server must run; needs ffmpeg)
 	$(need_ws)
 	@$(PNPM) --filter $(WEB) exec node scripts/vr-village-probe.mjs $(URL) $(CURDIR)/test-results/vr-probe
 

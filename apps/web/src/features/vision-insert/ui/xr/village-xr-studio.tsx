@@ -19,7 +19,9 @@ import { VillageSpatialHUD } from './village-spatial-hud';
 import { LiveWebcamBackdrop } from './live-webcam-backdrop';
 import { SpatialInteractionGuide } from './spatial-interaction-guide';
 import { pickTargetAtUv } from './webcam-screen';
-import { AIR_BUTTON_POSITION, INTERACTION_GUIDE_POSITION, miniatureSlot } from './xr-layout';
+import { MENU_GUIDE_OFFSET, MENU_SCAN_OFFSET, miniatureSlot } from './xr-layout';
+import { createWristMenu, WRIST_BUTTON_ID } from './wrist-menu';
+import { WristMenuButton, WristMenuPanel } from './xr-wrist-menu';
 
 export interface VillageXRStudioProps {
   detections: ApplianceDetection[];
@@ -31,8 +33,9 @@ export interface VillageXRStudioProps {
 
 /**
  * Village XR Studio Scene.
- * Immersive 3D room with lighting, in-air spatial scan button, holographic target boxes,
- * laser blaster interaction, and procedural 3D model materialization in-situ.
+ * Immersive 3D room with lighting, a wrist button that opens the menu (scan button, guide,
+ * HUD) in front of the viewer, holographic target boxes, laser blaster interaction, and
+ * procedural 3D model materialization in-situ.
  */
 export const VillageXRStudio = memo(function VillageXRStudio({
   detections,
@@ -50,6 +53,24 @@ export const VillageXRStudio = memo(function VillageXRStudio({
   /** Rotation of each miniature, mutated by the input controller in the frame loop. */
   const turntablesRef = useRef(new Map<string, Turntable>());
   const [hoveredTargetId, setHoveredTargetId] = useState<string | null>(null);
+  /** Wrist menu: closed on entry; the wrist button toggles it (read by the input controller). */
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menu = useMemo(() => {
+    const m = createWristMenu(() => {
+      m.open = !m.open;
+      setMenuOpen(m.open);
+    });
+    return m;
+  }, []);
+  // Dev only: lets `make vr-probe` aim at the wrist button (same pattern as __IWER_DEVICE__).
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'production') return;
+    const w = window as Window & { __VR_WRIST_MENU__?: unknown };
+    w.__VR_WRIST_MENU__ = menu;
+    return () => {
+      delete w.__VR_WRIST_MENU__;
+    };
+  }, [menu]);
   const [recentEvent, setRecentEvent] = useState<string | null>(null);
   const eventTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const captureFnRef = useRef<(() => string | null) | null>(null);
@@ -244,17 +265,25 @@ export const VillageXRStudio = memo(function VillageXRStudio({
         <meshBasicMaterial color="#38bdf8" transparent opacity={0.25} />
       </mesh>
 
-      {/* 4. In-Air Interactive Spatial Button & Diegetic Interaction Guide */}
-      <SpatialAirButton
-        status={status}
-        detectedCount={targets.length}
-        position={AIR_BUTTON_POSITION}
-        isHovered={hoveredTargetId === AIR_BUTTON_ID}
+      {/* 4. Wrist button → menu (scan button, guide, HUD VS-T8), following the viewer */}
+      <WristMenuButton
+        menu={menu}
+        open={menuOpen}
+        hovered={hoveredTargetId === WRIST_BUTTON_ID}
+        alert={!menuOpen && recentEvent !== null}
       />
-      <SpatialInteractionGuide position={INTERACTION_GUIDE_POSITION} />
-
-      {/* 5. Diegetic Holographic Telemetry HUD (VS-T8) */}
-      <VillageSpatialHUD recentEvent={recentEvent} />
+      {menuOpen && (
+        <WristMenuPanel menu={menu} scanOffset={MENU_SCAN_OFFSET}>
+          <SpatialAirButton
+            status={status}
+            detectedCount={targets.length}
+            position={MENU_SCAN_OFFSET}
+            isHovered={hoveredTargetId === AIR_BUTTON_ID}
+          />
+          <SpatialInteractionGuide position={MENU_GUIDE_OFFSET} />
+          <VillageSpatialHUD recentEvent={recentEvent} />
+        </WristMenuPanel>
+      )}
 
       {/* 6. Holographic Detection Targets */}
       {targets.map((target) => (
@@ -282,6 +311,7 @@ export const VillageXRStudio = memo(function VillageXRStudio({
       {/* 6. XR Blaster Controller Raycasting & Particle Effects */}
       <XRBlasterController
         targets={targets}
+        menu={menu}
         miniatures={miniatures}
         onTapMiniature={handleShootTarget}
         onHoverTarget={setHoveredTargetId}

@@ -87,6 +87,13 @@ flowchart TD
   - Réticule d'impact (pip dot) projeté à la distance exacte d'intersection avec les cibles.
   - Raycaster Three.js en boucle `useFrame` testant les intersections cibles.
   - Unprojection souris desktop intégrée (`_raycaster.setFromCamera`) pour viser et cliquer directement sur les boutons 3D sans casque.
+- **Menu au poignet (VS-T13) :** à l'entrée, aucun panneau flottant. Un petit bouton (Ø 4,4 cm, étiquette « Menu » / « Fermer »)
+  est porté sur le poignet gauche (joint `wrist` en suivi des mains, poignée gauche avec manettes ; sans entrée gauche
+  suivie, en bas à gauche de la vue). Le doigt de l'autre main, le laser, le pincement ou la souris l'ouvre / le ferme.
+  Le menu (bouton de scan, guide, HUD) apparaît à 0,9 m devant, 32 cm sous les yeux, dans le monde (règle Meta : menu
+  lancé _depuis_ le poignet, jamais accroché au poignet ; ≥ 0,8 m pour le rayon) et **suit la personne en différé**
+  (`wrist-menu.ts`, `updateLazyFollow`) : il reste immobile, puis se recentre en douceur si l'on tourne la tête
+  de plus de ~35° ou si l'on s'éloigne de plus de 35 cm. Fermé, le bouton pulse en orange à chaque nouvel événement.
 - **Source d'entrée unique :** `XRBlasterController` gère manettes, mains, doigt et souris. Les composants (bouton, cibles, HUD) n'ont plus de `onClick` R3F propre (un clic tirait deux fois).
 - **Visée sur la vidéo :** le rayon coupe l'écran webcam → point image $(u, v)$ → la plus petite boîte de détection qui le contient (une prise sur une table gagne sur la table). Hors de toute boîte : avant tout scan, le tir lance le scan puis transforme en 3D l'objet sous ce point ; après un scan, notification « Aucun objet détecté à cet endroit ».
 - **Action de tir :**
@@ -192,7 +199,7 @@ flowchart TD
 ### Phase 8 : Écran Panoramique Studio à Focus Plat & Prévention du Vertige (Anti-Vertigo Planar Cinema Screen)
 
 - **Vision :** Afficher le décor d'atelier et la webcam sans déformation sphérique pour éliminer les nausées de mouvement et le conflit vestibulaire :
-  - **Géométrie actuelle (`WEBCAM_SCREEN`) :** rayon 8,5 m, hauteur 4,2 m (16:9), centre à 2,6 m devant, **bord bas posé au sol** (avant, le bas de la vidéo passait sous le plancher). Le bouton (`[0, 1.05, -0.95]`), le guide, le HUD et la pastille caméra sont sous la ligne des yeux à ~1 m (`xr-layout.ts`) pour laisser le centre de la vidéo dégagé.
+  - **Géométrie actuelle (`WEBCAM_SCREEN`) :** rayon 8,5 m, hauteur 4,2 m (16:9), centre à 2,6 m devant, **bord bas posé au sol** (avant, le bas de la vidéo passait sous le plancher). Le menu du poignet (bouton de scan, guide, HUD) s'ouvre sous la ligne des yeux à 0,9 m et la pastille caméra est à ~1 m (`xr-layout.ts`) : le centre de la vidéo reste dégagé.
   - _Historique —_ **Focus central plat ($R = 11{,}5\text{ m}$) :** Courbure géante centrée à $4{,}2\text{ m}$ devant le regard. La flèche de courbure sur les $6\text{ m}$ centraux est $< 38\text{ cm}$, offrant une vue optiquement 100 % plane où les lignes horizontales ne sont pas déformées en œil de poisson.
   - **Grand angle panoramique étendu ($153^\circ$) :** Arc horizontal de $153^\circ$ (`thetaLength = Math.PI * 0.85`), permettant à l'utilisateur de tourner la tête librement de gauche à droite pour inspecter les cibles périphériques sans sentiment d'enfermement.
   - **Suppression du dôme sphérique 360° :** Remplacé par un mur architectural droit sombre (`name="studio-backdrop-wall"`, `<planeGeometry args={[26, 9]} />`) et un sol étendu stable (`circleGeometry args={[9, 48]}`), assurant un ancrage gravitationnel solide.
@@ -254,7 +261,9 @@ Le système supporte 4 manières complètes d'interagir avec les boutons flottan
 | `spatial-air-button.tsx`        | Bouton 3D flottant avec pulsation lumineuse et texture interactive pour scanner.                   | [x]  |
 | `spatial-air-button-texture.ts` | Générateur de texture canvas 2D haute résolution pour le bouton de scan spatial.                   | [x]  |
 | `webcam-screen.ts`              | Géométrie de l'écran webcam : point 3D d'un pixel, pixel visé par un rayon, cible sous un pixel.   | [x]  |
-| `xr-layout.ts`                  | Positions des panneaux dans le casque (bouton, guide, HUD, pastille caméra, socles miniatures).    | [x]  |
+| `xr-layout.ts`                  | Positions des panneaux dans le casque (contenu du menu, pastille caméra, socles miniatures).       | [x]  |
+| `wrist-menu.ts`                 | Menu du poignet : état partagé, placement du bouton (main / manette / vue), suivi différé du menu. | [x]  |
+| `xr-wrist-menu.tsx`             | Bouton du poignet (icône + étiquette) et panneau du menu qui suit l'utilisateur.                   | [x]  |
 | `spatial-projection.ts`         | Algorithme de projection des boîtes 2D normalisées en coordonnées sphériques/arc 3D.               | [x]  |
 | `holo-detection-target.tsx`     | Cible holographique 3D réactive au tir, avec texture billboard et mode raccordement.               | [x]  |
 | `holo-target-texture.ts`        | Générateur de texture canvas pour les cibles de détection et statuts de raccordement réseau.       | [x]  |

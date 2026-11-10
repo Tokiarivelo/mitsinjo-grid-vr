@@ -168,3 +168,11 @@
 - [x] Saisie au select maintenu (gâchette, pincement, clic) ; mouvement de la manette / main / souris → rotation.
 - [x] Tap sur la miniature = raccorder / déconnecter ; `make vr-probe` raccorde le frigo par sa miniature.
 - [x] **Done when :** dans l'émulateur, frigo, ventilateur et TV deviennent des miniatures devant soi qui tournent ; tap sur le frigo le raccorde.
+
+### VS-T13 : Menu au poignet (boutons flottants masqués à l'entrée)
+
+- [x] Aucun panneau flottant à l'entrée ; petit bouton sur le poignet gauche (main : joint `wrist`, manette : poignée gauche, sinon bas-gauche de la vue).
+- [x] Doigt de l'autre main, laser, pincement ou souris sur le bouton → ouvre / ferme le menu (bouton de scan, guide, HUD).
+- [x] Menu dans le monde à 0,9 m, sous les yeux, suivi différé (recentrage après ~35° de rotation ou 35 cm de déplacement).
+- [x] Bouton de scan inactif menu fermé ; bouton qui pulse quand un événement arrive menu fermé.
+- [x] **Done when :** `make vr-probe` → 8 PASS (menu fermé à l'entrée, ouvert puis fermé depuis le poignet, sans scan).

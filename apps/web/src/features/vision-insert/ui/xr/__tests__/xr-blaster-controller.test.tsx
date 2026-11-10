@@ -4,7 +4,8 @@ import * as THREE from 'three';
 import type { SpatialTarget } from '../spatial-projection';
 import { projectDetectionsTo3D } from '../spatial-projection';
 import { screenPoint } from '../webcam-screen';
-import { AIR_BUTTON_POSITION, miniatureSlot } from '../xr-layout';
+import { miniatureSlot } from '../xr-layout';
+import { createWristMenu, type WristMenu } from '../wrist-menu';
 import { XRBlasterController, type MiniatureHandle } from '../xr-blaster-controller';
 import { createTurntable } from '../turntable';
 
@@ -41,6 +42,10 @@ vi.mock('@react-three/fiber', () => ({
 }));
 
 const EYE = new THREE.Vector3(0, 1.6, 0);
+/** Scan button of the open menu, and the wrist button on the left hand. */
+const AIR_BUTTON_POSITION: [number, number, number] = [0, 1.34, -0.9];
+const WRIST: [number, number, number] = [-0.2, 1.1, -0.35];
+let menu: WristMenu;
 
 const FORWARD = new THREE.Vector3(0, 0, -1);
 
@@ -65,6 +70,7 @@ const fridgeOnVideo = screenPoint(0.21, 0.55);
 function setup(targets: SpatialTarget[] = [fridge], miniatures: MiniatureHandle[] = []) {
   const props = {
     targets,
+    menu,
     miniatures,
     onTapMiniature: vi.fn(),
     onHoverTarget: vi.fn(),
@@ -79,6 +85,15 @@ function setup(targets: SpatialTarget[] = [fridge], miniatures: MiniatureHandle[
 describe('XRBlasterController (VS-T4)', () => {
   beforeEach(() => {
     frame = null;
+    menu = createWristMenu();
+    menu.toggle = vi.fn(() => {
+      menu.open = !menu.open;
+    });
+    menu.open = true;
+    menu.scan.set(...AIR_BUTTON_POSITION);
+    menu.button.set(...WRIST);
+    menu.buttonVisible = true;
+    menu.wearer = 1;
     scene = new THREE.Scene();
     camera = new THREE.PerspectiveCamera(75, 800 / 600, 0.1, 100);
     camera.position.copy(EYE);
@@ -279,6 +294,52 @@ describe('XRBlasterController (VS-T4)', () => {
       });
       expect(m.turntable.yaw).toBeCloseTo(60 * 0.012, 2);
       expect(m.turntable.heldBy).toBeNull();
+    });
+  });
+
+  describe('wrist menu', () => {
+    it('the scan button is dead while the menu is closed', () => {
+      menu.open = false;
+      const { onTriggerScan } = setup();
+      aim(controller0, AIR_BUTTON_POSITION);
+      act(() => controller0.dispatchEvent({ type: 'selectstart' } as never));
+      expect(onTriggerScan).not.toHaveBeenCalled();
+    });
+
+    it('a laser shot at the wrist button toggles the menu, nothing else', () => {
+      menu.open = false;
+      const { onTriggerScan, onShootScreen } = setup();
+      aim(controller0, WRIST);
+      act(() => controller0.dispatchEvent({ type: 'selectstart' } as never));
+      expect(menu.toggle).toHaveBeenCalledTimes(1);
+      expect(menu.open).toBe(true);
+      expect(onTriggerScan).not.toHaveBeenCalled();
+      expect(onShootScreen).not.toHaveBeenCalled();
+    });
+
+    it('the other hand fingertip presses the wrist button once per touch', () => {
+      gl.xr.isPresenting = true;
+      menu.wearer = 1;
+      const tip = Object.assign(new THREE.Group(), { jointRadius: 0.01 });
+      tip.position.set(...WRIST);
+      hand0.joints!['index-finger-tip'] = tip;
+      setup();
+      act(() => {
+        frame?.({}, 0.016);
+        frame?.({}, 0.016);
+      });
+      expect(menu.toggle).toHaveBeenCalledTimes(1);
+    });
+
+    it("the wearing hand's own fingertip does not press it", () => {
+      gl.xr.isPresenting = true;
+      menu.wearer = 0;
+      const tip = Object.assign(new THREE.Group(), { jointRadius: 0.01 });
+      tip.position.set(...WRIST);
+      hand0.joints!['index-finger-tip'] = tip;
+      setup();
+      act(() => frame?.({}, 0.016));
+      expect(menu.toggle).not.toHaveBeenCalled();
     });
   });
 });

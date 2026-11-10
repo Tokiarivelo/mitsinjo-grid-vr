@@ -1,40 +1,37 @@
 # HANDOFF — read first, overwrite at end of session (≤40 lines)
 
-**Updated:** 2026-11-09 · **By:** Claude Code · **Branch:** feat/vr-village-mini-turntable (on top of fix/vr-village-xr-shoot-verify, not merged yet)
+**Updated:** 2026-11-10 · **By:** Claude Code · **Branch:** feat/vr-village-wrist-menu (stacked on feat/vr-village-mini-turntable, not merged yet)
 
 ## Current state
 
 - /village VR verified in the IWER emulator (Quest 3) with a fake webcam (sample room): controllers, hands, mouse.
-- New (VS-T11): shoot an object **in the webcam video** → it turns into 3D. Before any scan, the shot starts the scan
-  and resolves to the object under the shot once detections arrive. 2nd shot connects it to the microgrid.
-- `webcam-screen.ts` = single geometry for the curved video screen (bottom edge on the floor); targets are laid on
-  their object in the video, models pop out along the line of sight (1.6 m, ≤ 0.9 m).
-- `XRBlasterController` is the only input source: `selectstart` only; hands use the system ray + native pinch;
-  R3F `onClick` removed from air button, targets and HUD (each click fired twice before).
-- New (VS-T12): the shot model flies out of the video into a 22 cm **miniature** on a pedestal in reach
-  (`miniatureSlot`), spins (`turntable.ts`); held select (trigger / pinch / mouse) rotates it, a tap connects it.
-- Panels below eye level at ~1 m (`xr-layout.ts`); cyan hand spheres (`updateHandMesh`, shared with /simulation).
-- `make vr-probe` (scripted emulator check, 4 PASS) and `make dev-stop` (kills turbo/pnpm/next group; next-server alone respawns).
-- Dev only: `window.__IWER_DEVICE__` = IWER remote API (IWER MCP failed: port 8723 busy).
+- VS-T11: shoot an object **in the webcam video** → it turns into 3D; VS-T12: it flies to a spinning 22 cm
+  miniature in reach (hold select = rotate, tap = connect).
+- New (VS-T13): **wrist menu**. No floating panel on entry. Small "Menu" button on the left wrist (`wrist` joint /
+  left grip / bottom-left of view as fallback). Other hand's fingertip, laser, pinch or mouse toggles the menu
+  (scan button, guide, HUD), spawned in world space 0.9 m ahead, 0.32 m below the eyes, lazy-following the viewer
+  (`wrist-menu.ts`). Scan button dead while closed; wrist button pulses on new events while closed.
+- `XRBlasterController` stays the only input source (`menu` prop = shared mutable `WristMenu`).
+- `make vr-probe` → 8 PASS (menu closed on entry, opens/closes from the wrist without scanning, shoot flow).
+- Dev only: `window.__IWER_DEVICE__` (IWER remote) and `window.__VR_WRIST_MENU__` (probe aims at the wrist button).
 
 ## Next
 
-1. Real Quest: check comfort of panel heights and spawn size; tune `xr-layout.ts` / `spawnDistance`.
-2. Static text in headset (HUD « Charge / Décharge », webcam pill « 720p LIVE ») → i18n keys.
-3. VS-T9 spatial audio; foveation / frame-rate settings in `xr-session.ts` (see `/vr-immersion` skill).
+1. Real Quest: check wrist button offset on hands/controllers (`WRIST_OFFSET_*`) and menu height/distance.
+2. Optional: Meta palm-up pinch gesture (non-dominant hand) as a second way to open the menu.
+3. Static text in headset (HUD « Charge / Décharge », webcam pill « 720p LIVE », air-button badges) → i18n keys.
+4. VS-T9 spatial audio; foveation / frame-rate settings in `xr-session.ts`.
 
 ## Files touched
 
-- `apps/web/src/features/vision-insert/ui/xr/`: `turntable.ts` (new, VS-T12), `webcam-screen.ts` (new), `xr-layout.ts` (new), `spatial-projection.ts`,
-  `xr-blaster-controller.tsx`, `village-xr-studio.tsx`, `live-webcam-backdrop.tsx`, `holo-detection-target.tsx`,
-  `spatial-air-button.tsx`, `village-spatial-hud.tsx`, `spawned-object-3d.tsx` + tests (`webcam-screen`, `village-xr-studio` new)
-- `microgrid-3d/utils/xr-hands.ts`, `dev-xr-emulator.ts` (+ test); `messages/{en,fr,mg}.json` (`vrHudEvent*`)
-- `apps/web/scripts/vr-village-probe.mjs`, `scripts/dev-stop.sh`, `Makefile`, `README.md`
-- Docs: `vr-village-spatial-detection.md`, `vr-testing-guide.md`, `performance.md`, `tasks/VR-village-spatial-shoot.md`,
-  `.claude/skills/vr-immersion/SKILL.md`
+- `apps/web/src/features/vision-insert/ui/xr/`: `wrist-menu.ts`, `wrist-menu-texture.ts`, `xr-wrist-menu.tsx` (new),
+  `xr-blaster-controller.tsx`, `village-xr-studio.tsx`, `xr-layout.ts`, `spatial-air-button.tsx`,
+  `village-spatial-hud.tsx`, `village-xr-viewport.tsx` + tests (`wrist-menu`, `xr-wrist-menu` new)
+- `messages/{en,fr,mg}.json` (`vrWristMenuOpen/Close`, `vrInteractionHelpWrist`), `scripts/vr-village-probe.mjs`, `Makefile`
+- Docs: `vr-village-spatial-detection.md`, `tasks/VR-village-spatial-shoot.md` (VS-T13)
 
 ## Decisions
 
-- Targets follow the video, not a free arc: what you aim at in the image is what you hit.
-- Miniature tap window 1.2 s (emulator holds `select` ~1 s); any rotation > 0.15 rad is a drag, never a tap.
-- No `ContactShadows` on spawned models in XR (extra render target breaks FFR/MSAA, Meta guidance).
+- Meta hands UI guidance: spawn the menu _from_ the wrist, never anchor it to the wrist; ray UI ≥ 0.8 m → 0.9 m.
+- Lazy follow (re-centre after ~35° turn or 35 cm move, eased) instead of head-locked: no jitter, follows the person.
+- Menu content is unmounted when closed (three's raycaster ignores `visible`, the HUD would still catch shots).

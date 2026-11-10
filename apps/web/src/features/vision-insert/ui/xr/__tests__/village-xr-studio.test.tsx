@@ -20,6 +20,12 @@ vi.mock('../holo-detection-target', () => ({ HoloDetectionTarget: () => null }))
 vi.mock('../spawned-object-3d', () => ({ SpawnedObject3D: () => null }));
 vi.mock('../village-spatial-hud', () => ({ VillageSpatialHUD: () => null }));
 vi.mock('../spatial-interaction-guide', () => ({ SpatialInteractionGuide: () => null }));
+vi.mock('../xr-wrist-menu', () => ({
+  WristMenuButton: () => null,
+  WristMenuPanel: ({ children }: { children?: React.ReactNode }) => (
+    <div data-testid="wrist-menu-panel">{children}</div>
+  ),
+}));
 vi.mock('../xr-audio-fx', () => ({
   playGridConnectSound: vi.fn(),
   playGridDisconnectSound: vi.fn(),
@@ -100,5 +106,19 @@ describe('VillageXRStudio — shoot an object in the webcam video', () => {
 
     act(() => blaster.props!.onTapMiniature!('fridge'));
     expect(onSelectAppliance).toHaveBeenCalledTimes(2); // materialize, then connect
+  });
+
+  it('keeps the menu hidden on entry; the wrist button opens and closes it', () => {
+    const { queryByTestId } = setup();
+    const menu = blaster.props!.menu;
+    expect(menu.open).toBe(false);
+    expect(queryByTestId('wrist-menu-panel')).toBeNull();
+
+    act(() => menu.toggle());
+    expect(menu.open).toBe(true);
+    expect(queryByTestId('wrist-menu-panel')).toBeTruthy();
+
+    act(() => menu.toggle());
+    expect(queryByTestId('wrist-menu-panel')).toBeNull();
   });
 });

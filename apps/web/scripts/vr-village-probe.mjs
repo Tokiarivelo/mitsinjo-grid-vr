@@ -116,7 +116,38 @@ try {
   await sleep(2000);
   await shot('1-entered');
 
+  // Wrist menu: hidden on entry, opened by aiming at the button on the left wrist.
   await rc('set_input_mode', { mode: 'controller' });
+  await rc('set_transform', { device: 'controller-left', position: { x: -0.2, y: 1.1, z: -0.35 } });
+  await sleep(800);
+  const menu = () =>
+    page.evaluate(() => {
+      const m = window.__VR_WRIST_MENU__;
+      return (
+        m && {
+          open: m.open,
+          wearer: m.wearer,
+          button: { x: m.button.x, y: m.button.y, z: m.button.z },
+        }
+      );
+    });
+  const m0 = await menu();
+  check(
+    'wrist menu closed on entry, button worn on the left controller',
+    !!m0 && !m0.open && m0.wearer !== null
+  );
+  await shot('0-menu-closed');
+  if (m0) await fire('controller-right', m0.button, { x: 0.2, y: 1.3, z: -0.1 });
+  check('aiming at the wrist button opens the menu', !!(await menu())?.open);
+  check('opening the menu does not scan', scans === 0);
+  await shot('0b-menu-open');
+  await rc('look_at', { device: 'headset', target: { x: 0, y: 1.2, z: -0.9 } });
+  await sleep(1500);
+  await shot('0c-menu-look-down');
+  const m1 = await menu();
+  if (m1) await fire('controller-right', m1.button, { x: 0.2, y: 1.3, z: -0.1 });
+  check('a second press closes it', (await menu())?.open === false);
+
   await fire('controller-right', FRIDGE, { x: 0.2, y: 1.3, z: -0.3 });
   check('a shot at the video before any scan starts a scan', scans === 1);
   const t0 = Date.now();
