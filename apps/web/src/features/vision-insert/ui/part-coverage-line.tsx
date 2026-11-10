@@ -2,6 +2,10 @@ import { Fragment } from 'react';
 import { ListChecks, TriangleAlert } from 'lucide-react';
 import { useTranslations } from '@/lib/i18n';
 import type { PartCoverage } from '@/lib/object-shape';
+import en from '@/messages/en.json';
+
+/** SAM part concepts with a `model3dPart` label (same keys in every locale; the server's `PART_CONCEPTS`). */
+const LABELLED: ReadonlySet<string> = new Set(Object.keys(en.features.visionInsert.model3dPart));
 
 /**
  * « Parts seen on the photo: Wheels 2/2 · Windows 1/3 (not built: 2) » (PQ-T37): per SAM part kind, the
@@ -11,13 +15,15 @@ import type { PartCoverage } from '@/lib/object-shape';
  */
 export function PartCoverageLine({ coverage }: { coverage: ReadonlyArray<PartCoverage> }) {
   const t = useTranslations('features.visionInsert');
-  if (coverage.length === 0) return null;
+  // A concept without a label (a new SAM word not named in the messages yet) is left out: never a raw key.
+  const named = coverage.filter((c) => LABELLED.has(c.concept));
+  if (named.length === 0) return null;
   return (
     <p className="flex items-start gap-1.5 text-xs text-text-secondary">
       <ListChecks className="mt-0.5 h-3 w-3 shrink-0" aria-hidden="true" />
       <span>
         <span>{t('model3dCoverage')}</span>{' '}
-        {coverage.map((c, i) => {
+        {named.map((c, i) => {
           const missing = c.seen - c.built;
           return (
             <Fragment key={c.concept}>

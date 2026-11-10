@@ -160,3 +160,12 @@ describe('fetchPartMasks miss causes (FIX 1)', () => {
     }
   });
 });
+
+describe('part concepts are named in the panel (PQ-T37, PR #10 review)', () => {
+  it('every photo-path SAM concept has a `model3dPart` label', async () => {
+    const en = (await import('@/messages/en.json')).default;
+    const labels = Object.keys(en.features.visionInsert.model3dPart);
+    const concepts = [...new Set(Object.values(PART_CONCEPTS).flat())];
+    expect(concepts.filter((c) => !labels.includes(c))).toEqual([]);
+  });
+});

@@ -175,6 +175,20 @@ describe('ObjectShapePanel (PV-T10)', () => {
     expect(screen.queryByText(/not built: 0/)).toBeNull();
   });
 
+  it('a SAM concept without a label is left out, never shown as a raw key (PR #10 review)', () => {
+    renderPanel({
+      shape: {
+        ...shape('recipe'),
+        coverage: [
+          { concept: 'wheel', seen: 2, built: 2 },
+          { concept: 'mirror', seen: 1, built: 0 },
+        ],
+      },
+    });
+    expect(screen.getByText(/Wheels 2\/2/)).toBeTruthy();
+    expect(screen.queryByText(/model3dPart|mirror/)).toBeNull();
+  });
+
   it('no part masks: no parts line', () => {
     renderPanel();
     expect(screen.queryByText('Parts seen on the photo:')).toBeNull();
