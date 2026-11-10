@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  clampParts,
   fitRecipe,
   frontPartIndex,
   ObjectRecipeSchema,
@@ -237,5 +238,45 @@ describe('lathe profile (PR-2.3)', () => {
     expect(parse([part({ profile: [...prof.slice(0, 2), [0.5, -0.5]] })])).toBe(true);
     expect(parse([part({ profile: [...prof.slice(0, 3), [0.5, 0]] })])).toBe(false);
     expect(parse([part({ profile: [...prof.slice(0, 3), [0.6, 0.5]] })])).toBe(false);
+  });
+});
+
+describe('clampParts (last guard before shipping)', () => {
+  const base = {
+    proportions: { w: 1, h: 1, d: 1 },
+    parts: [
+      {
+        shape: 'box' as const,
+        at: [0, 0, 0] as [number, number, number],
+        size: [1, 1, 1] as [number, number, number],
+        color: '#ffffff',
+      },
+    ],
+  };
+
+  it('returns the same recipe when every part is in range', () => {
+    const r = ObjectRecipeSchema.parse(base);
+    expect(clampParts(r)).toEqual({ recipe: r, clamped: [] });
+    expect(clampParts(r).recipe).toBe(r);
+  });
+
+  it('a part squeezed flat or pushed out comes back into the schema (house-front regression)', () => {
+    const r = {
+      ...base,
+      parts: [
+        ...base.parts,
+        {
+          shape: 'box' as const,
+          at: [0.9, 0, 0] as [number, number, number],
+          size: [0.1, 0.004, 0.02] as [number, number, number],
+          color: '#000000',
+        },
+      ],
+    };
+    const out = clampParts(r as never);
+    expect(out.clamped).toEqual([1]);
+    expect(out.recipe.parts[1]!.size[1]).toBe(0.01);
+    expect(out.recipe.parts[1]!.at[0]).toBe(0.6);
+    expect(() => ObjectRecipeSchema.parse(out.recipe)).not.toThrow();
   });
 });

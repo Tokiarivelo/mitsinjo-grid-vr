@@ -4,6 +4,7 @@ import { elevationForCheckpoint, type StageLoopContext } from './stage-checkpoin
 
 import {
   MAX_RECIPE_PARTS,
+  clampParts,
   SHAPE_TIMEOUT_MS,
   fitRecipe,
   frontPartIndex,
@@ -916,6 +917,14 @@ export async function runObjectShape(
             scale: template,
           },
         };
+      }
+      // A fitting step can squeeze a part under the schema minimum (house-front capture, PQ-T1).
+      const safe = clampParts(recipe);
+      if (safe.clamped.length) {
+        console.info(
+          `[vision] 3D clamp for "${target.label}": part(s) ${safe.clamped.map((i) => `${i} (${recipe.parts[i]!.kind ?? recipe.parts[i]!.shape})`).join(', ')} out of range`
+        );
+        recipe = safe.recipe;
       }
       if (photo) {
         try {
