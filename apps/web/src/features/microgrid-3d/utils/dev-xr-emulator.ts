@@ -41,9 +41,16 @@ async function install(): Promise<boolean> {
   }
 }
 
-/** True when the WebXR runtime is the dev emulator (IWER), not a real headset. */
+/** Globals set by an emulated WebXR runtime: our dev IWER, or the Immersive Web Emulator extension. */
+const EMULATOR_GLOBALS = ['__IWER_DEVICE__', '__IWE_XR_DEVICE__'] as const;
+
+/**
+ * True when the WebXR runtime is an emulator, not a real headset. The browser extension reports
+ * immersive-vr as native (so our IWER is never installed) and fakes a Quest user agent: only its
+ * device global tells it apart.
+ */
 export function isDevXREmulated(): boolean {
-  return typeof window !== 'undefined' && '__IWER_DEVICE__' in window;
+  return typeof window !== 'undefined' && EMULATOR_GLOBALS.some((key) => key in window);
 }
 
 /**

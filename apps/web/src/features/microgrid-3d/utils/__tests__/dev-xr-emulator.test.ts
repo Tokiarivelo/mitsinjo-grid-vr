@@ -19,3 +19,19 @@ describe('installDevXREmulator (real IWER packages)', () => {
     expect(document.documentElement.hasAttribute('data-xr-emulated')).toBe(false);
   });
 });
+
+describe('isDevXREmulated with the Immersive Web Emulator extension', () => {
+  it('detects the extension device even when our IWER is not installed', () => {
+    const w = window as unknown as Record<string, unknown>;
+    const own = w.__IWER_DEVICE__;
+    delete w.__IWER_DEVICE__;
+    try {
+      expect(isDevXREmulated()).toBe(false);
+      w.__IWE_XR_DEVICE__ = {};
+      expect(isDevXREmulated()).toBe(true);
+    } finally {
+      delete w.__IWE_XR_DEVICE__;
+      if (own !== undefined) w.__IWER_DEVICE__ = own;
+    }
+  });
+});

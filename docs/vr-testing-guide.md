@@ -107,15 +107,16 @@ Lancer : `pnpm --filter web test xr-session use-webxr camera-controller-xr
 
 ## Dépannage
 
-| Symptôme                                 | Cause probable                                           | Correctif                                                |
-| ---------------------------------------- | -------------------------------------------------------- | -------------------------------------------------------- |
-| Pas de bouton (dev)                      | Page HTTP non-localhost, ou vue 2D (WebGL off)           | Servir en HTTPS/`localhost` ; vérifier WebGL             |
-| Pas de bouton (prod desktop)             | Normal sans casque ni extension                          | Installer l'extension (chemin B)                         |
-| Session refusée / erreur en infobulle    | Refus runtime, double `enter`                            | Lire le message (title), réessayer, recharger si HMR     |
-| Écran noir en session                    | (Ne devrait plus arriver : postfx coupés en XR)          | Recharger, signaler avec la console                      |
-| Overlay DevUI absent (dev)               | WebGL indisponible → runtime seul + avertissement `[vr]` | Normal en headless ; la session reste testable via l'API |
-| `Multiple instances of Three.js` (tests) | Double chargement CJS/ESM via `postprocessing`           | Bruit connu, ignoré (voir tâche VR)                      |
-| Saccades sur casque                      | Trop de draw calls / textures                            | Passer Qualité basse, `?perf=1`, viser < 120 calls       |
+| Symptôme                                       | Cause probable                                                         | Correctif                                                               |
+| ---------------------------------------------- | ---------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| Pas de bouton (dev)                            | Page HTTP non-localhost, ou vue 2D (WebGL off)                         | Servir en HTTPS/`localhost` ; vérifier WebGL                            |
+| Pas de bouton (prod desktop)                   | Normal sans casque ni extension                                        | Installer l'extension (chemin B)                                        |
+| Session refusée / erreur en infobulle          | Refus runtime, double `enter`                                          | Lire le message (title), réessayer, recharger si HMR                    |
+| Écran noir en session                          | (Ne devrait plus arriver : postfx coupés en XR)                        | Recharger, signaler avec la console                                     |
+| /village : vieille pièce dessinée en émulation | Extension Immersive Web Emulator : XR « natif », IWER app non installé | Corrigé : `isDevXREmulated` reconnaît `__IWE_XR_DEVICE__` (visite 360°) |
+| Overlay DevUI absent (dev)                     | WebGL indisponible → runtime seul + avertissement `[vr]`               | Normal en headless ; la session reste testable via l'API                |
+| `Multiple instances of Three.js` (tests)       | Double chargement CJS/ESM via `postprocessing`                         | Bruit connu, ignoré (voir tâche VR)                                     |
+| Saccades sur casque                            | Trop de draw calls / textures                                          | Passer Qualité basse, `?perf=1`, viser < 120 calls                      |
 
 ## Non applicable à ce projet (vérifié, doc Meta)
 

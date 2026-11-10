@@ -14,6 +14,8 @@
   (portal on <body>, above IWER's z 999 layer), on /village and /simulation.
 - Emulator controls fixed: DevUI installed via `device.installDevUI(DevUI)` (with `new DevUI(device)` IWER never
   mounted the Controller panels / gizmos), single-flight install. `make vr-probe` → 14 PASS.
+- Immersive Web Emulator **extension** counts as emulated too (`window.__IWE_XR_DEVICE__`; it fakes a Quest UA),
+  so the 360° tour shows instead of the webcam fallback room.
 
 ## Next
 
