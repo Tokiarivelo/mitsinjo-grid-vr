@@ -11,7 +11,11 @@ export const PHOTO = { width: 320, height: 240 } as const;
 const SKY = '#8fb8de';
 const ROAD = '#6b6b6b';
 
+/** Where a reference case comes from (PQ-T1): a drawn street (`synthetic`) or a captured photo (`real`). */
+export type ShapeFixtureKind = 'real' | 'synthetic';
+
 export interface GoldenCase {
+  kind: 'synthetic';
   name: string;
   /** Object box in photo pixels. */
   px: { x: number; y: number; w: number; h: number };
@@ -54,6 +58,7 @@ function cottageRow(n: number, eave: number): GoldenCase {
     shapes.push({ fill: '#2a2a2a', points: rect((i + 0.6) / n, 0.6, (i + 0.8) / n, 0.75) });
   }
   return {
+    kind: 'synthetic',
     name: 'cottage row',
     px: { x: 40, y: 60, w: 240, h: 120 },
     shapes,
@@ -71,6 +76,7 @@ function cottageRow(n: number, eave: number): GoldenCase {
 
 const POLE = '#3a3f44';
 const lampPost: GoldenCase = {
+  kind: 'synthetic',
   name: 'lamp post',
   px: { x: 150, y: 40, w: 40, h: 160 },
   shapes: [
@@ -103,6 +109,7 @@ const lampPost: GoldenCase = {
 
 const WHITE = '#e8eaec';
 const fridge: GoldenCase = {
+  kind: 'synthetic',
   name: 'fridge',
   px: { x: 120, y: 40, w: 80, h: 160 },
   shapes: [
@@ -121,6 +128,7 @@ const fridge: GoldenCase = {
 
 const RED = '#b03030';
 const car: GoldenCase = {
+  kind: 'synthetic',
   name: 'car',
   px: { x: 60, y: 130, w: 200, h: 80 },
   shapes: [
@@ -173,6 +181,7 @@ function treeOutline(): Pt[] {
   return pts;
 }
 const tree: GoldenCase = {
+  kind: 'synthetic',
   name: 'tree',
   px: { x: 100, y: 30, w: 120, h: 180 },
   shapes: [
@@ -219,3 +228,46 @@ export const goldenBox = (c: GoldenCase) => ({
   w: c.px.w / PHOTO.width,
   h: c.px.h / PHOTO.height,
 });
+
+/** Why a real case is hard (PQ-T1): mostly hidden (≥ 30 %), small (< 150 px) or against the light. */
+export type RealHardness = 'hidden' | 'small' | 'backlit';
+
+/** One real photo of the reference set: `make shape-capture PHOTO=… ID=<id>` writes it under `real/`. */
+export interface RealCase {
+  kind: 'real';
+  /** Capture id = file name in `real/` (`<id>.capture.json` + `<id>.crop.jpg`). */
+  id: string;
+  /** What the photo should show. */
+  subject: string;
+  hard?: RealHardness;
+}
+
+const real = (id: string, subject: string, hard?: RealHardness): RealCase => ({
+  kind: 'real',
+  id,
+  subject,
+  ...(hard ? { hard } : {}),
+});
+
+/**
+ * The real reference set (PQ-T1). `real/` is gitignored: photos that cannot be shared stay local and the
+ * report skips the ones not captured on this machine (listed as missing).
+ */
+export const REAL_SHAPES: RealCase[] = [
+  real('car-side', 'car seen from the side'),
+  real('car-corner', 'car seen from a front corner'),
+  real('car-hidden', 'car partly hidden', 'hidden'),
+  real('motorbike', 'motorbike'),
+  real('house-front', 'house front'),
+  real('house-row', 'row of houses'),
+  real('hut', 'thatched hut'),
+  real('lamp', 'street lamp post'),
+  real('utility-pole', 'utility pole', 'small'),
+  real('refrigerator', 'fridge'),
+  real('TV', 'television'),
+  real('fan', 'standing fan'),
+  real('pump', 'water pump or generator'),
+  real('water-tank', 'water tank'),
+  real('solar-panel', 'solar panel', 'backlit'),
+  real('tree', 'tree'),
+];

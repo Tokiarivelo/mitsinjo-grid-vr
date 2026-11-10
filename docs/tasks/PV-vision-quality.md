@@ -31,6 +31,9 @@ Meta API calls; all others run offline.
       Photos that cannot be shared stay local (the report skips missing ones, as PR-0.5 planned).
       **Test:** `shape-report.test.ts` (real table, missing capture skipped).
       **Done when:** `make shape-report` shows ≥ 12 real rows and the baseline is logged. Closes PR-0.5.
+      _Code done 2026-11-10:_ `REAL_SHAPES` (16 ids, 3 hard) in the fixtures index, `scoreRealSet` + « Real »
+      table (missing / not scorable listed), captures now keep `partMasks` and the replay scores them.
+      **Open (user):** capture the 13 missing photos; `TV` needs a re-capture (no outline).
 - [x] **PQ-T2 Detail score.** _(done 2026-11-10; real rows wait for PQ-T1)_ New `server/perception/detail-score.ts`: part recall, part precision, interior edge
       F1, colour per part (definitions: methodology §6.1). `ModelScore.detail` in `model-score.ts`, filled by
       `score-shape.ts` from the capture's part masks; four columns in the report. Not in the weighted score yet.

@@ -289,16 +289,16 @@ its Vitest test in `__tests__/` in the same commit.
 
 ## 8. Verification: commands that exist
 
-| Question                                       | Command                                                    | Passes when                                                |
-| ---------------------------------------------- | ---------------------------------------------------------- | ---------------------------------------------------------- |
-| Does the shape pipeline still work offline?    | `make test-shape`                                          | Golden set green                                           |
-| How good is every object, and which is worst?  | `make shape-report` → `test-results/shape-report/index.md` | Stop criteria met on the real table (§9)                   |
-| What does the user really see?                 | `make shape-shots` (dev server running)                    | Viewer shots, dark and light, reviewed with `/designer-3d` |
-| Did a prompt change help the kit?              | `make eval-shape MODEL=…` (live, costs API calls)          | Agreement not lower, median ≤ 30 s                         |
-| Did a prompt change help the staged loop?      | `make eval-stages` (offline replay)                        | Stage scores not lower                                     |
-| Does the 2D path work end to end on live Meta? | `make facade-e2e FRONT=… OUT=…` (costs API calls)          | Model built, stages logged                                 |
-| Add a real photo to the reference set          | `make shape-capture PHOTO=… ID=…` (costs API calls)        | Capture and crop written to `__fixtures__/shape/real/`     |
-| Everything before handoff                      | `make check`                                               | Typecheck, lint, tests green                               |
+| Question                                       | Command                                                                                                                          | Passes when                                                |
+| ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| Does the shape pipeline still work offline?    | `make test-shape`                                                                                                                | Golden set green                                           |
+| How good is every object, and which is worst?  | `make shape-report` → `test-results/shape-report/index.md` (synthetic + « Real » tables, real = local captures of `REAL_SHAPES`) | Stop criteria met on the real table (§9)                   |
+| What does the user really see?                 | `make shape-shots` (dev server running)                                                                                          | Viewer shots, dark and light, reviewed with `/designer-3d` |
+| Did a prompt change help the kit?              | `make eval-shape MODEL=…` (live, costs API calls)                                                                                | Agreement not lower, median ≤ 30 s                         |
+| Did a prompt change help the staged loop?      | `make eval-stages` (offline replay)                                                                                              | Stage scores not lower                                     |
+| Does the 2D path work end to end on live Meta? | `make facade-e2e FRONT=… OUT=…` (costs API calls)                                                                                | Model built, stages logged                                 |
+| Add a real photo to the reference set          | `make shape-capture PHOTO=… ID=…` (costs API calls)                                                                              | Capture and crop written to `__fixtures__/shape/real/`     |
+| Everything before handoff                      | `make check`                                                                                                                     | Typecheck, lint, tests green                               |
 
 ---
 

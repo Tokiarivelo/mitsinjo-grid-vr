@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { mkdtempSync, readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import sharp from 'sharp';
@@ -28,6 +28,7 @@ import {
   writeCapture,
   type ShapeCapture,
 } from '../shape-capture';
+import { writeGoldenCapture } from './golden-run';
 
 /** Golden fridge as a photo + target, Spark stubbed with the case prior. */
 async function goldenRun(onKit?: (kit: ObjectKit) => void) {
@@ -85,35 +86,10 @@ describe('shape capture (PR-0.4)', () => {
   });
 
   it('writes, reads and re-scores a capture offline (no API)', async () => {
-    const kits: ObjectKit[] = [];
-    const { photo, target, shape } = await goldenRun((k) => kits.push(k));
-    const kit = kits[0]!;
-    const rect = cropRectForShape(photo.width, photo.height, target.box);
-    const jpeg = Buffer.from((await cropForShape(photo, target.box)).split(',')[1]!, 'base64');
-    const capture: ShapeCapture = {
-      version: 1,
-      id: 'fridge',
-      capturedAt: new Date().toISOString(),
-      source: 'meta',
-      model: shape.model,
-      photo: { width: photo.width, height: photo.height },
-      target,
-      kit,
-      ...(shape.recipe ? { recipe: shape.recipe } : {}),
-      ...(shape.fit ? { fit: shape.fit } : {}),
-      seconds: 0.1,
-      crop: rect,
-      cropTarget: {
-        box: remapBoxToCrop(target.box, photo.width, photo.height, rect),
-        outline: target.outline
-          ? remapOutlineToCrop(target.outline, photo.width, photo.height, rect)
-          : undefined,
-      },
-    };
     const dir = mkdtempSync(join(tmpdir(), 'shape-capture-'));
-    const [json, jpg] = writeCapture(dir, capture, jpeg);
-    expect(json.endsWith('fridge.capture.json')).toBe(true);
-    expect(jpg.endsWith('fridge.crop.jpg')).toBe(true);
+    const capture = await writeGoldenCapture(dir, 'fridge');
+    expect(existsSync(join(dir, 'fridge.capture.json'))).toBe(true);
+    expect(existsSync(join(dir, 'fridge.crop.jpg'))).toBe(true);
 
     const { capture: back } = await readCapture(dir, 'fridge');
     expect(back).toEqual(capture);
@@ -122,6 +98,32 @@ describe('shape capture (PR-0.4)', () => {
     expect(replay).not.toBeNull();
     expect(replay!.score.iou).toBeGreaterThan(0.6);
     expect(replay!.score.score).toBeGreaterThan(0);
+  });
+
+  it('replays captured part masks on the whole crop (PQ-T1)', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'shape-capture-'));
+    const car = GOLDEN_SHAPES.find((g) => g.name === 'car')!;
+    const capture = await writeGoldenCapture(dir, 'car', car);
+    const plain = (await rescoreCapture(dir, 'car'))!;
+    expect(plain.score.detail?.partRecall).toBeUndefined();
+    // The two wheels of the drawing, in fractions of the captured crop.
+    const { box } = capture.cropTarget;
+    const wheel = (x0: number, x1: number) => ({
+      concept: 'wheel',
+      box: {
+        x: box.x + x0 * box.w,
+        y: box.y + 0.82 * box.h,
+        w: (x1 - x0) * box.w,
+        h: 0.18 * box.h,
+      },
+    });
+    writeCapture(
+      dir,
+      { ...capture, partMasks: [wheel(0.12, 0.38), wheel(0.62, 0.88)] },
+      readFileSync(join(dir, 'car.crop.jpg'))
+    );
+    const withMasks = (await rescoreCapture(dir, 'car'))!;
+    expect(withMasks.score.detail?.partRecall).toBeGreaterThan(0);
   });
 });
 
@@ -289,6 +291,8 @@ describe.skipIf(!LIVE)('make shape-capture', () => {
       kit,
       recipe: shape.recipe,
       ...(shape.fit ? { fit: shape.fit } : {}),
+      // PQ-T1: SAM part masks (crop fractions) so the replay scores parts too.
+      ...(shape.partMasks?.length ? { partMasks: shape.partMasks } : {}),
       seconds,
       crop: rect,
       cropTarget: {

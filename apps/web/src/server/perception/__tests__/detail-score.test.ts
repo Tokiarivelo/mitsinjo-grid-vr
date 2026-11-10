@@ -138,7 +138,11 @@ describe('detail score (PQ-T2)', () => {
   });
 
   it('guesses wheel and panel kinds on untagged kit parts', () => {
-    const untagged = TRUTH.map(({ kind: _kind, ...p }) => p);
+    const untagged = TRUTH.map((p) => {
+      const copy = { ...p };
+      delete copy.kind;
+      return copy;
+    });
     expect(detailParts(recipe(untagged)).map((p) => p.kinds)).toEqual([
       [],
       ['wheel'],

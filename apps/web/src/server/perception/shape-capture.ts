@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { kitToRecipe, ObjectKitSchema, type ObjectKit } from '@/lib/object-kit';
 import {
   ObjectRecipeSchema,
+  PartMaskSchema,
   ShapeTargetSchema,
   type ObjectRecipe,
   type PartMask,
@@ -131,9 +132,21 @@ export async function rescoreCapture(dir: string, id: string): Promise<RecipeSco
   const { capture, cropPhoto } = await readCapture(dir, id);
   const recipe: ObjectRecipe | undefined = capture.recipe;
   if (!recipe) return null;
-  // No masks: captured boxes are fractions of the saved crop, but scoreRecipe would remap them
-  // through a crop-of-the-crop. Replay stays 3-term until the mapping is capture-aware.
-  return scoreRecipe(cropPhoto, capture.cropTarget, recipe);
+  // Captured mask boxes are fractions of the saved crop, i.e. of the whole replayed image (PQ-T1).
+  const masks = (capture.partMasks ?? []).flatMap((m) => {
+    const parsed = PartMaskSchema.safeParse(m);
+    return parsed.success ? [parsed.data] : [];
+  });
+  if (!masks.length) return scoreRecipe(cropPhoto, capture.cropTarget, recipe);
+  const { width, height } = cropPhoto;
+  return scoreRecipe(cropPhoto, capture.cropTarget, recipe, masks, {
+    left: 0,
+    top: 0,
+    width,
+    height,
+    outWidth: width,
+    outHeight: height,
+  });
 }
 
 export interface CriticReplayRound {

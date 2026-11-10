@@ -1,9 +1,16 @@
 import 'server-only';
 
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import sharp from 'sharp';
+import type { KitArchetype } from '@/lib/object-kit';
+import type { ObjectRecipe } from '@/lib/object-shape';
+import type { RealCase } from './__fixtures__/shape';
 import type { ElevationScore } from './elevation-score';
-import type { FlatRender } from './flat-render';
+import { renderFlat, THREE_QUARTER, type FlatRender } from './flat-render';
 import type { ModelScore, RgbGrid } from './model-score';
+import { checkConstraints } from './object-graph';
+import { readCapture, rescoreCapture } from './shape-capture';
 
 /**
  * Shape report (PR-0.3) for the quality loop (`/shape-loop`): a Markdown table of the scores with the worst
@@ -19,8 +26,8 @@ export interface ReportRow {
   name: string;
   score: ModelScore;
   parts: number;
-  /** Whole shape math, ms. */
-  ms: number;
+  /** Whole shape math, ms; absent on replayed real captures (no shape math re-run). */
+  ms?: number;
   /** Coherence violations of the shipped recipe (PR-2.14); always 0 when clean. */
   violations: number;
   /** Part dimension statuses, non-zero counts (PR-2.15). */
@@ -73,23 +80,21 @@ function detailCells(s: ModelScore): string {
 const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
 const ok = (pass: boolean) => (pass ? '✓' : '✗');
 
-/** The report page: one row per object, means, and what the loop should look at next. */
-export function reportMarkdown(rows: ReportRow[], date: string): string {
-  const lines = [
-    `# Shape report — ${date}`,
-    '',
-    `Stop criteria: IoU ≥ ${STOP.iou} · edge F1 ≥ ${STOP.edgeF1} · ΔE ≤ ${STOP.deltaE}. Sheet: \`contact-sheet.png\` (photo | flat | ¾).`,
-    'Detail (PQ-T2, not in the score yet): part recall · precision · interior edge F1 · part ΔE; « — » without SAM part masks.',
-    '',
-    '| Object | Score | IoU | Edge F1 | ΔE | Recall | Prec | Int F1 | Part ΔE | Parts | ms | Viol | Status | Worst |',
-    '| ------ | ----- | --- | ------- | -- | ------ | ---- | ------ | ------- | ----- | -- | ---- | ------ | ----- |',
-  ];
+const HEADER = [
+  '| Object | Score | IoU | Edge F1 | ΔE | Recall | Prec | Int F1 | Part ΔE | Parts | ms | Viol | Status | Worst |',
+  '| ------ | ----- | --- | ------- | -- | ------ | ---- | ------ | ------- | ----- | -- | ---- | ------ | ----- |',
+];
+
+/** One table: a row per object and the means. */
+function scoreTable(rows: ReadonlyArray<ReportRow>): string[] {
+  const lines = [...HEADER];
   for (const r of rows) {
     const s = r.score;
     const w = worstMetric(s);
+    const ms = r.ms === undefined ? '—' : String(Math.round(r.ms));
     lines.push(
       `| ${r.name} | ${s.score} | ${s.iou} ${ok(s.iou >= STOP.iou)} | ${s.edgeF1} ${ok(s.edgeF1 >= STOP.edgeF1)} | ` +
-        `${s.deltaE} ${ok(s.deltaE <= STOP.deltaE)} | ${detailCells(s)} | ${r.parts} | ${Math.round(r.ms)} | ${r.violations} | ${statusCell(r.statusCounts)} | ${w.gap > 0 ? w.metric : '—'} |`
+        `${s.deltaE} ${ok(s.deltaE <= STOP.deltaE)} | ${detailCells(s)} | ${r.parts} | ${ms} | ${r.violations} | ${statusCell(r.statusCounts)} | ${w.gap > 0 ? w.metric : '—'} |`
     );
   }
   const avg = (f: (s: ModelScore) => number) => mean(rows.map((r) => f(r.score)));
@@ -98,19 +103,126 @@ export function reportMarkdown(rows: ReportRow[], date: string): string {
       `${avg((s) => s.edgeF1).toFixed(2)} | ${avg((s) => s.deltaE).toFixed(1)} | | | | | | | | | |`,
     ''
   );
+  return lines;
+}
+
+/** « Next » line: the lowest score and its worst metric. */
+function nextLine(rows: ReadonlyArray<ReportRow>): string | null {
   const worst = rows.reduce<ReportRow | null>(
     (a, r) => (!a || r.score.score < a.score.score ? r : a),
     null
   );
-  if (worst) {
-    const w = worstMetric(worst.score);
+  if (!worst) return null;
+  const w = worstMetric(worst.score);
+  return w.gap > 0
+    ? `**Next:** ${worst.name} (score ${worst.score.score}) — ${w.metric} is ${Math.round(w.gap * 100)} % off target.`
+    : `**Next:** every object meets the metric criteria; lowest score ${worst.name} (${worst.score.score}).`;
+}
+
+/** The real set in the report (PQ-T1): captured rows and the registered ids not captured on this machine. */
+export interface RealSection {
+  rows: ReportRow[];
+  missing: string[];
+  /** Captured but not scorable (no outline or no recipe in the capture). */
+  unscored?: string[];
+}
+
+/**
+ * The report page: the synthetic table, the « Real » table, and what the loop should look at next —
+ * taken from the real rows once there are any (synthetic drawings say little about photos).
+ */
+export function reportMarkdown(rows: ReportRow[], date: string, real?: RealSection): string {
+  const lines = [
+    `# Shape report — ${date}`,
+    '',
+    `Stop criteria: IoU ≥ ${STOP.iou} · edge F1 ≥ ${STOP.edgeF1} · ΔE ≤ ${STOP.deltaE}. Sheet: \`contact-sheet.png\` (photo | flat | ¾).`,
+    'Detail (PQ-T2, not in the score yet): part recall · precision · interior edge F1 · part ΔE; « — » without SAM part masks.',
+    '',
+    '## Synthetic (drawn streets)',
+    '',
+    ...scoreTable(rows),
+  ];
+  if (real) {
     lines.push(
-      w.gap > 0
-        ? `**Next:** ${worst.name} (score ${worst.score.score}) — ${w.metric} is ${Math.round(w.gap * 100)} % off target.`
-        : `**Next:** every object meets the metric criteria; lowest score ${worst.name} (${worst.score.score}).`
+      `## Real (${real.rows.length} captured, ${real.missing.length} missing)`,
+      '',
+      ...(real.rows.length ? scoreTable(real.rows) : ['No real capture on this machine.', '']),
+      ...(real.missing.length
+        ? [`Missing (\`make shape-capture PHOTO=… ID=<id>\`): ${real.missing.join(', ')}.`, '']
+        : []),
+      ...(real.unscored?.length
+        ? [`Not scorable (capture without outline or recipe): ${real.unscored.join(', ')}.`, '']
+        : [])
     );
   }
+  const next = nextLine(real?.rows.length ? real.rows : rows);
+  if (next) lines.push(next);
   return lines.join('\n') + '\n';
+}
+
+/** Report row of a scored recipe: part count, statuses and coherence violations (PR-2.14, PR-2.15). */
+export function reportRow(
+  name: string,
+  score: ModelScore,
+  recipe: ObjectRecipe,
+  archetype: KitArchetype,
+  ms?: number
+): ReportRow {
+  const statusCounts = { measured: 0, estimated: 0, inferred: 0, unknown: 0 };
+  for (const p of recipe.parts) statusCounts[p.status ?? 'unknown'] += 1;
+  return {
+    name,
+    score,
+    parts: recipe.parts.length,
+    ...(ms !== undefined ? { ms } : {}),
+    violations: checkConstraints(archetype, recipe),
+    statusCounts,
+  };
+}
+
+/** A captured real case, re-scored offline: its row and the images for the contact sheet. */
+export interface RealScored {
+  row: ReportRow;
+  sheet: SheetRow;
+}
+
+/**
+ * The real set (PQ-T1): every registered id with a capture in `dir` is re-scored offline (no API, the
+ * captured recipe on the captured crop); ids without files are listed as missing, never an error.
+ */
+export async function scoreRealSet(
+  dir: string,
+  cases: ReadonlyArray<RealCase>
+): Promise<{ scored: RealScored[]; missing: string[]; unscored: string[] }> {
+  const scored: RealScored[] = [];
+  const missing: string[] = [];
+  const unscored: string[] = [];
+  for (const c of cases) {
+    if (
+      !existsSync(join(dir, `${c.id}.capture.json`)) ||
+      !existsSync(join(dir, `${c.id}.crop.jpg`))
+    ) {
+      missing.push(c.id);
+      continue;
+    }
+    const { capture } = await readCapture(dir, c.id);
+    const s = await rescoreCapture(dir, c.id);
+    if (!s || !capture.recipe) {
+      unscored.push(c.id);
+      continue;
+    }
+    const name = c.hard ? `${c.id} (${c.hard})` : c.id;
+    scored.push({
+      row: reportRow(name, s.score, capture.recipe, capture.kit.archetype),
+      sheet: {
+        name: `${name} — ${s.score.score}`,
+        crop: s.crop,
+        flat: s.render,
+        threeQuarter: renderFlat(capture.recipe, 1, 160, 120, THREE_QUARTER),
+      },
+    });
+  }
+  return { scored, missing, unscored };
 }
 
 export interface SheetRow {

@@ -14,7 +14,7 @@ import { cropToPhoto, isWheelPart, photoToObject, type MaskMapGeom } from './mas
 import { scoreModel, type Landmark, type ModelScore, type RgbGrid } from './model-score';
 import type { PhotoForRegions } from './region';
 import { sampleObjectRgb } from './shape-colors';
-import { cropRectForShape } from './shape-crop';
+import { cropRectForShape, type CropRect } from './shape-crop';
 import { fitGrid, ringsMask } from './silhouette-fit';
 
 export interface RecipeScore {
@@ -122,7 +122,9 @@ export async function scoreRecipe(
   photo: PhotoForRegions,
   target: Pick<ShapeTarget, 'box' | 'outline'>,
   recipe: ObjectRecipe,
-  masks?: ReadonlyArray<PartMask>
+  masks?: ReadonlyArray<PartMask>,
+  /** Rect the mask fractions refer to; default = the shape crop of `photo` (live). Replays pass the whole crop. */
+  maskCrop?: CropRect
 ): Promise<RecipeScore | null> {
   const rings = target.outline ? pathToRings(target.outline).filter((r) => r.length >= 3) : [];
   const { box } = target;
@@ -137,7 +139,7 @@ export async function scoreRecipe(
           photoW: photo.width,
           photoH: photo.height,
           box,
-          crop: cropRectForShape(photo.width, photo.height, box),
+          crop: maskCrop ?? cropRectForShape(photo.width, photo.height, box),
         }
       : null;
   const landmarks =
