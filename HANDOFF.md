@@ -15,8 +15,7 @@
 - **Rendering audit** (methodology § 11): four renderers draw the same recipe unequally. Viewer has no
   part-on-part shadow or AO; the village draws all placed objects with one material; VR has no maps. Tasks PQ-T32–T35.
 - **Moved:** cloud and sun maths → `docs/vision-to-3d-atmosphere.md` (word for word, not re-audited).
-- VR state unchanged from the previous handoff (`feat/vr-village-outdoor-tour`): /village walkable 360° tour,
-  outdoor walk, `make vr-probe` 15 PASS.
+- VR state unchanged (merged in `main`): /village walkable 360° tour, outdoor walk, `make vr-probe` 15 PASS.
 
 ## Next
 
