@@ -389,10 +389,14 @@ _Ticked 2026-11-11 on the owner's request: the code and tests are in; every « d
 
 ## Q4 — Surfaces and light
 
-- [ ] **PQ-T25 Colour per region on hull bodies.** `object-views.ts`, `region-colors.ts`: two-tone cars, trunk
+- [x] **PQ-T25 Colour per region on hull bodies.** `object-views.ts`, `region-colors.ts`: two-tone cars, trunk
       against crown, from SAM masks. Closes PH-T8.
       **Test:** `region-colors.test.ts` (two-tone body keeps both colours, each within ΔE 5).
       **Done when:** colour-per-part ΔE is lower on the two-tone real objects.
+      _Built 2026-11-11 (Q4 pass, ticked on the owner's request; live measure pending):_ `withHullTones` cuts the hull
+      body at the lower edge of the SAM `roof` (vehicle) / `tree crown` / `foliage` region when its colour is ΔE ≥ 10
+      from the rest of the outline: lower part keeps `front`, the upper part is appended last (indices stable).
+      Wired on the views path by `toneHullBody` (`object-shape.ts`), best effort.
 - [ ] **PQ-T26 Gloss from the photo.** New `server/perception/gloss-measure.ts`: per region, the gap between
       the brightest 1 % and the median luminance, classed matt / satin / gloss. `surface-look.ts` shifts
       roughness and clearcoat within ± 0.2 of the material's entry; status `measured`.

@@ -65,7 +65,13 @@ import { ELEVATION_ARCHETYPES, measureFacadeElevations } from './facade-views';
 import { photoTarget, tagPhotoParts } from './photo-stages';
 import { fetchPartMasks, partMasksTimeout } from './part-masks';
 import { fitPartParams, hasPartGroups, preparePartFit } from './part-fit';
-import { REGION_GRID, measureRegionColors, withRegionColors } from './region-colors';
+import {
+  HULL_TONE_CONCEPTS,
+  REGION_GRID,
+  measureRegionColors,
+  withHullTones,
+  withRegionColors,
+} from './region-colors';
 import { withMaskChimney } from './mask-chimney';
 import { withMaskPanels } from './mask-panels';
 import { withMaskWheels } from './mask-wheels';
@@ -746,6 +752,12 @@ export async function runObjectShape(
           );
         }
         recipe = drawn(recipe);
+        recipe = await toneHullBody(recipe, kit.archetype, target, shaped.outline, {
+          photo,
+          imageUrl,
+          segmentImage: perception.segmentImage?.bind(perception),
+          timeoutMs: partMasksTimeout(started + timeoutMs - Date.now()),
+        });
         const iou = {
           front: viewIou(recipe, seen.front, 'front'),
           side: seen.side ? viewIou(recipe, seen.side, 'side') : null,
@@ -1217,5 +1229,53 @@ export async function runObjectShape(
   } catch (err) {
     console.warn('[vision] shape failed:', err instanceof Error ? err.message : err);
     return silhouette('provider_error', { source: 'mock', model: 'none' });
+  }
+}
+
+/**
+ * Two-tone hull body (PQ-T25): segments the archetype's upper region (roof, crown) on the photo crop, reads
+ * its colour against the rest of the outline and lets `withHullTones` cut the body. Best effort, never throws;
+ * the recipe comes back unchanged without a photo, a segmenter, a hull body or two distinct tones.
+ */
+async function toneHullBody(
+  recipe: ObjectRecipe,
+  archetype: KitArchetype,
+  target: ShapeTarget,
+  outline: string | undefined,
+  ctx: {
+    photo: PhotoForRegions | null;
+    imageUrl: string;
+    segmentImage: PerceptionClient['segmentImage'] | undefined;
+    timeoutMs: number;
+  }
+): Promise<ObjectRecipe> {
+  const concepts = HULL_TONE_CONCEPTS[archetype];
+  const { photo, segmentImage } = ctx;
+  if (
+    !concepts ||
+    !photo ||
+    !segmentImage ||
+    recipe.parts[frontPartIndex(recipe)]?.shape !== 'hull'
+  )
+    return recipe;
+  try {
+    const masks = await fetchPartMasks(segmentImage, ctx.imageUrl, archetype, {
+      timeoutMs: ctx.timeoutMs,
+      concepts,
+    });
+    if (masks.length === 0) return recipe;
+    const geom = {
+      photoW: photo.width,
+      photoH: photo.height,
+      box: target.box,
+      crop: cropRectForShape(photo.width, photo.height, target.box),
+    };
+    const grid = await sampleObjectRgb(photo, target.box, REGION_GRID, REGION_GRID);
+    const rings = outline ? pathToRings(outline).filter((r) => r.length >= 3) : [];
+    const regions = measureRegionColors(grid, rings, masks, geom, photo, target.box);
+    return withHullTones(recipe, masks, regions, geom, concepts);
+  } catch (err) {
+    console.warn('[vision] two-tone body failed:', err);
+    return recipe;
   }
 }
