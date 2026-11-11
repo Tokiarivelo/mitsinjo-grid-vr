@@ -21,6 +21,7 @@ import type { ShapeImprove } from '../hooks/use-object-shape';
 import { recipeMesh, silhouetteDepth, silhouetteMesh } from '../utils/object-geometry';
 import { buildRecipeMaterials } from '../utils/recipe-materials';
 import { bakeStudioEnv } from '../utils/studio-env';
+import { LIGHT_SETUPS, lookdevPreset } from '../utils/lookdev';
 import { BuildFocus } from './build-focus-3d';
 
 export interface ObjectEditor3dProps {
@@ -184,6 +185,9 @@ function ObjectModel({
  * Load with `LazyObjectEditor3d` (no SSR) behind a WebGL check.
  */
 export function ObjectEditor3d(props: ObjectEditor3dProps) {
+  // Look-development lighting (PQ-T40, dev shots only): `?lookdev=side|back`, the studio otherwise.
+  const lights =
+    LIGHT_SETUPS[lookdevPreset(typeof window === 'undefined' ? '' : window.location.search)];
   // Shader warm-up (PT-7): fade in once the materials are compiled (≤ 1 s).
   const [warmTarget, setWarmTarget] = useState<WarmupTarget | null>(null);
   const warm = useShaderWarmup(warmTarget);
@@ -208,8 +212,8 @@ export function ObjectEditor3d(props: ObjectEditor3dProps) {
       <StudioEnvironment />
       {/* Soft key from the upper right front. */}
       <directionalLight
-        position={[2, 3, 2.5]}
-        intensity={1.2}
+        position={lights.key.position}
+        intensity={lights.key.intensity}
         castShadow
         shadow-mapSize={[KEY_SHADOW.size, KEY_SHADOW.size]}
         shadow-radius={KEY_SHADOW.radius}
@@ -222,7 +226,7 @@ export function ObjectEditor3d(props: ObjectEditor3dProps) {
         shadow-camera-bottom={-1.2}
       />
       {/* Rim light from behind: outlines dark objects (black TV, pump) against the backdrop. */}
-      <directionalLight position={[-0.5, 1.6, -3]} intensity={1.1} />
+      <directionalLight position={lights.rim.position} intensity={lights.rim.intensity} />
       <Suspense fallback={null}>
         <ObjectModel {...props} />
       </Suspense>

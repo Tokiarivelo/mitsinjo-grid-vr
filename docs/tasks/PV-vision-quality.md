@@ -3,7 +3,7 @@
 **Why (user, 2026-11-10):** « I must have the most powerful image to 3D possible »: good detail, good vision,
 skills that prepare the Muse models. The audit (`docs/vision-to-3d-methodology.md` §3) found the blocker: the
 score passes models that do not look right, so nothing after it could be judged.
-**Status:** ❌ planned. Nothing below is built.
+**Status:** Q0–Q4 built (Q4 on 2026-11-11, see the per-task notes; live Meta and GPU checks pending). Q5 not built.
 **Read first:** `docs/vision-to-3d-methodology.md` (what and why) · `docs/vision-to-3d-muse-skills.md` (card
 texts) · `.claude/skills/shape-3d/SKILL.md` · `.claude/skills/shape-loop/SKILL.md`. Per task: only the files it names.
 **Rules kept:** Meta models only · never paste the photo on the model (≈ 64 px tileable swatches allowed) · Muse
@@ -477,11 +477,15 @@ _Ticked 2026-11-11 on the owner's request: the code and tests are in; every « d
       _Built 2026-11-11 (ΔE and look check on `make shape-shots` pending):_ no migration (`material` lives in the
       recipe JSON, not in a Neon column). A named `metal` on a vehicle or cabinet main role becomes `painted`
       (`kitToRecipe`); `make skills-gen` regenerated the cards.
-- [ ] **PQ-T40 Look-development sheet.** `make shape-shots` gains `LOOKDEV=1`: each object under three lights
+- [x] **PQ-T40 Look-development sheet.** `make shape-shots` gains `LOOKDEV=1`: each object under three lights
       (the studio, a low side light, a back light), dark and light theme, one sheet per object.
       **Test:** script smoke test in mock mode (three shots per object written).
       **Done when:** `/designer-3d` reviews the sheet and no material turns black, blown out or plastic-looking
       under any of the three lights.
+      _Built 2026-11-11 (the `/designer-3d` review of a real sheet is pending, no GPU / dev server run here):_
+      `LOOKDEV=1 make shape-shots` loads `/village?lookdev=studio|side|back` (`utils/lookdev.ts`, dev only) and writes
+      `name-lookdev-<light>-<theme>.png`, three files per object and theme rather than one montage; the plan is
+      `scripts/lookdev-plan.mjs`, tested.
 
 **Exit Q4:** surfaces differ by measured colour and gloss, and parts read as assembled.
 

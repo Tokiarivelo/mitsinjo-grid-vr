@@ -93,7 +93,7 @@ test-shape: ## Run the 3D shape golden set (5 photos, IoU / colour / gables / 30
 	$(need_ws)
 	SHAPE_BUDGET_STRICT=1 $(PNPM) --filter $(WEB) exec vitest run src/server/perception/__tests__/golden-shape.test.ts
 
-shape-shots: ## Real 3D viewer shots of the shape-report recipes, dark + light (dev server must run; SHOT_WIDTH=320 phone, SHOT_LOG=1 console)
+shape-shots: ## Real 3D viewer shots of the shape-report recipes, dark + light (dev server must run; SHOT_WIDTH=320 phone, SHOT_LOG=1 console, LOOKDEV=1 three lights per object)
 	$(need_ws)
 	@$(PNPM) --filter $(WEB) exec node scripts/object-viewer-shot.mjs $(URL) $(CURDIR)/test-results/shape-report
 

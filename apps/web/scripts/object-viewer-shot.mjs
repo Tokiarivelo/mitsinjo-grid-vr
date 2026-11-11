@@ -7,6 +7,7 @@ import { chromium } from '@playwright/test';
 import { mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { resolvePort } from './port.mjs';
+import { LOOKDEV_LIGHTS } from './lookdev-plan.mjs';
 
 const [
   baseUrl = `http://localhost:${resolvePort()}`,
@@ -15,6 +16,8 @@ const [
 ] = process.argv.slice(2);
 if (!reportDir) throw new Error('Usage: object-viewer-shot.mjs <baseUrl> <reportDir> [outDir]');
 const recipes = JSON.parse(readFileSync(join(reportDir, 'recipes.json'), 'utf8'));
+// LOOKDEV=1 (PQ-T40): each object under the studio, a low side light and a back light, dark and light.
+const lights = process.env.LOOKDEV ? LOOKDEV_LIGHTS : [null];
 const suffix = process.env.SHOT_SUFFIX ? `-${process.env.SHOT_SUFFIX}` : '';
 const GL_ARGS =
   process.env.SHOT_GL === 'gpu'
@@ -49,79 +52,86 @@ for (const theme of ['dark', 'light']) {
       if (m.type() === 'error' || m.type() === 'warning') console.log(`[${m.type()}] ${m.text()}`);
     });
   for (const { name, recipe } of recipes) {
-    await page.route('**/api/vision', (route) =>
-      route.fulfill({
-        contentType: 'text/event-stream',
-        body: sse([
-          [
-            'vision_detections',
-            { phase: 'outlines', detections: [detection(name)], source: 'mock', model: 'stub' },
-          ],
-          ['done', {}],
-        ]),
-      })
-    );
-    await page.route('**/api/vision/shape', (route) =>
-      route.fulfill({
-        contentType: 'text/event-stream',
-        body: sse([
-          [
-            'shape_result',
-            {
-              shape: {
-                detectionId: 'det-1',
-                mode: 'recipe',
-                recipe,
-                source: 'mock',
-                model: 'stub',
+    for (const light of lights) {
+      await page.route('**/api/vision', (route) =>
+        route.fulfill({
+          contentType: 'text/event-stream',
+          body: sse([
+            [
+              'vision_detections',
+              { phase: 'outlines', detections: [detection(name)], source: 'mock', model: 'stub' },
+            ],
+            ['done', {}],
+          ]),
+        })
+      );
+      await page.route('**/api/vision/shape', (route) =>
+        route.fulfill({
+          contentType: 'text/event-stream',
+          body: sse([
+            [
+              'shape_result',
+              {
+                shape: {
+                  detectionId: 'det-1',
+                  mode: 'recipe',
+                  recipe,
+                  source: 'mock',
+                  model: 'stub',
+                },
               },
-            },
-          ],
-          ['done', {}],
-        ]),
-      })
-    );
-    await page.goto(`${baseUrl}/village`, { waitUntil: 'networkidle' });
-    await page.getByRole('button', { name: /use the sample room/i }).click();
-    await page
-      .getByRole('button', { name: new RegExp(name, 'i') })
-      .first()
-      .click();
-    // /village asks for the 2D facade first (Muse Image): stubbed with a blank elevation.
-    await page.route('**/api/vision/facade', (route) =>
-      route.fulfill({
-        contentType: 'application/json',
-        body: JSON.stringify({
-          ok: true,
-          detectionId: 'det-1',
-          imageUrl: BLANK_PNG,
-          fileKey: 'stub.png',
-          prompt: 'stub',
-          archetype: 'house',
-          source: 'mock',
-        }),
-      })
-    );
-    const direct = page.getByRole('button', { name: /generate the 3d model/i });
-    const imagine = page.getByRole('button', { name: /imagine 2d facade/i });
-    await direct.or(imagine).first().waitFor();
-    if (await imagine.isVisible()) {
-      await imagine.click();
+            ],
+            ['done', {}],
+          ]),
+        })
+      );
+      await page.goto(`${baseUrl}/village${light ? `?lookdev=${light}` : ''}`, {
+        waitUntil: 'networkidle',
+      });
+      await page.getByRole('button', { name: /use the sample room/i }).click();
       await page
-        .getByRole('button', { name: /validate & generate 3d/i })
+        .getByRole('button', { name: new RegExp(name, 'i') })
         .first()
         .click();
-    } else {
-      await direct.click();
+      // /village asks for the 2D facade first (Muse Image): stubbed with a blank elevation.
+      await page.route('**/api/vision/facade', (route) =>
+        route.fulfill({
+          contentType: 'application/json',
+          body: JSON.stringify({
+            ok: true,
+            detectionId: 'det-1',
+            imageUrl: BLANK_PNG,
+            fileKey: 'stub.png',
+            prompt: 'stub',
+            archetype: 'house',
+            source: 'mock',
+          }),
+        })
+      );
+      const direct = page.getByRole('button', { name: /generate the 3d model/i });
+      const imagine = page.getByRole('button', { name: /imagine 2d facade/i });
+      await direct.or(imagine).first().waitFor();
+      if (await imagine.isVisible()) {
+        await imagine.click();
+        await page
+          .getByRole('button', { name: /validate & generate 3d/i })
+          .first()
+          .click();
+      } else {
+        await direct.click();
+      }
+      const viewer = page.locator('.viewer-studio').first();
+      await viewer.locator('canvas').waitFor({ timeout: 30_000 });
+      await viewer.scrollIntoViewIfNeeded();
+      await page.waitForTimeout(1500); // frameloop="demand": let the env map and shadow settle
+      const file = join(
+        outDir,
+        `${name.replace(/\W+/g, '-')}${light ? `-lookdev-${light}` : ''}${suffix}-${theme}.png`
+      );
+      await viewer.screenshot({ path: file });
+      console.log(`✓ ${file}`);
+      await page.unrouteAll();
     }
-    const viewer = page.locator('.viewer-studio').first();
-    await viewer.locator('canvas').waitFor({ timeout: 30_000 });
-    await viewer.scrollIntoViewIfNeeded();
-    await page.waitForTimeout(1500); // frameloop="demand": let the env map and shadow settle
-    const file = join(outDir, `${name.replace(/\W+/g, '-')}${suffix}-${theme}.png`);
-    await viewer.screenshot({ path: file });
-    console.log(`✓ ${file}`);
-    await page.unrouteAll();
   }
   await context.close();
 }
