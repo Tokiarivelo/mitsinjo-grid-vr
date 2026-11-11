@@ -350,11 +350,14 @@ _Ticked 2026-11-11 on the owner's request: the code and tests are in; every « d
       front are inferred).
       **Done when:** the hidden-car photo of the real set yields a whole car whose visible half still matches
       the photo (IoU on the visible region not lower).
-- [ ] **PQ-T24 Back by mirror, extra side on request.** The back of a views-path object is the front mirrored
+- [x] **PQ-T24 Back by mirror, extra side on request.** The back of a views-path object is the front mirrored
       with the family's rear parts (tail lights, rear door), never generated. A second side is drawn only when
       the views check asks for it. Closes PH-T9.
       **Test:** `object-views.test.ts` (back parts present and inferred; no Muse Image call for the back).
       **Done when:** vehicles on the 2D path have a rear end in the viewer.
+      _Built 2026-11-11:_ `viewsRecipe` mirrors the front lights (tail-light colour) and the bumper onto the rear,
+      status `inferred`, flush with the hull (side IoU kept), unless the side drawing already showed a rear part.
+      No second-side generator exists, so « on request » is not built: nothing draws the back. Not checked live.
 
 **Exit Q3:** the recognisable small parts exist in the model, on every path.
 

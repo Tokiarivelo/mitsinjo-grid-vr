@@ -169,7 +169,8 @@ describe('viewStageLoop (PG-T20)', () => {
 
   it('keeps a patch that brings a missing part back', async () => {
     const noLights: ObjectRecipe = { ...car, parts: car.parts.filter((p) => p.kind !== 'light') };
-    const lights = car.parts.filter((p) => p.kind === 'light');
+    // Headlights only: the tail lights are mirrored in by the rear (PQ-T24).
+    const lights = car.parts.filter((p) => p.kind === 'light' && p.status !== 'inferred');
     expect(lights.length).toBe(2);
     const out = await viewStageLoop({
       recipe: noLights,

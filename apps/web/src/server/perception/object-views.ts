@@ -2,7 +2,7 @@ import 'server-only';
 
 import { pickSide, sideCardPrompt } from './view-candidates';
 import { clipRing, ringRange, spanAt, type Ring } from '@/lib/hull';
-import { kitToRecipe, type KitArchetype, type ObjectKit } from '@/lib/object-kit';
+import { kitToRecipe, TAIL_LIGHT_COLOR, type KitArchetype, type ObjectKit } from '@/lib/object-kit';
 import {
   MAX_BUILT_PARTS,
   MAX_PANES,
@@ -697,6 +697,8 @@ export function viewsRecipe(
     );
   }
   // Parts the AI check named that no rule knows: a patch on their face, in the colour it read.
+  // The side drawing showed the rear end (tail lights, rear bumper): the rear is measured, not mirrored.
+  let backSeen = false;
   for (const [view, list] of [
     ['front', frontParts],
     ['side', sideParts],
@@ -718,6 +720,7 @@ export function viewsRecipe(
           )
         );
       } else if (section && BACK_PART.test(p.concept)) {
+        backSeen = true;
         // Seen on the side at the back end (rear bumper, tail lights): placed on the back face,
         // a pair of lamps at both corners or a band across the width.
         const yc = (y0 + y1) / 2;
@@ -781,6 +784,27 @@ export function viewsRecipe(
       };
     })
   );
+  // PQ-T24: the rear end of a vehicle is its front mirrored (tail lights, rear bumper), never drawn.
+  const rearByMirror = kit.archetype === 'vehicle' && !backSeen;
+  if (rearByMirror) {
+    add(
+      RANK.detail,
+      ...lights.map((p): RecipePart => {
+        const [cx, cy] = centre(p.box);
+        const y = 0.5 - cy;
+        return {
+          shape: 'cylinder',
+          axis: 'z',
+          at: [cx - 0.5, y, zSpan(y)[0] + 0.02],
+          size: [Math.max(0.01, p.box.w), Math.max(0.01, p.box.h), 0.04],
+          color: TAIL_LIGHT_COLOR,
+          material: 'glass',
+          kind: 'light',
+          status: 'inferred',
+        };
+      })
+    );
+  }
   const bumper = frontParts
     .filter((p) => p.concept === 'bumper' && p.box.w > 0.4)
     .sort((a, b) => b.box.w - a.box.w)[0];
@@ -811,6 +835,19 @@ export function viewsRecipe(
       kind: 'bumper',
       status: 'measured',
     });
+    if (rearByMirror) {
+      const zr = Math.min(...[y0, (y0 + y1) / 2, y1].map((y) => zSpan(y)[0]));
+      add(RANK.detail, {
+        shape: 'box',
+        // Outer face flush with the rear, so the side silhouette keeps its length.
+        at: [(x0 + x1) / 2, (y0 + y1) / 2, zr + 0.03],
+        size: [x1 - x0, Math.max(0.01, y1 - y0), 0.06],
+        color: VIEW_PART_LOOK.chrome,
+        material: 'metal',
+        kind: 'bumper',
+        status: 'inferred',
+      });
+    }
   }
   // Appliance and panel front parts (PG-T20): doors, handles, displays, solar cells.
   for (const p of frontParts) {
