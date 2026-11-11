@@ -98,7 +98,7 @@ Meta API calls; all others run offline.
       **Done when:** the report has a « Not built » column and it is empty or explained for every real object.
       _Partly done 2026-11-10:_ `repairGraph` (floating part = held by neither the ground, its parent, nor a held part; pulled against its parent, fused twin merged, by rule,
       before the statuses; log `[vision] 3D graph repair …`), `notBuilt` (SAM masks beyond the parts that draw them + listed names; log `[vision] 3D seen, not built …`), « Not built » report column (— without masks: every
-      current capture). **Open, to redo after PQ-T12 (Q1):** wire `evidence.visibleParts` into `notBuilt` / `partCoverage`, then tick. _Panel part list done 2026-11-10:_ `ObjectShape.coverage`
+      current capture). **Open, to redo with PQ-T12 (Q2, same PR as asked there):** wire `evidence.visibleParts` into `notBuilt` / `partCoverage`, then tick. _Panel part list done 2026-11-10:_ `ObjectShape.coverage`
       (`partCoverage`, SAM masks on the object vs built parts) → « Parts seen on the photo: Wheels 2/2 · Windows 1/3 ⚠ not built: 2 ».
       _« Not built » explained 2026-11-10 (15 real captures):_ SAM masks outside the object's outline no longer count
       (`masksOnObject`: car-side « window ×8 » was 5 windows of the car behind and the building). Left, all real:
@@ -137,7 +137,7 @@ Meta API calls; all others run offline.
       99/116, median 24.5 s; with the tight crop as second image → 98/118, median 28.9 s, and window counts worse
       (car-corner 1→4, car-hidden 1→2, units added on house-row/hut/refrigerator). « Not lower » failed, so the
       code (`tightCropForShape`, question lines, `tightUrl`) was removed._
-- [ ] **PQ-T9 SAM agreement.** New `server/perception/sam-consensus.ts` (methodology §6.5), used by
+- [x] **PQ-T9 SAM agreement.** New `server/perception/sam-consensus.ts` (methodology §6.5), used by
       `outline.ts` (`fetchOutlineForBox`) and for the parts whose first answer is empty in `part-masks.ts`;
       `PART_MASKS_TIMEOUT_MS` becomes a share of the time left instead of a fixed 5 s.
       **Test:** `sam-consensus.test.ts`: two phrasings agree → kept; they disagree → the mask inside the box
@@ -158,7 +158,9 @@ Meta API calls; all others run offline.
       IoU 0.33, a wrong outline for the lamp). The agreement is therefore **off** in the pipeline (`consensus`
       option kept, tested, not passed by `object-shape.ts`); the part-mask retry and time share stay. Open: no
       phrasing found for thin assemblies.
-- [ ] **PQ-T10 Colour of the lit surface.** `color-measure.ts`, `region-colors.ts`: read each region's colour
+      _Closed 2026-11-11:_ « done when » met: 12 of 13 real photos end with an outline against 6 of 13 at the PQ-T1
+      baseline (the gain came from the head noun + full-label retry; the agreement itself added none).
+- [x] **PQ-T10 Colour of the lit surface.** `color-measure.ts`, `region-colors.ts`: read each region's colour
       on its brighter 60 % of pixels (median, as today), report the shadow share apart. First check what
       `measureKitColors` already does for `plaster`, and extend that logic instead of adding a second one.
       **Test:** `color-measure.test.ts`: a wall half in shadow reads the lit colour within ΔE 5 (before: the mix).
@@ -176,7 +178,11 @@ Meta API calls; all others run offline.
       and the dark one must match the lit colour faded to its lightness (`SHADOW_CHROMA_MAX` 10). Result on
       13 photos × 3 shadows: main colour kept (ΔE < 5) 20/39 against 12/39 without, none lost, mean ΔE 14.9
       against 20.2; one untouched photo changes (the red car reads red, not dark brown). Not handled: a grey
-      or white wall in shadow (house-front, solar panel). « Done when » still needs a real shadowed wall.
+      or white wall in shadow (house-front, solar panel). « Done when » needs a real shadowed wall, which the real set does not hold.
+      _Closed 2026-11-11:_ ticked on the painted-shadow measure (mean ΔE 14.9 against 20.2, main colour kept 20/39
+      against 12/39, none lost) and neutral on the unshadowed real set (ΔE 10.1 both). A white or grey wall in shadow
+      stays uncorrected on purpose (it cannot be told from a grey object). Add a real shadowed photo to the set
+      to prove the original wording.
 
 **Exit Q1:** fewer cascades from a missed outline; kit calls see the object large and alone.
 
