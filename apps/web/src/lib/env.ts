@@ -17,6 +17,16 @@ const envSchema = z.object({
   /** Rubric judge of the 3D models (PQ-T4, offline `make shape-judge`). */
   META_JUDGE_MODEL: z.string().default('muse-wonder-1.0'),
   META_SEGMENT_MODEL: z.string().default('sam-3.1'),
+  /** Object families whose kit call carries the family card (PQ-T13), comma separated; empty = none. */
+  SHAPE_KIT_CARD_FAMILIES: z
+    .string()
+    .default('')
+    .transform((v) =>
+      v
+        .split(',')
+        .map((f) => f.trim())
+        .filter(Boolean)
+    ),
   /** Side views from the Side view card, 2 candidates scored against the front (PQ-T16, off until measured). */
   SHAPE_SIDE_V2: z
     .enum(['true', 'false'])
@@ -63,6 +73,7 @@ export const env = envSchema.parse({
   META_REFINE_MODEL: process.env.META_REFINE_MODEL || undefined,
   META_JUDGE_MODEL: process.env.META_JUDGE_MODEL || undefined,
   META_SEGMENT_MODEL: process.env.META_SEGMENT_MODEL || undefined,
+  SHAPE_KIT_CARD_FAMILIES: process.env.SHAPE_KIT_CARD_FAMILIES || undefined,
   SHAPE_SIDE_V2: process.env.SHAPE_SIDE_V2 || undefined,
   SHAPE_LOOP_CARDS: process.env.SHAPE_LOOP_CARDS || undefined,
   SHAPE_KIT_SAMPLES: process.env.SHAPE_KIT_SAMPLES || undefined,

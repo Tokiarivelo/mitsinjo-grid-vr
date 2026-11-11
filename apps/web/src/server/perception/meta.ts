@@ -51,7 +51,7 @@ import {
   criticJsonSchema,
   criticPrompt,
   parseKitReasons,
-  KIT_PROMPT_VERSION,
+  kitVersionFor,
   kitPrompt,
   parseKit,
   parseKitPatch,
@@ -372,7 +372,7 @@ export class MetaPerceptionBackend implements PerceptionBackend {
   ): Promise<PerceptionCall<ShapeResult>> {
     const hint = archetypeOf(target);
     // Standard id, not the contributor one: the operator waits on this answer (≈ 15 s vs ≈ 25 s measured).
-    const promptVersion = target.promptVersion ?? KIT_PROMPT_VERSION;
+    const promptVersion = target.promptVersion ?? kitVersionFor(hint, env.SHAPE_KIT_CARD_FAMILIES);
     const { content, model, usage } = await this.visionJson(
       kitPrompt(promptVersion, hint),
       shapeQuestion(target.label, target.aspect, hint, Boolean(target.facadeUrl), target.facts),

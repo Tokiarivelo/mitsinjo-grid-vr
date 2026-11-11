@@ -244,6 +244,7 @@ Meta API calls; all others run offline.
       real set is left off and the reason is written in the loop log.
       **Test:** per family, one captured answer replayed through `parseKit` and the pipeline.
       **Done when:** every family is either on with a logged gain or off with a logged reason.
+      _Built 2026-11-11, unticked:_ kit prompt 3 = prompt 1 + only the family card (`kitPrompt(3, hint)`, no Look card, no evidence); switched on per family by `SHAPE_KIT_CARD_FAMILIES=vehicle,house` (`kitVersionFor`, empty = none). `make eval-shape PROMPT=1,3` prints a per-family table (`familyTable`): `on` = agreement not lower and median ≤ 30 s, `off` otherwise, `thin` = one capture. Offline replay: every real capture's answer goes through `parseKit` and `kitToRecipe` (`family-cards.test.ts`). The real set covers 9 families (vehicle, house, cabinet, screen, fan, machine, lamp_post, pole, tree, water); panel, bush, person, animal, building have no capture and stay off (« no real capture to measure on »). Live run not done (≈ 30 min, API).
 - [ ] **PQ-T14 Critic v2** _(API)_. `spark-critic.ts`: 2 × 2 sheet (photo | model same view | difference |
       model ¾), tiles ≥ 512 px; runs when the detail score is under its gate or the score under 70, with
       ≥ 20 s left; up to 2 more rounds in the background through `shape-jobs.ts`. `shape.ts`:

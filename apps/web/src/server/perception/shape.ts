@@ -14,7 +14,7 @@ import {
   type ObjectKit,
 } from '@/lib/object-kit';
 import { RECIPE_MATERIALS, type ObjectRecipe, type RecipePart } from '@/lib/object-shape';
-import { skillFor } from './skills';
+import { archetypeCard, skillFor } from './skills';
 
 /**
  * Prompts and parsing for the Spark 3D « kit » of one object (PV-T9b). Spark only classifies and reads
@@ -55,13 +55,33 @@ export const KIT_PROMPTS: Readonly<Record<number, string>> = { 1: SHAPE_SYSTEM_P
  */
 export const KIT_PROMPT_CARDS_VERSION = 2;
 
+/**
+ * Version 3 (PQ-T13): version 1 + only the card of the hint's family (no Look card, no evidence): the
+ * short card prompt, switched on per family (`SHAPE_KIT_CARD_FAMILIES`) after its own eval.
+ */
+export const KIT_PROMPT_FAMILY_VERSION = 3;
+
+/** Kit prompt version of a call that named none: the family-card one when that family is switched on. */
+export function kitVersionFor(
+  hint: KitArchetype | undefined,
+  families: ReadonlyArray<string>
+): number {
+  return hint && families.includes(hint) && archetypeCard(hint)
+    ? KIT_PROMPT_FAMILY_VERSION
+    : KIT_PROMPT_VERSION;
+}
+
 /** The kit system prompt of `version` (default: current); throws on a version that was not kept. */
 export function kitPrompt(version: number = KIT_PROMPT_VERSION, hint?: KitArchetype): string {
   if (version === KIT_PROMPT_CARDS_VERSION) return skillFor('kit', hint).text;
+  if (version === KIT_PROMPT_FAMILY_VERSION) {
+    const card = archetypeCard(hint);
+    return card ? `${SHAPE_SYSTEM_PROMPT}\n\n${card}` : SHAPE_SYSTEM_PROMPT;
+  }
   const text = KIT_PROMPTS[version];
   if (!text)
     throw new Error(
-      `unknown kit prompt version ${version} (kept: ${[...Object.keys(KIT_PROMPTS), KIT_PROMPT_CARDS_VERSION].join(', ')})`
+      `unknown kit prompt version ${version} (kept: ${[...Object.keys(KIT_PROMPTS), KIT_PROMPT_CARDS_VERSION, KIT_PROMPT_FAMILY_VERSION].join(', ')})`
     );
   return text;
 }

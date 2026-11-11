@@ -159,7 +159,71 @@ export function evalMarkdown(rows: EvalRow[]): string {
         rows.filter((r) => r.promptVersion === v)
       )
     )
-    .join('\n');
+    .join('\n')
+    .concat(versions.length > 1 ? familyTable(rows, versions) : '');
+}
+
+/** Median of a list of seconds (0 when empty). */
+const medianOf = (xs: number[]) => {
+  const s = [...xs].sort((a, b) => a - b);
+  return s.length ? s[Math.floor((s.length - 1) / 2)]! : 0;
+};
+
+/** Seconds a family card may cost: the median of its prompt version must stay under this (PQ-T12 / PQ-T13). */
+export const FAMILY_MEDIAN_MAX_S = 30;
+
+/**
+ * One line per object family (the truth archetype) and per version after the first: its agreement against
+ * the first version's, and a verdict `on` (agreement not lower, median of that version ≤ 30 s) or `off`
+ * (PQ-T13). A family with one capture is marked `thin`: it can say nothing alone.
+ */
+export function familyTable(rows: EvalRow[], versions: number[]): string {
+  const [base, ...others] = versions;
+  if (base === undefined || !others.length) return '';
+  const medians = new Map(
+    versions.map((v) => [
+      v,
+      medianOf(rows.filter((r) => r.promptVersion === v).map((r) => r.seconds)),
+    ])
+  );
+  const families = [...new Set(rows.map((r) => r.archetype[0]))].sort();
+  const score = (v: number, f: string) =>
+    rows
+      .filter((r) => r.promptVersion === v && r.archetype[0] === f)
+      .reduce(
+        (a, r) => {
+          const { match, total } = agreement(r);
+          return { match: a.match + match, total: a.total + total, n: a.n + 1 };
+        },
+        { match: 0, total: 0, n: 0 }
+      );
+  const lines = [
+    `### Per family, v${others.join(', v')} against v${base}`,
+    '',
+    '| family | captures | v' +
+      base +
+      ' | ' +
+      others.map((v) => `v${v} | verdict v${v}`).join(' | ') +
+      ' |',
+    '| ------ | -------- | --- | ' + others.map(() => '--- | -------').join(' | ') + ' |',
+  ];
+  for (const f of families) {
+    const b = score(base, f);
+    const cells = others.map((v) => {
+      const c = score(v, f);
+      const verdict =
+        c.n === 0
+          ? '—'
+          : c.n < 2
+            ? 'thin'
+            : c.match >= b.match && medians.get(v)! <= FAMILY_MEDIAN_MAX_S
+              ? 'on'
+              : 'off';
+      return `${c.match}/${c.total} | ${verdict}`;
+    });
+    lines.push(`| ${f} | ${b.n} | ${b.match}/${b.total} | ${cells.join(' | ')} |`);
+  }
+  return `\n${lines.join('\n')}\n`;
 }
 
 function versionTable(version: number, rows: EvalRow[]): string {
