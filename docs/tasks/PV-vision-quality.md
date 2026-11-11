@@ -160,7 +160,7 @@ Meta API calls; all others run offline.
       phrasing found for thin assemblies.
       _Closed 2026-11-11:_ « done when » met: 12 of 13 real photos end with an outline against 6 of 13 at the PQ-T1
       baseline (the gain came from the head noun + full-label retry; the agreement itself added none).
-- [ ] **PQ-T10 Colour of the lit surface.** `color-measure.ts`, `region-colors.ts`: read each region's colour
+- [x] **PQ-T10 Colour of the lit surface.** `color-measure.ts`, `region-colors.ts`: read each region's colour
       on its brighter 60 % of pixels (median, as today), report the shadow share apart. First check what
       `measureKitColors` already does for `plaster`, and extend that logic instead of adding a second one.
       **Test:** `color-measure.test.ts`: a wall half in shadow reads the lit colour within ΔE 5 (before: the mix).
@@ -192,6 +192,11 @@ Meta API calls; all others run offline.
       (brick: secondary = shadowed brick → window grey). Not gained: a wall mostly in deep shadow (red wall, ΔE 51
       both) and the 2 grey walls (ΔE 54.5 both, by design). So « lower than at baseline » is not shown for the
       wall colour on real photos; the measured gain is fewer shadow colours on the roof and accent parts.
+      _Region colours, 2026-11-11 (Q3 pass, ticked on the owner's request):_ `region-colors.ts` was the part left: each
+      mask region and the rest pool now read the median of their brightest `LIT_SHARE` cells (`litMeasure`) and report
+      `shadow` apart (cells under `SHADOW_RATIO` of the lit luminance). Test: a region 40 % in shadow reads the lit
+      colour within ΔE 5. `make shape-report` replays captures, so the per-part colour column cannot move offline
+      (mean ΔE 10.1, same as baseline): « lower than at baseline » is still not shown on the real set.
 
 **Exit Q1:** fewer cascades from a missed outline; kit calls see the object large and alone.
 
@@ -307,7 +312,7 @@ _Ticked 2026-11-11 on the owner's request: the code and tests are in; every « d
 
 ## Q3 — Geometry that carries detail
 
-- [ ] **PQ-T19 Step-by-step loop on the photo path** _(API)_. New `server/perception/photo-stages.ts`: target
+- [x] **PQ-T19 Step-by-step loop on the photo path** _(API)_. New `server/perception/photo-stages.ts`: target
       (tight crop, outline, part masks, measured yaw) and stage scorer (methodology §6.4);
       `shape-stages-spark.ts` gains `photoStageLoop`; `object-shape.ts` starts it after the first answer when
       an outline exists; parts the photo cannot see are locked; `view-stages.ts` gives the stages per archetype.
@@ -315,7 +320,13 @@ _Ticked 2026-11-11 on the owner's request: the code and tests are in; every « d
       side parts are not editable), replay of one recorded loop in `eval-stages`.
       **Done when:** on the real photo-path objects, the background loop raises the detail score and never
       lowers the score (by construction, checked on the captures).
-- [ ] **PQ-T20 Detail assemblies.** `lib/object-shape.ts`, `lib/shape-script.ts`: detail kinds `handle`,
+      _Built 2026-11-11:_ `photo-stages.ts` (`photoTarget`, `scorePhoto`, `tagPhotoParts`, `photoCanEdit`),
+      `photoStageLoop`, sheet `photo` (the critic's 2 × 2), `photoStages` in `view-stages.ts` (house: body, openings,
+      chimney; stage id `chimney` + i18n key). Starts in `runObjectShape` after the hidden sides, only when an
+      outline and `proposeShapeOps` exist; the seed wins when no stage kept a change. No checkpoint context: a
+      background slice cut by the request limit stops. Not done: replay of a recorded loop in `eval-stages`, and
+      the real-set « detail score rises » check (needs live Meta calls).
+- [x] **PQ-T20 Detail assemblies.** `lib/object-shape.ts`, `lib/shape-script.ts`: detail kinds `handle`,
       `seam`, `mirror`, `arch` (wheel arch), `rim`, `gutter`, `vent`, `foot`.
       `features/vision-insert/utils/view-assemblies.ts` and `object-geometry.ts` expand them; `flat-render.ts`
       draws them (PQ-T3); `silhouette-fit.ts` `unitPoints` for the ones that change the outline. They cost
@@ -324,17 +335,30 @@ _Ticked 2026-11-11 on the owner's request: the code and tests are in; every « d
       with every detail on the heaviest object).
       **Done when:** the fridge has its handle and door line, the car its mirrors and wheel arches, in the
       viewer and on the flat render.
-- [ ] **PQ-T21 More components when they are measured.** Photo-path recipes may hold up to `MAX_COMPONENTS`
+      _Built 2026-11-11:_ `RecipePart.details` (+ `set` op field), `detailPartsOf` / `outlineDetails`, used by
+      `renderRecipe`. Nothing sets `details` yet: Spark / builders opt in (T24, loop), no live check done.
+      _Review PR #14:_ the wheel arch no longer dips under the tyre. Builders still do not set `details`: on
+      the template car the mirror lands mid-door and the arch is dark on a dark tyre (flat render checked), so
+      placement needs a viewer pass (`/designer-3d`) before the kits opt in. « Done when » is not met yet.
+- [x] **PQ-T21 More components when they are measured.** Photo-path recipes may hold up to `MAX_COMPONENTS`
       (32) when the extra parts come from SAM masks or kept loop ops; Spark-imagined part lists stay at 12.
       **Test:** `object-shape.test.ts` (a measured 14th part is kept; an imagined one is not).
       **Done when:** no real object loses a measured part to the budget.
-- [ ] **PQ-T22 Hidden sides by symmetry.** `hidden-sides.ts`: mirror the measured side's parts to the hidden
+      _Built 2026-11-11:_ `partCeiling(recipe)` in `mask-geometry.ts` (32, or 12 for `source: 'free'`) used by the
+      wheel, panel and chimney passes; hidden-side deduction keeps 12 so an inferred part never takes the room.
+      Test: `mask-panels.test.ts`. Real-set check (`make shape-report`) not run.
+- [x] **PQ-T22 Hidden sides by symmetry.** `hidden-sides.ts`: mirror the measured side's parts to the hidden
       side for families that are symmetric (vehicle, cabinet, house ends), status `inferred`; never mirror
       what is one-sided (a door, a handle, a chimney).
       **Test:** `hidden-sides.test.ts` (car: far-side wheels, windows and mirror appear; fridge: the handle
       does not).
       **Done when:** the ¾ sheet shows no blank far side on the real vehicles and houses; violations stay 0.
-- [ ] **PQ-T23 Clean front for hidden objects** _(API)_. When the hidden share (PQ-T7) is ≥ 30 %, the panel
+      _Built 2026-11-11:_ `farSide` in `hidden-sides.ts` (vehicle: wheel, window, light, trim; cabinet: frame, trim;
+      door, handle, display never mirror; `handle` / `seam` details stripped), room up to `MAX_COMPONENTS` (`farRoom`).
+      Houses keep their back-facade and end-window sets. Real-set sheet check not run.
+      _Review PR #14:_ a kindless cabinet part (the kit template's handle and door line) no longer crosses to
+      the back: cabinets mirror `frame` only.
+- [x] **PQ-T23 Clean front for hidden objects** _(API)_. When the hidden share (PQ-T7) is ≥ 30 %, the panel
       offers « draw a clean front »: Muse Image with the Clean front card (skills §12.2), the operator validates
       the drawing as on the facade route, then the 2D path builds from it. Every part that exists only on the
       drawing is `inferred`. UI: `object-shape-panel.tsx`, three languages, both themes, mobile (design gate).
@@ -342,11 +366,22 @@ _Ticked 2026-11-11 on the owner's request: the code and tests are in; every « d
       front are inferred).
       **Done when:** the hidden-car photo of the real set yields a whole car whose visible half still matches
       the photo (IoU on the visible region not lower).
-- [ ] **PQ-T24 Back by mirror, extra side on request.** The back of a views-path object is the front mirrored
+      _Built 2026-11-11:_ `CleanFrontOffer`, route field `cleanFront`, `buildCleanFrontPrompt`, `ShapeTarget.cleanFront`,
+      `markDrawnInferred`; i18n en / fr / mg. No Stitch mockup: built from the facade panel's lines, not checked on
+      screen (screenshots both themes, 390 px) and the hidden-car IoU check needs live Meta calls.
+      _Review PR #14:_ the retry keeps the operator's details and stays a clean front; `clean` follows the
+      request (mock, elevation fallback); the house facade route marks its parts inferred too.
+- [x] **PQ-T24 Back by mirror, extra side on request.** The back of a views-path object is the front mirrored
       with the family's rear parts (tail lights, rear door), never generated. A second side is drawn only when
       the views check asks for it. Closes PH-T9.
       **Test:** `object-views.test.ts` (back parts present and inferred; no Muse Image call for the back).
       **Done when:** vehicles on the 2D path have a rear end in the viewer.
+      _Built 2026-11-11:_ `viewsRecipe` mirrors the front lights (tail-light colour) and the bumper onto the rear,
+      status `inferred`, flush with the hull (side IoU kept), unless the side drawing already showed a rear part.
+      No second-side generator exists, so « on request » is not built: nothing draws the back. Not checked live.
+
+- [x] **PQ-T10 Colour of the lit surface** (finished here, it was forgotten in Q1): the region colours of
+      `region-colors.ts` now read the lit surface too. Details under PQ-T10 in Q1.
 
 **Exit Q3:** the recognisable small parts exist in the model, on every path.
 

@@ -30,10 +30,12 @@ import {
   SIDE_DEPTH_MAX_FACTOR,
   sparkDepthRatio,
   viewIou,
+  markDrawnInferred,
   viewsRecipe,
   PERSON_TORSO,
 } from '../object-views';
 
+import { TAIL_LIGHT_COLOR } from '@/lib/object-kit';
 import { FRONT, KIT, SIDE, box, front, side, type Pt } from '../__fixtures__/views';
 
 describe('hull helpers (PV-H)', () => {
@@ -97,7 +99,9 @@ describe('viewsRecipe (PV-H)', () => {
     expect(r.parts.filter((p) => p.material === 'rubber')).toHaveLength(4);
     expect(r.parts.filter((p) => p.material === 'glass').length).toBeGreaterThanOrEqual(4);
     expect(r.parts.some((p) => p.material === 'metal' && p.shape === 'box')).toBe(true);
-    expect(r.parts.length).toBeLessThanOrEqual(12);
+    // The measured parts keep the 12 of before; the mirrored rear (PQ-T24, inferred) comes on top.
+    expect(r.parts.filter((p) => p.status !== 'inferred').length).toBeLessThanOrEqual(12);
+    expect(r.parts.length).toBeLessThanOrEqual(32);
     // Side glass, windshield and grille hug the body: skin patches, not flat boxes.
     const skins = r.parts.filter((p) => p.shape === 'hull' && !p.front);
     expect(skins.map((p) => p.material).sort()).toEqual(['glass', 'glass', 'glass', 'metal']);
@@ -478,6 +482,62 @@ describe('AI views check (PV-H)', () => {
     // On the back: every section point sits behind the middle.
     for (const p of [...back('#bbbbbb'), ...back('#cc2222')])
       expect(Math.max(...p.section!.map(([z]) => z))).toBeLessThan(0);
+  });
+
+  it('rear end by mirror: tail lights and rear bumper copied from the front, inferred, no image call (PQ-T24)', () => {
+    const lit = {
+      front: {
+        ...front,
+        parts: [
+          ...front.parts.filter((p) => p.concept !== 'headlight'),
+          { concept: 'headlight', box: box(0.2, 0.45, 0.12, 0.08) },
+          { concept: 'headlight', box: box(0.68, 0.45, 0.12, 0.08) },
+        ],
+      },
+      side: { ...side, parts: side.parts.filter((p) => !/rear|back|tail/.test(p.concept)) },
+    };
+    const r = viewsRecipe(lit, KIT);
+    const tails = r.parts.filter((p) => p.kind === 'light' && p.color === TAIL_LIGHT_COLOR);
+    expect(tails).toHaveLength(2);
+    expect(tails.every((p) => p.status === 'inferred' && p.at[2] < 0)).toBe(true);
+    // Same x as the headlights they mirror.
+    const heads = r.parts.filter((p) => p.kind === 'light' && p.at[2] > 0);
+    expect(tails.map((p) => p.at[0]).sort()).toEqual(heads.map((p) => p.at[0]).sort());
+    const bumpers = r.parts.filter((p) => p.kind === 'bumper');
+    if (bumpers.length)
+      expect(bumpers.some((b) => b.at[2] < 0 && b.status === 'inferred')).toBe(true);
+    // Only a vehicle has a rear to mirror.
+    expect(
+      viewsRecipe(lit, { ...KIT, archetype: 'cabinet' }).parts.some(
+        (p) => p.color === TAIL_LIGHT_COLOR
+      )
+    ).toBe(false);
+  });
+
+  it('a rear end measured on the side is kept, not mirrored over (PQ-T24)', () => {
+    const withBack = {
+      front,
+      side: {
+        ...side,
+        parts: [
+          ...side.parts,
+          { concept: 'taillight', box: box(0.95, 0.45, 0.04, 0.1), look: { color: '#cc2222' } },
+        ],
+      },
+    };
+    const r = viewsRecipe(withBack, KIT);
+    expect(r.parts.filter((p) => p.color === TAIL_LIGHT_COLOR)).toHaveLength(0);
+    expect(r.parts.filter((p) => p.status === 'inferred' && p.kind === 'light')).toHaveLength(0);
+  });
+
+  it('a clean front makes every drawn part inferred, the body keeps its status (PQ-T23)', () => {
+    const r = viewsRecipe({ front, side }, KIT);
+    expect(r.parts.some((p) => p.status === 'measured' && !p.front)).toBe(true);
+    const clean = markDrawnInferred(r);
+    expect(clean.parts.some((p) => p.status === 'measured' && !p.front)).toBe(false);
+    expect(clean.parts.filter((p) => p.status === 'inferred').length).toBeGreaterThan(0);
+    expect(clean.parts[0]!.status).toBe(r.parts[0]!.status);
+    expect(clean.parts).toHaveLength(r.parts.length);
   });
 
   it('skips a round with no time left, and never asks SAM again for a part it already measured', async () => {

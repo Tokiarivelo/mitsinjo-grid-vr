@@ -66,4 +66,36 @@ describe('useFacade2d', () => {
     rerender({ photo: 'data:image/png;base64,P2', target: house });
     expect(result.current.status).toBe('idle');
   });
+
+  it('a clean front is remembered with its request: « Retry » asks for a clean front again (PQ-T23)', async () => {
+    fetchMock.mockImplementation(async (_url: string, init: RequestInit) => {
+      const form = init.body as FormData;
+      const id = JSON.parse(form.get('target') as string).id as string;
+      const body = (await reply(id).json()) as Record<string, unknown>;
+      return new Response(JSON.stringify({ ...body, clean: form.has('cleanFront') }));
+    });
+    const request = { hiddenBy: ['hedge'], visibleParts: ['wheel'] };
+    const props = { photo: 'data:image/png;base64,P1', target: house };
+    const first = renderHook(({ photo, target }) => useFacade2d(photo, target, undefined, 'kept'), {
+      initialProps: props,
+    });
+    await act(() => first.result.current.generate(undefined, request));
+    expect(validatedFacade(first.result.current.facade)).toMatchObject({ clean: true });
+    first.unmount();
+
+    // Back on the page (kept session): the retry of that drawing still carries the request.
+    const again = renderHook(({ photo, target }) => useFacade2d(photo, target, undefined, 'kept'), {
+      initialProps: props,
+    });
+    expect(again.result.current.facade?.clean).toBe(true);
+    await act(async () => again.result.current.retry('four doors'));
+    const sent = fetchMock.mock.calls.at(-1)![1].body as FormData;
+    expect(JSON.parse(sent.get('cleanFront') as string)).toEqual(request);
+    expect(sent.get('userPrompt')).toBe('four doors');
+
+    // A plain facade asked afterwards is not a clean front any more.
+    await act(() => again.result.current.generate());
+    expect(again.result.current.facade?.clean).toBeUndefined();
+    expect(validatedFacade(again.result.current.facade)).not.toHaveProperty('clean');
+  });
 });

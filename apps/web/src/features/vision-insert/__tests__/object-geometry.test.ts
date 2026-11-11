@@ -84,6 +84,39 @@ describe('recipeMesh (PV-T10)', () => {
   });
 });
 
+describe('detail kinds (PQ-T20)', () => {
+  it('every detail on a 12-part vehicle (4 wheels, 8 boxes) stays within the triangle budget', () => {
+    const all = ['handle', 'seam', 'mirror', 'arch', 'rim', 'gutter', 'vent', 'foot'] as const;
+    const heavy: ObjectRecipe = {
+      ...fridge,
+      parts: Array.from({ length: 12 }, (_, i) => ({
+        shape: i < 4 ? ('cylinder' as const) : ('box' as const),
+        axis: 'x' as const,
+        kind: i < 4 ? ('wheel' as const) : ('body' as const),
+        at: [((i % 5) - 2) * 0.1, ((i % 7) - 3) * 0.1, 0] as [number, number, number],
+        size: [0.2, 0.2, 0.2] as [number, number, number],
+        color: '#808080',
+        details: [...all],
+      })),
+    };
+    expect(triangleCount(recipeMesh(heavy))).toBeLessThanOrEqual(5_000);
+  });
+
+  it('a fridge with handle and seam builds taller in triangles than the plain one, bounds kept', () => {
+    const plain = recipeMesh(fridge);
+    const detailed = recipeMesh({
+      ...fridge,
+      parts: [{ ...fridge.parts[0]!, details: ['handle', 'seam'] }],
+    });
+    expect(triangleCount(detailed)).toBeGreaterThan(
+      triangleCount(recipeMesh({ ...fridge, parts: [fridge.parts[0]!] }))
+    );
+    expect(plain.getAttribute('position').count).toBeGreaterThan(0);
+    const b = bounds(detailed);
+    expect(b.max.y - b.min.y).toBeCloseTo(1, 1);
+  });
+});
+
 describe('roundedBox (PR-1.2)', () => {
   it('keeps the exact size, rounds the corners, smooth normals there', () => {
     const g = roundedBox(1, 0.5, 0.4, 0.04);

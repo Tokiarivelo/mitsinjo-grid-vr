@@ -372,6 +372,18 @@ describe('assembly details (PQ-T3): the judge sees what the viewer shows', () =>
     );
   });
 
+  it('a handle detail is drawn on the front face (PQ-T20)', () => {
+    const body = part({ size: [0.6, 1, 0.5], front: true, kind: 'body' });
+    const plain = renderFlat(recipe([body]), 1, N, N);
+    const detailed = renderFlat(recipe([{ ...body, details: ['handle'] }]), 1, N, N);
+    const diff = detailed.rgb.reduce((n, v, i) => n + (v !== plain.rgb[i] ? 1 : 0), 0);
+    expect(diff).toBeGreaterThan(0);
+    // The silhouette is the same: a handle is flush with the face, not beyond the body.
+    expect(detailed.mask.data.reduce((a, b) => a + b, 0)).toBe(
+      plain.mask.data.reduce((a, b) => a + b, 0)
+    );
+  });
+
   it('the heaviest detailed model (golden facade house) renders within budget', () => {
     const front = measureElevation(GOLDEN_ELEVATIONS[0]!.masks)!;
     const house = fitRecipe(

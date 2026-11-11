@@ -6,7 +6,7 @@ vi.mock('server-only', () => ({}));
 
 import { kitToRecipe, type ObjectKit } from '@/lib/object-kit';
 import {
-  MAX_RECIPE_PARTS,
+  MAX_COMPONENTS,
   ObjectRecipeSchema,
   type ObjectRecipe,
   type PartMask,
@@ -61,6 +61,8 @@ const rectMask = (
     ]),
   };
 };
+
+const free = (r: ObjectRecipe): ObjectRecipe => ({ ...r, source: 'free' });
 
 describe('withMaskChimney (PR-2.10)', () => {
   it('stepped house: template stack replaced by the measured one at the mask x', () => {
@@ -156,7 +158,7 @@ describe('withMaskChimney (PR-2.10)', () => {
 
   it('a full recipe without a stack funds the new one from decals', () => {
     const geom = geomA();
-    const base = kitToRecipe(houseKit());
+    const base = free(kitToRecipe(houseKit()));
     expect(base.parts).toHaveLength(8);
     const decals = [0, 1, 2, 3].map((i) => ({
       shape: 'box' as const,
@@ -263,7 +265,7 @@ describe('withMaskChimney (PR-2.10)', () => {
     const measured = await runObjectShape({ ...spark, segmentImage }, photo, 'data:full', target);
     expect(measured.mode).toBe('recipe');
     expect(measured.partMasks!.filter((m) => m.concept === 'chimney')).toHaveLength(1);
-    expect(measured.recipe!.parts.length).toBeLessThanOrEqual(MAX_RECIPE_PARTS);
+    expect(measured.recipe!.parts.length).toBeLessThanOrEqual(MAX_COMPONENTS);
     // A stack rises past the walls on the roof at the mask x.
     const outWalls = measured.recipe!.parts.find((p) => p.front)!;
     const stack = measured.recipe!.parts.find(

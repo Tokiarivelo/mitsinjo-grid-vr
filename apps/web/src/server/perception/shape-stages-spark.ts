@@ -29,9 +29,18 @@ import {
 import type { ShapeOpsOptions } from './backend';
 import type { KitArchetype } from '@/lib/object-kit';
 import type { Component } from '@/lib/shape-script';
+import {
+  judgedPhotoStages,
+  photoCanEdit,
+  photoStageScorer,
+  scorePhoto,
+  tagPhotoParts,
+  type PhotoTarget,
+} from './photo-stages';
 import { viewsSheet, type ObjectViews } from './object-views';
 import type { StageSheet } from './shape-script-prompt';
 import {
+  photoStages,
   VIEW_STAGES,
   type ViewStage,
   scoreViews,
@@ -429,6 +438,67 @@ export function viewStageLoop(input: ViewLoopInput) {
     return result.ops ?? [];
   };
   return stagedLoop({ ...input, ...looped, ...resumedStages(looped, input.resumeAt), propose });
+}
+
+export interface PhotoLoopInput extends LoopTiming {
+  recipe: ObjectRecipe;
+  archetype: KitArchetype;
+  target: PhotoTarget;
+  label: string;
+  /** `perception.proposeShapeOps` bound to its backend (photo sheet). */
+  proposeShapeOps: ViewLoopInput['proposeShapeOps'];
+}
+
+/**
+ * The photo-path loop (PQ-T19): the archetype's stages scored on the photo (`scorePhoto`), Spark sees the
+ * photo | model | difference | ¾ sheet. Parts the photo cannot see are locked (`photoCanEdit`). Null when
+ * no stage is judged beyond the body with nothing to improve, or the archetype has no stage list.
+ */
+export function photoStageLoop(input: PhotoLoopInput) {
+  const judged = input.resumeAt
+    ? (photoStages(input.archetype) ?? []).filter((st) => input.resumeAt!.all.includes(st.id))
+    : judgedPhotoStages(input.archetype, input.target);
+  if (!judged.length) return null;
+  const recipe = tagPhotoParts(input.recipe, input.archetype);
+  const looped = withFinalStage(judged, photoStageScorer(input.target, judged));
+  const propose: Proposer<ViewStage | FinalStage> = async (ctx) => {
+    // Dynamic: the critic module imports the pipeline that imports this one.
+    const { criticSheet } = await import('./spark-critic');
+    const sheet = await criticSheet(
+      input.target.crop,
+      ctx.recipe,
+      input.target.aspect,
+      input.target.outline
+    ).catch(() => null);
+    if (!sheet) return [];
+    const question = stageQuestion({
+      label: input.label,
+      stage: ctx.stage.id,
+      round: ctx.round,
+      score: ctx.score,
+      components: ctx.components,
+      editable: ctx.editable,
+      ...(ctx.feedback ? { feedback: ctx.feedback } : {}),
+      cards: env.SHAPE_LOOP_CARDS,
+      notes: viewStageNotes(scorePhoto(ctx.recipe, input.target, judged)),
+    });
+    const { result } = await input.proposeShapeOps(
+      sheet,
+      question,
+      ctx.signal,
+      'photo',
+      callOptions(ctx.stage.id)
+    );
+    return result.ops ?? [];
+  };
+  return stagedLoop({
+    ...input,
+    recipe,
+    ...looped,
+    ...resumedStages(looped, input.resumeAt),
+    propose,
+    canEdit: photoCanEdit,
+  });
 }
 
 const clamp01 = (v: number) => Math.min(1, Math.max(0, Number.isFinite(v) ? v : 0));

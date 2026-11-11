@@ -8,7 +8,7 @@ import { kitToRecipe, type ObjectKit } from '@/lib/object-kit';
 import { ObjectRecipeSchema, type PartMask, type ShapeTarget } from '@/lib/object-shape';
 import { boxPath, pathToRings, polygonPath } from '@/lib/vision';
 import { GOLDEN_SHAPES, goldenBox, goldenOutline, goldenSvg, PHOTO } from '../__fixtures__/shape';
-import { hexToRgb } from '../color-measure';
+import { deltaE2000, hexToLab, hexToRgb } from '../color-measure';
 import { confidence, mixColor } from '../fusion';
 import type { MaskMapGeom } from '../mask-geometry';
 import { withMaskPanels } from '../mask-panels';
@@ -17,7 +17,10 @@ import type { RgbGrid } from '../model-score';
 import { runObjectShape } from '../object-shape';
 import { cropRectForShape } from '../shape-crop';
 import { sampleObjectRgb } from '../shape-colors';
-import { measureRegionColors, withRegionColors } from '../region-colors';
+import { litMeasure, measureRegionColors, withRegionColors } from '../region-colors';
+
+const rgbHex = ([r, g, b]: [number, number, number]) =>
+  `#${[r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('')}`;
 
 const vehicleKit = (): ObjectKit => ({
   archetype: 'vehicle',
@@ -92,6 +95,39 @@ describe('measureRegionColors (PR-2.8)', () => {
     expectColor(out.rest!.color, RED);
   });
 
+  it('a part half in shadow reads its lit colour, the shadow share is reported apart (PQ-T10)', () => {
+    const geom = geomA();
+    const LIT: [number, number, number] = [200, 60, 50];
+    const SHADE: [number, number, number] = [70, 21, 18];
+    const rings = pathToRings(boxPath(geom.box));
+    const masks = [boxMask(geom, 'window', 20, 10, 180, 90)];
+    // Wall 40 % in shadow: the lit 60 % are exactly the lit cells.
+    const half = grid(10, 10, (i) => (i < 4 ? SHADE : LIT));
+    const out = measureRegionColors(half, rings, masks, geom, photoA, geom.box);
+    expect(deltaE2000(hexToLab(out.regions[0]!.color), hexToLab(rgbHex(LIT)))).toBeLessThan(5);
+    expect(out.regions[0]!.shadow).toBeGreaterThan(0.3);
+    // Before: the median of everything. 65 % in shadow reads the shade colour, 100 % lit reads no shadow.
+    const mostly = grid(10, 10, (i) => (i < 6 ? SHADE : LIT));
+    const m = measureRegionColors(mostly, rings, masks, geom, photoA, geom.box);
+    expect(m.regions[0]!.shadow).toBeGreaterThan(0.5);
+    const flat = measureRegionColors(
+      grid(10, 10, () => LIT),
+      rings,
+      masks,
+      geom,
+      photoA,
+      geom.box
+    );
+    expect(flat.regions[0]!.shadow).toBe(0);
+    expect(deltaE2000(hexToLab(flat.regions[0]!.color), hexToLab(rgbHex(LIT)))).toBeLessThan(1);
+  });
+
+  it('litMeasure: a single colour is itself, an empty-ish pool never throws', () => {
+    const one = litMeasure([0.5], [0.2], [0.1]);
+    expect(one.pixels).toBe(1);
+    expect(one.shadow).toBe(0);
+  });
+
   it('box-only masks erode 20%: round-wheel corners do not pollute the colour', () => {
     const geom = geomA();
     const g = grid(10, 10, (i, j) => (i >= 2 && i <= 7 && j >= 2 && j <= 7 ? BLUE : RED));
@@ -154,11 +190,11 @@ describe('withRegionColors (PR-2.8)', () => {
     const panelled = withMaskPanels('vehicle', wheeled, masks, geom);
     const measured = {
       regions: [
-        { color: '#1122ff', pixels: 2000 },
-        { color: '#111111', pixels: 2000 },
-        { color: '#111111', pixels: 2000 },
+        { color: '#1122ff', pixels: 2000, shadow: 0 },
+        { color: '#111111', pixels: 2000, shadow: 0 },
+        { color: '#111111', pixels: 2000, shadow: 0 },
       ],
-      rest: { color: '#ff0000', pixels: 2000 },
+      rest: { color: '#ff0000', pixels: 2000, shadow: 0 },
     };
     const out = withRegionColors('vehicle', panelled, masks, measured, geom);
     expect(out).not.toBe(panelled);
@@ -189,7 +225,7 @@ describe('withRegionColors (PR-2.8)', () => {
       'vehicle',
       recipe,
       masks,
-      { regions: [null], rest: { color: '#ff0000', pixels: 2000 } },
+      { regions: [null], rest: { color: '#ff0000', pixels: 2000, shadow: 0 } },
       geom
     );
     expect(out.parts.find((p) => p.front)!.color).toBe('#ff0000');
@@ -199,7 +235,7 @@ describe('withRegionColors (PR-2.8)', () => {
       'vehicle',
       recipe,
       masks,
-      { regions: [{ color: '#1122ff', pixels: 32 }], rest: null },
+      { regions: [{ color: '#1122ff', pixels: 32, shadow: 0 }], rest: null },
       geom
     );
     expect(confidence.colors(32)).toBe(0);

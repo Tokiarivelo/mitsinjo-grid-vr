@@ -9,6 +9,7 @@ import { DEFAULT_META_BASE_URL } from '@/server/copilot/providers/meta';
 import type { PhotoForRegions } from './region';
 import { cropForShape } from './shape-crop';
 import { inlineImageUrl } from './inline-image';
+import { imageCard } from './skills';
 
 /**
  * Sent with the photo crop as reference (user 2026-11-05): without it Muse Image drew a generic
@@ -65,11 +66,35 @@ export function buildFacadePrompt(
 
   if (fromPhoto) basePrompt += ` ${FACADE_FROM_PHOTO}`;
 
-  if (userPrompt && userPrompt.trim()) {
-    basePrompt += ` Additional required architectural features: ${userPrompt.trim()}.`;
-  }
+  return withUserDetails(basePrompt, userPrompt);
+}
 
-  return basePrompt;
+/** The operator's own details (« Retry with details »), appended to any 2D-view prompt. */
+function withUserDetails(prompt: string, userPrompt?: string): string {
+  const extra = userPrompt?.trim();
+  return extra ? `${prompt} Additional required architectural features: ${extra}.` : prompt;
+}
+
+/** What the kit saw of a hidden object (`evidence`): the Clean front card's two blanks. */
+export interface CleanFrontEvidence {
+  hiddenBy: ReadonlyArray<string>;
+  visibleParts: ReadonlyArray<string>;
+}
+
+/** The Clean front card (skills §12.2) filled with the object's name and what the kit saw. */
+export function buildCleanFrontPrompt(
+  label: string,
+  evidence: Partial<CleanFrontEvidence> = {},
+  userPrompt?: string
+) {
+  const list = (v: ReadonlyArray<string> | undefined, none: string) =>
+    v && v.length ? v.join(', ') : none;
+  const card = imageCard('cleanFront')
+    .replaceAll('{name}', label)
+    .replaceAll('{hiddenBy}', list(evidence.hiddenBy, 'other objects'))
+    .replaceAll('{visibleParts}', list(evidence.visibleParts, 'the visible parts'));
+  // « Retry with details » on a clean front: the operator's words ride along, as on the elevation prompt.
+  return withUserDetails(card, userPrompt);
 }
 
 /**
@@ -196,9 +221,16 @@ export interface GenerateFacadeOptions {
   userPrompt?: string;
   sessionId?: string;
   signal?: AbortSignal;
+  /** Clean front of a hidden object (PQ-T23): the Clean front card replaces the elevation prompt. */
+  cleanFront?: Partial<CleanFrontEvidence>;
 }
 
 export interface FacadeResult {
+  /**
+   * True when a clean front was asked for (PQ-T23): whatever drew it (the card, the elevation prompt after
+   * a refused photo, the mock), the drawing imagines what the photo hides, so its parts are inferred.
+   */
+  clean?: boolean;
   imageUrl: string;
   fileKey: string;
   prompt: string;
@@ -224,9 +256,11 @@ export async function generateFacadeImage(options: GenerateFacadeOptions): Promi
           return null;
         })
       : null;
-  let prompt = buildFacadePrompt(archetype, target.label, userPrompt, {
-    fromPhoto: reference !== null,
-  });
+  // The card speaks of « this photo »: without the photo as reference it falls back to the elevation prompt.
+  const clean = options.cleanFront && reference !== null ? options.cleanFront : null;
+  let prompt = clean
+    ? buildCleanFrontPrompt(target.label, clean, userPrompt)
+    : buildFacadePrompt(archetype, target.label, userPrompt, { fromPhoto: reference !== null });
 
   let pngBuffer: Buffer;
   let source: 'meta' | 'mock' = 'mock';
@@ -282,5 +316,6 @@ export async function generateFacadeImage(options: GenerateFacadeOptions): Promi
     prompt,
     archetype,
     source,
+    ...(options.cleanFront ? { clean: true } : {}),
   };
 }

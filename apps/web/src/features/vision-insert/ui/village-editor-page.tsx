@@ -151,7 +151,13 @@ export function VillageEditorPage() {
     if (imageUrl && shapeRequest) {
       void requestShape(imageUrl, {
         ...shapeRequest,
-        ...(facade ? { facadeUrl: facade.url, facadeKey: facade.key } : {}),
+        ...(facade
+          ? {
+              facadeUrl: facade.url,
+              facadeKey: facade.key,
+              ...(facade.clean ? { cleanFront: true } : {}),
+            }
+          : {}),
       });
     }
   };

@@ -3,7 +3,6 @@ import 'server-only';
 import type { KitArchetype } from '@/lib/object-kit';
 import {
   frontPartIndex,
-  MAX_RECIPE_PARTS,
   type ObjectRecipe,
   type PartMask,
   type RecipePart,
@@ -12,6 +11,7 @@ import { pathToRings } from '@/lib/vision';
 import {
   cropToPhoto,
   enforcePartBudget,
+  partCeiling,
   isWheelPart,
   MASK_YAW_HARD_MAX,
   MASK_YAW_MAX,
@@ -234,6 +234,7 @@ export function withMaskPanels(
   if (!frontal && Math.abs(recipe.yaw ?? 0) > MASK_YAW_HARD_MAX) return recipe;
   // ≤ 17° the far side mirrors the near one (both archetypes); 17–60° the near side only.
   const allowMirror = frontal || Math.abs(recipe.yaw ?? 0) <= MASK_YAW_MAX;
+  const CEIL = partCeiling(recipe);
   const main = recipe.parts[frontPartIndex(recipe)]!;
 
   // The face behind the panels + the colours they reuse.
@@ -317,7 +318,7 @@ export function withMaskPanels(
           (p) => Math.abs(p.x - h.x) * 2 < p.w + h.w && Math.abs(p.y - h.y) * 2 < p.h + h.h
         )?.concept ?? 'window';
       const rest = recipe.parts.filter((p) => !removed.includes(p) && p !== main);
-      if (rest.length + seg.strips.length + seg.holes.length <= MAX_RECIPE_PARTS) {
+      if (rest.length + seg.strips.length + seg.holes.length <= CEIL) {
         const stripParts: RecipePart[] = seg.strips.map((s) => ({
           shape: 'box',
           at: [s.x, s.y, main.at[2]],
@@ -366,24 +367,24 @@ export function withMaskPanels(
       (p) => !protect.includes(p) && (volume(p) < PART_KEEP_VOLUME || p.at[2] < -PART_MIRROR_MIN_Z)
     ).length;
   const both = allowMirror ? panels.length * 2 : panels.length;
-  const shortBoth = kept.length + both - MAX_RECIPE_PARTS;
-  const shortNear = kept.length + panels.length - MAX_RECIPE_PARTS;
+  const shortBoth = kept.length + both - CEIL;
+  const shortNear = kept.length + panels.length - CEIL;
   let base = { parts: kept, dropped: [] as string[] };
   let mirror = false;
   let use = panels;
   if (shortBoth <= 0) {
     mirror = allowMirror;
   } else if (fundable(kept) >= shortBoth) {
-    base = enforcePartBudget(kept, protect, { max: MAX_RECIPE_PARTS - both, soft: true });
+    base = enforcePartBudget(kept, protect, { max: CEIL - both, soft: true });
     mirror = allowMirror;
   } else {
     if (shortNear > 0) {
       base =
         fundable(kept) >= shortNear
-          ? enforcePartBudget(kept, protect, { max: MAX_RECIPE_PARTS - panels.length, soft: true })
+          ? enforcePartBudget(kept, protect, { max: CEIL - panels.length, soft: true })
           : enforcePartBudget(kept, protect, { max: 0, soft: true });
     }
-    const room = MAX_RECIPE_PARTS - base.parts.length;
+    const room = CEIL - base.parts.length;
     if (room <= 0) return recipe;
     use = panels.slice(0, room);
   }
@@ -412,7 +413,7 @@ export function withMaskPanels(
     parts.push(mk(pp, face + PANEL_PROUD));
     if (mirror) parts.push(mk(pp, -(face + PANEL_PROUD)));
   }
-  const { parts: fit, dropped } = enforcePartBudget(parts, protect);
+  const { parts: fit, dropped } = enforcePartBudget(parts, protect, { max: CEIL });
   const allDropped = [...base.dropped, ...dropped];
   if (allDropped.length > 0) {
     console.info(

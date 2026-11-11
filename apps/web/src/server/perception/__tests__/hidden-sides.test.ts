@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 vi.mock('server-only', () => ({}));
-import type { ObjectKit } from '@/lib/object-kit';
+import { kitToRecipe, type ObjectKit } from '@/lib/object-kit';
 import type { ObjectRecipe, RecipePart } from '@/lib/object-shape';
 import { GOLDEN_SHAPES } from '../__fixtures__/shape';
 import { checkConstraints } from '../object-graph';
@@ -104,6 +104,87 @@ describe('deduceHiddenSides (PR-2.16)', () => {
     const full = sedanRecipe();
     while (full.parts.length < 12) full.parts.push(part({ shape: 'box' }));
     expect(deduceHiddenSides('vehicle', full, { yaw: 0, colors: COLORS, room: 0 })).toEqual([]);
+  });
+
+  describe('far side by symmetry (PQ-T22)', () => {
+    const car = () => {
+      const r = sedanRecipe();
+      r.parts.push(
+        part({
+          shape: 'cylinder',
+          axis: 'z',
+          kind: 'wheel',
+          at: [0.3, -0.25, 0.46],
+          size: [0.2, 0.2, 0.08],
+        }),
+        part({ shape: 'box', kind: 'window', at: [0, 0.3, 0.41], size: [0.4, 0.2, 0.02] }),
+        part({ shape: 'box', at: [0.4, 0.1, 0.5], size: [0.04, 0.04, 0.04] }), // mirror
+        part({ shape: 'box', kind: 'door', at: [-0.1, 0, 0.455], size: [0.3, 0.4, 0.02] }),
+        part({ shape: 'box', kind: 'handle', at: [-0.1, 0.1, 0.47], size: [0.05, 0.02, 0.02] })
+      );
+      return r;
+    };
+    const far = (parts: RecipePart[]) => parts.filter((p) => p.at[2] < 0);
+
+    it('car: far-side wheel, window and mirror appear, the door and handle do not', () => {
+      const out = far(deduceHiddenSides('vehicle', car(), { yaw: 0, colors: COLORS, room: 12 }));
+      expect(out.map((p) => p.kind ?? 'trim').sort()).toEqual(['trim', 'wheel', 'window']);
+      const wheel = out.find((p) => p.kind === 'wheel')!;
+      expect(wheel.at).toEqual([0.3, -0.25, -0.46]);
+      expect(wheel.axis).toBe('z');
+      expect(wheel.status).toBeUndefined();
+    });
+
+    it('fridge: the handle and the display never cross over, trim does', () => {
+      const fridge = recipe([
+        part({ shape: 'box', at: [0, 0, 0], size: [0.5, 1, 0.5], front: true }),
+        part({ shape: 'box', kind: 'handle', at: [0.2, 0.1, 0.26], size: [0.03, 0.25, 0.02] }),
+        part({ shape: 'box', kind: 'display', at: [0, 0.3, 0.26], size: [0.1, 0.05, 0.02] }),
+        part({ shape: 'box', kind: 'frame', at: [0, -0.45, 0.26], size: [0.4, 0.04, 0.02] }),
+      ]);
+      const out = deduceHiddenSides('cabinet', fridge, { yaw: 0, colors: COLORS, room: 12 });
+      expect(out).toHaveLength(1);
+      expect(out[0]).toMatchObject({ kind: 'frame', at: [0, -0.45, -0.26] });
+    });
+
+    it('the kit fridge keeps its handle and door line on the front only (before: copied onto the back)', () => {
+      const fridge = kitToRecipe({
+        archetype: 'cabinet',
+        proportions: { w: 0.6, h: 1, d: 0.6 },
+        colors: COLORS,
+        details: { doors: 2 },
+      } as ObjectKit);
+      // The template's handle and door line carry no kind and sit proud of the front face.
+      expect(fridge.parts.filter((p) => !p.front && p.at[2] >= 0.5)).toHaveLength(2);
+      expect(
+        deduceHiddenSides('cabinet', fridge, { yaw: 0, colors: COLORS, room: 12, farRoom: 32 })
+      ).toEqual([]);
+    });
+
+    it('a far twin that already stands is not doubled; a set that does not fit is withheld whole', () => {
+      const r = car();
+      const twin = far(deduceHiddenSides('vehicle', r, { yaw: 0, colors: COLORS, room: 12 }));
+      const again = deduceHiddenSides(
+        'vehicle',
+        { ...r, parts: [...r.parts, ...twin] },
+        {
+          yaw: 0,
+          colors: COLORS,
+          room: 12,
+        }
+      );
+      expect(far(again)).toHaveLength(0);
+      expect(
+        far(deduceHiddenSides('vehicle', r, { yaw: 0, colors: COLORS, room: 2 }))
+      ).toHaveLength(0);
+    });
+
+    it('a handle detail is not copied to the far side, other details are', () => {
+      const r = car();
+      r.parts[2] = { ...r.parts[2]!, details: ['handle', 'arch'] };
+      const out = far(deduceHiddenSides('vehicle', r, { yaw: 0, colors: COLORS, room: 12 }));
+      expect(out.find((p) => p.kind === 'wheel')!.details).toEqual(['arch']);
+    });
   });
 
   it('cottage e2e: end windows ship as inferred, constraints clean, car gated', async () => {

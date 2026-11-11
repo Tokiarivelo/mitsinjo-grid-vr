@@ -39,6 +39,8 @@ export const EXTRUDE_POINTS_MAX = 64;
 /** Profile points of a `lathe` part (PR-2.3): radius-vs-height, non-decreasing y. */
 export const LATHE_PROFILE_MAX = 32;
 export const MAX_RECIPE_PARTS = 12;
+/** Hidden share (PQ-T7) from which the panel offers « draw a clean front » (PQ-T23). */
+export const CLEAN_FRONT_MIN_HIDDEN = 0.3;
 /** Highest half-hip gable share: above it the end is a plain gable (ridge 1). */
 export const HIP_CLIP_MAX = 0.9;
 /**
@@ -85,6 +87,23 @@ export const PART_KINDS = [
   'head',
 ] as const;
 export const PartKindSchema = z.enum(PART_KINDS);
+/**
+ * Small parts a host part carries (PQ-T20), expanded by the viewer and drawn by the flat render, never
+ * template parts: `handle`, `seam` (door line), `vent` on a body; `mirror`, `arch` (wheel arch) and `rim`
+ * on a vehicle; `gutter` along a roof eave; `foot` under a body. Dropped first past `MAX_TRIANGLES`.
+ */
+export const DETAIL_KINDS = [
+  'handle',
+  'seam',
+  'mirror',
+  'arch',
+  'rim',
+  'gutter',
+  'vent',
+  'foot',
+] as const;
+export const DetailKindSchema = z.enum(DETAIL_KINDS);
+export type DetailKind = z.infer<typeof DetailKindSchema>;
 /** Most timber posts or rails on one wall (PV-G). */
 export const MAX_TIMBER = 12;
 /** Most glass panes across or down one window (PG-T8). */
@@ -207,6 +226,8 @@ export const RecipePartSchema = z
     cap: z.boolean().optional(),
     bulge: z.number().min(0).max(MAX_ROOF_BULGE).optional(),
     rim: z.boolean().optional(),
+    /** Detail kinds this part carries (PQ-T20); `rim` here equals `rim: true` on a wheel. */
+    details: z.array(DetailKindSchema).max(DETAIL_KINDS.length).optional(),
   })
   .superRefine((p, ctx) => {
     if ((p.shape === 'extrude' || p.shape === 'hull') && !p.points)
@@ -282,6 +303,8 @@ export const ShapeTargetSchema = z.object({
   facadeKey: z.string().optional(),
   /** Family the operator picked when asked (PQ-T41): it becomes the kit hint and the kit's archetype. */
   archetype: z.string().max(16).optional(),
+  /** The validated 2D view is a clean front drawn from a hidden object (PQ-T23): its parts are inferred. */
+  cleanFront: z.boolean().optional(),
 });
 export type ShapeTarget = z.infer<typeof ShapeTargetSchema>;
 
@@ -416,6 +439,7 @@ export const SHAPE_STAGE_IDS = [
   'roof',
   'openings',
   'accessories',
+  'chimney',
   'body',
   'glass',
   'wheels',
