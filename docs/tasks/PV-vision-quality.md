@@ -285,6 +285,7 @@ Meta API calls; all others run offline.
       kept op). Soft signals only may be rescued by a model's answer; hard geometry checks never.
       **Test:** `shape-stages.test.ts` (repeat and back-and-forth stop the stage with their own stop reason).
       **Done when:** `make eval-stages`: fewer wasted rounds on the recorded loops, no stage score lower.
+      _Built 2026-11-11, unticked:_ stop reasons `repeat` and `back_and_forth` (`shape-stages.ts`, `undoesOp`); « no change » line added to the critic, stage ops and final cards (`make skills-gen`). Replay: 1 recorded loop (thatched), nothing changes (no repeat in it, scores equal). Tick once more `*.stages.json` loops are recorded.
 - [ ] **PQ-T41 Ask instead of guessing.** When the kit's archetype confidence (PQ-T12) is under 0.5, or two
       samples disagree (PQ-T18), the panel asks the operator to pick between the two best families before the
       build (one tap, three languages, both themes, mobile; design gate).

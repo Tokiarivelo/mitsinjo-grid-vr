@@ -443,6 +443,8 @@ export const SHAPE_STAGE_STOPS = [
   'timeout',
   'error',
   'skipped',
+  'repeat',
+  'back_and_forth',
 ] as const;
 export type ShapeStageStop = (typeof SHAPE_STAGE_STOPS)[number];
 

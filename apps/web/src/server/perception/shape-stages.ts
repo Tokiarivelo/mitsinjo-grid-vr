@@ -64,7 +64,17 @@ export interface RoundFeedback {
 /** Answers patch ops for the stage (raw: compiled and checked here). */
 export type Proposer<S extends string = string> = (ctx: ProposeContext<S>) => Promise<unknown[]>;
 
-export type StageStop = 'gate' | 'no_gain' | 'rounds' | 'timeout' | 'error' | 'skipped';
+export type StageStop =
+  | 'gate'
+  | 'no_gain'
+  | 'rounds'
+  | 'timeout'
+  | 'error'
+  | 'skipped'
+  /** The same op was proposed twice and the second time gained nothing (PQ-T38). */
+  | 'repeat'
+  /** An op undid the previous kept op (PQ-T38). */
+  | 'back_and_forth';
 
 export interface StageResult<S extends string = string> {
   id: S;
@@ -176,6 +186,36 @@ const kindOfOp = (op: unknown): PartKind | 'unknown' | null => {
   return null;
 };
 
+/** Stable key of an op: same op, same target, same values. */
+export const opKey = (op: unknown): string => JSON.stringify(op ?? null);
+
+/** Ops that only restate a field value of `set` ops, for undo detection. */
+const setFields = (op: unknown): { id: string; fields: Record<string, unknown> } | null => {
+  if (!op || typeof op !== 'object') return null;
+  const { op: name, id, ...fields } = op as Record<string, unknown>;
+  return name === 'set' && typeof id === 'string' ? { id, fields } : null;
+};
+
+/**
+ * PQ-T38: `next` undoes `prev` when both are `set` ops on one component and `next` writes
+ * back a value `before` the kept op (`prev` changed field f from X to Y; `next` sets f to X).
+ * `originals` holds the field values the component had before `prev`.
+ */
+export function undoesOp(
+  next: unknown,
+  prev: unknown,
+  originals: Record<string, unknown> | undefined
+): boolean {
+  const a = setFields(next);
+  const b = setFields(prev);
+  if (!a || !b || a.id !== b.id || !originals) return false;
+  const names = Object.keys(a.fields).filter((k) => k in b.fields);
+  return (
+    names.length > 0 &&
+    names.every((k) => JSON.stringify(a.fields[k]) === JSON.stringify(originals[k]))
+  );
+}
+
 /** Patch ops that create components outside the stage's kinds are refused before compiling. */
 function guardPatch(ops: unknown[], kinds: ReadonlyArray<PartKind>) {
   const kept: unknown[] = [];
@@ -267,6 +307,9 @@ export async function runShapeStages<S extends string>({
       } else {
         onStageStart?.(stage, index);
         let misses = 0;
+        /** Ops tried in earlier rounds of this stage, and the last kept ops with the values they replaced. */
+        const tried = new Set<string>();
+        let lastKept: Array<{ op: unknown; originals: Record<string, unknown> | undefined }> = [];
         let feedback: RoundFeedback | undefined;
         /** Duration of this stage's last round (ms), for the breadth-first share. */
         let lastRoundMs: number | undefined;
@@ -325,6 +368,16 @@ export async function runShapeStages<S extends string>({
             break;
           }
           const { kept: patch, refused } = guardPatch(Array.isArray(raw) ? raw : [], stage.kinds);
+          // PQ-T38: an op that undoes the last kept op, or one already tried without gain, ends the stage.
+          const backAndForth = patch.some((op) =>
+            lastKept.some((k) => undoesOp(op, k.op, k.originals))
+          );
+          const repeated = patch.length > 0 && patch.every((op) => tried.has(opKey(op)));
+          if (backAndForth || repeated) {
+            result.stop = backAndForth ? 'back_and_forth' : 'repeat';
+            break;
+          }
+          const before = components;
           // Op by op, with smaller steps: one bad or overshooting op no longer sinks the round.
           const step = microPatch({
             script,
@@ -342,7 +395,18 @@ export async function runShapeStages<S extends string>({
             step.after.stage >= current.stage + STAGE_MIN_GAIN &&
             step.after.overall >= current.overall;
           feedback = { round, kept: Boolean(gained), trials: step.trials, refused };
+          for (const op of patch) tried.add(opKey(op));
           if (gained && step.out?.recipe) {
+            lastKept = (step.ops as unknown[]).map((op) => {
+              const f = setFields(op);
+              const comp = f && before.find((c) => c.id === f.id);
+              const originals: Record<string, unknown> = {};
+              if (f && comp) {
+                for (const k of Object.keys(f.fields))
+                  originals[k] = (comp.part as unknown as Record<string, unknown>)[k];
+              }
+              return { op, originals: f && comp ? originals : undefined };
+            });
             script = { ...script, ops: [...script.ops, ...(step.ops as ShapeScript['ops'])] };
             recipe = step.out.recipe;
             components = step.out.components;
