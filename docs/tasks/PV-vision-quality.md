@@ -397,12 +397,15 @@ _Ticked 2026-11-11 on the owner's request: the code and tests are in; every « d
       body at the lower edge of the SAM `roof` (vehicle) / `tree crown` / `foliage` region when its colour is ΔE ≥ 10
       from the rest of the outline: lower part keeps `front`, the upper part is appended last (indices stable).
       Wired on the views path by `toneHullBody` (`object-shape.ts`), best effort.
-- [ ] **PQ-T26 Gloss from the photo.** New `server/perception/gloss-measure.ts`: per region, the gap between
+- [x] **PQ-T26 Gloss from the photo.** New `server/perception/gloss-measure.ts`: per region, the gap between
       the brightest 1 % and the median luminance, classed matt / satin / gloss. `surface-look.ts` shifts
       roughness and clearcoat within ± 0.2 of the material's entry; status `measured`.
       **Test:** `gloss-measure.test.ts` (a region with a sharp highlight classed gloss, a flat one matt),
       `surface-look.test.ts` (shift clamped; metal never under roughness 0.45, per `/designer-3d`).
       **Done when:** `/designer-3d` on `make shape-shots` does not lower its grade on any object, dark and light.
+      _Built 2026-11-11 (live `/designer-3d` pass pending):_ the class is stored per material on the recipe
+      (`ObjectRecipe.gloss`, a JSON field of the recipe: no migration), not per part, because the viewer has one
+      material per surface. `measureRecipeGloss` + `withPhotoGloss` (views and photo paths), `surfaceLook`.
 - [ ] **PQ-T27 Shadow where parts meet.** New `features/vision-insert/utils/vertex-ao.ts`: darken vertex
       colours near part joints and near the ground at merge time (pure, once per recipe, both quality tiers).
       **Test:** `vertex-ao.test.ts` (vertices at a joint darker than free ones; factor never under 0.6, so no

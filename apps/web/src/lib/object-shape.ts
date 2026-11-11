@@ -141,6 +141,14 @@ export const RECIPE_MATERIALS = [
 export const RecipeMaterialSchema = z.enum(RECIPE_MATERIALS);
 export type RecipeMaterial = z.infer<typeof RecipeMaterialSchema>;
 
+/**
+ * How shiny a material reads on the photo (PQ-T26): matt (flat light), satin, gloss (a sharp highlight).
+ * Measured per material, never named by the AI; the 3D view shifts the material's look within ± 0.2.
+ */
+export const GLOSS_CLASSES = ['matt', 'satin', 'gloss'] as const;
+export const GlossClassSchema = z.enum(GLOSS_CLASSES);
+export type GlossClass = z.infer<typeof GlossClassSchema>;
+
 /** Largest measured yaw (60°). */
 export const MAX_YAW = Math.PI / 3;
 
@@ -262,6 +270,8 @@ export const ObjectRecipeSchema = z.object({
   yaw: z.number().min(-MAX_YAW).max(MAX_YAW).optional(),
   /** One tileable 64 px photo swatch per material (PR-1.5), base64 data URL (≤ 8 kB each). */
   swatches: z.record(RecipeMaterialSchema, z.string()).optional(),
+  /** Gloss read on the photo per material (PQ-T26); absent = the material's default look. */
+  gloss: z.record(RecipeMaterialSchema, GlossClassSchema).optional(),
   /** How the key dims were determined (PR-2.15); eave on houses only, absent on older shapes. */
   dimStatus: z
     .object({
@@ -569,6 +579,7 @@ export function fitRecipe(recipe: ObjectRecipe, boxAspect: number, yaw = 0): Obj
     ...(turn !== 0 ? { yaw: turn } : {}),
     ...(recipe.source ? { source: recipe.source } : {}),
     ...(recipe.swatches ? { swatches: recipe.swatches } : {}),
+    ...(recipe.gloss ? { gloss: recipe.gloss } : {}),
   };
 }
 

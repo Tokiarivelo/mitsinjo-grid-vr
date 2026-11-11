@@ -48,6 +48,7 @@ import { applyConstraints, buildGraph, notBuilt, partCoverage, repairGraph } fro
 import { deduceHiddenSides } from './hidden-sides';
 import { enforcePartBudget, masksOnObject, partCeiling } from './mask-geometry';
 import { cropForShape, cropRectForShape } from './shape-crop';
+import { measureRecipeGloss } from './gloss-measure';
 import { extractSwatches } from './photo-swatches';
 import { withLatheBody } from './lathe-body';
 import { fetchFacadeMasks, type FacadeMasks } from './facade-masks';
@@ -758,6 +759,7 @@ export async function runObjectShape(
           segmentImage: perception.segmentImage?.bind(perception),
           timeoutMs: partMasksTimeout(started + timeoutMs - Date.now()),
         });
+        recipe = await withPhotoGloss(recipe, photo, target.box, shaped.outline);
         const iou = {
           front: viewIou(recipe, seen.front, 'front'),
           side: seen.side ? viewIou(recipe, seen.side, 'side') : null,
@@ -962,6 +964,7 @@ export async function runObjectShape(
             console.warn('[vision] region colours failed:', err);
           }
         }
+        recipe = await withPhotoGloss(recipe, photo, target.box, shaped.outline);
         // PR-2.9: per-part parameters (wheels, cabin, eave) by coordinate descent on the
         // model score. Best effort, kept only when the score rises; no groups = no cost.
         if (photo && target.outline && hasPartGroups(finalKit.archetype, recipe)) {
@@ -1276,6 +1279,35 @@ async function toneHullBody(
     return withHullTones(recipe, masks, regions, geom, concepts);
   } catch (err) {
     console.warn('[vision] two-tone body failed:', err);
+    return recipe;
+  }
+}
+
+/**
+ * Gloss per material read on the photo (PQ-T26): the brightest 1 % against the median of each material's
+ * cells, classed matt / satin / gloss. Best effort, never throws; the recipe is unchanged without a photo or a
+ * measurable material. The 3D view shifts roughness and clearcoat from it, the flat render ignores it.
+ */
+async function withPhotoGloss(
+  recipe: ObjectRecipe,
+  photo: PhotoForRegions | null,
+  box: ShapeTarget['box'],
+  outline: string | undefined
+): Promise<ObjectRecipe> {
+  if (!photo) return recipe;
+  try {
+    const grid = await sampleObjectRgb(photo, box, REGION_GRID, REGION_GRID);
+    const rings = outline ? pathToRings(outline).filter((r) => r.length >= 3) : [];
+    const gloss = measureRecipeGloss(grid, rings, box, recipe);
+    if (Object.keys(gloss).length === 0) return recipe;
+    console.info(
+      `[vision] 3D gloss: ${Object.entries(gloss)
+        .map(([m, c]) => `${m} ${c}`)
+        .join(', ')}`
+    );
+    return { ...recipe, gloss };
+  } catch (err) {
+    console.warn('[vision] gloss failed:', err instanceof Error ? err.message : err);
     return recipe;
   }
 }

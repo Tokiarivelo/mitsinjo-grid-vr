@@ -1,5 +1,10 @@
 import * as THREE from 'three';
-import { RECIPE_MATERIALS, type ObjectRecipe, type RecipeMaterial } from '@/lib/object-shape';
+import {
+  RECIPE_MATERIALS,
+  type GlossClass,
+  type ObjectRecipe,
+  type RecipeMaterial,
+} from '@/lib/object-shape';
 
 /** How a material's surface catches the light in the 3D view (three.js standard material). */
 export interface SurfaceLook {
@@ -48,6 +53,33 @@ export const SURFACE_LOOK: Record<Surface, SurfaceLook> = {
   },
 };
 
+/** How far a measured gloss moves a material's roughness and clearcoat (PQ-T26). */
+export const GLOSS_SHIFT = 0.2;
+
+/** Metal never turns rougher-than-polished below this roughness (`/designer-3d`: no mirror in a dark studio). */
+export const METAL_MIN_ROUGHNESS = 0.45;
+
+const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+
+/**
+ * Look of a surface with the gloss read on the photo (PQ-T26): matt raises roughness and lowers the clearcoat
+ * by `GLOSS_SHIFT`, gloss does the opposite, satin and no measure keep the material's entry. Metal never goes
+ * under `METAL_MIN_ROUGHNESS`. Pure.
+ */
+export function surfaceLook(surface: Surface, gloss?: GlossClass): SurfaceLook {
+  const base = SURFACE_LOOK[surface];
+  if (!gloss || gloss === 'satin') return base;
+  const sign = gloss === 'gloss' ? -1 : 1;
+  const floor = surface === 'metal' ? METAL_MIN_ROUGHNESS : 0.05;
+  return {
+    ...base,
+    roughness: clamp(base.roughness + sign * GLOSS_SHIFT, floor, 1),
+    clearcoat: clamp(base.clearcoat - sign * GLOSS_SHIFT, 0, 1),
+    clearcoatRoughness:
+      base.clearcoat > 0 || gloss === 'gloss' ? Math.max(base.clearcoatRoughness, 0.05) : 0,
+  };
+}
+
 /** Index of a part's surface in `SURFACES` (the geometry group's material index). */
 export function surfaceIndex(material?: RecipeMaterial): number {
   return SURFACES.indexOf(material ?? 'painted');
@@ -66,9 +98,10 @@ export function recipeMaterials(recipe: Pick<ObjectRecipe, 'parts'>): RecipeMate
  */
 export function surfaceMaterial(
   surface: Surface,
-  params: THREE.MeshStandardMaterialParameters = {}
+  params: THREE.MeshStandardMaterialParameters = {},
+  gloss?: GlossClass
 ): THREE.MeshStandardMaterial {
-  const { roughness, metalness, clearcoat, clearcoatRoughness } = SURFACE_LOOK[surface];
+  const { roughness, metalness, clearcoat, clearcoatRoughness } = surfaceLook(surface, gloss);
   if (clearcoat > 0)
     return new THREE.MeshPhysicalMaterial({
       ...params,

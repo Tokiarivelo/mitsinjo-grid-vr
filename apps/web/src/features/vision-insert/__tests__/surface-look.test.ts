@@ -5,7 +5,10 @@ import * as THREE from 'three';
 import {
   recipeMaterials,
   SURFACE_LOOK,
+  surfaceLook,
   surfaceMaterial,
+  GLOSS_SHIFT,
+  METAL_MIN_ROUGHNESS,
   SURFACES,
   surfaceIndex,
 } from '../utils/surface-look';
@@ -89,5 +92,45 @@ describe('clearcoat by surface (PT-3)', () => {
     expect(stone).not.toBeInstanceOf(THREE.MeshPhysicalMaterial);
     expect(stone.roughness).toBe(SURFACE_LOOK.stone.roughness);
     [glass, stone].forEach((m) => m.dispose());
+  });
+});
+
+describe('surfaceLook (PQ-T26)', () => {
+  it('no or satin gloss keeps the material entry; matt and gloss shift within the clamp', () => {
+    for (const s of SURFACES) {
+      expect(surfaceLook(s)).toBe(SURFACE_LOOK[s]);
+      expect(surfaceLook(s, 'satin')).toBe(SURFACE_LOOK[s]);
+      for (const g of ['matt', 'gloss'] as const) {
+        const look = surfaceLook(s, g);
+        expect(Math.abs(look.roughness - SURFACE_LOOK[s].roughness)).toBeLessThanOrEqual(
+          GLOSS_SHIFT + 1e-9
+        );
+        expect(Math.abs(look.clearcoat - SURFACE_LOOK[s].clearcoat)).toBeLessThanOrEqual(
+          GLOSS_SHIFT + 1e-9
+        );
+        expect(look.roughness).toBeGreaterThanOrEqual(0.05);
+        expect(look.roughness).toBeLessThanOrEqual(1);
+        expect(look.clearcoat).toBeGreaterThanOrEqual(0);
+        expect(look.clearcoat).toBeLessThanOrEqual(1);
+      }
+    }
+  });
+
+  it('gloss lowers roughness and raises the clearcoat, matt does the opposite', () => {
+    expect(surfaceLook('plastic', 'gloss').roughness).toBeLessThan(SURFACE_LOOK.plastic.roughness);
+    expect(surfaceLook('plastic', 'gloss').clearcoat).toBeGreaterThan(
+      SURFACE_LOOK.plastic.clearcoat
+    );
+    expect(surfaceLook('plastic', 'matt').roughness).toBeGreaterThan(
+      SURFACE_LOOK.plastic.roughness
+    );
+    expect(surfaceLook('plastic', 'matt').clearcoat).toBeLessThan(SURFACE_LOOK.plastic.clearcoat);
+  });
+
+  it('metal never goes under roughness 0.45, even measured gloss', () => {
+    expect(surfaceLook('metal', 'gloss').roughness).toBeGreaterThanOrEqual(METAL_MIN_ROUGHNESS);
+    expect(surfaceMaterial('metal', {}, 'gloss').roughness).toBeGreaterThanOrEqual(
+      METAL_MIN_ROUGHNESS
+    );
   });
 });

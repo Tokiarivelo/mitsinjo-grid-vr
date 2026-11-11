@@ -124,6 +124,7 @@ function ObjectModel({
   const invalidate = useThree((s) => s.invalidate);
   const vertexColors = Boolean(activeRecipe);
   const swatches = activeRecipe?.swatches;
+  const gloss = activeRecipe?.gloss;
   // One material per surface (stone matte, glass shiny…), indexed by the geometry groups. Surfaces the
   // model uses get their relief maps (PR-1.4: stone blocks, slate rows…) or photo swatches (PR-1.5),
   // tinted by the measured colours and compensated with a brightness gain so surfaces do not darken.
@@ -135,14 +136,18 @@ function ObjectModel({
       const swatchTex = swatch ? swatchTexture(swatch, invalidate) : null;
       const map = swatchTex ?? maps?.map;
       const gain = swatchTex ? SWATCH_GAIN : (maps?.gain ?? 1);
-      return surfaceMaterial(s, {
-        vertexColors: true,
-        color: new THREE.Color(tint ?? '#ffffff').multiplyScalar(gain),
-        ...(maps ? { normalMap: maps.normalMap, roughnessMap: maps.roughnessMap } : {}),
-        ...(map ? { map } : {}),
-      });
+      return surfaceMaterial(
+        s,
+        {
+          vertexColors: true,
+          color: new THREE.Color(tint ?? '#ffffff').multiplyScalar(gain),
+          ...(maps ? { normalMap: maps.normalMap, roughnessMap: maps.roughnessMap } : {}),
+          ...(map ? { map } : {}),
+        },
+        gloss?.[s as RecipeMaterial]
+      );
     });
-  }, [mesh, vertexColors, swatches, tint, invalidate]);
+  }, [mesh, vertexColors, swatches, gloss, tint, invalidate]);
   useEffect(() => () => surfaces.forEach((m) => m.dispose()), [surfaces]);
   // Ground under the object (shadow sits on it), from the real geometry.
   const floorY = useMemo(() => {
