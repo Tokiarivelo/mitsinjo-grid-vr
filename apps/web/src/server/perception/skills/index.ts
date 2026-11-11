@@ -5,7 +5,8 @@ import { CARD_TEXT } from './cards.generated';
 /**
  * Muse skill cards (PQ-T11, `docs/vision-to-3d-muse-skills.md`): the text loaded into a call before its
  * question. The doc is the source; `cards.generated.ts` is its copy (`make skills-gen`, checked by
- * `skills.test.ts`). No call uses the cards yet: each one switches on after its own eval (PQ-T12 to PQ-T16).
+ * `skills.test.ts`). Only kit prompt 2 loads them (`kitPrompt(2)`, `partsPrompt(2)`: measured and off, PQ-T12);
+ * each other call switches on after its own eval (PQ-T13 to PQ-T16).
  */
 
 /** Which call the system prompt is for. */

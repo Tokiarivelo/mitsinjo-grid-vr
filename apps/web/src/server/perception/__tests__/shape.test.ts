@@ -5,6 +5,7 @@ import { ObjectRecipeSchema, recipeIssue } from '@/lib/object-shape';
 import {
   criticQuestion,
   KIT_PROMPT_CARDS_VERSION,
+  kitJsonSchema,
   kitPrompt,
   parseEvidence,
   mergeKitPatch,
@@ -304,10 +305,23 @@ describe('kit evidence and confidence (PQ-T12)', () => {
     expect(parseEvidence({ visibleParts: 'wheel' })).toBeUndefined();
   });
 
-  it('asks for the evidence before the answer', () => {
-    const keys = Object.keys(SHAPE_JSON_SCHEMA.schema.properties);
+  it('prompt 2 asks for the evidence before the answer', () => {
+    const keys = Object.keys(kitJsonSchema(KIT_PROMPT_CARDS_VERSION).schema.properties);
     expect(keys[0]).toBe('evidence');
     expect(keys).toContain('confidence');
+    expect(kitJsonSchema(KIT_PROMPT_CARDS_VERSION).schema.required).toEqual(
+      SHAPE_JSON_SCHEMA.schema.required
+    );
+  });
+
+  it('regression (PR #12 review): prompt 1 is not offered evidence or confidence', () => {
+    // Before: one schema for both prompts, so the default call could answer the extra fields too
+    // (longer answers, and parts and doubts that were said to be off under prompt 1).
+    const keys = Object.keys(kitJsonSchema().schema.properties);
+    expect(kitJsonSchema()).toBe(SHAPE_JSON_SCHEMA);
+    expect(keys).not.toContain('evidence');
+    expect(keys).not.toContain('confidence');
+    expect(keys[0]).toBe('archetype');
   });
 
   it('version 2 is the Muse cards of the hint family: look first, no « answer fast »', () => {

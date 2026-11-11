@@ -338,18 +338,43 @@ export function notBuilt(
     .filter((c) => c.seen > c.built)
     .map((c) => `${c.concept} ×${c.seen - c.built}`);
   const seen = new Set(coverage.map((c) => c.concept));
-  for (const name of new Set(listed.map(singular))) {
-    if (!seen.has(name) && builtCount(recipe, name) === 0) out.push(name);
+  for (const name of new Set(listed.map(listedConcept))) {
+    if (name && !seen.has(name) && builtCount(recipe, name) === 0) out.push(name);
   }
   return out;
 }
 
-/** « wheels » → « wheel »: the kit lists parts in the plural as often as not. */
-const singular = (name: string) =>
-  name
-    .trim()
+/** « wheels » → « wheel », « batteries » → « battery », « boxes » → « box »; « glass », « bus », « chassis » stay. */
+const singular = (word: string) =>
+  word.length < 4 || /(ss|us|is)$/.test(word)
+    ? word
+    : word.endsWith('ies')
+      ? `${word.slice(0, -3)}y`
+      : /(ch|sh|x|z)es$/.test(word)
+        ? word.slice(0, -2)
+        : word.endsWith('s')
+          ? word.slice(0, -1)
+          : word;
+
+/**
+ * A part name as the kit lists it (`evidence.visibleParts`, PQ-T12) → the name it is counted under. The Look
+ * card asks for the place too (« wheel, lower left »): only the name before the comma counts. Plural read as
+ * singular, and a qualified known part (« front wheels », « side window ») is that part (`CONCEPT_KINDS`),
+ * so it is not reported « not built » beside the wheels the model does build.
+ */
+export function listedConcept(raw: string): string {
+  const words = raw
     .toLowerCase()
-    .replace(/(?<=[a-z]{3})s$/, '');
+    .split(/[,(;:]/)[0]!
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (words.length === 0) return '';
+  words[words.length - 1] = singular(words[words.length - 1]!);
+  const name = words.join(' ');
+  const head = words[words.length - 1]!;
+  return CONCEPT_KINDS[name] ? name : CONCEPT_KINDS[head] ? head : name;
+}
 
 /** Model parts that can draw `concept` (its `CONCEPT_KINDS`, else the concept as a kind). */
 function builtCount(recipe: ObjectRecipe, concept: string): number {
@@ -368,8 +393,12 @@ export function partCoverage(
 ): PartCoverage[] {
   const seen = new Map<string, number>();
   for (const m of masks) seen.set(m.concept, (seen.get(m.concept) ?? 0) + 1);
-  // Parts the kit listed that SAM did not find count once (PQ-T12): the operator sees them built or not.
-  for (const name of listed.map(singular)) if (!seen.has(name)) seen.set(name, 1);
+  // Parts the kit listed that SAM did not find (PQ-T12) count as many times as they are listed
+  // (« wheel, lower left » + « wheel, lower right » = 2): the operator sees them built or not.
+  const named = new Map<string, number>();
+  for (const name of listed.map(listedConcept))
+    if (name && !seen.has(name)) named.set(name, (named.get(name) ?? 0) + 1);
+  for (const [name, n] of named) seen.set(name, n);
   return [...seen].map(([concept, n]) => ({
     concept,
     seen: n,

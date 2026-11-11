@@ -80,6 +80,11 @@ describe('fields the model doubts are led by the measurement (PQ-T12)', () => {
     expect(modelDoubts({ evidence: { unsure: ['colors.main'] } }, 'colors')).toBe(true);
     expect(modelDoubts({ evidence: { unsure: ['details.windows'] } }, 'counts')).toBe(true);
     expect(modelDoubts({ evidence: { unsure: ['colors'] } }, 'proportions')).toBe(false);
+    // Plain words instead of the field path (PR #12 review): « depth », « color », « wheels ».
+    expect(modelDoubts({ evidence: { unsure: ['depth'] } }, 'proportions')).toBe(true);
+    expect(modelDoubts({ evidence: { unsure: ['color of the roof'] } }, 'colors')).toBe(true);
+    expect(modelDoubts({ evidence: { unsure: ['wheels'] } }, 'counts')).toBe(true);
+    expect(modelDoubts({ evidence: { unsure: ['wheels'] } }, 'colors')).toBe(false);
     expect(modelDoubts({ confidence: { proportions: 0.4 } }, 'proportions')).toBe(true);
     expect(modelDoubts({ confidence: { proportions: 0.8 } }, 'proportions')).toBe(false);
   });

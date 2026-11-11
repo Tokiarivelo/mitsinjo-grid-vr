@@ -12,10 +12,10 @@
     `docs/vision-to-3d-muse-skills.md` by `make skills-gen`; `skills.test.ts` fails when the module is behind.
   - PQ-T12 built but **unticked, prompt 2 off**: `make eval-shape PROMPT=1,2` on 16 real captures: v1 95/117 agree,
     median 22.9 s; v2 (cards + evidence first) 83/121, median 47.3 s. `KIT_PROMPT_VERSION` stays 1.
-  - PQ-T37 ticked: `evidence.visibleParts` feeds `notBuilt` / panel coverage (only filled under prompt 2).
-- Real baseline unchanged: mean 53 (synthetic 93).
-- Full `make check`: 2425 tests pass; vitest reported one worker RPC timeout (`onTaskUpdate`) under load, no failing test.
-- Machine: if dev says `Can't resolve 'three'` → stop dev, `make install`. `jiti` is missing (`make gen-evals` fails).
+  - PQ-T37 ticked: `evidence.visibleParts` feeds `notBuilt` / panel coverage through `listedConcept` (prompt 2 only:
+    review fix, prompt 1 now keeps its own JSON schema, `kitJsonSchema`). A listed part without a panel label is log-only.
+- Real baseline unchanged: mean 53 (synthetic 93). Full `make check`: 2429 tests pass; vitest reported one worker RPC timeout (`onTaskUpdate`) under load, no failing test.
+- Machine: if dev says `Can't resolve 'three'` → stop dev, `make install`.
 
 ## Next
 
@@ -37,4 +37,4 @@
 - The doc is the source of the cards; the module is generated (no hand copy). Versions = hash of the composed text.
 - Prompt 2 is not the default: its eval fails both « done when » (agreement lower, median > 30 s).
 - A field the kit lists as unsure (or confidence < ½) is led by the measurement, half-way to full trust.
-- Scenarios: none added (no visible change under the default prompt).
+- Scenarios: none added (no visible change under the default prompt). `jiti` is missing (`make gen-evals` fails).

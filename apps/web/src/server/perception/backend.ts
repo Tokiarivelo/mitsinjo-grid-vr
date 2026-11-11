@@ -152,4 +152,6 @@ export interface PartsSubject {
    * keeps size, pose and measured colours; the facade refines windows, doors, materials, parts.
    */
   facadeUrl?: string;
+  /** Kit prompt version the object was described with (default: current): version 2 loads the Muse cards. */
+  promptVersion?: number;
 }

@@ -10,6 +10,7 @@ import {
   applyConstraints,
   buildGraph,
   checkConstraints,
+  listedConcept,
   notBuilt,
   partCoverage,
   repairGraph,
@@ -310,6 +311,39 @@ describe('repairGraph + notBuilt (PQ-T37)', () => {
       { concept: 'wheel', seen: 1, built: 1 },
       { concept: 'mirror', seen: 1, built: 0 },
     ]);
+  });
+
+  it('listed names (PR #12 review): place dropped, known parts by their head noun, real plurals only', () => {
+    expect(listedConcept('Wheel, lower left')).toBe('wheel');
+    expect(listedConcept('front wheels')).toBe('wheel');
+    expect(listedConcept('side window (driver)')).toBe('window');
+    expect(listedConcept('side mirrors')).toBe('side mirror');
+    expect(listedConcept('batteries')).toBe('battery');
+    expect(listedConcept('boxes')).toBe('box');
+    // Before: every final « s » was cut (« glas », « bu », « chassi »).
+    expect(listedConcept('glass')).toBe('glass');
+    expect(listedConcept('bus')).toBe('bus');
+    expect(listedConcept('chassis')).toBe('chassis');
+    expect(listedConcept('  ,  ')).toBe('');
+  });
+
+  it('regression (PR #12 review): parts listed with their place are not reported « not built »', () => {
+    const r = car([body, wheel(-0.3), wheel(0.3)]);
+    const listed = [
+      'wheel, lower left',
+      'wheel, lower right',
+      'front wheels',
+      'mirror, right edge',
+    ];
+    // Before: « wheel, lower left » matched nothing, so built wheels were reported missing.
+    expect(notBuilt(r, [], listed)).toEqual(['mirror']);
+    expect(partCoverage(r, [], listed)).toEqual([
+      { concept: 'wheel', seen: 3, built: 2 },
+      { concept: 'mirror', seen: 1, built: 0 },
+    ]);
+    // SAM saw the wheels: its count wins, the listed ones are not added on top.
+    const m = { concept: 'wheel', box: { x: 0.1, y: 0.1, w: 0.1, h: 0.1 } };
+    expect(partCoverage(r, [m, m], listed)[0]).toEqual({ concept: 'wheel', seen: 2, built: 2 });
   });
 
   it('partCoverage: seen vs built per SAM concept, for the panel (built never above seen)', () => {

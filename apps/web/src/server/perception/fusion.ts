@@ -51,6 +51,17 @@ export const UNSURE_LEAD = 0.5;
 type KitDoubts = Pick<ObjectKit, 'evidence' | 'confidence'>;
 
 /**
+ * How `evidence.unsure` names each group: the field path the cards ask for (`proportions.d`, `colors.main`,
+ * `details.windows`), and the plain words a model writes instead (« depth », « color », « wheels »).
+ */
+const DOUBT_WORDS = {
+  archetype: /^(archetype|subtype|family)/,
+  proportions: /^(proportions?|depth|width|height|size)/,
+  colors: /^(colou?rs?|main|secondary|accent)/,
+  counts: /^(details?|counts?|windows?|doors?|wheels?|legs?|floors?|units?|chimneys?)/,
+} as const;
+
+/**
  * True when the kit says it guessed this group of fields: it listed it (or one of its fields, `colors.main`)
  * under `evidence.unsure`, or gave it a confidence under ½ (PQ-T12). Kits of the first prompt never doubt.
  */
@@ -61,8 +72,7 @@ export function modelDoubts(
   if (!kit) return false;
   const c = kit.confidence?.[group];
   if (c !== undefined && c < 0.5) return true;
-  const alias = group === 'counts' ? /^(details|counts)/ : new RegExp(`^${group}`);
-  return (kit.evidence?.unsure ?? []).some((u) => alias.test(u));
+  return (kit.evidence?.unsure ?? []).some((u) => DOUBT_WORDS[group].test(u));
 }
 
 /** A measured confidence raised toward 1 when the model doubts that field; 0 stays 0 (nothing measured). */

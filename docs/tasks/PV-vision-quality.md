@@ -215,6 +215,11 @@ Meta API calls; all others run offline.
       22.9 s; v2 83/121, median 47.3 s.** Both « done when » fail (agreement lower, median over 30 s: the evidence and
       the longer card double every call), so `KIT_PROMPT_VERSION` stays 1 and prompt 2 stays opt-in (`PROMPT=2`).
       Open: a shorter Look card or a smaller evidence (parts only) to bring v2 under 30 s, then re-measure.
+      _PR #12 review (2026-11-11):_ the schema with `evidence` and `confidence` was sent with prompt 1 too, so the
+      default call could fill them; now `kitJsonSchema(version)`, prompt 1 keeps the schema of the baseline.
+      `modelDoubts` also reads plain words in `unsure` (« depth », « color », « wheels »); `partsPrompt` takes the
+      version from `PartsSubject.promptVersion`. Listed parts go through `listedConcept` (PQ-T37): the Look card
+      asks for « wheel, lower left », which matched nothing and reported built wheels as not built.
       **Then finish PQ-T37 (same PR):** pass `evidence.visibleParts` to `notBuilt` / `partCoverage`, so every
       listed part is built or shown « not built » in the panel and the report; then tick PQ-T37.
 - [ ] **PQ-T13 Archetype cards, one family at a time** _(API)_. Enable the cards in this order, each with its

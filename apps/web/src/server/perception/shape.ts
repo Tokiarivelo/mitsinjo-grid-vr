@@ -101,19 +101,6 @@ export const SHAPE_JSON_SCHEMA = {
   schema: {
     type: 'object',
     properties: {
-      // First, so the answer is written in the order of the Look card (PQ-T12): look, then answer.
-      evidence: {
-        type: 'object',
-        properties: {
-          view: { type: 'string', enum: [...EVIDENCE_VIEWS] },
-          outline: { type: 'string' },
-          hiddenBy: { type: 'array', items: { type: 'string' } },
-          volumes: { type: 'array', items: { type: 'string' } },
-          visibleParts: { type: 'array', items: { type: 'string' }, maxItems: MAX_VISIBLE_PARTS },
-          repeats: { type: 'object', additionalProperties: int },
-          unsure: { type: 'array', items: { type: 'string' } },
-        },
-      },
       archetype: { type: 'string', enum: [...KIT_ARCHETYPES] },
       subtype: { type: 'string' },
       proportions: {
@@ -133,15 +120,6 @@ export const SHAPE_JSON_SCHEMA = {
       partMaterials: {
         type: 'object',
         properties: Object.fromEntries(PART_MATERIAL_KEYS.map((k) => [k, material])),
-      },
-      confidence: {
-        type: 'object',
-        properties: {
-          archetype: { type: 'number' },
-          proportions: { type: 'number' },
-          colors: { type: 'number' },
-          counts: { type: 'number' },
-        },
       },
       details: {
         type: 'object',
@@ -163,6 +141,46 @@ export const SHAPE_JSON_SCHEMA = {
     required: ['archetype', 'proportions', 'colors'],
   },
 };
+
+/**
+ * Schema of kit prompt 2 (PQ-T12): `evidence` first, so the answer is written in the order of the Look card
+ * (look, then answer), and `confidence`. Kept apart from `SHAPE_JSON_SCHEMA`: under prompt 1 the model is
+ * not offered these fields, so its answers (and their length) stay what the baseline measured.
+ */
+export const SHAPE_JSON_SCHEMA_CARDS = {
+  ...SHAPE_JSON_SCHEMA,
+  schema: {
+    ...SHAPE_JSON_SCHEMA.schema,
+    properties: {
+      evidence: {
+        type: 'object',
+        properties: {
+          view: { type: 'string', enum: [...EVIDENCE_VIEWS] },
+          outline: { type: 'string' },
+          hiddenBy: { type: 'array', items: { type: 'string' } },
+          volumes: { type: 'array', items: { type: 'string' } },
+          visibleParts: { type: 'array', items: { type: 'string' }, maxItems: MAX_VISIBLE_PARTS },
+          repeats: { type: 'object', additionalProperties: int },
+          unsure: { type: 'array', items: { type: 'string' } },
+        },
+      },
+      ...SHAPE_JSON_SCHEMA.schema.properties,
+      confidence: {
+        type: 'object',
+        properties: {
+          archetype: { type: 'number' },
+          proportions: { type: 'number' },
+          colors: { type: 'number' },
+          counts: { type: 'number' },
+        },
+      },
+    },
+  },
+};
+
+/** The JSON schema sent with kit prompt `version`. */
+export const kitJsonSchema = (version: number = KIT_PROMPT_VERSION) =>
+  version === KIT_PROMPT_CARDS_VERSION ? SHAPE_JSON_SCHEMA_CARDS : SHAPE_JSON_SCHEMA;
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 const NEUTRAL = '#9aa3ad';

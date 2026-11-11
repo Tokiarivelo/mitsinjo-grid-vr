@@ -51,7 +51,7 @@ import {
   kitPrompt,
   parseKit,
   parseKitPatch,
-  SHAPE_JSON_SCHEMA,
+  kitJsonSchema,
   shapeQuestion,
 } from './shape';
 import { boxUnionCoverage, parseSamOutput } from './parse-sam';
@@ -371,7 +371,7 @@ export class MetaPerceptionBackend implements PerceptionBackend {
       kitPrompt(promptVersion, hint),
       shapeQuestion(target.label, target.aspect, hint, Boolean(target.facadeUrl), target.facts),
       imageUrl,
-      SHAPE_JSON_SCHEMA,
+      kitJsonSchema(promptVersion),
       signal,
       false,
       { kind: 'describeShape', params: { ...target, promptVersion } },
@@ -394,7 +394,7 @@ export class MetaPerceptionBackend implements PerceptionBackend {
   ): Promise<PerceptionCall<ShapeResult>> {
     // Standard id, not the contributor one: the operator waits on this answer (same as the kit call).
     const { content, model, usage } = await this.visionJson(
-      partsPrompt(),
+      partsPrompt(target.promptVersion),
       shapePartsQuestion(
         target.label,
         target.archetype,
