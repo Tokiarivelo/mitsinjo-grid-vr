@@ -307,7 +307,7 @@ _Ticked 2026-11-11 on the owner's request: the code and tests are in; every « d
 
 ## Q3 — Geometry that carries detail
 
-- [ ] **PQ-T19 Step-by-step loop on the photo path** _(API)_. New `server/perception/photo-stages.ts`: target
+- [x] **PQ-T19 Step-by-step loop on the photo path** _(API)_. New `server/perception/photo-stages.ts`: target
       (tight crop, outline, part masks, measured yaw) and stage scorer (methodology §6.4);
       `shape-stages-spark.ts` gains `photoStageLoop`; `object-shape.ts` starts it after the first answer when
       an outline exists; parts the photo cannot see are locked; `view-stages.ts` gives the stages per archetype.
@@ -315,6 +315,12 @@ _Ticked 2026-11-11 on the owner's request: the code and tests are in; every « d
       side parts are not editable), replay of one recorded loop in `eval-stages`.
       **Done when:** on the real photo-path objects, the background loop raises the detail score and never
       lowers the score (by construction, checked on the captures).
+      _Built 2026-11-11:_ `photo-stages.ts` (`photoTarget`, `scorePhoto`, `tagPhotoParts`, `photoCanEdit`),
+      `photoStageLoop`, sheet `photo` (the critic's 2 × 2), `photoStages` in `view-stages.ts` (house: body, openings,
+      chimney; stage id `chimney` + i18n key). Starts in `runObjectShape` after the hidden sides, only when an
+      outline and `proposeShapeOps` exist; the seed wins when no stage kept a change. No checkpoint context: a
+      background slice cut by the request limit stops. Not done: replay of a recorded loop in `eval-stages`, and
+      the real-set « detail score rises » check (needs live Meta calls).
 - [x] **PQ-T20 Detail assemblies.** `lib/object-shape.ts`, `lib/shape-script.ts`: detail kinds `handle`,
       `seam`, `mirror`, `arch` (wheel arch), `rim`, `gutter`, `vent`, `foot`.
       `features/vision-insert/utils/view-assemblies.ts` and `object-geometry.ts` expand them; `flat-render.ts`

@@ -13,7 +13,17 @@ import type { StageScorer, StageSpec } from './shape-stages';
  */
 
 export type ViewStage =
-  'body' | 'glass' | 'wheels' | 'doors' | 'cells' | 'trunk' | 'crown' | 'head' | 'details';
+  | 'body'
+  | 'glass'
+  | 'wheels'
+  | 'doors'
+  | 'cells'
+  | 'trunk'
+  | 'crown'
+  | 'head'
+  | 'details'
+  | 'openings'
+  | 'chimney';
 
 const S = {
   // Raised (user 2026-11-05) so the stages work past a first match; was body 0.85 (the plan's
@@ -55,6 +65,21 @@ export const VIEW_STAGES: Partial<Record<KitArchetype, Stages>> = {
   person: GENERIC,
   other: GENERIC,
 };
+
+/**
+ * Stages of the photo-path loop (PQ-T19): the views list of the archetype, and for a house or a building
+ * the walls and roof, then openings, then the chimney (SAM reads them on the photo; the facade elevation
+ * stays the facade route's). Null when the archetype has no stage list.
+ */
+export function photoStages(archetype: KitArchetype): Stages | null {
+  if (archetype === 'house' || archetype === 'building')
+    return [
+      { id: 'body', kinds: ['body', 'wall', 'roof'], gate: 0.92 },
+      { id: 'openings', kinds: ['window', 'door'], gate: 0.88 },
+      { id: 'chimney', kinds: ['chimney'], gate: 0.88 },
+    ];
+  return VIEW_STAGES[archetype] ?? null;
+}
 
 /** SAM concept (as asked on the views) → the part kind it measures. */
 export const CONCEPT_KIND: Readonly<Record<string, PartKind>> = {

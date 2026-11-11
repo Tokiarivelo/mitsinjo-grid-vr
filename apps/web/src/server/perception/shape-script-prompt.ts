@@ -22,7 +22,7 @@ export const MAX_STAGE_OPS = 12;
 export const SPARK_OPS = ['set', 'cut', 'remove', 'repeat', 'material', 'attach', 'add'] as const;
 
 /** What the stage image shows: the house elevation sheet, or the views sheet (PG-T20). */
-export type StageSheet = 'elevation' | 'views';
+export type StageSheet = 'elevation' | 'views' | 'photo';
 
 const SHEET_LINES: Record<StageSheet, ReadonlyArray<string>> = {
   elevation: [
@@ -32,6 +32,10 @@ const SHEET_LINES: Record<StageSheet, ReadonlyArray<string>> = {
   views: [
     'You improve a 3D model of ONE object, one build stage at a time, so it matches its validated 2D drawings.',
     'The image is a 2 × 2 sheet: top-left = the front drawing (target), top-right = our model seen from the front; bottom-left = the side drawing (blank when none), bottom-right = our model seen from the side (its front on the left). Each tile is framed on the object.',
+  ],
+  photo: [
+    'You improve a 3D model of ONE object, one build stage at a time, so it matches the PHOTO of that object.',
+    'The image is a 2 × 2 sheet: top-left = the photo, cropped on the object (target), top-right = our model rendered flat from the same view; bottom-left = the difference (grey = right, red = in the photo but missing, blue = built but not in the photo), bottom-right = our model from a three-quarter view. Parts on the side the photo does not show are locked.',
   ],
 };
 

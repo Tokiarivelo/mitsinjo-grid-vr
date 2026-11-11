@@ -35,7 +35,7 @@ import {
 } from './fusion';
 import { coverageForBox, needsFreeParts } from './free-recipe';
 import { conditionsFacts, conditionsTrust, measurePhotoConditions } from './photo-conditions';
-import { fitSilhouette } from './silhouette-fit';
+import { fitGrid, fitSilhouette, ringsMask } from './silhouette-fit';
 import {
   EDGE_COLUMNS,
   sampleNativeGray,
@@ -55,12 +55,14 @@ import { depthRatio, facadeHouseRecipe, wallTimber, type Elevation } from './fac
 import { STAGE_SAFETY_MS } from './shape-stages';
 import {
   facadeStageLoop,
+  photoStageLoop,
   viewStageLoop,
   type StageProgress,
   type StagesContinuation,
 } from './shape-stages-spark';
 import { formatElevationScore, scoreElevation, type ScoredElevation } from './elevation-score';
 import { ELEVATION_ARCHETYPES, measureFacadeElevations } from './facade-views';
+import { photoTarget, tagPhotoParts } from './photo-stages';
 import { fetchPartMasks, partMasksTimeout } from './part-masks';
 import { fitPartParams, hasPartGroups, preparePartFit } from './part-fit';
 import { REGION_GRID, measureRegionColors, withRegionColors } from './region-colors';
@@ -249,7 +251,7 @@ export async function runObjectShape(
     start: () => Promise<{ recipe: ObjectRecipe; rest: StagesContinuation | null }> | null,
     seed: ObjectRecipe,
     /** What the loop is built from: lets a later request resume it (Vercel limit). */
-    context: StageLoopContext
+    context?: StageLoopContext
   ): Promise<ObjectRecipe> => {
     try {
       const loop = await start();
@@ -261,7 +263,7 @@ export async function runObjectShape(
         const rest = loop.rest;
         onStagesLeft?.({
           ...rest,
-          context,
+          ...(context ? { context } : {}),
           run: (o) =>
             rest.run({
               ...o,
@@ -786,6 +788,8 @@ export async function runObjectShape(
       // PR-2.5: the archetype's part concepts segmented on the crop (wheels, windows…),
       // best effort — skipped without a photo or a segmenting client.
       let partMasks: import('@/lib/object-shape').PartMask[] | undefined;
+      // The masks that sit on the object (PQ-T19 target); set where the graph reads them.
+      let objectMasks: import('@/lib/object-shape').PartMask[] = [];
       const segmentImage = perception.segmentImage?.bind(perception);
       // Windows and doors measured on the validated 2D facade (straight on, unoccluded),
       // segmented while the photo masks run: they place the house's panels when present.
@@ -1061,6 +1065,7 @@ export async function runObjectShape(
             : (partMasks ?? []);
         // PQ-T37: the parts the kit listed under evidence.visibleParts join the SAM masks.
         const listed = finalKit.evidence?.visibleParts ?? [];
+        objectMasks = onObject;
         const missing = notBuilt(recipe, onObject, listed);
         if (onObject.length || listed.length) coverage = partCoverage(recipe, onObject, listed);
         if (missing.length)
@@ -1101,6 +1106,54 @@ export async function runObjectShape(
           `[vision] 3D clamp for "${target.label}": part(s) ${safe.clamped.map((i) => `${i} (${recipe.parts[i]!.kind ?? recipe.parts[i]!.shape})`).join(', ')} out of range`
         );
         recipe = safe.recipe;
+      }
+      // PQ-T19: the staged loop on the photo — stages scored on the outline and the part masks,
+      // parts the photo cannot see locked. First stages now, the rest in the background; the seed
+      // wins when no stage kept a change (the kinds the loop tags are not worth a different model).
+      if (finalKit && photo && shaped.outline && perception.proposeShapeOps) {
+        const proposeShapeOps = perception.proposeShapeOps.bind(perception);
+        const archetype = finalKit.archetype;
+        const rings = pathToRings(shaped.outline).filter((r) => r.length >= 3);
+        const { cols, rows } = fitGrid(aspect);
+        const crop =
+          rings.length && aspect > 0
+            ? await sampleObjectRgb(photo, shaped.box, cols, rows).catch(() => null)
+            : null;
+        const photoT =
+          crop &&
+          photoTarget({
+            aspect,
+            crop,
+            outline: ringsMask(rings, shaped.box, cols, rows),
+            masks: objectMasks,
+            geom: {
+              photoW: photo.width,
+              photoH: photo.height,
+              box: shaped.box,
+              crop: cropRectForShape(photo.width, photo.height, shaped.box),
+            },
+          });
+        if (photoT) {
+          const seed = recipe;
+          const tagged = tagPhotoParts(seed, archetype);
+          const looped = await followStages(
+            () =>
+              photoStageLoop({
+                recipe: seed,
+                archetype,
+                target: photoT,
+                label: target.label,
+                proposeShapeOps: async (img, q, sig, sheet, opts) => ({
+                  result: await proposeShapeOps(img, q, sig, sheet, opts),
+                }),
+                firstBudgetMs: started + timeoutMs - STAGE_SAFETY_MS - Date.now(),
+                ...(signal ? { signal } : {}),
+                onProgress: stageProgress,
+              }),
+            seed
+          );
+          if (JSON.stringify(looped.parts) !== JSON.stringify(tagged.parts)) recipe = looped;
+        }
       }
       if (photo) {
         try {

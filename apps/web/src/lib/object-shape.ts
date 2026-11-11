@@ -435,6 +435,7 @@ export const SHAPE_STAGE_IDS = [
   'roof',
   'openings',
   'accessories',
+  'chimney',
   'body',
   'glass',
   'wheels',
