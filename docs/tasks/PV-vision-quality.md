@@ -333,12 +333,15 @@ _Ticked 2026-11-11 on the owner's request: the code and tests are in; every « d
       _Built 2026-11-11:_ `partCeiling(recipe)` in `mask-geometry.ts` (32, or 12 for `source: 'free'`) used by the
       wheel, panel and chimney passes; hidden-side deduction keeps 12 so an inferred part never takes the room.
       Test: `mask-panels.test.ts`. Real-set check (`make shape-report`) not run.
-- [ ] **PQ-T22 Hidden sides by symmetry.** `hidden-sides.ts`: mirror the measured side's parts to the hidden
+- [x] **PQ-T22 Hidden sides by symmetry.** `hidden-sides.ts`: mirror the measured side's parts to the hidden
       side for families that are symmetric (vehicle, cabinet, house ends), status `inferred`; never mirror
       what is one-sided (a door, a handle, a chimney).
       **Test:** `hidden-sides.test.ts` (car: far-side wheels, windows and mirror appear; fridge: the handle
       does not).
       **Done when:** the ¾ sheet shows no blank far side on the real vehicles and houses; violations stay 0.
+      _Built 2026-11-11:_ `farSide` in `hidden-sides.ts` (vehicle: wheel, window, light, trim; cabinet: frame, trim;
+      door, handle, display never mirror; `handle` / `seam` details stripped), room up to `MAX_COMPONENTS` (`farRoom`).
+      Houses keep their back-facade and end-window sets. Real-set sheet check not run.
 - [ ] **PQ-T23 Clean front for hidden objects** _(API)_. When the hidden share (PQ-T7) is ≥ 30 %, the panel
       offers « draw a clean front »: Muse Image with the Clean front card (skills §12.2), the operator validates
       the drawing as on the facade route, then the 2D path builds from it. Every part that exists only on the

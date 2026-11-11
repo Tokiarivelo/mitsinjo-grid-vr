@@ -73,6 +73,8 @@ export interface HiddenSidesOptions {
   colors: ObjectKit['colors'];
   /** Free part slots; sets that do not fit are withheld whole. */
   room: number;
+  /** Slots for the far-side mirror (PQ-T22), which may use measured-part room up to `MAX_COMPONENTS`; default `room`. */
+  farRoom?: number;
 }
 
 /**
@@ -82,25 +84,31 @@ export interface HiddenSidesOptions {
 export function deduceHiddenSides(
   archetype: KitArchetype,
   recipe: ObjectRecipe,
-  { yaw, colors, room }: HiddenSidesOptions
+  { yaw, colors, room, farRoom = room }: HiddenSidesOptions
 ): RecipePart[] {
-  if (Math.abs(yaw) > MASK_YAW_MAX || room <= 0) return [];
+  if (Math.abs(yaw) > MASK_YAW_MAX || Math.max(room, farRoom) <= 0) return [];
   const main = recipe.parts[frontPartIndex(recipe)]!;
-  const sets: RecipePart[][] = [];
+  const sets: Array<{ parts: RecipePart[]; far?: true }> = [];
   if (archetype === 'house') {
-    sets.push(endWindows(recipe.parts, main));
-    sets.push(backFacade(recipe.parts, main));
+    sets.push({ parts: endWindows(recipe.parts, main) }, { parts: backFacade(recipe.parts, main) });
   } else if (archetype === 'building') {
-    sets.push(backFacade(recipe.parts, main));
+    sets.push({ parts: backFacade(recipe.parts, main) });
   } else if (archetype === 'vehicle') {
-    sets.push(rearDoor(recipe.parts, main, colors));
+    sets.push(
+      { parts: farSide(recipe.parts, main, VEHICLE_MIRRORED), far: true },
+      { parts: rearDoor(recipe.parts, main, colors) }
+    );
+  } else if (archetype === 'cabinet') {
+    sets.push({ parts: farSide(recipe.parts, main, CABINET_MIRRORED), far: true });
   }
   const out: RecipePart[] = [];
   let left = Math.floor(room);
-  for (const set of sets) {
-    if (set.length === 0 || set.length > left) continue;
-    out.push(...set);
-    left -= set.length;
+  let leftFar = Math.floor(farRoom);
+  for (const { parts, far } of sets) {
+    if (parts.length === 0 || parts.length > (far ? leftFar : left)) continue;
+    out.push(...parts);
+    left -= parts.length;
+    leftFar -= parts.length;
   }
   return out;
 }
@@ -162,4 +170,58 @@ function rearDoor(
     color: colors.secondary,
   };
   return occupied(parts, seam) ? [] : [seam];
+}
+
+/**
+ * Kinds that are the same on both sides of a symmetric object (PQ-T22): wheels, glass and lamps of a
+ * vehicle, trim and feet of a cabinet. A part with no kind counts as trim (mirrors, decals). One-sided
+ * parts — door, handle, display, chimney, grille, bumper (centred) — are never mirrored.
+ */
+const VEHICLE_MIRRORED: ReadonlyArray<RecipePart['kind'] | undefined> = [
+  'wheel',
+  'window',
+  'light',
+  undefined,
+];
+const CABINET_MIRRORED: ReadonlyArray<RecipePart['kind'] | undefined> = ['frame', undefined];
+
+/** The same part already stands on the far side (measured or deduced earlier, any dust in x / y). */
+function hasFarTwin(parts: ReadonlyArray<RecipePart>, p: RecipePart): boolean {
+  return parts.some(
+    (q) =>
+      q !== p &&
+      q.shape === p.shape &&
+      q.axis === p.axis &&
+      q.at[2] < -PART_MIRROR_MIN_Z &&
+      Math.abs(q.at[0] - p.at[0]) < 0.03 &&
+      Math.abs(q.at[1] - p.at[1]) < 0.03
+  );
+}
+
+/**
+ * The measured near side mirrored onto the far side (z negated), status left for the graph to stamp
+ * `inferred`: wheels, windows and mirrors of a vehicle, trim of a cabinet. Needs parts well clear of
+ * the centre plane; the body itself, thin one-sided kinds and details like a handle never move over.
+ */
+function farSide(
+  parts: ReadonlyArray<RecipePart>,
+  main: RecipePart,
+  kinds: ReadonlyArray<RecipePart['kind'] | undefined>
+): RecipePart[] {
+  const out: RecipePart[] = [];
+  for (const p of parts) {
+    if (p === main || p.front || p.at[2] < PART_MIRROR_MIN_Z) continue;
+    if (!kinds.includes(p.kind) || hasFarTwin(parts, p)) continue;
+    const details = p.details?.filter((d) => d !== 'handle' && d !== 'seam');
+    const twin: RecipePart = {
+      ...p,
+      at: [p.at[0], p.at[1], -p.at[2]],
+      status: undefined,
+      ...(details?.length ? { details } : {}),
+    };
+    if (!details?.length) delete (twin as Partial<RecipePart>).details;
+    if (out.some((q) => samePlace(q, twin))) continue;
+    out.push(twin);
+  }
+  return out;
 }

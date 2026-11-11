@@ -46,7 +46,7 @@ import {
 import { conceptOf, fetchOutlineForBox, samRetries, type OutlineCrop } from './outline';
 import { applyConstraints, buildGraph, notBuilt, partCoverage, repairGraph } from './object-graph';
 import { deduceHiddenSides } from './hidden-sides';
-import { enforcePartBudget, masksOnObject } from './mask-geometry';
+import { enforcePartBudget, masksOnObject, partCeiling } from './mask-geometry';
 import { cropForShape, cropRectForShape } from './shape-crop';
 import { extractSwatches } from './photo-swatches';
 import { withLatheBody } from './lathe-body';
@@ -1013,10 +1013,13 @@ export async function runObjectShape(
           yaw: recipe.yaw ?? 0,
           colors: finalKit.colors,
           room: MAX_RECIPE_PARTS - recipe.parts.length,
+          farRoom: partCeiling(recipe) - recipe.parts.length,
         });
         if (deduced.length > 0) {
           const before = recipe.parts.length;
-          const kept = enforcePartBudget([...recipe.parts, ...deduced], recipe.parts);
+          const kept = enforcePartBudget([...recipe.parts, ...deduced], recipe.parts, {
+            max: partCeiling(recipe),
+          });
           recipe = applyConstraints(finalKit.archetype, { ...recipe, parts: kept.parts });
           console.info(
             `[vision] 3D hidden sides for "${target.label}": +${recipe.parts.length - before} part(s)`

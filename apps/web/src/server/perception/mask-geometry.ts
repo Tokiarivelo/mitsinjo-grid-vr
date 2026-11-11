@@ -101,8 +101,8 @@ export const PART_MIRROR_MIN_Z = 0.05;
 
 /**
  * Most parts a recipe may hold while a mask pass adds measured ones (PQ-T21): `MAX_COMPONENTS` when the
- * extra parts come from SAM masks, `MAX_RECIPE_PARTS` for a Spark-imagined list (`source: 'free'`) and for
- * the passes that only deduce (hidden sides), so an imagined or inferred part never takes a measured one's room.
+ * extra parts come from SAM masks, `MAX_RECIPE_PARTS` for a Spark-imagined list (`source: 'free'`). Hidden-side
+ * deduction runs last and withholds a set that does not fit, so an inferred part never takes a measured one's room.
  */
 export function partCeiling(recipe: Pick<ObjectRecipe, 'source'>): number {
   return recipe.source === 'free' ? MAX_RECIPE_PARTS : MAX_COMPONENTS;
