@@ -3,6 +3,7 @@ import {
   RECIPE_MATERIALS,
   type GlossClass,
   type ObjectRecipe,
+  type PartKind,
   type RecipeMaterial,
 } from '@/lib/object-shape';
 
@@ -17,8 +18,15 @@ export interface SurfaceLook {
   clearcoatRoughness: number;
 }
 
-/** Every surface of the 3D view: the recipe materials (`painted` included, also the look of a part with no material). */
-export const SURFACES = RECIPE_MATERIALS;
+/**
+ * Surfaces that glow (PQ-T34): not materials the AI names but the look of a part by what it is — a `light` part
+ * (lamp, headlight) or a `display` part. Plastic-like and glass-like bodies with an emissive colour.
+ */
+export const GLOW_SURFACES = ['lamp', 'screen'] as const;
+export type GlowSurface = (typeof GLOW_SURFACES)[number];
+
+/** Every surface of the 3D view: the recipe materials (`painted` included, also the look of a part with no material), then the glows. */
+export const SURFACES = [...RECIPE_MATERIALS, ...GLOW_SURFACES] as const;
 export type Surface = (typeof SURFACES)[number];
 
 /**
@@ -46,6 +54,9 @@ export const SURFACE_LOOK: Record<Surface, SurfaceLook> = {
   rubber: { roughness: 0.9, metalness: 0, radius: 0.04, clearcoat: 0, clearcoatRoughness: 0 },
   foliage: { roughness: 0.95, metalness: 0, radius: 0.03, clearcoat: 0, clearcoatRoughness: 0 },
   water: { roughness: 0.1, metalness: 0, radius: 0.01, clearcoat: 0, clearcoatRoughness: 0 },
+  // Glow surfaces (PQ-T34): the same body as plastic / glass, the emissive comes from `GLOW`.
+  lamp: { roughness: 0.4, metalness: 0, radius: 0.03, clearcoat: 0.5, clearcoatRoughness: 0.2 },
+  screen: { roughness: 0.1, metalness: 0, radius: 0.01, clearcoat: 1, clearcoatRoughness: 0.05 },
   painted: {
     roughness: 0.6,
     metalness: 0,
@@ -100,9 +111,22 @@ export function baseColorFor(surface: Surface, hex: string): string {
   return `#${channel(0)}${channel(1)}${channel(2)}`;
 }
 
-/** Index of a part's surface in `SURFACES` (the geometry group's material index). */
-export function surfaceIndex(material?: RecipeMaterial): number {
-  return SURFACES.indexOf(material ?? 'painted');
+/** Emissive colour and strength of a glow surface, in the viewer (`VIEWER_GLOW_MAX` is the ceiling of the strength). */
+export const GLOW: Record<GlowSurface, { color: string; intensity: number }> = {
+  lamp: { color: '#ffd9a0', intensity: 0.7 },
+  screen: { color: '#bcdcff', intensity: 0.5 },
+};
+/** The viewer's fixed glow stays under this (a lamp reads as a lamp without blowing out the shot). */
+export const VIEWER_GLOW_MAX = 1;
+
+/** Which glow surface a part kind takes, if any (`light` → lamp, `display` → screen). */
+export function glowSurfaceFor(kind?: PartKind): GlowSurface | null {
+  return kind === 'light' ? 'lamp' : kind === 'display' ? 'screen' : null;
+}
+
+/** Index of a part's surface in `SURFACES` (the geometry group's material index): lights and displays glow. */
+export function surfaceIndex(material?: RecipeMaterial, kind?: PartKind): number {
+  return SURFACES.indexOf(glowSurfaceFor(kind) ?? material ?? 'painted');
 }
 
 /** Materials named on a recipe's parts, once each, in part order (the AI's reading, shown in the panel). */
@@ -119,9 +143,21 @@ export function recipeMaterials(recipe: Pick<ObjectRecipe, 'parts'>): RecipeMate
 export function surfaceMaterial(
   surface: Surface,
   params: THREE.MeshStandardMaterialParameters = {},
-  gloss?: GlossClass
+  gloss?: GlossClass,
+  /** Emissive strength override of a glow surface (village: 0 = off, else lit); default `GLOW[surface].intensity`. */
+  glow?: number
 ): THREE.MeshStandardMaterial {
   const { roughness, metalness, clearcoat, clearcoatRoughness } = surfaceLook(surface, gloss);
+  const glowing = (GLOW_SURFACES as readonly string[]).includes(surface)
+    ? {
+        emissive: new THREE.Color(GLOW[surface as GlowSurface].color),
+        emissiveIntensity: Math.min(
+          VIEWER_GLOW_MAX,
+          glow ?? GLOW[surface as GlowSurface].intensity
+        ),
+      }
+    : {};
+  params = { ...params, ...glowing };
   if (clearcoat > 0)
     return new THREE.MeshPhysicalMaterial({
       ...params,

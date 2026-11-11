@@ -6,6 +6,10 @@ import {
   recipeMaterials,
   SURFACE_LOOK,
   surfaceLook,
+  GLOW,
+  GLOW_SURFACES,
+  glowSurfaceFor,
+  VIEWER_GLOW_MAX,
   baseColorFor,
   METAL_BASE_MAX,
   METAL_BASE_MIN,
@@ -72,7 +76,7 @@ describe('surface looks (AI materials)', () => {
 });
 
 describe('clearcoat by surface (PT-3)', () => {
-  const coated = ['painted', 'plastic', 'tile', 'glass', 'metal'] as const;
+  const coated = ['painted', 'plastic', 'tile', 'glass', 'metal', 'lamp', 'screen'] as const;
 
   it('every surface: roughness and clearcoat in [0, 1]; coat only on lacquered surfaces', () => {
     for (const s of SURFACES) {
@@ -164,5 +168,61 @@ describe('physical material rules (PQ-T39)', () => {
       expect(c).toBeLessThanOrEqual(METAL_BASE_MAX);
     }
     expect(baseColorFor('painted', '#000000')).toBe('#000000');
+  });
+});
+
+describe('lamps and screens glow (PQ-T34)', () => {
+  it('only light and display parts take a glow surface', () => {
+    expect(glowSurfaceFor('light')).toBe('lamp');
+    expect(glowSurfaceFor('display')).toBe('screen');
+    for (const k of ['body', 'wheel', 'window', 'wall', 'grille', undefined] as const)
+      expect(glowSurfaceFor(k)).toBeNull();
+    expect(SURFACES[surfaceIndex('plastic', 'light')]).toBe('lamp');
+    expect(SURFACES[surfaceIndex('glass', 'display')]).toBe('screen');
+    expect(SURFACES[surfaceIndex('plastic', 'body')]).toBe('plastic');
+  });
+
+  it('emissive only on the glow surfaces, and the viewer glow stays under 1', () => {
+    for (const s of SURFACES) {
+      const m = surfaceMaterial(s);
+      if ((GLOW_SURFACES as readonly string[]).includes(s)) {
+        expect(m.emissiveIntensity).toBeGreaterThan(0);
+        expect(m.emissiveIntensity).toBeLessThanOrEqual(VIEWER_GLOW_MAX);
+        expect(m.emissive.getHex()).not.toBe(0);
+      } else {
+        expect(m.emissive.getHex()).toBe(0);
+      }
+    }
+    for (const g of GLOW_SURFACES) expect(GLOW[g].intensity).toBeLessThan(1);
+  });
+
+  it('an explicit glow strength is capped at the viewer ceiling, 0 turns it off', () => {
+    expect(surfaceMaterial('lamp', {}, undefined, 5).emissiveIntensity).toBe(VIEWER_GLOW_MAX);
+    expect(surfaceMaterial('lamp', {}, undefined, 0).emissiveIntensity).toBe(0);
+  });
+
+  it('a lamp part of a recipe reaches the lamp surface in the mesh groups', () => {
+    const lamp: ObjectRecipe = {
+      proportions: { w: 0.3, h: 1, d: 0.3 },
+      parts: [
+        {
+          shape: 'cylinder',
+          at: [0, -0.1, 0],
+          size: [0.1, 0.8, 0.1],
+          color: '#333333',
+          material: 'metal',
+        },
+        {
+          shape: 'sphere',
+          at: [0, 0.42, 0],
+          size: [0.3, 0.16, 0.3],
+          color: '#ffe9b0',
+          kind: 'light',
+        },
+      ],
+    };
+    const used = recipeMesh(lamp).groups.map((g) => SURFACES[g.materialIndex!]);
+    expect(used).toContain('lamp');
+    expect(used).toContain('metal');
   });
 });

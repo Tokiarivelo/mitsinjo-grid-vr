@@ -495,7 +495,7 @@ function buildMesh(recipe: ObjectRecipe, detail: AssemblyDetail): THREE.BufferGe
   // half-timbered walls get their beams. Objects from their 2D view: wheel rims, solar cell lines (PG-T21).
   const { parts: expanded, holes } = expandAssemblies(recipe, detail, ROOF_OVERHANG);
   const sorted = expanded
-    .map((p) => ({ p, surface: surfaceIndex(p.material) }))
+    .map((p) => ({ p, surface: surfaceIndex(p.material, p.kind) }))
     .sort((a, b) => a.surface - b.surface);
   const parts = sorted.map(({ p, surface }) => {
     const [sx, sy, sz] = [p.size[0] * dims[0], p.size[1] * dims[1], p.size[2] * dims[2]];
