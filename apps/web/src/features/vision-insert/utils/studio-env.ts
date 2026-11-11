@@ -75,3 +75,28 @@ export function buildStudioScene(): StudioScene {
     });
   return { scene, dispose };
 }
+
+/** Studio environment baked once per renderer for objects that cannot own the scene's environment (VR miniatures, PQ-T32). */
+const shared = new WeakMap<THREE.WebGLRenderer, THREE.WebGLRenderTarget>();
+
+/**
+ * The pre-filtered studio (PMREM) as a render target: the caller owns it and disposes it. Needs a renderer.
+ */
+export function bakeStudioEnv(gl: THREE.WebGLRenderer): THREE.WebGLRenderTarget {
+  const pmrem = new THREE.PMREMGenerator(gl);
+  const studio = buildStudioScene();
+  const target = pmrem.fromScene(studio.scene, STUDIO_SIGMA);
+  studio.dispose();
+  pmrem.dispose();
+  return target;
+}
+
+/** The studio environment of a renderer, baked on first use and kept for its life (shared, never disposed by callers). */
+export function sharedStudioEnv(gl: THREE.WebGLRenderer): THREE.WebGLRenderTarget {
+  let target = shared.get(gl);
+  if (!target) {
+    target = bakeStudioEnv(gl);
+    shared.set(gl, target);
+  }
+  return target;
+}

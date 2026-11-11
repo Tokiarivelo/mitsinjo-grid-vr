@@ -3,11 +3,33 @@ import * as THREE from 'three';
 import type { ObjectRecipe } from '@/lib/object-shape';
 import {
   buildPlacedModelsGeometry,
+  FAMILY_SURFACE,
+  familyOf,
+  PLACED_FAMILIES,
   PLACED_LOW_TRIANGLES,
+  placedFamilyMaterials,
+  splitByFamily,
   placedGeometryKey,
   type PlacedModelItem,
 } from '../utils/placed-models-geometry';
-import { triangleCount } from '@/features/vision-insert/utils/object-geometry';
+import { recipeMesh, triangleCount } from '@/features/vision-insert/utils/object-geometry';
+import { SURFACE_LOOK, SURFACES } from '@/features/vision-insert/utils/surface-look';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+
+/** The village result with every family merged back into one geometry (`modelsGeometry`, null when empty): for shape checks. */
+function build(...args: Parameters<typeof buildPlacedModelsGeometry>) {
+  const res = buildPlacedModelsGeometry(...args);
+  const list = Object.values(res.families);
+  return {
+    ...res,
+    modelsGeometry: list.length
+      ? mergeGeometries(
+          list.map((g) => g!.clone()),
+          false
+        )
+      : null,
+  };
+}
 
 const SAMPLE_RECIPE: ObjectRecipe = {
   proportions: { w: 1, h: 0.8, d: 0.6 },
@@ -23,13 +45,13 @@ const SAMPLE_RECIPE: ObjectRecipe = {
 
 describe('placed-models-geometry (PI-T2)', () => {
   it('returns null geometry when items array is empty', () => {
-    const res = buildPlacedModelsGeometry([]);
+    const res = build([]);
     expect(res.modelsGeometry).toBeNull();
     expect(res.plinths).toHaveLength(0);
     expect(res.modelBounds).toEqual({});
   });
 
-  it('merges 30 placed objects into a single BufferGeometry (draw call budget: ≤ +2)', () => {
+  it('merges 30 placed objects into at most one geometry per surface family (draw call budget)', () => {
     const items: PlacedModelItem[] = Array.from({ length: 30 }, (_, i) => ({
       id: `app-${i}`,
       sector: 'households',
@@ -40,9 +62,10 @@ describe('placed-models-geometry (PI-T2)', () => {
       archetype: 'cabinet',
     }));
 
-    const res = buildPlacedModelsGeometry(items);
+    const res = build(items);
     expect(res.modelsGeometry).toBeInstanceOf(THREE.BufferGeometry);
-    // Crucial budget test: 30 objects yield 1 merged geometry, representing exactly 1 draw call!
+    // Crucial budget test: 30 objects yield one merged geometry per family, never more than 5 draw calls.
+    expect(Object.keys(res.families).length).toBeLessThanOrEqual(PLACED_FAMILIES.length);
     expect(Object.keys(res.modelBounds)).toHaveLength(30);
   });
 
@@ -59,7 +82,7 @@ describe('placed-models-geometry (PI-T2)', () => {
       },
     ];
 
-    const res = buildPlacedModelsGeometry(items);
+    const res = build(items);
     expect(res.modelsGeometry).toBeDefined();
     res.modelsGeometry!.computeBoundingBox();
     const bb = res.modelsGeometry!.boundingBox!;
@@ -80,7 +103,7 @@ describe('placed-models-geometry (PI-T2)', () => {
       },
     ];
 
-    const res = buildPlacedModelsGeometry(items);
+    const res = build(items);
     expect(res.plinths.length).toBeGreaterThan(0);
     expect(res.plinths[0]!.size[0]).toBeGreaterThan(0);
     expect(res.plinths[0]!.size[1]).toBeGreaterThan(0);
@@ -102,8 +125,8 @@ describe('placed-models-geometry (PI-T2)', () => {
       recipe: SAMPLE_RECIPE,
     };
 
-    const resRunning = buildPlacedModelsGeometry([runningItem], { water: { unserved: false } });
-    const resIdle = buildPlacedModelsGeometry([idleItem], { water: { unserved: true } });
+    const resRunning = build([runningItem], { water: { unserved: false } });
+    const resIdle = build([idleItem], { water: { unserved: true } });
 
     const colRunning = resRunning.modelsGeometry!.getAttribute('color');
     const colIdle = resIdle.modelsGeometry!.getAttribute('color');
@@ -122,7 +145,7 @@ describe('placed-models-geometry (PI-T2)', () => {
       recipe: SAMPLE_RECIPE,
     };
 
-    const resFire = buildPlacedModelsGeometry([item], { school: { onFire: true } });
+    const resFire = build([item], { school: { onFire: true } });
     const colFire = resFire.modelsGeometry!.getAttribute('color');
 
     // Fire alert increases red channel, suppresses green
@@ -139,8 +162,8 @@ describe('placed-models-geometry (PI-T2)', () => {
       recipe: SAMPLE_RECIPE,
     };
 
-    const low = buildPlacedModelsGeometry([item], {}, 'low').modelsGeometry!;
-    const high = buildPlacedModelsGeometry([item], {}, 'high').modelsGeometry!;
+    const low = build([item], {}, 'low').modelsGeometry!;
+    const high = build([item], {}, 'high').modelsGeometry!;
     expect(low.getAttribute('position').count).toBeGreaterThan(24);
     low.computeBoundingBox();
     high.computeBoundingBox();
@@ -157,7 +180,7 @@ describe('placed-models-geometry (PI-T2)', () => {
         { shape: 'sphere', at: [0, 0.4, 0], size: [1, 0.2, 1], color: '#eeeeee' },
       ],
     };
-    const one = buildPlacedModelsGeometry(
+    const one = build(
       [{ id: 'm0', sector: 'water', running: true, position: [0, 0, 0], recipe: pole }],
       {},
       'low'
@@ -171,7 +194,7 @@ describe('placed-models-geometry (PI-T2)', () => {
       position: [i * 3, 0, 0],
       recipe: pole,
     }));
-    const all = buildPlacedModelsGeometry(items, {}, 'low').modelsGeometry!;
+    const all = build(items, {}, 'low').modelsGeometry!;
     // Fewer triangles than every model in full, and the last model is still drawn (as a box).
     expect(triangleCount(all)).toBeLessThan(n * per);
     all.computeBoundingBox();
@@ -187,7 +210,7 @@ describe('placed-models-geometry (PI-T2)', () => {
       recipe: SAMPLE_RECIPE,
       scale: 2.0,
     };
-    const res = buildPlacedModelsGeometry([item]);
+    const res = build([item]);
     const plinth = res.plinths[0]!;
     const plinthTop = plinth.position[1] + plinth.size[1] / 2;
     res.modelsGeometry!.computeBoundingBox();
@@ -203,12 +226,160 @@ describe('placed-models-geometry (PI-T2)', () => {
       recipe: SAMPLE_RECIPE,
     };
     const served = { water: { unserved: false } };
-    const on = buildPlacedModelsGeometry([base], served).modelsGeometry!.getAttribute('color');
-    const off = buildPlacedModelsGeometry(
-      [{ ...base, running: false }],
-      served
-    ).modelsGeometry!.getAttribute('color');
+    const on = build([base], served).modelsGeometry!.getAttribute('color');
+    const off = build([{ ...base, running: false }], served).modelsGeometry!.getAttribute('color');
     expect(off.getX(0)).toBeLessThan(on.getX(0));
+  });
+
+  describe('surface families (PQ-T32)', () => {
+    const MIXED: ObjectRecipe = {
+      proportions: { w: 1, h: 0.6, d: 0.5 },
+      parts: [
+        { shape: 'box', at: [0, 0, 0], size: [1, 0.5, 0.5], color: '#a33327', material: 'painted' },
+        {
+          shape: 'box',
+          at: [0.1, 0.1, 0.26],
+          size: [0.3, 0.2, 0.02],
+          color: '#8fa3b4',
+          material: 'glass',
+        },
+        {
+          shape: 'cylinder',
+          at: [-0.4, 0.3, 0],
+          size: [0.05, 0.3, 0.05],
+          color: '#b0b0b0',
+          material: 'metal',
+        },
+        {
+          shape: 'box',
+          at: [0.3, -0.3, 0],
+          size: [0.2, 0.1, 0.4],
+          color: '#8a8a80',
+          material: 'stone',
+        },
+      ],
+    };
+    const item = (over: Partial<PlacedModelItem> = {}): PlacedModelItem => ({
+      id: 'm',
+      sector: 'water',
+      running: true,
+      position: [0, 0, 0],
+      recipe: MIXED,
+      ...over,
+    });
+
+    it('glass and metal no longer read as matt paint: each lands in its own family with its own look', () => {
+      const res = buildPlacedModelsGeometry([item()], {}, 'high');
+      expect(Object.keys(res.families).sort()).toEqual(['glass', 'gloss', 'matt', 'metal']);
+      const mats = placedFamilyMaterials();
+      expect(mats.glass.roughness).toBe(SURFACE_LOOK.glass.roughness);
+      expect(mats.metal.metalness).toBe(1);
+      expect(mats.gloss.metalness).toBe(0);
+      expect(mats.matt.roughness).toBeGreaterThan(mats.gloss.roughness);
+      for (const f of PLACED_FAMILIES) expect(SURFACES).toContain(FAMILY_SURFACE[f]);
+      for (const m of Object.values(mats)) m.dispose();
+    });
+
+    it('keeps every triangle: the families together hold what the model has', () => {
+      const whole = recipeMesh(MIXED, 'full');
+      const res = buildPlacedModelsGeometry([item()], {}, 'high');
+      const total = Object.values(res.families).reduce((n, g) => n + triangleCount(g!), 0);
+      expect(total).toBe(triangleCount(whole));
+    });
+
+    it('a low-tier village keeps the same few families, inside the triangle budget', () => {
+      const items = Array.from({ length: 20 }, (_, i) =>
+        item({ id: `m${i}`, position: [i * 3, 0, 0] })
+      );
+      const res = buildPlacedModelsGeometry(items, {}, 'low');
+      expect(Object.keys(res.families).length).toBeLessThanOrEqual(4);
+      const total = Object.values(res.families).reduce((n, g) => n + triangleCount(g!), 0);
+      expect(total).toBeLessThanOrEqual(PLACED_LOW_TRIANGLES + 5000);
+    });
+
+    it('dimmed and fire tints are kept on every family', () => {
+      const lum = (res: ReturnType<typeof buildPlacedModelsGeometry>) => {
+        const c = res.families.gloss!.getAttribute('color');
+        return c.getX(0) + c.getY(0) + c.getZ(0);
+      };
+      const on = lum(buildPlacedModelsGeometry([item()], { water: {} }));
+      const dim = lum(buildPlacedModelsGeometry([item()], { water: { unserved: true } }));
+      expect(dim).toBeLessThan(on);
+      for (const g of Object.values(
+        buildPlacedModelsGeometry([item()], { water: { onFire: true } }).families
+      )) {
+        expect(g!.getAttribute('color').count).toBeGreaterThan(0);
+      }
+    });
+
+    it('familyOf puts glass and water in glass, paint and plastic in gloss, bare metal alone', () => {
+      expect(familyOf('glass', false)).toBe('glass');
+      expect(familyOf('water', false)).toBe('glass');
+      expect(familyOf('painted', false)).toBe('gloss');
+      expect(familyOf('plastic', false)).toBe('gloss');
+      expect(familyOf('metal', false)).toBe('metal');
+      expect(familyOf('brick', false)).toBe('matt');
+    });
+
+    it('splitByFamily cuts a mesh without losing vertices', () => {
+      const g = recipeMesh(MIXED, 'full');
+      const pieces = splitByFamily(g, false);
+      const verts = [...pieces.values()].reduce((n, p) => n + p.getAttribute('position').count, 0);
+      const flat = g.index ? g.toNonIndexed() : g;
+      expect(verts).toBe(flat.getAttribute('position').count);
+    });
+  });
+
+  describe('lamps and screens glow (PQ-T34)', () => {
+    const LAMP: ObjectRecipe = {
+      proportions: { w: 0.3, h: 1, d: 0.3 },
+      parts: [
+        {
+          shape: 'cylinder',
+          at: [0, -0.1, 0],
+          size: [0.1, 0.8, 0.1],
+          color: '#333333',
+          material: 'metal',
+        },
+        {
+          shape: 'sphere',
+          at: [0, 0.42, 0],
+          size: [0.3, 0.16, 0.3],
+          color: '#ffe9b0',
+          kind: 'light',
+        },
+      ],
+    };
+    const lamp = (over: Partial<PlacedModelItem>): PlacedModelItem => ({
+      id: 'lamp',
+      sector: 'water',
+      running: true,
+      position: [0, 0, 0],
+      recipe: LAMP,
+      ...over,
+    });
+
+    it('a running lamp on a served sector goes to the glow family, an idle or unserved one does not', () => {
+      expect(buildPlacedModelsGeometry([lamp({})], { water: {} }).families.glow).toBeDefined();
+      expect(
+        buildPlacedModelsGeometry([lamp({ running: false })], { water: {} }).families.glow
+      ).toBeUndefined();
+      expect(
+        buildPlacedModelsGeometry([lamp({})], { water: { unserved: true } }).families.glow
+      ).toBeUndefined();
+      expect(
+        buildPlacedModelsGeometry([lamp({})], { water: { onFire: true } }).families.glow
+      ).toBeUndefined();
+    });
+
+    it('the glow material is emissive and stays under 1', () => {
+      const mats = placedFamilyMaterials();
+      expect(mats.glow.emissiveIntensity).toBeGreaterThan(0);
+      expect(mats.glow.emissiveIntensity).toBeLessThanOrEqual(1);
+      expect(mats.matt.emissiveIntensity).toBe(1);
+      expect(mats.matt.emissive.getHex()).toBe(0);
+      for (const m of Object.values(mats)) m.dispose();
+    });
   });
 
   describe('placedGeometryKey', () => {

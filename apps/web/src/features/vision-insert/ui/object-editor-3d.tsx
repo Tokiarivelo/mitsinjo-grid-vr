@@ -8,12 +8,7 @@ import { ToneMappingMode } from 'postprocessing';
 import * as THREE from 'three';
 import { TOKEN_HEX } from '@/features/microgrid-3d/utils/scene-palette';
 import { defaultArchetype, kitToRecipe, type ObjectKit } from '@/lib/object-kit';
-import {
-  fitRecipe,
-  silhouetteRings,
-  type ObjectShape,
-  type RecipeMaterial,
-} from '@/lib/object-shape';
+import { fitRecipe, silhouetteRings, type ObjectShape } from '@/lib/object-shape';
 import type { ApplianceDetection } from '@/lib/vision';
 import { useReducedMotion } from '@/features/microgrid-3d/hooks/use-reduced-motion';
 import { Ink } from '@/features/microgrid-3d/ui/ink';
@@ -24,11 +19,9 @@ import {
 import { cn } from '@/lib/utils';
 import type { ShapeImprove } from '../hooks/use-object-shape';
 import { recipeMesh, silhouetteDepth, silhouetteMesh } from '../utils/object-geometry';
-import { surfaceMaterial, SURFACES } from '../utils/surface-look';
-import { buildStudioScene, STUDIO_SIGMA } from '../utils/studio-env';
+import { buildRecipeMaterials } from '../utils/recipe-materials';
+import { bakeStudioEnv } from '../utils/studio-env';
 import { BuildFocus } from './build-focus-3d';
-import { SWATCH_GAIN } from '../utils/surface-maps';
-import { surfaceTextures, swatchTexture } from '../utils/surface-textures';
 
 export interface ObjectEditor3dProps {
   shape: ObjectShape;
@@ -57,11 +50,7 @@ function StudioEnvironment() {
   const get = useThree((s) => s.get);
   useEffect(() => {
     const { gl, scene, invalidate } = get();
-    const pmrem = new THREE.PMREMGenerator(gl);
-    const studio = buildStudioScene();
-    const target = pmrem.fromScene(studio.scene, STUDIO_SIGMA);
-    studio.dispose();
-    pmrem.dispose();
+    const target = bakeStudioEnv(gl);
     scene.environment = target.texture;
     scene.environmentIntensity = ENV_INTENSITY;
     invalidate(); // frameloop="demand"
@@ -125,27 +114,15 @@ function ObjectModel({
   const vertexColors = Boolean(activeRecipe);
   const swatches = activeRecipe?.swatches;
   const gloss = activeRecipe?.gloss;
-  // One material per surface (stone matte, glass shiny…), indexed by the geometry groups. Surfaces the
-  // model uses get their relief maps (PR-1.4: stone blocks, slate rows…) or photo swatches (PR-1.5),
-  // tinted by the measured colours and compensated with a brightness gain so surfaces do not darken.
+  // One material per surface (stone matte, glass shiny…), indexed by the geometry groups: the shared builder
+  // gives the surfaces the model uses their relief maps or photo swatches (PQ-T32).
   const surfaces = useMemo(() => {
     const used = new Set(mesh.groups.map((g) => g.materialIndex));
-    return SURFACES.map((s, i) => {
-      const maps = vertexColors && used.has(i) ? surfaceTextures(s) : null;
-      const swatch = vertexColors && swatches?.[s as RecipeMaterial];
-      const swatchTex = swatch ? swatchTexture(swatch, invalidate) : null;
-      const map = swatchTex ?? maps?.map;
-      const gain = swatchTex ? SWATCH_GAIN : (maps?.gain ?? 1);
-      return surfaceMaterial(
-        s,
-        {
-          vertexColors: true,
-          color: new THREE.Color(tint ?? '#ffffff').multiplyScalar(gain),
-          ...(maps ? { normalMap: maps.normalMap, roughnessMap: maps.roughnessMap } : {}),
-          ...(map ? { map } : {}),
-        },
-        gloss?.[s as RecipeMaterial]
-      );
+    return buildRecipeMaterials(vertexColors ? { swatches, gloss } : undefined, {
+      used: used as ReadonlySet<number>,
+      textured: vertexColors,
+      tint,
+      onTexture: invalidate,
     });
   }, [mesh, vertexColors, swatches, gloss, tint, invalidate]);
   useEffect(() => () => surfaces.forEach((m) => m.dispose()), [surfaces]);

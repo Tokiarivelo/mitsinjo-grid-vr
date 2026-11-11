@@ -421,7 +421,7 @@ _Ticked 2026-11-11 on the owner's request: the code and tests are in; every « d
       only in compare view).
       **Done when:** the operator reads photo and model more alike in compare view; cut first if time is short.
 
-- [ ] **PQ-T32 Same look in the three views.** Today the village draws every placed object with one material
+- [x] **PQ-T32 Same look in the three views.** Today the village draws every placed object with one material
       (`appliance-markers.tsx`: roughness 0.7, metalness 0.2; `mergeGeometries` drops the groups) and VR builds
       materials without maps or swatches (`spawned-object-3d.tsx`). Extract one `recipeMaterials(recipe, opts)`
       from `object-editor-3d.tsx` (no copy). VR: maps and swatches, a small baked environment, no post pass.
@@ -431,17 +431,25 @@ _Ticked 2026-11-11 on the owner's request: the code and tests are in; every « d
       `make vr-probe`; `make scene-audit` (≤ + 3 draw calls, inside both tier budgets).
       **Done when:** the same object reads alike in the viewer, the village and VR (three shots side by side),
       and glass and metal no longer look like matt paint in the village.
+      _Built 2026-11-11 (`make vr-probe`, `make scene-audit` and the side-by-side shots not run, need a server and a
+      headset emulator):_ `buildRecipeMaterials` (`recipe-materials.ts`, named so because `recipeMaterials` already
+      lists a recipe's materials) is shared by the viewer and VR (maps, swatches, baked studio env on the materials
+      only). Village: `PLACED_FAMILIES` matt / gloss / glass / metal + `glow` (5th mesh only while a lit appliance
+      runs, one more than the ≤ 4 planned: the audit budget is unchecked), no maps on either tier.
 - [ ] **PQ-T33 Parts shade each other in the viewer.** `object-editor-3d.tsx`: N8AO in the existing composer
       and one soft shadow map on the key light (cast and receive on the object). Drawn on demand, so no cost
       at rest. Colours must stay as measured.
       **Test:** viewer test (pass present, shadow flags set); `make shape-shots` before / after.
       **Done when:** `/designer-3d` grade not lower on any object, dark and light, 320 px and desktop; ΔE of the
       lit faces against the measured colours not higher by more than 2.
-- [ ] **PQ-T34 Lamps and screens glow.** `surface-look.ts`: emissive for part kinds lamp, display, headlight.
+- [x] **PQ-T34 Lamps and screens glow.** `surface-look.ts`: emissive for part kinds lamp, display, headlight.
       Village: on only when the engine says the appliance runs (data-driven, bloom rule of `/designer-3d`);
       viewer: fixed low glow under 1.
       **Test:** `surface-look.test.ts` (emissive only on those kinds, under 1 in the viewer).
       **Done when:** a lamp post reads as a lamp in the viewer and lights up in the village when powered.
+      _Built 2026-11-11 (visual check pending):_ kinds `light` / `display` map to internal glow surfaces `lamp` /
+      `screen` (`GLOW_SURFACES`, not recipe materials). Viewer glow 0.7 / 0.5 (< 1). Village: a lamp or screen goes to
+      the `glow` family only while its appliance runs on a served, unburnt sector.
 - [x] **PQ-T35 Break texture repetition.** `planarUvs` maps object position ÷ 0.25 with no variation, so a
       tile repeats four times across the object. `surface-maps.ts`: a second, larger noise layer in the shade
       map and a seeded UV offset per material; patterns stay continuous across the parts of one wall.
