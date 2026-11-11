@@ -4,7 +4,7 @@
 
 ## Current state
 
-- **PV-Q Q2 code built, one commit per task, all unticked** (their « done when » needs live Meta calls; nothing
+- **PV-Q Q2 code built, one commit per task, ticked on the owner's request (live evals still pending)** (their « done when » needs live Meta calls; nothing
   new is on by default, so the demo path and the real baseline are unchanged):
   - PQ-T38 stage stops `repeat` / `back_and_forth` (always on) · PQ-T18 `SHAPE_KIT_SAMPLES=2` (`kit-vote.ts`).
   - PQ-T14 critic v2 (`criticPromptVersion` 2): 2 × 2 sheet, 4-field patch, ≤ 3 live rounds (not via `shape-jobs`).
