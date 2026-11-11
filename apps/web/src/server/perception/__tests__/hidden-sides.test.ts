@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 vi.mock('server-only', () => ({}));
-import type { ObjectKit } from '@/lib/object-kit';
+import { kitToRecipe, type ObjectKit } from '@/lib/object-kit';
 import type { ObjectRecipe, RecipePart } from '@/lib/object-shape';
 import { GOLDEN_SHAPES } from '../__fixtures__/shape';
 import { checkConstraints } from '../object-graph';
@@ -145,6 +145,20 @@ describe('deduceHiddenSides (PR-2.16)', () => {
       const out = deduceHiddenSides('cabinet', fridge, { yaw: 0, colors: COLORS, room: 12 });
       expect(out).toHaveLength(1);
       expect(out[0]).toMatchObject({ kind: 'frame', at: [0, -0.45, -0.26] });
+    });
+
+    it('the kit fridge keeps its handle and door line on the front only (before: copied onto the back)', () => {
+      const fridge = kitToRecipe({
+        archetype: 'cabinet',
+        proportions: { w: 0.6, h: 1, d: 0.6 },
+        colors: COLORS,
+        details: { doors: 2 },
+      } as ObjectKit);
+      // The template's handle and door line carry no kind and sit proud of the front face.
+      expect(fridge.parts.filter((p) => !p.front && p.at[2] >= 0.5)).toHaveLength(2);
+      expect(
+        deduceHiddenSides('cabinet', fridge, { yaw: 0, colors: COLORS, room: 12, farRoom: 32 })
+      ).toEqual([]);
     });
 
     it('a far twin that already stands is not doubled; a set that does not fit is withheld whole', () => {

@@ -5,17 +5,14 @@
 ## Current state
 
 - **PV-Q Q3 built, ticked on the owner's request** (live Meta checks still pending, like Q2). One commit per task:
-  - PQ-T20 `RecipePart.details` (handle, seam, mirror, arch, rim, gutter, vent, foot): `view-assemblies.ts`
-    (`detailPartsOf`, `outlineDetails` used by `silhouette-fit`), dropped first past 5 000 triangles. Nothing sets
-    `details` yet: builders / Spark opt in.
-  - PQ-T21 `partCeiling` (mask-geometry): mask passes reach 32 parts, `source: 'free'` stays at 12.
-  - PQ-T22 `farSide` in `hidden-sides.ts` (vehicle, cabinet), `farRoom` up to 32.
-  - PQ-T24 rear end of a views-path vehicle mirrored from the front (inferred). « Second side on request » NOT built.
-  - PQ-T19 `photo-stages.ts` + `photoStageLoop` (sheet `photo`, stage id `chimney`): runs in `runObjectShape` after
-    hidden sides when an outline and `proposeShapeOps` exist; seed wins without a kept change; no checkpoint context.
-  - PQ-T23 clean front: `CleanFrontOffer`, route field `cleanFront`, `ShapeTarget.cleanFront`, `markDrawnInferred`.
-  - PQ-T10 (forgotten in Q1) region colours on the lit surface (`litMeasure`, `shadow` apart).
+  T20 `RecipePart.details` (nothing sets them yet) · T21 `partCeiling` (32 measured, 12 imagined) · T22 `farSide` ·
+  T24 rear by mirror (« second side on request » NOT built) · T19 `photoStageLoop` (no checkpoint context) ·
+  T23 clean front · T10 region colours on the lit surface. Details per task in `docs/tasks/PV-vision-quality.md`.
 - Existing mask tests now use `source: 'free'` fixtures to keep covering the 12 budget.
+- **PR #14 reviewed** (fix commit): cabinet far side mirrors `frame` only (template handle / door line stayed on
+  the back); clean front keeps « Retry with details », stays clean on retry after a remount, `clean` follows the
+  request (mock too), house facade route marks drawn parts inferred; wheel arch never under the tyre.
+- `make test-shape` strict 300 ms budget fails on this machine on `main` too (302–342 ms): not from Q3.
 
 ## Next
 
@@ -25,7 +22,8 @@
    colours cannot move offline.
 3. T19 left: replay of a recorded loop in `eval-stages`; resume across requests (add a `photo` checkpoint kind).
 4. T23 design gate: screenshots (both themes, 390 px) of the clean-front block; no Stitch mockup.
-5. Add `details` where the builders know them (fridge handle + seam, car mirrors + arches).
+5. `details` in the builders: template car checked on the flat render, mirror lands mid-door (62 % of a low
+   body) and arch is dark on dark: fix placement with a viewer pass before opting in.
 
 ## Files touched
 
@@ -37,4 +35,4 @@ shape-stages-spark,view-stages,region-colors,facade-specialist,silhouette-fit,sh
 ## Decisions
 
 - Inferred parts never displace measured ones: far-side set is atomic and added last.
-- Local scenarios V244–V248 (test-scenarios is gitignored). Hub dataset not republished: no bench / eval output changed.
+- Local scenarios V244–V252 (test-scenarios is gitignored). Hub dataset not republished: no bench / eval output changed.

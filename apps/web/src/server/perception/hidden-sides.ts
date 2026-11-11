@@ -174,8 +174,10 @@ function rearDoor(
 
 /**
  * Kinds that are the same on both sides of a symmetric object (PQ-T22): wheels, glass and lamps of a
- * vehicle, trim and feet of a cabinet. A part with no kind counts as trim (mirrors, decals). One-sided
- * parts — door, handle, display, chimney, grille, bumper (centred) — are never mirrored.
+ * vehicle, the frame of a cabinet. On a vehicle a part with no kind counts as trim (mirrors, decals). On a
+ * cabinet it does not: the kit template's handle and door line carry no kind and sit on the front face,
+ * so a kindless cabinet part never crosses to the back. One-sided parts — door, handle, display,
+ * chimney, grille, bumper (centred) — are never mirrored.
  */
 const VEHICLE_MIRRORED: ReadonlyArray<RecipePart['kind'] | undefined> = [
   'wheel',
@@ -183,7 +185,7 @@ const VEHICLE_MIRRORED: ReadonlyArray<RecipePart['kind'] | undefined> = [
   'light',
   undefined,
 ];
-const CABINET_MIRRORED: ReadonlyArray<RecipePart['kind'] | undefined> = ['frame', undefined];
+const CABINET_MIRRORED: ReadonlyArray<RecipePart['kind'] | undefined> = ['frame'];
 
 /** The same part already stands on the far side (measured or deduced earlier, any dust in x / y). */
 function hasFarTwin(parts: ReadonlyArray<RecipePart>, p: RecipePart): boolean {

@@ -245,6 +245,12 @@ export async function runObjectShape(
     onStage?.(e);
   };
   /**
+   * PQ-T23: a model built from a clean front (drawn where the photo shows nothing) has its drawn parts
+   * `inferred`: applied once the 2D path is done (the views check and the staged loop stamp `measured`
+   * on what they add), and on every background stage update.
+   */
+  const drawn = (r: ObjectRecipe): ObjectRecipe => (target.cleanFront ? markDrawnInferred(r) : r);
+  /**
    * Runs a staged loop (PG-T16…T20): the first answer's stages now, the rest handed to the
    * caller for the background (`onStagesLeft`, logged the same way). Never worse than `seed`.
    */
@@ -270,7 +276,7 @@ export async function runObjectShape(
               ...o,
               onProgress: (e) => {
                 logStage(e);
-                o.onProgress(e);
+                o.onProgress(e.recipe ? { ...e, recipe: drawn(e.recipe) } : e);
               },
             }),
         });
@@ -650,6 +656,7 @@ export async function runObjectShape(
             }
           );
         }
+        recipe = drawn(recipe);
         // PG-T2: the model against the drawing it was built from (the staged loop's yardstick).
         const elevScore = scoreElevation(recipe, front, {
           ...(front.roofRings ? { roofRings: front.roofRings } : {}),
@@ -680,8 +687,6 @@ export async function runObjectShape(
         // Round objects (PG-T19): lathe of the drawn silhouette, no side, no views check.
         const round = ROUND_VIEW_ARCHETYPES.includes(kit.archetype);
         let recipe = round ? roundViewRecipe(seen.front, kit) : viewsRecipe(seen, kit);
-        // PQ-T23: what exists only on a clean front drawn from a hidden object is inferred.
-        if (target.cleanFront) recipe = markDrawnInferred(recipe);
         // After the build, the AI checks every side against the drawings and the model is fixed.
         if (!round && perception.checkViews && perception.segmentImage) {
           onStep?.('check');
@@ -740,6 +745,7 @@ export async function runObjectShape(
             }
           );
         }
+        recipe = drawn(recipe);
         const iou = {
           front: viewIou(recipe, seen.front, 'front'),
           side: seen.side ? viewIou(recipe, seen.side, 'side') : null,

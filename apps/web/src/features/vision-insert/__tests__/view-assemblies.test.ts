@@ -127,6 +127,8 @@ describe('detail kinds (PQ-T20)', () => {
     expect(arch[0]!.color).toBe(DETAIL_DARK);
     expect(arch[0]!.size[1]).toBeGreaterThan(wheel.size[1]);
     expect(arch[0]!.axis).toBe('x');
+    // Larger than the tyre, yet never lower: its bottom is the tyre's (before: it dipped under the ground).
+    expect(arch[0]!.at[1] - arch[0]!.size[1] / 2).toBeCloseTo(wheel.at[1] - wheel.size[1] / 2, 6);
     const viaDetail = expandViewAssemblies([{ ...wheel, rim: undefined, details: ['rim'] }]);
     const viaFlag = expandViewAssemblies([wheel]);
     expect(viaDetail.map((p) => p.color)).toEqual(viaFlag.map((p) => p.color));

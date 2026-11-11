@@ -236,6 +236,22 @@ describe('runObjectShape with a validated facade', () => {
     // PQ-T7: the facade path carries the photo conditions too, or the small / blurred hint never shows.
     expect(out.conditions).toMatchObject({ sharpness: expect.any(String) });
     expect(out.conditions!.widthPx).toBeGreaterThan(0);
+    // PQ-T23: the same house from a clean front (drawn where the photo shows nothing) reads inferred,
+    // on the facade route too (before: only the views path marked it).
+    const drawnOnly = (parts: typeof r.parts) => parts.filter((p) => !p.front);
+    expect(drawnOnly(r.parts).some((p) => p.status === 'measured')).toBe(true);
+    const clean = await shapeWithCritic(
+      { ...spark, segmentImage, criticizeShape },
+      photo,
+      'data:full',
+      {
+        ...target,
+        cleanFront: true,
+      }
+    );
+    expect(clean.recipe!.source).toBe('facade');
+    expect(drawnOnly(clean.recipe!.parts).some((p) => p.status === 'measured')).toBe(false);
+    expect(clean.recipe!.parts).toHaveLength(r.parts.length);
   });
 
   it('the staged loop asks Spark per stage and never makes the house worse (PG-T16)', async () => {

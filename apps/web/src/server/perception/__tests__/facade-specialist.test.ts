@@ -19,6 +19,13 @@ describe('facade-specialist', () => {
       expect(prompt).not.toMatch(/[{}]/);
     });
 
+    it('keeps the operator details of « Retry with details » (before: dropped on a clean front)', () => {
+      const prompt = buildCleanFrontPrompt('red car', { hiddenBy: ['hedge'] }, ' four doors ');
+      expect(prompt).toContain('partly hidden by hedge');
+      expect(prompt).toContain('Additional required architectural features: four doors.');
+      expect(buildCleanFrontPrompt('red car', {}, '  ')).not.toContain('Additional required');
+    });
+
     it('says something plain when the kit listed nothing', () => {
       const prompt = buildCleanFrontPrompt('pump');
       expect(prompt).toContain('partly hidden by other objects');
@@ -90,6 +97,16 @@ describe('facade-specialist', () => {
       expect(result.prompt).toContain('cottage');
       expect(result.prompt).toContain('wooden shutters');
       expect(result.source).toBe('mock');
+      expect(result.clean).toBeUndefined();
+    });
+
+    it('a clean front asked without Muse Image is still marked clean: its parts must read inferred (PQ-T23)', async () => {
+      const result = await generateFacadeImage({
+        target,
+        cleanFront: { hiddenBy: ['hedge'], visibleParts: ['roof'] },
+      });
+      expect(result.source).toBe('mock');
+      expect(result.clean).toBe(true);
     });
   });
 });

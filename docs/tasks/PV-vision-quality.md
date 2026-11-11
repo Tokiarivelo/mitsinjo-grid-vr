@@ -337,6 +337,9 @@ _Ticked 2026-11-11 on the owner's request: the code and tests are in; every « d
       viewer and on the flat render.
       _Built 2026-11-11:_ `RecipePart.details` (+ `set` op field), `detailPartsOf` / `outlineDetails`, used by
       `renderRecipe`. Nothing sets `details` yet: Spark / builders opt in (T24, loop), no live check done.
+      _Review PR #14:_ the wheel arch no longer dips under the tyre. Builders still do not set `details`: on
+      the template car the mirror lands mid-door and the arch is dark on a dark tyre (flat render checked), so
+      placement needs a viewer pass (`/designer-3d`) before the kits opt in. « Done when » is not met yet.
 - [x] **PQ-T21 More components when they are measured.** Photo-path recipes may hold up to `MAX_COMPONENTS`
       (32) when the extra parts come from SAM masks or kept loop ops; Spark-imagined part lists stay at 12.
       **Test:** `object-shape.test.ts` (a measured 14th part is kept; an imagined one is not).
@@ -353,6 +356,8 @@ _Ticked 2026-11-11 on the owner's request: the code and tests are in; every « d
       _Built 2026-11-11:_ `farSide` in `hidden-sides.ts` (vehicle: wheel, window, light, trim; cabinet: frame, trim;
       door, handle, display never mirror; `handle` / `seam` details stripped), room up to `MAX_COMPONENTS` (`farRoom`).
       Houses keep their back-facade and end-window sets. Real-set sheet check not run.
+      _Review PR #14:_ a kindless cabinet part (the kit template's handle and door line) no longer crosses to
+      the back: cabinets mirror `frame` only.
 - [x] **PQ-T23 Clean front for hidden objects** _(API)_. When the hidden share (PQ-T7) is ≥ 30 %, the panel
       offers « draw a clean front »: Muse Image with the Clean front card (skills §12.2), the operator validates
       the drawing as on the facade route, then the 2D path builds from it. Every part that exists only on the
@@ -364,6 +369,8 @@ _Ticked 2026-11-11 on the owner's request: the code and tests are in; every « d
       _Built 2026-11-11:_ `CleanFrontOffer`, route field `cleanFront`, `buildCleanFrontPrompt`, `ShapeTarget.cleanFront`,
       `markDrawnInferred`; i18n en / fr / mg. No Stitch mockup: built from the facade panel's lines, not checked on
       screen (screenshots both themes, 390 px) and the hidden-car IoU check needs live Meta calls.
+      _Review PR #14:_ the retry keeps the operator's details and stays a clean front; `clean` follows the
+      request (mock, elevation fallback); the house facade route marks its parts inferred too.
 - [x] **PQ-T24 Back by mirror, extra side on request.** The back of a views-path object is the front mirrored
       with the family's rear parts (tail lights, rear door), never generated. A second side is drawn only when
       the views check asks for it. Closes PH-T9.

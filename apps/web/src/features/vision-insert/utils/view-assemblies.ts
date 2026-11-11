@@ -219,7 +219,10 @@ function detailParts(p: RecipePart, kind: DetailKind): RecipePart[] {
   }
 }
 
-/** Wheel arch: a dark disc a fifth larger than the tyre, just behind its outer face. */
+/**
+ * Wheel arch: a dark disc a fifth larger than the tyre, just behind its outer face, raised so its lowest
+ * point is the tyre's (an arch opens downward: it never dips under the ground the wheel stands on).
+ */
 function withArch(p: RecipePart): RecipePart[] {
   if (p.kind !== 'wheel' || p.shape !== 'cylinder') return [];
   if (p.axis !== 'x' && p.axis !== 'z') return [];
@@ -230,6 +233,7 @@ function withArch(p: RecipePart): RecipePart[] {
   return sides.map((s) => {
     const at: [number, number, number] = [...p.at];
     at[axis] = p.at[axis]! + s * (across / 2 - t / 2 - across * 0.05);
+    at[1] = p.at[1] + p.size[1] * 0.1;
     const size: [number, number, number] = [p.size[0] * 1.2, p.size[1] * 1.2, p.size[2] * 1.2];
     size[axis] = t;
     return { ...plate(p, at, size, DETAIL_DARK, 'cylinder'), axis: p.axis };

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, type SetStateAction } from 'react';
+import { useCallback, useEffect, type SetStateAction } from 'react';
 import type { ShapeRequest } from './use-object-shape';
 import { shapeKey } from './use-object-shape';
 import { prepareVisionImage } from '../utils/prepare-image';
@@ -16,6 +16,8 @@ export interface FacadeData {
   source: 'meta' | 'mock';
   /** A clean front drawn from a hidden object (PQ-T23): its parts will be inferred. */
   clean?: boolean;
+  /** What that clean front was asked with: « Retry » asks for a clean front again, also after a remount. */
+  cleanFront?: CleanFrontRequest;
 }
 
 /** What the 3D call needs from a validated facade: the image and its storage key (unique per generation). */
@@ -74,8 +76,6 @@ export function useFacade2d(
   /** Object the running generation belongs to (kept sessions only). */
   const abortForRef = useKeptRef<string | null>(scope, 'facadeAbortFor', () => null);
 
-  /** Evidence of the last « clean front » request: a retry of that drawing asks for a clean front again. */
-  const cleanRef = useRef<CleanFrontRequest | undefined>(undefined);
   const objectKey = target ? shapeKey(target) : '';
   if (cache.current.photo !== imageDataUrl) {
     cache.current = { photo: imageDataUrl, byKey: new Map() };
@@ -113,7 +113,6 @@ export function useFacade2d(
   const generate = useCallback(
     async (extraPrompt?: string, cleanFront?: CleanFrontRequest) => {
       if (!imageDataUrl || !target) return;
-      if (cleanFront) cleanRef.current = cleanFront;
 
       abortRef.current?.abort();
       const controller = new AbortController();
@@ -181,7 +180,7 @@ export function useFacade2d(
           archetype: data.archetype,
           detectionId: data.detectionId,
           source: data.source,
-          ...(data.clean ? { clean: true } : {}),
+          ...(data.clean ? { clean: true, ...(cleanFront ? { cleanFront } : {}) } : {}),
         };
 
         if (cache.current.photo === imageDataUrl) {
@@ -209,12 +208,9 @@ export function useFacade2d(
 
   const retry = useCallback(
     (extraPrompt?: string, cleanFront?: CleanFrontRequest) => {
-      void generate(
-        extraPrompt,
-        cleanFront ?? (state.facade?.clean ? cleanRef.current : undefined)
-      );
+      void generate(extraPrompt, cleanFront ?? state.facade?.cleanFront);
     },
-    [generate, state.facade?.clean]
+    [generate, state.facade?.cleanFront]
   );
 
   const deleteFacade = useCallback(async () => {
