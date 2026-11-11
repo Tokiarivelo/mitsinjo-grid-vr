@@ -9,12 +9,15 @@ import {
   type ShapeTarget,
 } from '@/lib/object-shape';
 import type { PerceptionClient } from './client';
-import { renderFlat, type FlatRender } from './flat-render';
+import { renderFlat, THREE_QUARTER, type FlatRender } from './flat-render';
+import type { DetailScore } from './detail-score';
+import { STOP_DETAIL } from './shape-report';
+import type { Mask } from './silhouette-fit';
 import type { ModelScore, RgbGrid } from './model-score';
 import { runObjectShape, type ObjectShapeOptions } from './object-shape';
 import type { PhotoForRegions } from './region';
 import { scoreRecipe } from './score-shape';
-import { criticQuestion, mergeKitPatch } from './shape';
+import { CRITIC_PROMPT_VERSION, criticQuestion, mergeKitPatch } from './shape';
 
 /**
  * Spark visual critic, shared half (PR-0.6): the side-by-side image (photo crop | flat render)
@@ -28,6 +31,25 @@ export const CRITIC_WIDTH = 256;
 /** Live round gates: score below this, this much time left. */
 export const CRITIC_SCORE_MAX = 70;
 export const CRITIC_TIME_MIN_MS = 20_000;
+
+/** Critic sheet tile width (px) of version 2 (PQ-T14): 512 so a part the size of a window frame shows. */
+export const CRITIC_TILE = 512;
+/** Rounds one object may get: the live one, then up to 2 more kept only on gain (PQ-T14). */
+export const CRITIC_ROUNDS = 3;
+
+/**
+ * Does the critic run? The score under 70, or (version 2) a detail gate missed: part recall or precision
+ * under its `STOP_DETAIL` value, or a blank band. Without a detail score only the score decides.
+ */
+export function criticFires(score: number, detail?: DetailScore): boolean {
+  if (score < CRITIC_SCORE_MAX) return true;
+  if (!detail) return false;
+  return (
+    (detail.partRecall !== undefined && detail.partRecall < STOP_DETAIL.partRecall) ||
+    (detail.partPrecision !== undefined && detail.partPrecision < STOP_DETAIL.partPrecision) ||
+    (detail.blankBands ?? 0) > 0
+  );
+}
 
 /** Render background → white, so dark parts stay visible to the judge. */
 function onWhite(r: FlatRender): Buffer {
@@ -75,6 +97,62 @@ export async function criticImage(
 }
 
 /**
+ * Difference tile: grey where photo and model agree, red where the photo has the object and the model
+ * does not, blue where the model draws what the photo does not (the Critic card's legend).
+ */
+export function differenceTile(model: FlatRender, outline: Mask): Buffer {
+  const n = model.mask.cols * model.mask.rows;
+  const out = Buffer.alloc(n * 3);
+  for (let i = 0; i < n; i++) {
+    const photo = outline.data[i] ? 1 : 0;
+    const built = model.mask.data[i] ? 1 : 0;
+    const c = photo && !built ? [220, 40, 40] : built && !photo ? [40, 80, 220] : [160, 160, 160];
+    out.set(c, i * 3);
+  }
+  return out;
+}
+
+/**
+ * The 2 × 2 sheet of the Critic card (PQ-T14): photo | model, same view / difference | model ¾, tiles
+ * `CRITIC_TILE` wide. One PNG data URL.
+ */
+export async function criticSheet(
+  crop: RgbGrid,
+  recipe: ObjectRecipe,
+  aspect: number,
+  outline: Mask
+): Promise<string> {
+  const w = CRITIC_TILE;
+  const h = Math.min(CRITIC_TILE * 2, Math.max(64, Math.round(w / Math.max(0.1, aspect))));
+  // Same grid for the model and the difference, so the tiles line up with the outline mask.
+  const same = renderFlat(recipe, aspect, outline.cols, outline.rows);
+  const raw = (buf: Uint8Array | Uint8ClampedArray, cols: number, rows: number) =>
+    sharp(Buffer.from(buf), { raw: { width: cols, height: rows, channels: 3 } })
+      .resize({ width: w, height: h, fit: 'fill' })
+      .png()
+      .toBuffer();
+  const corner = renderFlat(recipe, aspect, w >> 1, h >> 1, THREE_QUARTER);
+  const [photo, model, diff, three] = await Promise.all([
+    raw(crop.rgb as Uint8Array, crop.cols, crop.rows),
+    raw(onWhite(same), same.mask.cols, same.mask.rows),
+    raw(differenceTile(same, outline), same.mask.cols, same.mask.rows),
+    raw(onWhite(corner), corner.mask.cols, corner.mask.rows),
+  ]);
+  const png = await sharp({
+    create: { width: w * 2, height: h * 2, channels: 3, background: '#ffffff' },
+  })
+    .composite([
+      { input: photo, left: 0, top: 0 },
+      { input: model, left: w, top: 0 },
+      { input: diff, left: 0, top: h },
+      { input: three, left: w, top: h },
+    ])
+    .png()
+    .toBuffer();
+  return `data:image/png;base64,${png.toString('base64')}`;
+}
+
+/**
  * Live shape with one critic round (PR-0.6): run, score against the used outline, and when the
  * score is below 70 with ≥ 20 s left, patch → re-fit → keep only when the score rises. The
  * scoring sits outside `runObjectShape`, so the 300 ms shape-math budget is untouched. Mock and
@@ -90,16 +168,42 @@ export async function shapeWithCritic(
 }
 
 async function shapeWithCriticRound(
-  perception: Pick<PerceptionClient, 'describeShape' | 'describeParts' | 'criticizeShape'> &
-    Partial<Pick<PerceptionClient, 'segmentImage' | 'checkViews'>>,
+  perception: CriticPerception,
   photo: PhotoForRegions | null,
   fullImageUrl: string,
   target: ShapeTarget,
   opts: ObjectShapeOptions = {}
 ): Promise<ObjectShape> {
   const started = Date.now();
+  let shape = await runObjectShape(perception, photo, fullImageUrl, target, opts);
+  // Version 1: one round. Version 2 (PQ-T14): up to `CRITIC_ROUNDS`, each kept only on gain.
+  const rounds = (opts.criticPromptVersion ?? CRITIC_PROMPT_VERSION) >= 2 ? CRITIC_ROUNDS : 1;
+  for (let r = 0; r < rounds; r++) {
+    const next = await criticRound(perception, photo, fullImageUrl, target, opts, shape, started);
+    if (next === shape) break;
+    shape = next;
+  }
+  return shape;
+}
+
+type CriticPerception = Pick<
+  PerceptionClient,
+  'describeShape' | 'describeParts' | 'criticizeShape'
+> &
+  Partial<Pick<PerceptionClient, 'segmentImage' | 'checkViews'>>;
+
+/** One critic round over `shape`: the same object back when nothing was kept. */
+async function criticRound(
+  perception: CriticPerception,
+  photo: PhotoForRegions | null,
+  fullImageUrl: string,
+  target: ShapeTarget,
+  opts: ObjectShapeOptions,
+  shape: ObjectShape,
+  started: number
+): Promise<ObjectShape> {
   const timeoutMs = opts.timeoutMs ?? SHAPE_TIMEOUT_MS;
-  const shape = await runObjectShape(perception, photo, fullImageUrl, target, opts);
+  const version = opts.criticPromptVersion ?? CRITIC_PROMPT_VERSION;
   try {
     if (
       !photo ||
@@ -123,16 +227,25 @@ async function shapeWithCriticRound(
       shape.recipe,
       shape.partMasks
     );
-    if (!scored || scored.score.score >= CRITIC_SCORE_MAX) return shape;
+    if (!scored) return shape;
+    if (
+      version >= 2
+        ? !criticFires(scored.score.score, scored.score.detail)
+        : scored.score.score >= CRITIC_SCORE_MAX
+    )
+      return shape;
     const w = target.box.w * photo.width;
     const h = target.box.h * photo.height;
     if (!(w > 0 && h > 0)) return shape;
     const patch = await requestPatch(
       perception,
-      await criticImage(scored.crop, shape.recipe, w / h),
+      version >= 2
+        ? await criticSheet(scored.crop, shape.recipe, w / h, scored.outline)
+        : await criticImage(scored.crop, shape.recipe, w / h),
       shape.kit,
       scored.score,
-      opts.signal
+      opts.signal,
+      version
     );
     if (!patch) return shape;
     // No re-check of the budget here: the patch is paid for, and the retry below carries no
@@ -194,18 +307,24 @@ export async function requestPatch(
   imageUrl: string,
   kit: ObjectKit,
   score: ModelScore,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  version: number = CRITIC_PROMPT_VERSION
 ): Promise<Partial<ObjectKit> | null> {
   try {
     const out = await client.criticizeShape(
       imageUrl,
-      criticQuestion(kit, {
-        score: score.score,
-        iou: score.iou,
-        edgeF1: score.edgeF1,
-        deltaE: score.deltaE,
-      }),
-      signal
+      criticQuestion(
+        kit,
+        {
+          score: score.score,
+          iou: score.iou,
+          edgeF1: score.edgeF1,
+          deltaE: score.deltaE,
+        },
+        version
+      ),
+      signal,
+      { promptVersion: version, archetype: kit.archetype }
     );
     return out.patch;
   } catch (err) {

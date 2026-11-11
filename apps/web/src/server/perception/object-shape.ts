@@ -187,6 +187,8 @@ export interface ObjectShapeOptions {
   promptVersion?: number;
   /** Kit samples voting (PQ-T18, default `SHAPE_KIT_SAMPLES`): 2 asks the kit twice when ≥ 40 s are left. */
   kitSamples?: number;
+  /** Critic prompt version of `shapeWithCritic` (PQ-T14): 2 = cards + 2 × 2 sheet + extra rounds; default 1. */
+  criticPromptVersion?: number;
 }
 
 /** The second kit sample is asked only with at least this budget (PQ-T18). */

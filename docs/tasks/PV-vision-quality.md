@@ -253,6 +253,7 @@ Meta API calls; all others run offline.
       background round kept only on gain).
       **Done when:** on the real set the critic fires on the objects missing parts and the kept patches raise
       the detail score.
+      _Built 2026-11-11, unticked, off by default (`criticPromptVersion` 2; v1 stays):_ `criticSheet` 2 × 2 (512 px tiles, `differenceTile`), `criticFires` (score < 70 or recall / precision under `STOP_DETAIL` or a blank band), `criticPrompt(2, archetype)`, `reasons` in the schema, `capPatchFields` (4 fields), up to `CRITIC_ROUNDS` = 3 rounds kept only on gain. Rounds run in the live call, not yet in the background through `shape-jobs.ts`. Gain on the real set not measured (API).
 - [ ] **PQ-T15 Cards for the loop calls** _(API to evaluate)_. Stage ops card into
       `shapeScriptSystemPrompt`, Views check card into `VIEWS_CHECK_SYSTEM_PROMPT`, Final check card into the
       `final` stage question; versions bumped.

@@ -6,6 +6,7 @@ import { DEFAULT_META_BASE_URL } from '@/server/copilot/providers/meta';
 import { fetchPreferringContributor } from '@/server/copilot/providers/contributor';
 import type { UsageSample } from '@/server/spend';
 import type {
+  CriticOptions,
   PartsSubject,
   PerceptionBackend,
   PerceptionCall,
@@ -44,9 +45,11 @@ import {
 import { REGION_SYSTEM_PROMPT, regionQuestion } from './region-prompt';
 import { defaultArchetype, kitToRecipe } from '@/lib/object-kit';
 import {
-  CRITIC_JSON_SCHEMA,
   CRITIC_PROMPT_VERSION,
-  CRITIC_SYSTEM_PROMPT,
+  capPatchFields,
+  criticJsonSchema,
+  criticPrompt,
+  parseKitReasons,
   KIT_PROMPT_VERSION,
   kitPrompt,
   parseKit,
@@ -421,22 +424,27 @@ export class MetaPerceptionBackend implements PerceptionBackend {
   async criticizeShape(
     imageUrl: string,
     question: string,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    opts: CriticOptions = {}
   ): Promise<PerceptionCall<CriticResult>> {
+    const promptVersion = opts.promptVersion ?? CRITIC_PROMPT_VERSION;
     // Standard id, like the kit call: the operator waits on this answer.
     // No separate params: the question already carries the kit and the scores.
     const { content, model, usage } = await this.visionJson(
-      CRITIC_SYSTEM_PROMPT,
+      criticPrompt(promptVersion, opts.archetype),
       question,
       imageUrl,
-      CRITIC_JSON_SCHEMA,
+      criticJsonSchema(promptVersion),
       signal,
       false,
-      { kind: 'criticizeShape', params: { promptVersion: CRITIC_PROMPT_VERSION } }
+      { kind: 'criticizeShape', params: { promptVersion } }
     );
-    const patch = parseKitPatch(content);
+    const parsed = parseKitPatch(content);
+    // Version 2 cuts a long patch to its first 4 fields (PQ-T14).
+    const patch = parsed && promptVersion >= 2 ? capPatchFields(parsed) : parsed;
+    const reasons = promptVersion >= 2 ? parseKitReasons(content) : [];
     console.info(
-      `[vision] 3D critic from ${model}: ${patch ? Object.keys(patch).join(',') : 'no patch'}`
+      `[vision] 3D critic from ${model}: ${patch ? Object.keys(patch).join(',') : 'no patch'}${reasons.length ? ` (${reasons.join(' | ')})` : ''}`
     );
     return { model, usage, result: { patch } };
   }

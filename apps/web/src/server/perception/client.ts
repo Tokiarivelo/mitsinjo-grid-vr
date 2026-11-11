@@ -4,6 +4,7 @@ import { env } from '@/lib/env';
 import { errorWithCause, isTransientProviderError } from '@/server/copilot/providers/transient';
 import { spendGuard, type SpendGuard } from '@/server/spend';
 import type {
+  CriticOptions,
   PartsSubject,
   PerceptionBackend,
   PerceptionCall,
@@ -146,8 +147,13 @@ export class PerceptionClient {
     return this.run('describeParts', (b) => b.describeParts(imageUrl, target, signal));
   }
 
-  criticizeShape(imageUrl: string, question: string, signal?: AbortSignal): Promise<CriticResult> {
-    return this.run('criticizeShape', (b) => b.criticizeShape(imageUrl, question, signal));
+  criticizeShape(
+    imageUrl: string,
+    question: string,
+    signal?: AbortSignal,
+    opts?: CriticOptions
+  ): Promise<CriticResult> {
+    return this.run('criticizeShape', (b) => b.criticizeShape(imageUrl, question, signal, opts));
   }
 
   judgeShape(imageUrl: string, question: string, signal?: AbortSignal): Promise<JudgeResult> {

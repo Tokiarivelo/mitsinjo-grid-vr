@@ -18,6 +18,11 @@ import type {
 
 type WithoutSource<T> = Omit<T, 'source' | 'model' | 'fallback'>;
 
+export interface CriticOptions {
+  promptVersion?: number;
+  archetype?: KitArchetype;
+}
+
 export interface PerceptionCall<T> {
   result: WithoutSource<T>;
   model: string;
@@ -79,7 +84,9 @@ export interface PerceptionBackend {
   criticizeShape(
     imageUrl: string,
     question: string,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    /** Prompt version and the family's card (PQ-T14); default version 1. */
+    opts?: CriticOptions
   ): Promise<PerceptionCall<CriticResult>>;
   /**
    * Rubric judge (PQ-T4): `imageUrl` is photo | model | model ¾, `question` names the object.
