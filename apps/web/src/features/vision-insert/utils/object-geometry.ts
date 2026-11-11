@@ -14,6 +14,7 @@ import { holedBox } from './holed-wall';
 import { expandAssemblies } from './assembly-parts';
 import type { AssemblyDetail } from './openings';
 import { planarUvs } from './surface-maps';
+import { applyVertexAo } from './vertex-ao';
 import { type ApplianceDetection, type NormBox, type SceneryType } from '@/lib/vision';
 
 /**
@@ -552,6 +553,8 @@ function buildMesh(recipe: ObjectRecipe, detail: AssemblyDetail): THREE.BufferGe
     g.setAttribute('color', new THREE.BufferAttribute(colors, 3));
     return g;
   });
+  // Shadow where parts meet and on the ground (PQ-T27), baked once into the vertex colours.
+  applyVertexAo(parts);
   const body = mergeGeometries(parts) ?? new THREE.BufferGeometry();
   body.clearGroups();
   let start = 0;

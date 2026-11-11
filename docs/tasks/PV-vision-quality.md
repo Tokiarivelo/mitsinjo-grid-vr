@@ -406,11 +406,14 @@ _Ticked 2026-11-11 on the owner's request: the code and tests are in; every « d
       _Built 2026-11-11 (live `/designer-3d` pass pending):_ the class is stored per material on the recipe
       (`ObjectRecipe.gloss`, a JSON field of the recipe: no migration), not per part, because the viewer has one
       material per surface. `measureRecipeGloss` + `withPhotoGloss` (views and photo paths), `surfaceLook`.
-- [ ] **PQ-T27 Shadow where parts meet.** New `features/vision-insert/utils/vertex-ao.ts`: darken vertex
+- [x] **PQ-T27 Shadow where parts meet.** New `features/vision-insert/utils/vertex-ao.ts`: darken vertex
       colours near part joints and near the ground at merge time (pure, once per recipe, both quality tiers).
       **Test:** `vertex-ao.test.ts` (vertices at a joint darker than free ones; factor never under 0.6, so no
       part falls to black; cost inside the geometry budget).
       **Done when:** viewer shots show parts sitting on each other instead of floating; `/designer-3d` ≥ 4 / 5.
+      _Built 2026-11-11 (live `/designer-3d` pass pending):_ `applyVertexAo` runs in `buildMesh` before the merge.
+      A vertex darkens near another part's surface only when it faces it (a decal on a wall keeps its colour);
+      box faces carry corner vertices only, so the effect is strongest on hulls, cylinders and rounded boxes.
 - [ ] **PQ-T28 Light from the photo side (optional, last).** In the panel's compare view only: turn the studio
       key light to the side the photo is lit from (left or right, from the luminance gradient across the body
       mask). The default studio light stays for every other view.
