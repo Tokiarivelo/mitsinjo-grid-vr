@@ -118,7 +118,8 @@ Meta API calls; all others run offline.
       clipped pixels), hidden share (outline area against the box and the archetype's usual fill), view class
       from the measured yaw. Used three ways: the « Measured: » line of the question (skills §14), confidences
       in `fusion.ts`, and a hint in `object-shape-panel.tsx` when the photo is too small or too blurred
-      (`messages/{en,fr,mg}.json`, design gate).
+      (`messages/{en,fr,mg}.json`, design gate: real run 2026-11-11, 1440 + 390 × dark + light, both hints,
+      no horizontal overflow; `conditions` ride on the facade and views answers too, not only the photo pipeline).
       **Test:** `photo-conditions.test.ts` (blurred copy of a fixture classed lower; half-covered outline →
       hidden ≈ 0.5), panel test for the hint.
       **Done when:** the log prints one conditions line per object and the facts line reaches Spark.

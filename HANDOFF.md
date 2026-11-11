@@ -5,20 +5,21 @@
 ## Current state
 
 - **PV-Q Q1 measured and closed as far as the data allows:**
-  - PQ-T7 photo conditions: in, ticked (design-gate screenshots of the hint line still to do).
+  - PQ-T7 photo conditions: in, ticked. Design gate done on a real run (2026-11-11; shots in local `design/shots/pq-t7/`).
+    Bug found and fixed there: the facade and views answers dropped `conditions`, so the hint never showed for houses.
   - PQ-T8 tight crop: **reverted** (`make eval-shape` 98/118 vs 99/116, median 28.9 vs 24.5 s, window counts worse).
   - PQ-T9 SAM agreement: `make outline-compare` 12/13 = plain 12/13 → **off** (option kept, tested). Part-mask retry
     and time share stay. Only miss: solar street light (SAM returns the panel alone).
   - PQ-T10 lit colours: in, unticked — shape-report identical with and without it (no shadowed wall in the real set).
 - Real baseline unchanged: mean 53 (synthetic 93). PQ-T37 open: only `evidence.visibleParts` (PQ-T12, Q2).
 - Machine: if dev says `Can't resolve 'three'` → stop dev, `make install`.
-- Full vitest run: facade-masks stage loop + golden car/fridge/tree failed once under full-suite load, pass alone.
+- Full vitest run flaked on wall-clock budgets (golden-shape 1026 ms vs 1000); loosened in full-suite mode only
+  (strict budgets stay in `make test-shape`).
 
 ## Next
 
 1. Merge PR #11 once CI is green.
-2. Design gate for the new hint (`photoTooSmall` / `photoBlurred`): 1440 + 390, dark + light (needs a real run).
-3. Q2 from PQ-T11 (skill loader); PQ-T12 brings `evidence.visibleParts` and closes PQ-T37.
+2. Q2 from PQ-T11 (skill loader); PQ-T12 brings `evidence.visibleParts` and closes PQ-T37.
 
 ## Files touched (Q1)
 

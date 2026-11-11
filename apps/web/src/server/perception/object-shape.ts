@@ -16,7 +16,7 @@ import {
   type ShapeStep,
   type ShapeTarget,
 } from '@/lib/object-shape';
-import { defaultArchetype, kitToRecipe, type ObjectKit } from '@/lib/object-kit';
+import { defaultArchetype, kitToRecipe, type KitArchetype, type ObjectKit } from '@/lib/object-kit';
 import { pathToRings } from '@/lib/vision';
 import type { PerceptionClient } from './client';
 import { measureKitColors, type ObjectPixels } from './color-measure';
@@ -376,6 +376,19 @@ export async function runObjectShape(
       : Promise.resolve(null);
     const found = await shapeCall;
     const finalGrid = await edges;
+    // PQ-T7: the conditions ride on every recipe answer (facade house, views, photo pipeline alike),
+    // otherwise the "photo too small / blurred" hint never shows for the objects that take those paths.
+    const conditionsFor = (archetype: KitArchetype | undefined, yaw: number | null) =>
+      photo && preConditions
+        ? measurePhotoConditions({
+            widthPx: target.box.w * photo.width,
+            heightPx: target.box.h * photo.height,
+            grid: finalGrid,
+            hasOutline: !!shaped.outline,
+            ...(archetype ? { archetype } : {}),
+            yaw,
+          })
+        : undefined;
     const seconds = ((Date.now() - started) / 1000).toFixed(1);
     if (found.kit) onKit?.(found.kit);
     const source = {
@@ -549,12 +562,14 @@ export async function runObjectShape(
         console.info(
           `[vision] 3D facade house for "${target.label}": ${recipe.parts.length} parts, roof ${roofPart ? `${roofPart.shape}${roofPart.shape === 'hip' ? ` ridge ${roofPart.ridge?.toFixed(2)}${roofPart.clip ? ` half-hip ${roofPart.clip.toFixed(2)}` : ''}` : ''}` : 'flat'}, ${front.windows.length} windows, ${front.doors.length} door(s), ${front.chimneys.length} chimney(s), side ${side ? `${side.windows.length} windows, depth ${depthRatio(front, side)?.toFixed(2)}` : 'none'} vs Spark ${(kit.proportions.d / kit.proportions.w).toFixed(2)}, w:h:d ${[recipe.proportions.w, recipe.proportions.h, recipe.proportions.d].map((v) => v.toFixed(2)).join(':')}, yaw ${Math.round((yaw0 * 180) / Math.PI)}° (${seconds} s Spark)`
         );
+        const facadeConditions = conditionsFor(found.kit?.archetype, recipe.yaw ?? null);
         return {
           ...base,
           mode: 'recipe',
           recipe,
           kit: found.kit,
           ...(shaped.outline ? { outline: shaped.outline } : {}),
+          ...(facadeConditions ? { conditions: facadeConditions } : {}),
           ...source,
         };
       }
@@ -636,15 +651,18 @@ export async function runObjectShape(
           `[vision] 3D views for "${target.label}": ${recipe.parts[0]!.shape} body, ${recipe.parts.length} parts, side ${seen.side ? `drawn (length/width ${(seen.side.aspect / seen.front.aspect).toFixed(2)})` : `none (Spark depth ${sparkDepthRatio(kit).toFixed(2)})`}, SAM ${[...counts].map(([c, n]) => `${c}×${n}`).join(', ') || 'no parts'}; silhouette IoU front ${iou.front}${iou.side !== null ? `, side ${iou.side}` : ''}, w:h:d ${[recipe.proportions.w, recipe.proportions.h, recipe.proportions.d].map((v) => v.toFixed(2)).join(':')} (${seconds} s Spark)`
         );
         const issue = recipeIssue(recipe);
-        if (!issue)
+        if (!issue) {
+          const viewsConditions = conditionsFor(found.kit.archetype, recipe.yaw ?? null);
           return {
             ...base,
             mode: 'recipe',
             recipe,
             kit: found.kit,
             ...(shaped.outline ? { outline: shaped.outline } : {}),
+            ...(viewsConditions ? { conditions: viewsConditions } : {}),
             ...source,
           };
+        }
         console.info(`[vision] 3D views recipe rejected (${issue}), photo pipeline`);
       }
       let roofMeasured = false;
@@ -912,17 +930,7 @@ export async function runObjectShape(
       // fit values read estimated, a single view never measures depth, the box-fit scale is
       // estimated (metric scale arrives with free placement).
       let coverage: PartCoverage[] | undefined;
-      const conditions =
-        photo && preConditions
-          ? measurePhotoConditions({
-              widthPx: target.box.w * photo.width,
-              heightPx: target.box.h * photo.height,
-              grid: finalGrid,
-              hasOutline: !!shaped.outline,
-              ...(finalKit ? { archetype: finalKit.archetype } : {}),
-              yaw: recipe.yaw ?? null,
-            })
-          : undefined;
+      const conditions = conditionsFor(finalKit?.archetype, recipe.yaw ?? null);
       if (conditions) {
         console.info(
           `[vision] 3D photo conditions for "${target.label}": ${conditionsFacts(conditions).join(', ')}`
