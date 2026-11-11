@@ -162,7 +162,7 @@ describe('withMaskPanels (PR-2.7)', () => {
     // Shell (glasshouse) recolored to the body colour behind the glass.
     const shell = out.parts.find((p) => p.shape === 'box' && p.at[1] === 0.32)!;
     expect(shell.color).toBe('#a33327');
-    expect(shell.material).toBe('metal');
+    expect(shell.material).toBe('painted');
     // Window 1: photo x 60..100 → obj −0.25..0; y 16..32 → obj 0.225..0.425.
     const panels = out.parts.filter((p) => p.shape === 'box' && p.size[2] === 0.02);
     expect(panels).toHaveLength(4);

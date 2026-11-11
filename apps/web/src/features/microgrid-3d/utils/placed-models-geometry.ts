@@ -4,6 +4,14 @@ import type { SectorId } from '@mitsinjo/engine';
 import type { KitArchetype } from '@/lib/object-kit';
 import type { ObjectRecipe } from '@/lib/object-shape';
 import { recipeMesh, triangleCount } from '@/features/vision-insert/utils/object-geometry';
+import {
+  GLOW,
+  GLOW_SURFACES,
+  surfaceMaterial,
+  SURFACES,
+  type GlowSurface,
+  type Surface,
+} from '@/features/vision-insert/utils/surface-look';
 import { terrainHeight } from './landscape';
 import { TOKEN_HEX } from './scene-palette';
 import { footprint, sceneScale } from '@/stores/placed-models.store';
@@ -24,9 +32,100 @@ export interface PlacedPlinth {
   size: [number, number, number];
 }
 
+/**
+ * Surface families of the village (PQ-T32): every surface of every placed model lands in one of these, so the
+ * whole village draws in ≤ 4 meshes (matt, gloss, glass, metal) plus one `glow` mesh while a lit appliance runs.
+ */
+export const PLACED_FAMILIES = ['matt', 'gloss', 'glass', 'metal', 'glow'] as const;
+export type PlacedFamily = (typeof PLACED_FAMILIES)[number];
+
+/** The viewer's surface whose look (roughness, metalness, clearcoat) a family wears. */
+export const FAMILY_SURFACE: Record<PlacedFamily, Surface> = {
+  matt: 'plaster',
+  gloss: 'painted',
+  glass: 'glass',
+  metal: 'metal',
+  glow: 'lamp',
+};
+
+/**
+ * Family of a surface (PQ-T32). Lamps and screens glow only while their appliance runs (`lit`, data-driven,
+ * PQ-T34); off, a lamp reads as gloss plastic and a screen as dark glass.
+ */
+export function familyOf(surface: Surface, lit: boolean): PlacedFamily {
+  if ((GLOW_SURFACES as readonly string[]).includes(surface)) {
+    if (lit) return 'glow';
+    return (surface as GlowSurface) === 'lamp' ? 'gloss' : 'glass';
+  }
+  switch (surface) {
+    case 'metal':
+      return 'metal';
+    case 'glass':
+    case 'water':
+      return 'glass';
+    case 'painted':
+    case 'plastic':
+    case 'tile':
+      return 'gloss';
+    default:
+      return 'matt';
+  }
+}
+
+/** Materials of the families, the viewer's look values without maps (the village stays light on textures). */
+export function placedFamilyMaterials(): Record<PlacedFamily, THREE.MeshStandardMaterial> {
+  return Object.fromEntries(
+    PLACED_FAMILIES.map((f) => [
+      f,
+      surfaceMaterial(
+        FAMILY_SURFACE[f],
+        { vertexColors: true },
+        undefined,
+        f === 'glow' ? GLOW.lamp.intensity : undefined
+      ),
+    ])
+  ) as Record<PlacedFamily, THREE.MeshStandardMaterial>;
+}
+
+const ATTRIBUTES = ['position', 'normal', 'uv', 'color'] as const;
+
+/** Triangles of a recipe mesh cut by family: one non-indexed geometry per family present. */
+export function splitByFamily(
+  g: THREE.BufferGeometry,
+  lit: boolean
+): Map<PlacedFamily, THREE.BufferGeometry> {
+  const flat = g.index ? g.toNonIndexed() : g;
+  const out = new Map<PlacedFamily, THREE.BufferGeometry>();
+  const total = flat.getAttribute('position').count;
+  const groups =
+    flat.groups.length > 0 ? flat.groups : [{ start: 0, count: total, materialIndex: 0 }];
+  const pieces = new Map<PlacedFamily, Array<{ start: number; count: number }>>();
+  for (const grp of groups) {
+    const family = familyOf(SURFACES[grp.materialIndex ?? 0] ?? 'painted', lit);
+    pieces.set(family, [...(pieces.get(family) ?? []), { start: grp.start, count: grp.count }]);
+  }
+  for (const [family, ranges] of pieces) {
+    const count = ranges.reduce((n, r) => n + r.count, 0);
+    const part = new THREE.BufferGeometry();
+    for (const name of ATTRIBUTES) {
+      const attr = flat.getAttribute(name);
+      if (!attr) continue;
+      const array = new Float32Array(count * attr.itemSize);
+      let at = 0;
+      for (const r of ranges)
+        for (let v = r.start; v < r.start + r.count; v++)
+          for (let k = 0; k < attr.itemSize; k++) array[at++] = attr.getComponent(v, k);
+      part.setAttribute(name, new THREE.BufferAttribute(array, attr.itemSize));
+    }
+    out.set(family, part);
+  }
+  if (flat !== g) flat.dispose();
+  return out;
+}
+
 export interface PlacedModelsGeometryResult {
-  /** Single merged geometry for all placed models (1 draw call). Null if empty. */
-  modelsGeometry: THREE.BufferGeometry | null;
+  /** One merged geometry per surface family present (≤ 5 draw calls for the whole village). Empty if no models. */
+  families: Partial<Record<PlacedFamily, THREE.BufferGeometry>>;
   /** Concrete plinths under models on sloped ground. */
   plinths: PlacedPlinth[];
   /** Heights and footprint radius per model id (for tag positioning and click bounds). */
@@ -77,12 +176,12 @@ export function buildPlacedModelsGeometry(
   tier: 'high' | 'low' = 'high'
 ): PlacedModelsGeometryResult {
   if (items.length === 0) {
-    return { modelsGeometry: null, plinths: [], modelBounds: {} };
+    return { families: {}, plinths: [], modelBounds: {} };
   }
 
   const plinths: PlacedPlinth[] = [];
   const modelBounds: Record<string, { height: number; radius: number }> = {};
-  const geometriesToMerge: THREE.BufferGeometry[] = [];
+  const byFamily = new Map<PlacedFamily, THREE.BufferGeometry[]>();
   let lowTriangles = 0;
 
   for (const item of items) {
@@ -175,14 +274,22 @@ export function buildPlacedModelsGeometry(
       colorAttr.needsUpdate = true;
     }
 
-    geometriesToMerge.push(g);
+    // A lamp or screen glows only while its appliance runs on a served, unburnt sector (PQ-T34).
+    for (const [family, piece] of splitByFamily(g, !onFire && !unserved)) {
+      byFamily.set(family, [...(byFamily.get(family) ?? []), piece]);
+    }
+    g.dispose();
   }
 
-  const merged = mergeGeometries(geometriesToMerge, false) ?? null;
-  for (const g of geometriesToMerge) g.dispose();
+  const families: Partial<Record<PlacedFamily, THREE.BufferGeometry>> = {};
+  for (const [family, list] of byFamily) {
+    const merged = mergeGeometries(list, false);
+    if (merged) families[family] = merged;
+    for (const g of list) g.dispose();
+  }
 
   return {
-    modelsGeometry: merged,
+    families,
     plinths,
     modelBounds,
   };

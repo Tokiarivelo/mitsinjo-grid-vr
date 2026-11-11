@@ -2,11 +2,12 @@
 
 import { memo, useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
-import { useFrame } from '@react-three/fiber';
+import { useFrame, useThree } from '@react-three/fiber';
 import { defaultArchetype, kitToRecipe, type ObjectKit } from '@/lib/object-kit';
 import { fitRecipe } from '@/lib/object-shape';
 import { recipeMesh } from '../../utils/object-geometry';
-import { surfaceMaterial, SURFACES, type Surface } from '../../utils/surface-look';
+import { buildRecipeMaterials } from '../../utils/recipe-materials';
+import { sharedStudioEnv } from '../../utils/studio-env';
 import type { SpatialTarget } from './spatial-projection';
 import { PowerConnectionBeam } from './power-connection-beam';
 import { spinTurntable, type Turntable } from './turntable';
@@ -48,7 +49,7 @@ export const SpawnedObject3D = memo(function SpawnedObject3D({
   const from = useMemo(() => new THREE.Vector3(...spawnPosition), [spawnPosition]);
   const to = useMemo(() => new THREE.Vector3(...slot), [slot]);
 
-  const geometry = useMemo(() => {
+  const recipe = useMemo(() => {
     const archetype = defaultArchetype(detection.category, detection.scenery, detection.label);
     const kit: ObjectKit = {
       archetype,
@@ -57,19 +58,26 @@ export const SpawnedObject3D = memo(function SpawnedObject3D({
       materials: { main: 'metal', secondary: 'glass', accent: 'plastic' },
     };
     const aspect = spawnDimensions[0] / Math.max(spawnDimensions[1], 1e-6);
-    // Largest side normalized to 1, centred so it spins around its middle.
-    return recipeMesh(fitRecipe(kitToRecipe(kit), aspect), 'full').center();
+    return fitRecipe(kitToRecipe(kit), aspect);
   }, [detection, spawnDimensions]);
+  // Largest side normalized to 1, centred so it spins around its middle.
+  const geometry = useMemo(() => recipeMesh(recipe, 'full').center(), [recipe]);
 
   useEffect(() => () => geometry.dispose(), [geometry]);
 
-  const materials = useMemo(
-    () =>
-      SURFACES.map((s: Surface) =>
-        surfaceMaterial(s, { vertexColors: true, color: new THREE.Color('#ffffff') })
-      ),
-    []
-  );
+  // Same look as the viewer (PQ-T32): relief maps and swatches, a small baked studio environment on the
+  // materials only (the village keeps its own sky), no post pass in the headset.
+  const gl = useThree((s) => s.gl);
+  const materials = useMemo(() => {
+    const used = new Set(geometry.groups.map((g) => g.materialIndex));
+    const env = sharedStudioEnv(gl).texture;
+    const list = buildRecipeMaterials(recipe, { used: used as ReadonlySet<number> });
+    for (const m of list) {
+      m.envMap = env;
+      m.envMapIntensity = 0.9;
+    }
+    return list;
+  }, [recipe, geometry, gl]);
 
   useEffect(
     () => () => {

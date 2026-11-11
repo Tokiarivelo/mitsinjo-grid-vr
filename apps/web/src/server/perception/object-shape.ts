@@ -48,6 +48,8 @@ import { applyConstraints, buildGraph, notBuilt, partCoverage, repairGraph } fro
 import { deduceHiddenSides } from './hidden-sides';
 import { enforcePartBudget, masksOnObject, partCeiling } from './mask-geometry';
 import { cropForShape, cropRectForShape } from './shape-crop';
+import { measureRecipeGloss } from './gloss-measure';
+import { withPbrRules } from './pbr-rules';
 import { extractSwatches } from './photo-swatches';
 import { withLatheBody } from './lathe-body';
 import { fetchFacadeMasks, type FacadeMasks } from './facade-masks';
@@ -65,7 +67,13 @@ import { ELEVATION_ARCHETYPES, measureFacadeElevations } from './facade-views';
 import { photoTarget, tagPhotoParts } from './photo-stages';
 import { fetchPartMasks, partMasksTimeout } from './part-masks';
 import { fitPartParams, hasPartGroups, preparePartFit } from './part-fit';
-import { REGION_GRID, measureRegionColors, withRegionColors } from './region-colors';
+import {
+  HULL_TONE_CONCEPTS,
+  REGION_GRID,
+  measureRegionColors,
+  withHullTones,
+  withRegionColors,
+} from './region-colors';
 import { withMaskChimney } from './mask-chimney';
 import { withMaskPanels } from './mask-panels';
 import { withMaskWheels } from './mask-wheels';
@@ -671,7 +679,7 @@ export async function runObjectShape(
         return {
           ...base,
           mode: 'recipe',
-          recipe,
+          recipe: withPbrRules(recipe, target.label),
           kit: found.kit,
           ...(shaped.outline ? { outline: shaped.outline } : {}),
           ...(facadeConditions ? { conditions: facadeConditions } : {}),
@@ -746,6 +754,12 @@ export async function runObjectShape(
           );
         }
         recipe = drawn(recipe);
+        recipe = await toneHullBody(recipe, kit.archetype, target, shaped.outline, {
+          photo,
+          imageUrl,
+          segmentImage: perception.segmentImage?.bind(perception),
+          timeoutMs: partMasksTimeout(started + timeoutMs - Date.now()),
+        });
         const iou = {
           front: viewIou(recipe, seen.front, 'front'),
           side: seen.side ? viewIou(recipe, seen.side, 'side') : null,
@@ -762,7 +776,7 @@ export async function runObjectShape(
           return {
             ...base,
             mode: 'recipe',
-            recipe,
+            recipe: await finishLook(recipe, target, photo, shaped.outline),
             kit: found.kit,
             ...(shaped.outline ? { outline: shaped.outline } : {}),
             ...(viewsConditions ? { conditions: viewsConditions } : {}),
@@ -1188,7 +1202,7 @@ export async function runObjectShape(
       return {
         ...base,
         mode: 'recipe',
-        recipe,
+        recipe: await finishLook(recipe, target, photo, shaped.outline),
         ...(imaginedViews ? { imaginedViews } : {}),
         ...(fitIou !== undefined ? { fit: { iou: fitIou } } : {}),
         ...(partMasks ? { partMasks } : {}),
@@ -1210,12 +1224,103 @@ export async function runObjectShape(
     return {
       ...base,
       mode: 'recipe',
-      recipe: found.recipe,
+      recipe: withPbrRules(found.recipe, target.label),
       ...(fallbackViews ? { imaginedViews: fallbackViews } : {}),
       ...source,
     };
   } catch (err) {
     console.warn('[vision] shape failed:', err instanceof Error ? err.message : err);
     return silhouette('provider_error', { source: 'mock', model: 'none' });
+  }
+}
+
+/**
+ * Two-tone hull body (PQ-T25): segments the archetype's upper region (roof, crown) on the photo crop, reads
+ * its colour against the rest of the outline and lets `withHullTones` cut the body. Best effort, never throws;
+ * the recipe comes back unchanged without a photo, a segmenter, a hull body or two distinct tones.
+ */
+async function toneHullBody(
+  recipe: ObjectRecipe,
+  archetype: KitArchetype,
+  target: ShapeTarget,
+  outline: string | undefined,
+  ctx: {
+    photo: PhotoForRegions | null;
+    imageUrl: string;
+    segmentImage: PerceptionClient['segmentImage'] | undefined;
+    timeoutMs: number;
+  }
+): Promise<ObjectRecipe> {
+  const concepts = HULL_TONE_CONCEPTS[archetype];
+  const { photo, segmentImage } = ctx;
+  if (
+    !concepts ||
+    !photo ||
+    !segmentImage ||
+    recipe.parts[frontPartIndex(recipe)]?.shape !== 'hull'
+  )
+    return recipe;
+  try {
+    const masks = await fetchPartMasks(segmentImage, ctx.imageUrl, archetype, {
+      timeoutMs: ctx.timeoutMs,
+      concepts,
+    });
+    if (masks.length === 0) return recipe;
+    const geom = {
+      photoW: photo.width,
+      photoH: photo.height,
+      box: target.box,
+      crop: cropRectForShape(photo.width, photo.height, target.box),
+    };
+    const grid = await sampleObjectRgb(photo, target.box, REGION_GRID, REGION_GRID);
+    const rings = outline ? pathToRings(outline).filter((r) => r.length >= 3) : [];
+    const regions = measureRegionColors(grid, rings, masks, geom, photo, target.box);
+    return withHullTones(recipe, masks, regions, geom, concepts);
+  } catch (err) {
+    console.warn('[vision] two-tone body failed:', err);
+    return recipe;
+  }
+}
+
+/**
+ * Last step of the views and photo paths: the physical rules (PQ-T39), then the gloss of each material read on
+ * the photo (PQ-T26). In this order and at the very end: the gloss is keyed by the final materials (a dark
+ * `metal` has become `painted`), and no later step can rebuild the recipe without it.
+ */
+async function finishLook(
+  recipe: ObjectRecipe,
+  target: ShapeTarget,
+  photo: PhotoForRegions | null,
+  outline: string | undefined
+): Promise<ObjectRecipe> {
+  return withPhotoGloss(withPbrRules(recipe, target.label), photo, target.box, outline);
+}
+
+/**
+ * Gloss per material read on the photo (PQ-T26): the brightest 1 % against the median of each material's
+ * cells, classed matt / satin / gloss. Best effort, never throws; the recipe is unchanged without a photo or a
+ * measurable material. The 3D view shifts roughness and clearcoat from it, the flat render ignores it.
+ */
+async function withPhotoGloss(
+  recipe: ObjectRecipe,
+  photo: PhotoForRegions | null,
+  box: ShapeTarget['box'],
+  outline: string | undefined
+): Promise<ObjectRecipe> {
+  if (!photo) return recipe;
+  try {
+    const grid = await sampleObjectRgb(photo, box, REGION_GRID, REGION_GRID);
+    const rings = outline ? pathToRings(outline).filter((r) => r.length >= 3) : [];
+    const gloss = measureRecipeGloss(grid, rings, box, recipe);
+    if (Object.keys(gloss).length === 0) return recipe;
+    console.info(
+      `[vision] 3D gloss: ${Object.entries(gloss)
+        .map(([m, c]) => `${m} ${c}`)
+        .join(', ')}`
+    );
+    return { ...recipe, gloss };
+  } catch (err) {
+    console.warn('[vision] gloss failed:', err instanceof Error ? err.message : err);
+    return recipe;
   }
 }

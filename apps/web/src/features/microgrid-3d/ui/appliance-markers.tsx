@@ -15,6 +15,8 @@ import { APPLIANCE_FOCUS_SCALE } from '../utils/camera-focus';
 import { BADGE_DISTANCE_FACTOR, badgeY, beaconY, SceneBadge } from './scene-badge';
 import {
   buildPlacedModelsGeometry,
+  PLACED_FAMILIES,
+  placedFamilyMaterials,
   placedGeometryKey,
   type PlacedModelItem,
   type SectorStateOverride,
@@ -128,12 +130,25 @@ export function ApplianceMarkers({
 
   // Rebuild the merged mesh only when what it draws changes (not on every scene-model refresh).
   const geometryKey = placedGeometryKey(placedItems, sectorStatuses, tier);
-  const { modelsGeometry, plinths, modelBounds } = useMemo(
+  const { families, plinths, modelBounds } = useMemo(
     () => buildPlacedModelsGeometry(placedItems, sectorStatuses, tier),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- geometryKey covers every input
     [geometryKey]
   );
-  useEffect(() => () => modelsGeometry?.dispose(), [modelsGeometry]);
+  useEffect(
+    () => () => {
+      for (const g of Object.values(families)) g?.dispose();
+    },
+    [families]
+  );
+  // One material per surface family, with the viewer's look values (PQ-T32); the glow family is lit (PQ-T34).
+  const familyMaterials = useMemo(() => placedFamilyMaterials(), []);
+  useEffect(
+    () => () => {
+      for (const m of Object.values(familyMaterials)) m.dispose();
+    },
+    [familyMaterials]
+  );
 
   // One LineSegments2 for every marker→building link: a single draw call (PP-T3 budget).
   const feederLinks = useMemo(
@@ -170,12 +185,20 @@ export function ApplianceMarkers({
         />
       )}
 
-      {/* 1. Placed 3D models (PI-T2): single merged mesh for all objects */}
-      {modelsGeometry && (
-        <mesh name="placed-appliance-models" geometry={modelsGeometry} castShadow receiveShadow>
-          <meshStandardMaterial vertexColors roughness={0.7} metalness={0.2} />
-        </mesh>
-      )}
+      {/* 1. Placed 3D models (PI-T2): one merged mesh per surface family (≤ 5) for all objects */}
+      {PLACED_FAMILIES.map((family) => {
+        const geometry = families[family];
+        return geometry ? (
+          <mesh
+            key={family}
+            name={`placed-appliance-models-${family}`}
+            geometry={geometry}
+            material={familyMaterials[family]}
+            castShadow
+            receiveShadow
+          />
+        ) : null;
+      })}
 
       {/* Plinths under models on sloped ground: one instanced draw call */}
       {plinths.length > 0 && (

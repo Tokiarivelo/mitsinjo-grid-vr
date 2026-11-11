@@ -258,7 +258,7 @@ its Vitest test in `__tests__/` in the same commit.
 | `server/perception/skills/{base,archetypes,critic,stages,views,judge}.ts` | The cards of `vision-to-3d-muse-skills.md` as versioned string arrays | PQ-T11–T16 |
 | `server/perception/photo-stages.ts`                                       | Target and scorer of the photo-path staged loop                       | PQ-T19     |
 | `server/perception/view-candidates.ts`                                    | Consistency score between a generated view and the front              | PQ-T16     |
-| `server/perception/gloss-measure.ts`                                      | Gloss estimate per region from highlight statistics                   | PQ-T26     |
+| `server/perception/gloss-measure.ts`                                      | Gloss per smooth material: brightest 1 % against the 90th percentile  | PQ-T26     |
 | `features/vision-insert/utils/vertex-ao.ts`                               | Baked ambient shadow at part joints                                   | PQ-T27     |
 | `scripts/shape-judge.mjs` + Makefile target `shape-judge`                 | Run the rubric judge on the real set, on demand                       | PQ-T4      |
 
@@ -498,6 +498,8 @@ loop log of 2026-11-01 notes that metal parts render darker than measured. A car
 metal, so it should be `painted` (metalness 0, clearcoat), and only bare metal (galvanised sheet, chrome,
 aluminium) should be `metal` with metalness 1. `painted` exists in the viewer's surfaces but not in
 `RECIPE_MATERIALS`, so Muse cannot name it today.
+
+_Done 2026-11-11 (PQ-T39): `painted` is a recipe material, `metal` is metalness 1 with a base colour lifted into 180–255 sRGB, `pbr-rules.ts` clamps the non-metal base colours, turns a `metal` part measured dark (brightest channel < 110) into `painted`, a vehicle or cabinet body defaults to `painted`._
 
 One consequence for PQ-T27: darkening vertex colours near joints is occlusion written into the base colour, which
 the guide lists as a mistake. It is kept only as the cheap path for the village and VR, bounded at 0.6, and the

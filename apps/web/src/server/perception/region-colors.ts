@@ -1,9 +1,23 @@
 import 'server-only';
 
 import type { KitArchetype } from '@/lib/object-kit';
-import { frontPartIndex, type ObjectRecipe, type PartMask } from '@/lib/object-shape';
+import { clipRing, ringRange } from '@/lib/hull';
+import {
+  frontPartIndex,
+  MAX_COMPONENTS,
+  type ObjectRecipe,
+  type PartMask,
+  type RecipePart,
+} from '@/lib/object-shape';
 import { pathToRings } from '@/lib/vision';
-import { insideRings, LIT_SHARE, linearToHex, srgbToLinear } from './color-measure';
+import {
+  deltaE2000,
+  hexToLab,
+  insideRings,
+  LIT_SHARE,
+  linearToHex,
+  srgbToLinear,
+} from './color-measure';
 import { confidence, mixColor } from './fusion';
 import { isWheelPart, type MaskMapGeom } from './mask-geometry';
 import { vehicleShell } from './mask-panels';
@@ -253,4 +267,91 @@ export function withRegionColors(
       recoloured.has(i) ? { ...p, color: recoloured.get(i)! } : p
     ),
   };
+}
+
+/** SAM concepts of the upper colour zone of a hull body (PQ-T25): the roof of a car, the crown of a tree. */
+export const HULL_TONE_CONCEPTS: Readonly<Partial<Record<KitArchetype, ReadonlyArray<string>>>> = {
+  vehicle: ['roof'],
+  tree: ['tree crown'],
+  bush: ['foliage'],
+};
+
+/** Two zones count as two tones above this colour distance (ΔE 2000); under it the body stays one colour. */
+export const TONE_DELTA_E = 10;
+
+/** The upper zone must cover between these shares of the body height, else it is the body or noise. */
+export const TONE_MIN_SHARE = 0.1;
+export const TONE_MAX_SHARE = 0.85;
+
+/** Thinnest zone the split keeps, in object units (the schema's `MIN_EXTENT` with margin). */
+const TONE_MIN_EXTENT = 0.02;
+
+/**
+ * One zone of a hull body: both rings cut to `y ∈ [lo, hi]` (part unit space) and stretched back to
+ * the unit box, so the part's `at` / `size` carry the zone. Null when a ring vanishes or the zone is thin.
+ */
+function hullZone(main: RecipePart, lo: number, hi: number): RecipePart | null {
+  const points = clipRing(main.points!, -0.5, 0.5, lo, hi);
+  const section = clipRing(main.section!, -0.5, 0.5, lo, hi);
+  if (points.length < 3 || section.length < 3) return null;
+  const [a0, a1] = ringRange(points, 1);
+  const [b0, b1] = ringRange(section, 1);
+  const y0 = Math.min(a0, b0);
+  const y1 = Math.max(a1, b1);
+  const span = y1 - y0;
+  if (span * main.size[1] < TONE_MIN_EXTENT) return null;
+  const mid = (y0 + y1) / 2;
+  const unit = (ring: Array<[number, number]>) =>
+    ring.map((p) => [p[0], (p[1] - mid) / span] as [number, number]);
+  return {
+    ...main,
+    at: [main.at[0], main.at[1] + main.size[1] * mid, main.at[2]],
+    size: [main.size[0], main.size[1] * span, main.size[2]],
+    points: unit(points),
+    section: unit(section),
+  };
+}
+
+/**
+ * Two-tone hull body (PQ-T25, closes PH-T8): when the photo's upper region (roof, crown) is a clearly
+ * different colour from the rest of the body, the hull is cut at the region's lower edge into a lower part
+ * (keeps `front`) and an upper part appended last, each in its own measured colour. The extra part is
+ * appended so every other part keeps its index. Same reference when it does not apply. Pure.
+ */
+export function withHullTones(
+  recipe: ObjectRecipe,
+  masks: ReadonlyArray<PartMask>,
+  measured: RegionColors,
+  geom: MaskMapGeom,
+  concepts: ReadonlyArray<string>
+): ObjectRecipe {
+  const mainIdx = frontPartIndex(recipe);
+  const main = recipe.parts[mainIdx]!;
+  if (main.shape !== 'hull' || !main.points || !main.section) return recipe;
+  if (recipe.parts.length >= MAX_COMPONENTS || !measured.rest) return recipe;
+  let top = -1;
+  masks.forEach((m, k) => {
+    const r = measured.regions[k];
+    if (!r || !concepts.includes(m.concept)) return;
+    if (top < 0 || r.pixels > measured.regions[top]!.pixels) top = k;
+  });
+  if (top < 0) return recipe;
+  const region = measured.regions[top]!;
+  const topConf = confidence.colors(region.pixels);
+  const restConf = confidence.colors(measured.rest.pixels);
+  if (!(topConf > 0) || !(restConf > 0)) return recipe;
+  const rect = maskObjectRect(geom, masks[top]!.box);
+  const cut = (rect.y0 - main.at[1]) / main.size[1];
+  const share = 0.5 - cut;
+  if (share < TONE_MIN_SHARE || share > TONE_MAX_SHARE) return recipe;
+  const upperColor = mixColor(region.color, main.color, topConf);
+  const lowerColor = mixColor(measured.rest.color, main.color, restConf);
+  if (deltaE2000(hexToLab(upperColor), hexToLab(lowerColor)) < TONE_DELTA_E) return recipe;
+  const lower = hullZone(main, -0.5, cut);
+  const upper = hullZone(main, cut, 0.5);
+  if (!lower || !upper) return recipe;
+  console.info(`[vision] 3D two-tone body: ${upperColor} above ${lowerColor}`);
+  const parts = recipe.parts.map((p, i) => (i === mainIdx ? { ...lower, color: lowerColor } : p));
+  parts.push({ ...upper, front: false, color: upperColor, status: 'measured' });
+  return { ...recipe, parts };
 }

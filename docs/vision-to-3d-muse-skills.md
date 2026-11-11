@@ -67,7 +67,7 @@ Ground rules
 - Sizes are fractions of the whole object, largest side = 1. Never metres.
 - Colours are #rrggbb of the surface in daylight: skip shadows, reflections and highlights.
 - Materials: stone, brick, plaster, concrete, wood, thatch, tile, slate, metal, glass, plastic,
-  fabric, rubber, foliage, water. Nothing else.
+  fabric, rubber, foliage, water, painted. Nothing else.
 - Never give watts, kW, kWh or any energy value.
 - Answer ONLY the JSON asked for.
 ```
@@ -124,8 +124,8 @@ Material cues
 - fabric: folds · foliage: leaves, uneven green edge · water: flat, reflects the sky
 ```
 
-`painted` is not in `RECIPE_MATERIALS` today: the `painted` line and its entry in the Base card's material list
-ship with PQ-T39 (methodology §12.3). Until then a painted surface is sent as `metal` or `plastic`, as now.
+`painted` is a recipe material since PQ-T39 (methodology §12.3): a car body, fridge or gate is `painted`, only
+bare metal is `metal`.
 
 ---
 

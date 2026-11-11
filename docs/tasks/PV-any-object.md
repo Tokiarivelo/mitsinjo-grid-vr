@@ -33,6 +33,6 @@ l'auto corriger ».
 
 ## Next
 
-- [ ] **PH-T8** Colour per region of the hull body (two-tone cars, tree trunk vs canopy) from SAM masks.
+- [x] **PH-T8** Colour per region of the hull body (two-tone cars, tree trunk vs canopy) from SAM masks. _(PQ-T25)_
 - [ ] **PH-T9** Top / back views when the AI check asks for them; trees, bushes, poles on the hull path.
 - [ ] **PH-T10** Background improvement after the first answer with the stage indicator (PG-T13–T18).

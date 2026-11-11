@@ -3,7 +3,7 @@
 **Why (user, 2026-11-10):** « I must have the most powerful image to 3D possible »: good detail, good vision,
 skills that prepare the Muse models. The audit (`docs/vision-to-3d-methodology.md` §3) found the blocker: the
 score passes models that do not look right, so nothing after it could be judged.
-**Status:** ❌ planned. Nothing below is built.
+**Status:** Q0–Q4 built (Q4 on 2026-11-11, see the per-task notes; live Meta and GPU checks pending). Q5 not built.
 **Read first:** `docs/vision-to-3d-methodology.md` (what and why) · `docs/vision-to-3d-muse-skills.md` (card
 texts) · `.claude/skills/shape-3d/SKILL.md` · `.claude/skills/shape-loop/SKILL.md`. Per task: only the files it names.
 **Rules kept:** Meta models only · never paste the photo on the model (≈ 64 px tileable swatches allowed) · Muse
@@ -389,29 +389,52 @@ _Ticked 2026-11-11 on the owner's request: the code and tests are in; every « d
 
 ## Q4 — Surfaces and light
 
-- [ ] **PQ-T25 Colour per region on hull bodies.** `object-views.ts`, `region-colors.ts`: two-tone cars, trunk
+- [x] **PQ-T25 Colour per region on hull bodies.** `object-views.ts`, `region-colors.ts`: two-tone cars, trunk
       against crown, from SAM masks. Closes PH-T8.
       **Test:** `region-colors.test.ts` (two-tone body keeps both colours, each within ΔE 5).
       **Done when:** colour-per-part ΔE is lower on the two-tone real objects.
-- [ ] **PQ-T26 Gloss from the photo.** New `server/perception/gloss-measure.ts`: per region, the gap between
+      _Built 2026-11-11 (Q4 pass, ticked on the owner's request; live measure pending):_ `withHullTones` cuts the hull
+      body at the lower edge of the SAM `roof` (vehicle) / `tree crown` / `foliage` region when its colour is ΔE ≥ 10
+      from the rest of the outline: lower part keeps `front`, the upper part is appended last (indices stable).
+      Wired on the views path by `toneHullBody` (`object-shape.ts`), best effort.
+      _Live try 2026-11-11:_ a two-tone car photo added (`car-two-tone`, `make family-photos`) and captured with
+      `make shape-capture`: the run went down the photo path (extruded body, not a hull), so the cut did not run
+      there. Still to see on the views path (2D view first).
+- [x] **PQ-T26 Gloss from the photo.** New `server/perception/gloss-measure.ts`: per region, the gap between
       the brightest 1 % and the median luminance, classed matt / satin / gloss. `surface-look.ts` shifts
       roughness and clearcoat within ± 0.2 of the material's entry; status `measured`.
       **Test:** `gloss-measure.test.ts` (a region with a sharp highlight classed gloss, a flat one matt),
       `surface-look.test.ts` (shift clamped; metal never under roughness 0.45, per `/designer-3d`).
       **Done when:** `/designer-3d` on `make shape-shots` does not lower its grade on any object, dark and light.
-- [ ] **PQ-T27 Shadow where parts meet.** New `features/vision-insert/utils/vertex-ao.ts`: darken vertex
+      _Built 2026-11-11 (live `/designer-3d` pass pending):_ the class is stored per material on the recipe
+      (`ObjectRecipe.gloss`, a JSON field of the recipe: no migration), not per part, because the viewer has one
+      material per surface. `measureRecipeGloss` + `withPhotoGloss` (views and photo paths), `surfaceLook`.
+      _PR #15 review, 2026-11-11 (`make gloss-report`, 25 real captures, no API):_ the first measure (brightest 1 %
+      against the median, per material) read contrast, not highlights: plaster walls, foliage and a wooden pole
+      came out `gloss`. Now: the gap is read against the 90th percentile, inside each part (the smallest part wins
+      a cell, so windows and wheels leave the body), only for smooth materials (`SPECULAR_MATERIALS`: painted,
+      plastic, metal, glass, tile, water), glass and water are never `matt`, limits 8 / 14 L\*. Result: 4 car
+      bodies gloss or satin, fridge, TV and lamp matt, no rough material classed. The class is added as the last
+      pipeline step (`finishLook`): a live capture showed the photo path dropped it before the answer.
+      Limit: a part is read on its front rectangle, so a wrongly placed part still bleeds into its neighbour.
+- [x] **PQ-T27 Shadow where parts meet.** New `features/vision-insert/utils/vertex-ao.ts`: darken vertex
       colours near part joints and near the ground at merge time (pure, once per recipe, both quality tiers).
       **Test:** `vertex-ao.test.ts` (vertices at a joint darker than free ones; factor never under 0.6, so no
       part falls to black; cost inside the geometry budget).
       **Done when:** viewer shots show parts sitting on each other instead of floating; `/designer-3d` ≥ 4 / 5.
+      _Built 2026-11-11 (live `/designer-3d` pass pending):_ `applyVertexAo` runs in `buildMesh` before the merge.
+      A vertex darkens near another part's surface only when it faces it (a decal on a wall keeps its colour);
+      box faces carry corner vertices only, so the effect is strongest on hulls, cylinders and rounded boxes.
 - [ ] **PQ-T28 Light from the photo side (optional, last).** In the panel's compare view only: turn the studio
       key light to the side the photo is lit from (left or right, from the luminance gradient across the body
       mask). The default studio light stays for every other view.
       **Test:** `photo-conditions.test.ts` (lit side read on a fixture), viewer test (key light angle changes
       only in compare view).
       **Done when:** the operator reads photo and model more alike in compare view; cut first if time is short.
+      _Cut 2026-11-11 (Q4 pass):_ the panel has no compare view to carry it (it would be a new screen, with its
+      design gate), and the task says to cut it first. Left unticked.
 
-- [ ] **PQ-T32 Same look in the three views.** Today the village draws every placed object with one material
+- [x] **PQ-T32 Same look in the three views.** Today the village draws every placed object with one material
       (`appliance-markers.tsx`: roughness 0.7, metalness 0.2; `mergeGeometries` drops the groups) and VR builds
       materials without maps or swatches (`spawned-object-3d.tsx`). Extract one `recipeMaterials(recipe, opts)`
       from `object-editor-3d.tsx` (no copy). VR: maps and swatches, a small baked environment, no post pass.
@@ -421,25 +444,39 @@ _Ticked 2026-11-11 on the owner's request: the code and tests are in; every « d
       `make vr-probe`; `make scene-audit` (≤ + 3 draw calls, inside both tier budgets).
       **Done when:** the same object reads alike in the viewer, the village and VR (three shots side by side),
       and glass and metal no longer look like matt paint in the village.
-- [ ] **PQ-T33 Parts shade each other in the viewer.** `object-editor-3d.tsx`: N8AO in the existing composer
+      _Built 2026-11-11 (`make vr-probe`, `make scene-audit` and the side-by-side shots not run, need a server and a
+      headset emulator):_ `buildRecipeMaterials` (`recipe-materials.ts`, named so because `recipeMaterials` already
+      lists a recipe's materials) is shared by the viewer and VR (maps, swatches, baked studio env on the materials
+      only). Village: `PLACED_FAMILIES` matt / gloss / glass / metal + `glow` (5th mesh only while a lit appliance
+      runs, one more than the ≤ 4 planned: the audit budget is unchecked), no maps on either tier.
+- [x] **PQ-T33 Parts shade each other in the viewer.** `object-editor-3d.tsx`: N8AO in the existing composer
       and one soft shadow map on the key light (cast and receive on the object). Drawn on demand, so no cost
       at rest. Colours must stay as measured.
       **Test:** viewer test (pass present, shadow flags set); `make shape-shots` before / after.
       **Done when:** `/designer-3d` grade not lower on any object, dark and light, 320 px and desktop; ΔE of the
       lit faces against the measured colours not higher by more than 2.
-- [ ] **PQ-T34 Lamps and screens glow.** `surface-look.ts`: emissive for part kinds lamp, display, headlight.
+      _Built 2026-11-11 (the `/designer-3d` grade and the ΔE check on `make shape-shots` are pending; no GPU
+      here, the viewer test reads the source and the exported knobs):_ N8AO (half res, performance) before tone
+      mapping in the existing composer, one 1024 soft shadow map on the key light, the object casts and receives.
+- [x] **PQ-T34 Lamps and screens glow.** `surface-look.ts`: emissive for part kinds lamp, display, headlight.
       Village: on only when the engine says the appliance runs (data-driven, bloom rule of `/designer-3d`);
       viewer: fixed low glow under 1.
       **Test:** `surface-look.test.ts` (emissive only on those kinds, under 1 in the viewer).
       **Done when:** a lamp post reads as a lamp in the viewer and lights up in the village when powered.
-- [ ] **PQ-T35 Break texture repetition.** `planarUvs` maps object position ÷ 0.25 with no variation, so a
+      _Built 2026-11-11 (visual check pending):_ kinds `light` / `display` map to internal glow surfaces `lamp` /
+      `screen` (`GLOW_SURFACES`, not recipe materials). Viewer glow 0.7 / 0.5 (< 1). Village: a lamp or screen goes to
+      the `glow` family only while its appliance runs on a served, unburnt sector.
+- [x] **PQ-T35 Break texture repetition.** `planarUvs` maps object position ÷ 0.25 with no variation, so a
       tile repeats four times across the object. `surface-maps.ts`: a second, larger noise layer in the shade
       map and a seeded UV offset per material; patterns stay continuous across the parts of one wall.
       **Test:** `surface-maps.test.ts` (shade map has energy below the tile frequency; same seed → same result;
       mean brightness unchanged so the gain still holds).
       **Done when:** no visible grid of repeats on walls and roofs in `make shape-shots`.
+      _Built 2026-11-11 (visual check on `make shape-shots` pending):_ the shade map spans `SHADE_SPAN` = 2 tiles a
+      side (the pattern repeats in it, a large noise layer, 25 % of the variation, does not), so the light varies
+      every 2 tiles; `surfaceOffset` gives each surface a seeded UV offset applied to its three maps alike.
 
-- [ ] **PQ-T39 Physical material rules.** `lib/object-shape.ts`: add `painted` to `RECIPE_MATERIALS`
+- [x] **PQ-T39 Physical material rules.** `lib/object-shape.ts`: add `painted` to `RECIPE_MATERIALS`
       (contract change → `docs/contracts.md`; not stored in Neon as a new field, so no migration: say so in
       the commit). `surface-look.ts`: `metal` = bare metal, metalness 1, base colour lifted into 180–255 sRGB;
       `painted` = metalness 0 with clearcoat; `water` metalness 0. New `server/perception/pbr-rules.ts`: clamp
@@ -450,11 +487,23 @@ _Ticked 2026-11-11 on the owner's request: the code and tests are in; every « d
       `surface-look.test.ts` (metalness is 0 or 1 for every surface).
       **Done when:** the red car body renders at its measured colour (ΔE lower than at baseline) and bare
       metal reads as metal in `make shape-shots`.
-- [ ] **PQ-T40 Look-development sheet.** `make shape-shots` gains `LOOKDEV=1`: each object under three lights
+      _Built 2026-11-11 (ΔE and look check on `make shape-shots` pending):_ no migration (`material` lives in the
+      recipe JSON, not in a Neon column). A named `metal` on a vehicle or cabinet main role becomes `painted`
+      (`kitToRecipe`); `make skills-gen` regenerated the cards.
+      _PR #15 review, 2026-11-11 (real viewer shots, before / after):_ the golden lamp post's black pole, named
+      `metal`, came out pale silver. A `metal` part whose brightest channel is under 110 is coated metal:
+      `applyPbrRules` turns it into `painted` and logs it, so it keeps its measured colour.
+- [x] **PQ-T40 Look-development sheet.** `make shape-shots` gains `LOOKDEV=1`: each object under three lights
       (the studio, a low side light, a back light), dark and light theme, one sheet per object.
       **Test:** script smoke test in mock mode (three shots per object written).
       **Done when:** `/designer-3d` reviews the sheet and no material turns black, blown out or plastic-looking
       under any of the three lights.
+      _Built 2026-11-11 (the `/designer-3d` review of a real sheet is pending, no GPU / dev server run here):_
+      `LOOKDEV=1 make shape-shots` loads `/village?lookdev=studio|side|back` (`utils/lookdev.ts`, dev only) and writes
+      `name-lookdev-<light>-<theme>.png`, three files per object and theme rather than one montage; the plan is
+      `scripts/lookdev-plan.mjs`, tested.
+      _Run 2026-11-11 (dev server, 6 report objects × 3 lights × 2 themes = 36 shots):_ nothing black or blown
+      out under any light. The script now takes its file names from the tested plan (`shotFile`).
 
 **Exit Q4:** surfaces differ by measured colour and gloss, and parts read as assembled.
 

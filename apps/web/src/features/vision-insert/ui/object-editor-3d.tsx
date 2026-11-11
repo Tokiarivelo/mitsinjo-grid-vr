@@ -3,17 +3,12 @@
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { Canvas, useLoader, useThree } from '@react-three/fiber';
 import { ContactShadows, OrbitControls } from '@react-three/drei';
-import { EffectComposer, ToneMapping } from '@react-three/postprocessing';
+import { EffectComposer, N8AO, ToneMapping } from '@react-three/postprocessing';
 import { ToneMappingMode } from 'postprocessing';
 import * as THREE from 'three';
 import { TOKEN_HEX } from '@/features/microgrid-3d/utils/scene-palette';
 import { defaultArchetype, kitToRecipe, type ObjectKit } from '@/lib/object-kit';
-import {
-  fitRecipe,
-  silhouetteRings,
-  type ObjectShape,
-  type RecipeMaterial,
-} from '@/lib/object-shape';
+import { fitRecipe, silhouetteRings, type ObjectShape } from '@/lib/object-shape';
 import type { ApplianceDetection } from '@/lib/vision';
 import { useReducedMotion } from '@/features/microgrid-3d/hooks/use-reduced-motion';
 import { Ink } from '@/features/microgrid-3d/ui/ink';
@@ -24,11 +19,10 @@ import {
 import { cn } from '@/lib/utils';
 import type { ShapeImprove } from '../hooks/use-object-shape';
 import { recipeMesh, silhouetteDepth, silhouetteMesh } from '../utils/object-geometry';
-import { surfaceMaterial, SURFACES } from '../utils/surface-look';
-import { buildStudioScene, STUDIO_SIGMA } from '../utils/studio-env';
+import { buildRecipeMaterials } from '../utils/recipe-materials';
+import { bakeStudioEnv } from '../utils/studio-env';
+import { LIGHT_SETUPS, lookdevPreset } from '../utils/lookdev';
 import { BuildFocus } from './build-focus-3d';
-import { SWATCH_GAIN } from '../utils/surface-maps';
-import { surfaceTextures, swatchTexture } from '../utils/surface-textures';
 
 export interface ObjectEditor3dProps {
   shape: ObjectShape;
@@ -57,11 +51,7 @@ function StudioEnvironment() {
   const get = useThree((s) => s.get);
   useEffect(() => {
     const { gl, scene, invalidate } = get();
-    const pmrem = new THREE.PMREMGenerator(gl);
-    const studio = buildStudioScene();
-    const target = pmrem.fromScene(studio.scene, STUDIO_SIGMA);
-    studio.dispose();
-    pmrem.dispose();
+    const target = bakeStudioEnv(gl);
     scene.environment = target.texture;
     scene.environmentIntensity = ENV_INTENSITY;
     invalidate(); // frameloop="demand"
@@ -72,6 +62,15 @@ function StudioEnvironment() {
   }, [get]);
   return null;
 }
+
+/**
+ * Parts shade each other (PQ-T33): N8AO (half resolution, performance quality) in the composer and one soft
+ * shadow map on the key light. Both draw on demand with the rest of the frame, so nothing costs at rest. The AO
+ * tint stays light and its strength moderate so the measured colours hold.
+ */
+export const EDITOR_AO = { radius: 0.35, intensity: 1.2, falloff: 0.5, color: '#201a18' } as const;
+/** Shadow map side of the key light, and its blur radius. */
+export const KEY_SHADOW = { size: 1024, radius: 4 } as const;
 
 /** Ink strength in the editor (PT-5): a clear drawn edge on the single object. */
 export const EDITOR_INK = 0.6;
@@ -124,25 +123,18 @@ function ObjectModel({
   const invalidate = useThree((s) => s.invalidate);
   const vertexColors = Boolean(activeRecipe);
   const swatches = activeRecipe?.swatches;
-  // One material per surface (stone matte, glass shiny…), indexed by the geometry groups. Surfaces the
-  // model uses get their relief maps (PR-1.4: stone blocks, slate rows…) or photo swatches (PR-1.5),
-  // tinted by the measured colours and compensated with a brightness gain so surfaces do not darken.
+  const gloss = activeRecipe?.gloss;
+  // One material per surface (stone matte, glass shiny…), indexed by the geometry groups: the shared builder
+  // gives the surfaces the model uses their relief maps or photo swatches (PQ-T32).
   const surfaces = useMemo(() => {
     const used = new Set(mesh.groups.map((g) => g.materialIndex));
-    return SURFACES.map((s, i) => {
-      const maps = vertexColors && used.has(i) ? surfaceTextures(s) : null;
-      const swatch = vertexColors && swatches?.[s as RecipeMaterial];
-      const swatchTex = swatch ? swatchTexture(swatch, invalidate) : null;
-      const map = swatchTex ?? maps?.map;
-      const gain = swatchTex ? SWATCH_GAIN : (maps?.gain ?? 1);
-      return surfaceMaterial(s, {
-        vertexColors: true,
-        color: new THREE.Color(tint ?? '#ffffff').multiplyScalar(gain),
-        ...(maps ? { normalMap: maps.normalMap, roughnessMap: maps.roughnessMap } : {}),
-        ...(map ? { map } : {}),
-      });
+    return buildRecipeMaterials(vertexColors ? { swatches, gloss } : undefined, {
+      used: used as ReadonlySet<number>,
+      textured: vertexColors,
+      tint,
+      onTexture: invalidate,
     });
-  }, [mesh, vertexColors, swatches, tint, invalidate]);
+  }, [mesh, vertexColors, swatches, gloss, tint, invalidate]);
   useEffect(() => () => surfaces.forEach((m) => m.dispose()), [surfaces]);
   // Ground under the object (shadow sits on it), from the real geometry.
   const floorY = useMemo(() => {
@@ -166,7 +158,7 @@ function ObjectModel({
       />
       <group scale={scale}>
         {vertexColors ? (
-          <mesh geometry={mesh} material={surfaces} />
+          <mesh geometry={mesh} material={surfaces} castShadow receiveShadow />
         ) : (
           <mesh geometry={mesh}>
             <meshStandardMaterial color={tint ?? TOKEN_HEX.idle} roughness={0.6} metalness={0.05} />
@@ -193,6 +185,9 @@ function ObjectModel({
  * Load with `LazyObjectEditor3d` (no SSR) behind a WebGL check.
  */
 export function ObjectEditor3d(props: ObjectEditor3dProps) {
+  // Look-development lighting (PQ-T40, dev shots only): `?lookdev=side|back`, the studio otherwise.
+  const lights =
+    LIGHT_SETUPS[lookdevPreset(typeof window === 'undefined' ? '' : window.location.search)];
   // Shader warm-up (PT-7): fade in once the materials are compiled (≤ 1 s).
   const [warmTarget, setWarmTarget] = useState<WarmupTarget | null>(null);
   const warm = useShaderWarmup(warmTarget);
@@ -204,6 +199,7 @@ export function ObjectEditor3d(props: ObjectEditor3dProps) {
         warm ? 'opacity-100' : 'opacity-0'
       )}
       frameloop="demand"
+      shadows
       dpr={[1, 1.5]}
       camera={{ position: CAMERA_POSITION, fov: 35, near: 0.05, far: 20 }}
       gl={{
@@ -215,9 +211,22 @@ export function ObjectEditor3d(props: ObjectEditor3dProps) {
     >
       <StudioEnvironment />
       {/* Soft key from the upper right front. */}
-      <directionalLight position={[2, 3, 2.5]} intensity={1.2} />
+      <directionalLight
+        position={lights.key.position}
+        intensity={lights.key.intensity}
+        castShadow
+        shadow-mapSize={[KEY_SHADOW.size, KEY_SHADOW.size]}
+        shadow-radius={KEY_SHADOW.radius}
+        shadow-bias={-0.0005}
+        shadow-camera-near={0.5}
+        shadow-camera-far={8}
+        shadow-camera-left={-1.2}
+        shadow-camera-right={1.2}
+        shadow-camera-top={1.2}
+        shadow-camera-bottom={-1.2}
+      />
       {/* Rim light from behind: outlines dark objects (black TV, pump) against the backdrop. */}
-      <directionalLight position={[-0.5, 1.6, -3]} intensity={1.1} />
+      <directionalLight position={lights.rim.position} intensity={lights.rim.intensity} />
       <Suspense fallback={null}>
         <ObjectModel {...props} />
       </Suspense>
@@ -229,6 +238,14 @@ export function ObjectEditor3d(props: ObjectEditor3dProps) {
         frameBufferType={THREE.HalfFloatType}
         enableNormalPass={false}
       >
+        <N8AO
+          halfRes
+          aoRadius={EDITOR_AO.radius}
+          intensity={EDITOR_AO.intensity}
+          distanceFalloff={EDITOR_AO.falloff}
+          quality="performance"
+          color={EDITOR_AO.color}
+        />
         <ToneMapping mode={ToneMappingMode.NEUTRAL} />
         <Ink strength={EDITOR_INK} />
       </EffectComposer>

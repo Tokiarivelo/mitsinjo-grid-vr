@@ -9,11 +9,12 @@ import {
   type RecipePart,
 } from '@/lib/object-shape';
 import { HULL_LEVELS, HULL_SLICES, hullLoops } from '@/lib/hull';
-import { SURFACE_LOOK, SURFACES, surfaceIndex } from './surface-look';
+import { baseColorFor, SURFACE_LOOK, SURFACES, surfaceIndex } from './surface-look';
 import { holedBox } from './holed-wall';
 import { expandAssemblies } from './assembly-parts';
 import type { AssemblyDetail } from './openings';
 import { planarUvs } from './surface-maps';
+import { applyVertexAo } from './vertex-ao';
 import { type ApplianceDetection, type NormBox, type SceneryType } from '@/lib/vision';
 
 /**
@@ -494,7 +495,7 @@ function buildMesh(recipe: ObjectRecipe, detail: AssemblyDetail): THREE.BufferGe
   // half-timbered walls get their beams. Objects from their 2D view: wheel rims, solar cell lines (PG-T21).
   const { parts: expanded, holes } = expandAssemblies(recipe, detail, ROOF_OVERHANG);
   const sorted = expanded
-    .map((p) => ({ p, surface: surfaceIndex(p.material) }))
+    .map((p) => ({ p, surface: surfaceIndex(p.material, p.kind) }))
     .sort((a, b) => a.surface - b.surface);
   const parts = sorted.map(({ p, surface }) => {
     const [sx, sy, sz] = [p.size[0] * dims[0], p.size[1] * dims[1], p.size[2] * dims[2]];
@@ -545,13 +546,15 @@ function buildMesh(recipe: ObjectRecipe, detail: AssemblyDetail): THREE.BufferGe
     // Measured yaw (PF-T5): turned like on the photo.
     if (recipe.yaw) g.rotateY(recipe.yaw);
     // `set` already turns sRGB into the linear working space (ColorManagement): no second conversion.
-    color.set(p.color);
+    color.set(baseColorFor(SURFACES[surface]!, p.color));
     const count = g.getAttribute('position').count;
     const colors = new Float32Array(count * 3);
     for (let i = 0; i < count; i++) color.toArray(colors, i * 3);
     g.setAttribute('color', new THREE.BufferAttribute(colors, 3));
     return g;
   });
+  // Shadow where parts meet and on the ground (PQ-T27), baked once into the vertex colours.
+  applyVertexAo(parts);
   const body = mergeGeometries(parts) ?? new THREE.BufferGeometry();
   body.clearGroups();
   let start = 0;

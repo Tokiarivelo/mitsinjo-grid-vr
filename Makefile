@@ -93,7 +93,7 @@ test-shape: ## Run the 3D shape golden set (5 photos, IoU / colour / gables / 30
 	$(need_ws)
 	SHAPE_BUDGET_STRICT=1 $(PNPM) --filter $(WEB) exec vitest run src/server/perception/__tests__/golden-shape.test.ts
 
-shape-shots: ## Real 3D viewer shots of the shape-report recipes, dark + light (dev server must run; SHOT_WIDTH=320 phone, SHOT_LOG=1 console)
+shape-shots: ## Real 3D viewer shots of the shape-report recipes, dark + light (dev server must run; SHOT_WIDTH=320 phone, SHOT_LOG=1 console, LOOKDEV=1 three lights per object)
 	$(need_ws)
 	@$(PNPM) --filter $(WEB) exec node scripts/object-viewer-shot.mjs $(URL) $(CURDIR)/test-results/shape-report
 
@@ -127,8 +127,12 @@ skills-gen: ## Regenerate the Muse skill cards module from docs/vision-to-3d-mus
 shadow-photos: ## Download the real photos of walls partly in shadow (Wikimedia Commons, PQ-T10) into the local fixtures
 	./scripts/fetch-fixture-photos.sh shadow-walls
 
-family-photos: ## Download one real photo per family the real set lacked (tank, panel, bush, animal, person, building; Wikimedia Commons, PQ-T13); then `make shape-capture` each
+family-photos: ## Download one real photo per family the real set lacked (tank, panel, bush, animal, person, building, plus a two-tone car for PQ-T25; Wikimedia Commons, PQ-T13); then `make shape-capture` each
 	./scripts/fetch-fixture-photos.sh family-photos
+
+gloss-report: ## Gloss class per material read on the real captures' crops (PQ-T26, no API call)
+	$(need_ws)
+	GLOSS_REPORT=1 SHAPE_REAL_DIR="$(CURDIR)/apps/web/src/server/perception/__fixtures__/shape/real" $(PNPM) --filter $(WEB) exec vitest run src/server/perception/__tests__/gloss-report.test.ts
 
 shadow-compare: ## Colour under a shadow, litSurface on vs off: painted on the real photos + real shadowed walls (PQ-T10, no API call)
 	$(need_ws)
@@ -351,5 +355,5 @@ clean: ## Remove build/test output (keeps node_modules)
 clean-all: clean ## Also remove node_modules
 	rm -rf node_modules apps/*/node_modules packages/*/node_modules
 
-.PHONY: help install env setup-claude browsers dev port dev-mock build start test test-engine test-web test-shape family-photos shape-capture shape-judge sam-probe facade-e2e photo-audit eval-stages shape-report shape-shots improve-shot test-watch coverage e2e \
+.PHONY: help install env setup-claude browsers dev port dev-mock build start test test-engine test-web test-shape family-photos gloss-report shape-capture shape-judge sam-probe facade-e2e photo-audit eval-stages shape-report shape-shots improve-shot test-watch coverage e2e \
         typecheck lint bridge bridge-sim test-bridge format format-check format-changed git-hooks check ci shots mockups scenarios-publish analyze scene-audit scene-audit-gpu lighthouse claude env-export mcp status todo deploy-link deploy clean clean-all video-tts-setup video-voice video-sfx video-capture video-canvas video-build video-thumbnail hf-dataset hf-publish

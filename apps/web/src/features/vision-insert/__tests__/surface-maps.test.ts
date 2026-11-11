@@ -7,6 +7,8 @@ import {
   MAP_TILE,
   MAPPED_SURFACES,
   planarUvs,
+  SHADE_SPAN,
+  surfaceOffset,
   surfaceHeight,
   surfaceMaps,
 } from '../utils/surface-maps';
@@ -70,6 +72,56 @@ describe('surfaceMaps (PR-1.4)', () => {
     const m = surfaceMaps('brick', N)!;
     expect(m.gain).toBeGreaterThan(1.1);
     expect(m.gain).toBeLessThan(1.4);
+  });
+});
+
+describe('surface maps against repetition (PQ-T35)', () => {
+  /** Mean grey of each of the `SHADE_SPAN`² tiles of the shade map. */
+  const tileMeans = (surface: 'plaster' | 'stone' | 'brick') => {
+    const m = surfaceMaps(surface, N)!;
+    const means: number[] = [];
+    for (let ty = 0; ty < SHADE_SPAN; ty++)
+      for (let tx = 0; tx < SHADE_SPAN; tx++) {
+        let sum = 0;
+        for (let y = 0; y < N; y++)
+          for (let x = 0; x < N; x++)
+            sum += m.shade[((ty * N + y) * m.shadeSize + tx * N + x) * 4]!;
+        means.push(sum / (N * N));
+      }
+    return means;
+  };
+
+  it('the shade map spans several tiles and the tiles differ: energy below the tile frequency', () => {
+    const m = surfaceMaps('brick', N)!;
+    expect(m.shadeSize).toBe(N * SHADE_SPAN);
+    expect(m.shade.length).toBe(m.shadeSize * m.shadeSize * 4);
+    for (const s of ['plaster', 'stone', 'brick'] as const) {
+      const means = tileMeans(s);
+      expect(Math.max(...means) - Math.min(...means)).toBeGreaterThan(0.5);
+    }
+  });
+
+  it('same surface → same maps and offset; two surfaces start at different corners', () => {
+    expect(Array.from(surfaceMaps('stone', N)!.shade)).toEqual(
+      Array.from(surfaceMaps('stone', N)!.shade)
+    );
+    expect(surfaceOffset('stone')).toEqual(surfaceOffset('stone'));
+    for (const o of [surfaceOffset('stone'), surfaceOffset('brick')])
+      for (const v of o) {
+        expect(v).toBeGreaterThanOrEqual(0);
+        expect(v).toBeLessThan(1);
+      }
+    expect(surfaceOffset('stone')).not.toEqual(surfaceOffset('brick'));
+  });
+
+  it('keeps the mean brightness: gain × mean linear shade ≈ 1', () => {
+    const m = surfaceMaps('plaster', N)!;
+    let sum = 0;
+    for (let i = 0; i < m.shadeSize * m.shadeSize; i++) {
+      const c = m.shade[i * 4]! / 255;
+      sum += c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+    }
+    expect((sum / (m.shadeSize * m.shadeSize)) * m.gain).toBeCloseTo(1, 2);
   });
 });
 

@@ -5,7 +5,12 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('server-only', () => ({}));
 
 import { kitToRecipe, type ObjectKit } from '@/lib/object-kit';
-import { ObjectRecipeSchema, type PartMask, type ShapeTarget } from '@/lib/object-shape';
+import {
+  ObjectRecipeSchema,
+  type ObjectRecipe,
+  type PartMask,
+  type ShapeTarget,
+} from '@/lib/object-shape';
 import { boxPath, pathToRings, polygonPath } from '@/lib/vision';
 import { GOLDEN_SHAPES, goldenBox, goldenOutline, goldenSvg, PHOTO } from '../__fixtures__/shape';
 import { deltaE2000, hexToLab, hexToRgb } from '../color-measure';
@@ -17,7 +22,7 @@ import type { RgbGrid } from '../model-score';
 import { runObjectShape } from '../object-shape';
 import { cropRectForShape } from '../shape-crop';
 import { sampleObjectRgb } from '../shape-colors';
-import { litMeasure, measureRegionColors, withRegionColors } from '../region-colors';
+import { litMeasure, measureRegionColors, withHullTones, withRegionColors } from '../region-colors';
 
 const rgbHex = ([r, g, b]: [number, number, number]) =>
   `#${[r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('')}`;
@@ -364,5 +369,75 @@ describe('withRegionColors (PR-2.8)', () => {
       `[test] car colours: glass ${shell.color} → ${glassPanels[0]!.color}, body ${main.color} → ${expectedBody}, iou ${plain.fit!.iou} → ${measured.fit!.iou}`
     );
     expect(Math.abs(measured.fit!.iou - plain.fit!.iou)).toBeLessThanOrEqual(0.03);
+  });
+});
+
+describe('withHullTones (PQ-T25)', () => {
+  const square: Array<[number, number]> = [
+    [-0.5, -0.5],
+    [0.5, -0.5],
+    [0.5, 0.5],
+    [-0.5, 0.5],
+  ];
+  const hullBody = (): ObjectRecipe => ({
+    proportions: { w: 1, h: 0.5, d: 0.5 },
+    source: 'views',
+    parts: [
+      {
+        shape: 'hull',
+        at: [0, 0, 0],
+        size: [1, 1, 1],
+        points: square,
+        section: square,
+        color: '#a33327',
+        kind: 'body',
+        front: true,
+      },
+    ],
+  });
+  const RED_HEX = '#c82020';
+  const WHITE: [number, number, number] = [235, 235, 235];
+  // Photo 200×100, box 160×80 at (20, 10): the top 30 % of the box (photo y 10..34) is the roof.
+  const twoTone = (top: [number, number, number], bottom: [number, number, number]) => {
+    const geom = geomA();
+    const g = grid(120, 120, (_i, j) => (j < 36 ? top : bottom));
+    const rings = pathToRings(boxPath(geom.box));
+    const masks = [boxMask(geom, 'roof', 20, 10, 180, 34)];
+    return { geom, masks, measured: measureRegionColors(g, rings, masks, geom, photoA, geom.box) };
+  };
+
+  it('a white roof on a red body keeps both colours, each within ΔE 5', () => {
+    const { geom, masks, measured } = twoTone(WHITE, [200, 32, 32]);
+    const out = withHullTones(hullBody(), masks, measured, geom, ['roof']);
+    expect(out.parts).toHaveLength(2);
+    const [lower, upper] = out.parts;
+    expect(lower!.front).toBe(true);
+    expect(upper!.front).toBeFalsy();
+    expect(deltaE2000(hexToLab(lower!.color), hexToLab(RED_HEX))).toBeLessThan(5);
+    expect(deltaE2000(hexToLab(upper!.color), hexToLab(rgbHex(WHITE)))).toBeLessThan(5);
+    expect(upper!.at[1]).toBeGreaterThan(lower!.at[1]);
+    // The two zones together fill the body: heights add up, rings stay in the unit box.
+    expect(lower!.size[1] + upper!.size[1]).toBeCloseTo(1, 2);
+    for (const p of out.parts)
+      for (const [x, y] of [...p.points!, ...p.section!]) {
+        expect(Math.abs(x)).toBeLessThanOrEqual(0.5 + 1e-9);
+        expect(Math.abs(y)).toBeLessThanOrEqual(0.5 + 1e-9);
+      }
+    expect(ObjectRecipeSchema.safeParse(out).success).toBe(true);
+  });
+
+  it('one tone, no roof mask, or a non-hull body leave the recipe as is', () => {
+    const same = twoTone([200, 32, 32], [205, 34, 34]);
+    const one = hullBody();
+    expect(withHullTones(one, same.masks, same.measured, same.geom, ['roof'])).toBe(one);
+    const r = hullBody();
+    const t = twoTone(WHITE, [200, 32, 32]);
+    expect(withHullTones(r, t.masks, t.measured, t.geom, ['roof'])).not.toBe(r);
+    expect(withHullTones(r, t.masks, t.measured, t.geom, ['trunk'])).toBe(r);
+    const box = {
+      ...r,
+      parts: [{ ...r.parts[0]!, shape: 'box' as const, points: undefined, section: undefined }],
+    };
+    expect(withHullTones(box, t.masks, t.measured, t.geom, ['roof'])).toBe(box);
   });
 });

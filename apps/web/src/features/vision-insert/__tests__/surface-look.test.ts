@@ -5,7 +5,17 @@ import * as THREE from 'three';
 import {
   recipeMaterials,
   SURFACE_LOOK,
+  surfaceLook,
+  GLOW,
+  GLOW_SURFACES,
+  glowSurfaceFor,
+  VIEWER_GLOW_MAX,
+  baseColorFor,
+  METAL_BASE_MAX,
+  METAL_BASE_MIN,
   surfaceMaterial,
+  GLOSS_SHIFT,
+  METAL_MIN_ROUGHNESS,
   SURFACES,
   surfaceIndex,
 } from '../utils/surface-look';
@@ -66,7 +76,7 @@ describe('surface looks (AI materials)', () => {
 });
 
 describe('clearcoat by surface (PT-3)', () => {
-  const coated = ['painted', 'plastic', 'tile', 'glass', 'metal'] as const;
+  const coated = ['painted', 'plastic', 'tile', 'glass', 'metal', 'lamp', 'screen'] as const;
 
   it('every surface: roughness and clearcoat in [0, 1]; coat only on lacquered surfaces', () => {
     for (const s of SURFACES) {
@@ -89,5 +99,130 @@ describe('clearcoat by surface (PT-3)', () => {
     expect(stone).not.toBeInstanceOf(THREE.MeshPhysicalMaterial);
     expect(stone.roughness).toBe(SURFACE_LOOK.stone.roughness);
     [glass, stone].forEach((m) => m.dispose());
+  });
+});
+
+describe('surfaceLook (PQ-T26)', () => {
+  it('no or satin gloss keeps the material entry; matt and gloss shift within the clamp', () => {
+    for (const s of SURFACES) {
+      expect(surfaceLook(s)).toBe(SURFACE_LOOK[s]);
+      expect(surfaceLook(s, 'satin')).toBe(SURFACE_LOOK[s]);
+      for (const g of ['matt', 'gloss'] as const) {
+        const look = surfaceLook(s, g);
+        expect(Math.abs(look.roughness - SURFACE_LOOK[s].roughness)).toBeLessThanOrEqual(
+          GLOSS_SHIFT + 1e-9
+        );
+        expect(Math.abs(look.clearcoat - SURFACE_LOOK[s].clearcoat)).toBeLessThanOrEqual(
+          GLOSS_SHIFT + 1e-9
+        );
+        expect(look.roughness).toBeGreaterThanOrEqual(0.05);
+        expect(look.roughness).toBeLessThanOrEqual(1);
+        expect(look.clearcoat).toBeGreaterThanOrEqual(0);
+        expect(look.clearcoat).toBeLessThanOrEqual(1);
+      }
+    }
+  });
+
+  it('gloss lowers roughness and raises the clearcoat, matt does the opposite', () => {
+    expect(surfaceLook('plastic', 'gloss').roughness).toBeLessThan(SURFACE_LOOK.plastic.roughness);
+    expect(surfaceLook('plastic', 'gloss').clearcoat).toBeGreaterThan(
+      SURFACE_LOOK.plastic.clearcoat
+    );
+    expect(surfaceLook('plastic', 'matt').roughness).toBeGreaterThan(
+      SURFACE_LOOK.plastic.roughness
+    );
+    expect(surfaceLook('plastic', 'matt').clearcoat).toBeLessThan(SURFACE_LOOK.plastic.clearcoat);
+  });
+
+  it('metal never goes under roughness 0.45, even measured gloss', () => {
+    expect(surfaceLook('metal', 'gloss').roughness).toBeGreaterThanOrEqual(METAL_MIN_ROUGHNESS);
+    expect(surfaceMaterial('metal', {}, 'gloss').roughness).toBeGreaterThanOrEqual(
+      METAL_MIN_ROUGHNESS
+    );
+  });
+});
+
+describe('physical material rules (PQ-T39)', () => {
+  it('metalness is 0 or 1 for every surface; only bare metal is 1', () => {
+    for (const s of SURFACES) expect([0, 1], s).toContain(SURFACE_LOOK[s].metalness);
+    expect(SURFACE_LOOK.metal.metalness).toBe(1);
+    expect(SURFACE_LOOK.painted.metalness).toBe(0);
+    expect(SURFACE_LOOK.painted.clearcoat).toBeGreaterThan(0);
+    expect(SURFACE_LOOK.water.metalness).toBe(0);
+  });
+
+  it('`painted` is a recipe material, so Muse can name it', () => {
+    expect(RECIPE_MATERIALS).toContain('painted');
+    expect(SURFACES[surfaceIndex('painted')]).toBe('painted');
+  });
+
+  it('a bare-metal base colour is lifted into 180–255 sRGB, other surfaces keep theirs', () => {
+    const lifted = baseColorFor('metal', '#000000');
+    expect(lifted).toBe('#b4b4b4');
+    expect(baseColorFor('metal', '#ffffff')).toBe('#ffffff');
+    const [r, g, b] = [1, 3, 5].map((i) =>
+      parseInt(baseColorFor('metal', '#3a6f9c').slice(i, i + 2), 16)
+    );
+    for (const c of [r, g, b]) {
+      expect(c).toBeGreaterThanOrEqual(METAL_BASE_MIN);
+      expect(c).toBeLessThanOrEqual(METAL_BASE_MAX);
+    }
+    expect(baseColorFor('painted', '#000000')).toBe('#000000');
+  });
+});
+
+describe('lamps and screens glow (PQ-T34)', () => {
+  it('only light and display parts take a glow surface', () => {
+    expect(glowSurfaceFor('light')).toBe('lamp');
+    expect(glowSurfaceFor('display')).toBe('screen');
+    for (const k of ['body', 'wheel', 'window', 'wall', 'grille', undefined] as const)
+      expect(glowSurfaceFor(k)).toBeNull();
+    expect(SURFACES[surfaceIndex('plastic', 'light')]).toBe('lamp');
+    expect(SURFACES[surfaceIndex('glass', 'display')]).toBe('screen');
+    expect(SURFACES[surfaceIndex('plastic', 'body')]).toBe('plastic');
+  });
+
+  it('emissive only on the glow surfaces, and the viewer glow stays under 1', () => {
+    for (const s of SURFACES) {
+      const m = surfaceMaterial(s);
+      if ((GLOW_SURFACES as readonly string[]).includes(s)) {
+        expect(m.emissiveIntensity).toBeGreaterThan(0);
+        expect(m.emissiveIntensity).toBeLessThanOrEqual(VIEWER_GLOW_MAX);
+        expect(m.emissive.getHex()).not.toBe(0);
+      } else {
+        expect(m.emissive.getHex()).toBe(0);
+      }
+    }
+    for (const g of GLOW_SURFACES) expect(GLOW[g].intensity).toBeLessThan(1);
+  });
+
+  it('an explicit glow strength is capped at the viewer ceiling, 0 turns it off', () => {
+    expect(surfaceMaterial('lamp', {}, undefined, 5).emissiveIntensity).toBe(VIEWER_GLOW_MAX);
+    expect(surfaceMaterial('lamp', {}, undefined, 0).emissiveIntensity).toBe(0);
+  });
+
+  it('a lamp part of a recipe reaches the lamp surface in the mesh groups', () => {
+    const lamp: ObjectRecipe = {
+      proportions: { w: 0.3, h: 1, d: 0.3 },
+      parts: [
+        {
+          shape: 'cylinder',
+          at: [0, -0.1, 0],
+          size: [0.1, 0.8, 0.1],
+          color: '#333333',
+          material: 'metal',
+        },
+        {
+          shape: 'sphere',
+          at: [0, 0.42, 0],
+          size: [0.3, 0.16, 0.3],
+          color: '#ffe9b0',
+          kind: 'light',
+        },
+      ],
+    };
+    const used = recipeMesh(lamp).groups.map((g) => SURFACES[g.materialIndex!]);
+    expect(used).toContain('lamp');
+    expect(used).toContain('metal');
   });
 });

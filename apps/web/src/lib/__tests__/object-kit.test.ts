@@ -80,7 +80,9 @@ describe('kitToRecipe (PV-T9b)', () => {
       subtype: 'sedan',
       materials: { main: 'metal', secondary: 'glass', accent: 'rubber' },
     });
-    expect(r2.parts.find((p) => p.front)).toMatchObject({ color: '#c9a36a', material: 'metal' });
+    // The main body of a vehicle is painted sheet, never bare metal (PQ-T39); the other roles keep theirs.
+    expect(r2.parts.find((p) => p.front)).toMatchObject({ color: '#c9a36a', material: 'painted' });
+    expect(r2.parts.some((p) => p.material === 'glass')).toBe(true);
     expect(r2.parts.filter((p) => p.color === TAIL_LIGHT_COLOR)).toHaveLength(2);
   });
 });
@@ -253,10 +255,27 @@ describe('materials (AI)', () => {
     expect(ObjectRecipeSchema.safeParse(r).success).toBe(true);
   });
 
-  it('no materials → parts have none, colours unchanged (as before)', () => {
+  it('no materials → parts have none, colours unchanged (the body of a cabinet or vehicle is painted, PQ-T39)', () => {
     const r = kitToRecipe(kit('cabinet'));
-    expect(r.parts.every((p) => p.material === undefined)).toBe(true);
+    expect(r.parts.filter((p) => p.material !== undefined).map((p) => p.material)).toEqual(
+      r.parts.filter((p) => p.front).map(() => 'painted')
+    );
     expect(r.parts[0]!.color).toBe('#c9a36a');
+    const tank = kitToRecipe(kit('tank'));
+    expect(tank.parts.every((p) => p.material === undefined)).toBe(true);
+  });
+
+  it('a metal main of a cabinet or vehicle becomes painted, a named other material is kept (PQ-T39)', () => {
+    for (const archetype of ['cabinet', 'vehicle'] as const) {
+      const metal = kitToRecipe({ ...kit(archetype), materials: { main: 'metal' } });
+      expect(metal.parts.some((p) => p.material === 'metal')).toBe(false);
+      expect(metal.parts.some((p) => p.material === 'painted')).toBe(true);
+      const plastic = kitToRecipe({ ...kit(archetype), materials: { main: 'plastic' } });
+      expect(plastic.parts.some((p) => p.material === 'plastic')).toBe(true);
+    }
+    // Another family keeps bare metal as named.
+    const tank = kitToRecipe({ ...kit('tank'), materials: { main: 'metal' } });
+    expect(tank.parts.some((p) => p.material === 'metal')).toBe(true);
   });
 });
 

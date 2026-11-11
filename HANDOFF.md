@@ -1,38 +1,40 @@
 # HANDOFF — read first, overwrite at end of session (≤40 lines)
 
-**Updated:** 2026-11-11 · **By:** Claude Code · **Branch:** feat/pq-q3 (PR to `main`, one commit per task)
+**Updated:** 2026-11-11 · **By:** Claude Code · **Branch:** feat/pq-q4 (PR to `main`, one commit per task)
 
 ## Current state
 
-- **PV-Q Q3 built, ticked on the owner's request** (live Meta checks still pending, like Q2). One commit per task:
-  T20 `RecipePart.details` (nothing sets them yet) · T21 `partCeiling` (32 measured, 12 imagined) · T22 `farSide` ·
-  T24 rear by mirror (« second side on request » NOT built) · T19 `photoStageLoop` (no checkpoint context) ·
-  T23 clean front · T10 region colours on the lit surface. Details per task in `docs/tasks/PV-vision-quality.md`.
-- Existing mask tests now use `source: 'free'` fixtures to keep covering the 12 budget.
-- **PR #14 reviewed** (fix commit): cabinet far side mirrors `frame` only (template handle / door line stayed on
-  the back); clean front keeps « Retry with details », stays clean on retry after a remount, `clean` follows the
-  request (mock too), house facade route marks drawn parts inferred; wheel arch never under the tyre.
-- `make test-shape` strict 300 ms budget fails on this machine on `main` too (302–342 ms): not from Q3.
+- **PV-Q Q4 built, ticked on the owner's request** (live Meta / GPU checks pending, like Q2–Q3). One commit per task:
+  T25 `withHullTones` (two-tone hull body) · T26 gloss (`gloss-measure.ts`, `ObjectRecipe.gloss`, `surfaceLook`) ·
+  T27 `vertex-ao.ts` · T35 2-tile shade map + `surfaceOffset` · T39 `painted` + PBR rules (`pbr-rules.ts`) ·
+  T34 glow surfaces `lamp` / `screen` · T32 `buildRecipeMaterials` + village families · T33 N8AO + key shadow ·
+  T40 `LOOKDEV=1 make shape-shots`. Details per task in `docs/tasks/PV-vision-quality.md`.
+- **PR #15 review (2026-11-11, real GPU + dev server + live Meta):** viewer shots and `LOOKDEV=1` (36) fine. Fixed:
+  gloss read contrast, not highlights (walls, foliage came out gloss) and was dropped on the photo path; a dark
+  `metal` part turned pale silver → now `painted`. New `make gloss-report`; two-tone car in `family-photos.json`.
+- **T28 cut** (no compare view in the panel; the task allows cutting it). Left unticked.
+- Nothing stored in Neon changed (recipe JSON fields only): no migration.
 
 ## Next
 
-1. Merge the Q3 PR once CI is green.
-2. With a Meta key: measure T19 (detail score rises, never lowers, on the real photo-path objects), T23 (hidden car
-   IoU on the visible region), T22 sheet, T10 on a real shadowed photo. `make shape-report` replays captures: per-part
-   colours cannot move offline.
-3. T19 left: replay of a recorded loop in `eval-stages`; resume across requests (add a `photo` checkpoint kind).
-4. T23 design gate: screenshots (both themes, 390 px) of the clean-front block; no Stitch mockup.
-5. `details` in the builders: template car checked on the flat render, mirror lands mid-door (62 % of a low
-   body) and arch is dark on dark: fix placement with a viewer pass before opting in.
+1. Merge the Q4 PR once CI is green.
+2. T25 on the views path: the `car-two-tone` capture went down the photo path (extruded body), so the hull cut
+   did not run. Try it from /village with the 2D view first.
+3. `make scene-audit-gpu` fails on the base scene, no placed model involved: low tier 651 k triangles (≤ 150 k),
+   167 draw calls (< 150); high tier 2.4 M (≤ 800 k). To check against `main` and fix apart from Q4.
+4. Village families with placed models: unit-tested only (≤ 5 meshes); `make vr-probe` not run. T28 if wanted.
 
 ## Files touched
 
-- `lib/object-shape.ts`, `lib/shape-script.ts`, `server/perception/{photo-stages,hidden-sides,mask-*,object-views,object-shape,
-shape-stages-spark,view-stages,region-colors,facade-specialist,silhouette-fit,shape-script-prompt}.ts`,
-  `features/vision-insert/{ui/clean-front-offer.tsx,ui/object-shape-panel.tsx,utils/view-assemblies.ts,hooks/*}`,
-  `app/api/vision/facade/route.ts`, `messages/*.json`, docs (`contracts`, `copilot`, `tasks/PV-vision-quality`).
+- `lib/{object-shape,object-kit}.ts`, `server/perception/{region-colors,gloss-measure,pbr-rules,object-shape}.ts`,
+  `features/vision-insert/{utils,ui}` (surfaces, maps, AO, materials, lookdev, viewer, XR), `features/microgrid-3d`
+  (placed models), `scripts/{lookdev-plan,object-viewer-shot}.mjs`, `Makefile`, `family-photos.json`, docs.
 
 ## Decisions
 
-- Inferred parts never displace measured ones: far-side set is atomic and added last.
-- Local scenarios V244–V252 (test-scenarios is gitignored). Hub dataset not republished: no bench / eval output changed.
+- Gloss is per material on the recipe (the viewer has one material per surface), not per part.
+- A named `metal` on a vehicle / cabinet main role becomes `painted`; non-metal base colours clamp to 30–240 sRGB.
+- Gloss: only smooth materials are classed, glass and water never matt, read per part against the 90th
+  percentile, as the last pipeline step (`finishLook`). Limits 8 / 14 L\* from the real captures.
+- Glow surfaces are internal (`GLOW_SURFACES`), not recipe materials: the AI never names them.
+- Local scenarios V253–V262 (test-scenarios is gitignored). Hub dataset not republished: no bench / eval output changed.

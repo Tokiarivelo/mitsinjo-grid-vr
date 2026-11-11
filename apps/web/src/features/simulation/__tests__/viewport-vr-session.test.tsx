@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { scenarios, simulate } from '@mitsinjo/engine';
 
 const three = vi.hoisted(() => ({
@@ -143,9 +143,10 @@ describe('VillageViewport VR session, single pass (enter → gesture exit → ex
       'immersive-vr',
       expect.objectContaining({ optionalFeatures: expect.arrayContaining(['local-floor']) })
     );
-    expect(seen.xrActive[seen.xrActive.length - 1]).toBe(true);
+    // The XR flag and the camera rig land in effects after the button flips: wait for them (seen racing on CI).
+    await waitFor(() => expect(seen.xrActive[seen.xrActive.length - 1]).toBe(true));
     // Headset owns the camera in XR: it hangs under a rig at the VR viewpoint.
-    expect(camera.parent).toBeInstanceOf(THREE.Group);
+    await waitFor(() => expect(camera.parent).toBeInstanceOf(THREE.Group));
     const world = new THREE.Vector3();
     camera.getWorldPosition(world);
     expect(world.distanceTo(new THREE.Vector3(...XR_VIEWPOINT.position))).toBeLessThan(1e-6);
