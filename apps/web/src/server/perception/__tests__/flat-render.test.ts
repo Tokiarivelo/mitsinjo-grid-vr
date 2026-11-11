@@ -29,7 +29,7 @@ const pixel = (r: ReturnType<typeof renderFlat>, c: number, row: number, cols: n
 };
 
 /** Render budget per object: strict alone (`make test-shape`), looser when the whole suite shares the CPU. */
-const RENDER_BUDGET_MS = process.env.SHAPE_BUDGET_STRICT ? 100 : 500;
+const RENDER_BUDGET_MS = process.env.SHAPE_BUDGET_STRICT ? 100 : 1500;
 
 describe('renderFlat (PR-0.1)', () => {
   it('a box head-on renders its colour, shaded by its front face', () => {
