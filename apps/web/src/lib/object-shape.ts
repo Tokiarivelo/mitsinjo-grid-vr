@@ -119,7 +119,7 @@ export const MIN_FILL_VOLUME = 0.005;
 
 /**
  * What a part is made of, named by Spark (the AI): the 3D view gives each its own surface (rough stone,
- * shiny glass, metal…). Absent = a neutral painted surface.
+ * shiny glass, metal…). `metal` is bare metal only; paint over metal is `painted`. Absent = `painted`.
  */
 export const RECIPE_MATERIALS = [
   'stone',
@@ -137,6 +137,8 @@ export const RECIPE_MATERIALS = [
   'rubber',
   'foliage',
   'water',
+  /** Anything under a coat of paint (car body, fridge, gate): metalness 0 with a clearcoat (PQ-T39). */
+  'painted',
 ] as const;
 export const RecipeMaterialSchema = z.enum(RECIPE_MATERIALS);
 export type RecipeMaterial = z.infer<typeof RecipeMaterialSchema>;

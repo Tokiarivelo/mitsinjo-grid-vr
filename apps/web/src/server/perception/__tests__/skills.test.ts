@@ -83,8 +83,8 @@ describe('skill cards (PQ-T11)', () => {
     }
   });
 
-  it('every material a card names is a recipe material (`painted` waits for PQ-T39)', () => {
-    const allowed = new Set<string>([...RECIPE_MATERIALS, 'painted']);
+  it('every material a card names is a recipe material', () => {
+    const allowed = new Set<string>(RECIPE_MATERIALS);
     const listed = CARD_TEXT.base!.match(/Materials: ([^\n]+(?:\n {2}[^\n]+)*)/)![1]!;
     // « stone, brick, …, water. Nothing else. »: the list stops at the first full stop.
     for (const m of listed.replace(/\s+/g, ' ').split('.')[0]!.split(/,\s*/))

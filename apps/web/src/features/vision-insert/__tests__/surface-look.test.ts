@@ -6,6 +6,9 @@ import {
   recipeMaterials,
   SURFACE_LOOK,
   surfaceLook,
+  baseColorFor,
+  METAL_BASE_MAX,
+  METAL_BASE_MIN,
   surfaceMaterial,
   GLOSS_SHIFT,
   METAL_MIN_ROUGHNESS,
@@ -132,5 +135,34 @@ describe('surfaceLook (PQ-T26)', () => {
     expect(surfaceMaterial('metal', {}, 'gloss').roughness).toBeGreaterThanOrEqual(
       METAL_MIN_ROUGHNESS
     );
+  });
+});
+
+describe('physical material rules (PQ-T39)', () => {
+  it('metalness is 0 or 1 for every surface; only bare metal is 1', () => {
+    for (const s of SURFACES) expect([0, 1], s).toContain(SURFACE_LOOK[s].metalness);
+    expect(SURFACE_LOOK.metal.metalness).toBe(1);
+    expect(SURFACE_LOOK.painted.metalness).toBe(0);
+    expect(SURFACE_LOOK.painted.clearcoat).toBeGreaterThan(0);
+    expect(SURFACE_LOOK.water.metalness).toBe(0);
+  });
+
+  it('`painted` is a recipe material, so Muse can name it', () => {
+    expect(RECIPE_MATERIALS).toContain('painted');
+    expect(SURFACES[surfaceIndex('painted')]).toBe('painted');
+  });
+
+  it('a bare-metal base colour is lifted into 180–255 sRGB, other surfaces keep theirs', () => {
+    const lifted = baseColorFor('metal', '#000000');
+    expect(lifted).toBe('#b4b4b4');
+    expect(baseColorFor('metal', '#ffffff')).toBe('#ffffff');
+    const [r, g, b] = [1, 3, 5].map((i) =>
+      parseInt(baseColorFor('metal', '#3a6f9c').slice(i, i + 2), 16)
+    );
+    for (const c of [r, g, b]) {
+      expect(c).toBeGreaterThanOrEqual(METAL_BASE_MIN);
+      expect(c).toBeLessThanOrEqual(METAL_BASE_MAX);
+    }
+    expect(baseColorFor('painted', '#000000')).toBe('#000000');
   });
 });

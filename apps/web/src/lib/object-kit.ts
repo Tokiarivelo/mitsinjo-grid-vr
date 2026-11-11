@@ -1,6 +1,11 @@
 import type { ApplianceCategory } from '@mitsinjo/engine';
 import { z } from 'zod';
-import { RecipeMaterialSchema, type ObjectRecipe, type RecipePart } from './object-shape';
+import {
+  RecipeMaterialSchema,
+  type ObjectRecipe,
+  type RecipeMaterial,
+  type RecipePart,
+} from './object-shape';
 import type { SceneryType } from './vision';
 
 /**
@@ -619,6 +624,15 @@ const ROLE_TOKEN: Record<Role, string> = {
 };
 const ROLES = Object.keys(ROLE_TOKEN) as Role[];
 
+/** Families whose main body is painted sheet, not bare metal (PQ-T39). */
+const PAINTED_BODY: ReadonlyArray<KitArchetype> = ['vehicle', 'cabinet'];
+
+/** Material of a part role: the main body of a vehicle or cabinet is `painted` unless named something else than bare metal. */
+function painted(archetype: KitArchetype, role: Role, named: RecipeMaterial | undefined) {
+  if (role !== 'main' || !PAINTED_BODY.includes(archetype)) return named;
+  return !named || named === 'metal' ? ('painted' as const) : named;
+}
+
 /**
  * Kit → parts recipe (≤ 12 parts, inside the object box). Pure: same kit → same recipe. Each part takes
  * the colour and the material (AI, `kit.materials`) of its role; fixed signal colours (taillight
@@ -630,7 +644,9 @@ export function kitToRecipe(kit: ObjectKit): ObjectRecipe {
     .map((p) => {
       const role = ROLES.find((r) => ROLE_TOKEN[r] === p.color);
       if (!role) return p;
-      const material = kit.materials?.[role];
+      // A car body or a fridge is painted metal (PQ-T39): its main role defaults to `painted`, bare `metal` only
+      // when another family says so.
+      const material = painted(kit.archetype, role, kit.materials?.[role]);
       return { ...p, color: kit.colors[role], ...(material ? { material } : {}) };
     });
   return { proportions: kit.proportions, parts };

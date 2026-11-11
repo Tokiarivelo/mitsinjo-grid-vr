@@ -17,15 +17,17 @@ export interface SurfaceLook {
   clearcoatRoughness: number;
 }
 
-/** Every surface of the 3D view: the AI materials, then `painted` for a part with no material. */
-export const SURFACES = [...RECIPE_MATERIALS, 'painted'] as const;
+/** Every surface of the 3D view: the recipe materials (`painted` included, also the look of a part with no material). */
+export const SURFACES = RECIPE_MATERIALS;
 export type Surface = (typeof SURFACES)[number];
 
 /**
- * Look per surface. Matte for stone, thatch, leaves; shiny for glass, water, metal. Metalness stays
- * ≤ 0.6 so a metal part keeps its measured colour under the studio light. Edges: rounded most on
- * pressed / moulded surfaces (metal, plastic, rubber), barely on masonry. Clearcoat (PT-3) only on
- * lacquered or glazed surfaces; metal stays fairly rough (0.45) so its highlights are broad streaks.
+ * Look per surface. Matte for stone, thatch, leaves; shiny for glass, water, metal. Metalness is 0 or 1
+ * (PQ-T39, PBR metal / roughness workflow): only `metal` (bare metal: galvanised sheet, chrome, aluminium)
+ * is 1, its base colour lifted by `liftMetal`; paint, rust and dirt are non-metal (`painted` = metalness 0
+ * with a clearcoat). Edges: rounded most on pressed / moulded surfaces (metal, plastic, rubber), barely on
+ * masonry. Clearcoat (PT-3) only on lacquered or glazed surfaces; metal stays fairly rough (0.45) so its
+ * highlights are broad streaks.
  */
 export const SURFACE_LOOK: Record<Surface, SurfaceLook> = {
   stone: { roughness: 0.95, metalness: 0, radius: 0.01, clearcoat: 0, clearcoatRoughness: 0 },
@@ -35,18 +37,18 @@ export const SURFACE_LOOK: Record<Surface, SurfaceLook> = {
   wood: { roughness: 0.75, metalness: 0, radius: 0.015, clearcoat: 0, clearcoatRoughness: 0 },
   thatch: { roughness: 1, metalness: 0, radius: 0.03, clearcoat: 0, clearcoatRoughness: 0 },
   tile: { roughness: 0.6, metalness: 0, radius: 0.01, clearcoat: 0.3, clearcoatRoughness: 0.3 },
-  slate: { roughness: 0.55, metalness: 0.05, radius: 0.008, clearcoat: 0, clearcoatRoughness: 0 },
-  metal: { roughness: 0.45, metalness: 0.6, radius: 0.04, clearcoat: 0.4, clearcoatRoughness: 0.2 },
+  slate: { roughness: 0.55, metalness: 0, radius: 0.008, clearcoat: 0, clearcoatRoughness: 0 },
+  metal: { roughness: 0.45, metalness: 1, radius: 0.04, clearcoat: 0.4, clearcoatRoughness: 0.2 },
   // Glass: no metalness (PG-T8: at 0.4 it mirrored the dark studio and windows read as holes).
   glass: { roughness: 0.1, metalness: 0, radius: 0.01, clearcoat: 1, clearcoatRoughness: 0.05 },
   plastic: { roughness: 0.4, metalness: 0, radius: 0.03, clearcoat: 0.5, clearcoatRoughness: 0.2 },
   fabric: { roughness: 1, metalness: 0, radius: 0.03, clearcoat: 0, clearcoatRoughness: 0 },
   rubber: { roughness: 0.9, metalness: 0, radius: 0.04, clearcoat: 0, clearcoatRoughness: 0 },
   foliage: { roughness: 0.95, metalness: 0, radius: 0.03, clearcoat: 0, clearcoatRoughness: 0 },
-  water: { roughness: 0.1, metalness: 0.2, radius: 0.01, clearcoat: 0, clearcoatRoughness: 0 },
+  water: { roughness: 0.1, metalness: 0, radius: 0.01, clearcoat: 0, clearcoatRoughness: 0 },
   painted: {
     roughness: 0.6,
-    metalness: 0.05,
+    metalness: 0,
     radius: 0.02,
     clearcoat: 0.6,
     clearcoatRoughness: 0.15,
@@ -78,6 +80,24 @@ export function surfaceLook(surface: Surface, gloss?: GlossClass): SurfaceLook {
     clearcoatRoughness:
       base.clearcoat > 0 || gloss === 'gloss' ? Math.max(base.clearcoatRoughness, 0.05) : 0,
   };
+}
+
+/** Lightest and darkest sRGB channel of the base colour of bare metal (PQ-T39): metal reflects, it is never dark paint. */
+export const METAL_BASE_MIN = 180;
+export const METAL_BASE_MAX = 255;
+
+/**
+ * Base colour of a bare-metal part: each sRGB channel moved into `METAL_BASE_MIN`–`METAL_BASE_MAX` (hue kept in
+ * proportion), so metalness 1 does not mirror a dark studio into a black part. Non-metal colours pass through.
+ */
+export function baseColorFor(surface: Surface, hex: string): string {
+  if (surface !== 'metal') return hex;
+  const k = (METAL_BASE_MAX - METAL_BASE_MIN) / 255;
+  const channel = (i: number) =>
+    Math.round(METAL_BASE_MIN + parseInt(hex.slice(1 + 2 * i, 3 + 2 * i), 16) * k)
+      .toString(16)
+      .padStart(2, '0');
+  return `#${channel(0)}${channel(1)}${channel(2)}`;
 }
 
 /** Index of a part's surface in `SURFACES` (the geometry group's material index). */

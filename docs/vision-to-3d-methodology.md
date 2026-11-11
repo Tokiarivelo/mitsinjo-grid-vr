@@ -499,6 +499,8 @@ metal, so it should be `painted` (metalness 0, clearcoat), and only bare metal (
 aluminium) should be `metal` with metalness 1. `painted` exists in the viewer's surfaces but not in
 `RECIPE_MATERIALS`, so Muse cannot name it today.
 
+_Done 2026-11-11 (PQ-T39): `painted` is a recipe material, `metal` is metalness 1 with a base colour lifted into 180–255 sRGB, `pbr-rules.ts` clamps the non-metal base colours, a vehicle or cabinet body defaults to `painted`._
+
 One consequence for PQ-T27: darkening vertex colours near joints is occlusion written into the base colour, which
 the guide lists as a mistake. It is kept only as the cheap path for the village and VR, bounded at 0.6, and the
 viewer uses the occlusion pass of PQ-T33 instead.

@@ -49,6 +49,7 @@ import { deduceHiddenSides } from './hidden-sides';
 import { enforcePartBudget, masksOnObject, partCeiling } from './mask-geometry';
 import { cropForShape, cropRectForShape } from './shape-crop';
 import { measureRecipeGloss } from './gloss-measure';
+import { withPbrRules } from './pbr-rules';
 import { extractSwatches } from './photo-swatches';
 import { withLatheBody } from './lathe-body';
 import { fetchFacadeMasks, type FacadeMasks } from './facade-masks';
@@ -678,7 +679,7 @@ export async function runObjectShape(
         return {
           ...base,
           mode: 'recipe',
-          recipe,
+          recipe: withPbrRules(recipe, target.label),
           kit: found.kit,
           ...(shaped.outline ? { outline: shaped.outline } : {}),
           ...(facadeConditions ? { conditions: facadeConditions } : {}),
@@ -776,7 +777,7 @@ export async function runObjectShape(
           return {
             ...base,
             mode: 'recipe',
-            recipe,
+            recipe: withPbrRules(recipe, target.label),
             kit: found.kit,
             ...(shaped.outline ? { outline: shaped.outline } : {}),
             ...(viewsConditions ? { conditions: viewsConditions } : {}),
@@ -1203,7 +1204,7 @@ export async function runObjectShape(
       return {
         ...base,
         mode: 'recipe',
-        recipe,
+        recipe: withPbrRules(recipe, target.label),
         ...(imaginedViews ? { imaginedViews } : {}),
         ...(fitIou !== undefined ? { fit: { iou: fitIou } } : {}),
         ...(partMasks ? { partMasks } : {}),
@@ -1225,7 +1226,7 @@ export async function runObjectShape(
     return {
       ...base,
       mode: 'recipe',
-      recipe: found.recipe,
+      recipe: withPbrRules(found.recipe, target.label),
       ...(fallbackViews ? { imaginedViews: fallbackViews } : {}),
       ...source,
     };

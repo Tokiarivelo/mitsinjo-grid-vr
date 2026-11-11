@@ -452,7 +452,7 @@ _Ticked 2026-11-11 on the owner's request: the code and tests are in; every « d
       side (the pattern repeats in it, a large noise layer, 25 % of the variation, does not), so the light varies
       every 2 tiles; `surfaceOffset` gives each surface a seeded UV offset applied to its three maps alike.
 
-- [ ] **PQ-T39 Physical material rules.** `lib/object-shape.ts`: add `painted` to `RECIPE_MATERIALS`
+- [x] **PQ-T39 Physical material rules.** `lib/object-shape.ts`: add `painted` to `RECIPE_MATERIALS`
       (contract change → `docs/contracts.md`; not stored in Neon as a new field, so no migration: say so in
       the commit). `surface-look.ts`: `metal` = bare metal, metalness 1, base colour lifted into 180–255 sRGB;
       `painted` = metalness 0 with clearcoat; `water` metalness 0. New `server/perception/pbr-rules.ts`: clamp
@@ -463,6 +463,9 @@ _Ticked 2026-11-11 on the owner's request: the code and tests are in; every « d
       `surface-look.test.ts` (metalness is 0 or 1 for every surface).
       **Done when:** the red car body renders at its measured colour (ΔE lower than at baseline) and bare
       metal reads as metal in `make shape-shots`.
+      _Built 2026-11-11 (ΔE and look check on `make shape-shots` pending):_ no migration (`material` lives in the
+      recipe JSON, not in a Neon column). A named `metal` on a vehicle or cabinet main role becomes `painted`
+      (`kitToRecipe`); `make skills-gen` regenerated the cards.
 - [ ] **PQ-T40 Look-development sheet.** `make shape-shots` gains `LOOKDEV=1`: each object under three lights
       (the studio, a low side light, a back light), dark and light theme, one sheet per object.
       **Test:** script smoke test in mock mode (three shots per object written).

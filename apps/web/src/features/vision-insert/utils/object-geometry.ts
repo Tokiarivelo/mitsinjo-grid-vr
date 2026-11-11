@@ -9,7 +9,7 @@ import {
   type RecipePart,
 } from '@/lib/object-shape';
 import { HULL_LEVELS, HULL_SLICES, hullLoops } from '@/lib/hull';
-import { SURFACE_LOOK, SURFACES, surfaceIndex } from './surface-look';
+import { baseColorFor, SURFACE_LOOK, SURFACES, surfaceIndex } from './surface-look';
 import { holedBox } from './holed-wall';
 import { expandAssemblies } from './assembly-parts';
 import type { AssemblyDetail } from './openings';
@@ -546,7 +546,7 @@ function buildMesh(recipe: ObjectRecipe, detail: AssemblyDetail): THREE.BufferGe
     // Measured yaw (PF-T5): turned like on the photo.
     if (recipe.yaw) g.rotateY(recipe.yaw);
     // `set` already turns sRGB into the linear working space (ColorManagement): no second conversion.
-    color.set(p.color);
+    color.set(baseColorFor(SURFACES[surface]!, p.color));
     const count = g.getAttribute('position').count;
     const colors = new Float32Array(count * 3);
     for (let i = 0; i < count; i++) color.toArray(colors, i * 3);
