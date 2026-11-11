@@ -352,7 +352,6 @@ export function withHullTones(
   if (!lower || !upper) return recipe;
   console.info(`[vision] 3D two-tone body: ${upperColor} above ${lowerColor}`);
   const parts = recipe.parts.map((p, i) => (i === mainIdx ? { ...lower, color: lowerColor } : p));
-  const { front: _front, ...rest } = upper;
-  parts.push({ ...rest, color: upperColor, status: 'measured' });
+  parts.push({ ...upper, front: false, color: upperColor, status: 'measured' });
   return { ...recipe, parts };
 }

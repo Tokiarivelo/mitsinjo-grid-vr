@@ -412,7 +412,7 @@ describe('withHullTones (PQ-T25)', () => {
     expect(out.parts).toHaveLength(2);
     const [lower, upper] = out.parts;
     expect(lower!.front).toBe(true);
-    expect(upper!.front).toBeUndefined();
+    expect(upper!.front).toBeFalsy();
     expect(deltaE2000(hexToLab(lower!.color), hexToLab(RED_HEX))).toBeLessThan(5);
     expect(deltaE2000(hexToLab(upper!.color), hexToLab(rgbHex(WHITE)))).toBeLessThan(5);
     expect(upper!.at[1]).toBeGreaterThan(lower!.at[1]);
