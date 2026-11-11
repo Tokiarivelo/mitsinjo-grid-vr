@@ -175,18 +175,45 @@ describe('ObjectShapePanel (PV-T10)', () => {
     expect(screen.queryByText(/not built: 0/)).toBeNull();
   });
 
-  it('a SAM concept without a label is left out, never shown as a raw key (PR #10 review)', () => {
+  it('a part without a label is counted under « Other parts », never shown as a raw key', () => {
     renderPanel({
       shape: {
         ...shape('recipe'),
         coverage: [
           { concept: 'wheel', seen: 2, built: 2 },
-          { concept: 'mirror', seen: 1, built: 0 },
+          { concept: 'side mirror', seen: 2, built: 0 },
+          { concept: 'roof rack', seen: 1, built: 0 },
+          { concept: 'antenna', seen: 1, built: 1 },
         ],
       },
     });
     expect(screen.getByText(/Wheels 2\/2/)).toBeTruthy();
-    expect(screen.queryByText(/model3dPart|mirror/)).toBeNull();
+    // A SAM word of the Muse cards has its own label (two words → one key).
+    expect(screen.getByText(/Side mirrors 0\/2/)).toBeTruthy();
+    // Before: the kit's free words were left out of the panel and only logged.
+    expect(screen.getByText(/Other parts 1\/2/)).toBeTruthy();
+    expect(screen.queryByText(/model3dPart|roof rack|antenna|side_mirror/)).toBeNull();
+  });
+
+  it('small or blurred photo: a hint; a good photo: none (PQ-T7)', () => {
+    renderPanel({
+      shape: { ...shape('recipe'), conditions: { widthPx: 90, heightPx: 120, sharpness: 'high' } },
+    });
+    expect(screen.getByText(/Object too small on the photo/)).toBeTruthy();
+  });
+
+  it('blurred photo hint (PQ-T7)', () => {
+    renderPanel({
+      shape: { ...shape('recipe'), conditions: { widthPx: 400, heightPx: 300, sharpness: 'low' } },
+    });
+    expect(screen.getByText(/Photo blurred/)).toBeTruthy();
+  });
+
+  it('good photo: no hint (PQ-T7)', () => {
+    renderPanel({
+      shape: { ...shape('recipe'), conditions: { widthPx: 400, heightPx: 300, sharpness: 'high' } },
+    });
+    expect(screen.queryByText(/too small|blurred/)).toBeNull();
   });
 
   it('no part masks: no parts line', () => {
@@ -378,5 +405,35 @@ describe('ObjectShapePanel staged improvement (PG-T18)', () => {
       improve: { status: 'running', index: 1, total: 4, stage: 'massing' },
     });
     expect(screen.queryByText('Improving: stage 1/4 — Massing')).toBeNull();
+  });
+});
+
+describe('ObjectShapePanel family question (PQ-T41)', () => {
+  const asked = { ...shape('recipe'), ask: { archetypes: ['vehicle', 'cabinet'] } };
+
+  it('shown only when the server asks: two choices, the pick goes to onChooseFamily', () => {
+    const onChooseFamily = vi.fn();
+    renderPanel({ shape: asked, onChooseFamily });
+    expect(screen.getByText('Not sure what this is. Pick the closest:')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Choose Cabinet or appliance' }));
+    expect(onChooseFamily).toHaveBeenCalledWith('cabinet');
+    expect(screen.getByRole('button', { name: 'Choose Vehicle' })).toBeTruthy();
+  });
+
+  it('no question without ask, without a handler, or with an unnamed family', () => {
+    renderPanel({ shape: shape('recipe'), onChooseFamily: vi.fn() });
+    expect(screen.queryByText(/Not sure what this is/)).toBeNull();
+    renderPanel({ shape: asked });
+    expect(screen.queryByRole('button', { name: /^Choose / })).toBeNull();
+    renderPanel({
+      shape: { ...shape('recipe'), ask: { archetypes: ['vehicle', 'spaceship'] } },
+      onChooseFamily: vi.fn(),
+    });
+    expect(screen.queryByRole('button', { name: /^Choose / })).toBeNull();
+  });
+
+  it('choices are 44 px touch targets (min-h-11)', () => {
+    renderPanel({ shape: asked, onChooseFamily: vi.fn() });
+    expect(screen.getByRole('button', { name: 'Choose Vehicle' }).className).toContain('min-h-11');
   });
 });

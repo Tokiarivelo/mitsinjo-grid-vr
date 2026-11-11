@@ -18,6 +18,11 @@ import type {
 
 type WithoutSource<T> = Omit<T, 'source' | 'model' | 'fallback'>;
 
+export interface CriticOptions {
+  promptVersion?: number;
+  archetype?: KitArchetype;
+}
+
 export interface PerceptionCall<T> {
   result: WithoutSource<T>;
   model: string;
@@ -79,7 +84,9 @@ export interface PerceptionBackend {
   criticizeShape(
     imageUrl: string,
     question: string,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    /** Prompt version and the family's card (PQ-T14); default version 1. */
+    opts?: CriticOptions
   ): Promise<PerceptionCall<CriticResult>>;
   /**
    * Rubric judge (PQ-T4): `imageUrl` is photo | model | model ¾, `question` names the object.
@@ -127,11 +134,15 @@ export interface ShapeSubject {
   scenery?: SceneryType;
   /** Width / height of the object on the photo, in pixels (thin pole ≈ 0.1, wide car ≈ 2). */
   aspect?: number;
+  /** Photo facts measured by code (PQ-T7), sent as the « Measured: » line of the question. */
+  facts?: string[];
   /**
    * Validated 2D facade (front elevation, unoccluded): a second image beside the crop. The crop
    * keeps size, pose and measured colours; the facade refines windows, doors, materials, parts.
    */
   facadeUrl?: string;
+  /** Family the operator picked (PQ-T41): the kit hint. */
+  archetype?: string;
   /** Kit prompt version to ask with (PQ-T5, evals); default `KIT_PROMPT_VERSION`. */
   promptVersion?: number;
 }
@@ -150,4 +161,6 @@ export interface PartsSubject {
    * keeps size, pose and measured colours; the facade refines windows, doors, materials, parts.
    */
   facadeUrl?: string;
+  /** Kit prompt version the object was described with (default: current): version 2 loads the Muse cards. */
+  promptVersion?: number;
 }

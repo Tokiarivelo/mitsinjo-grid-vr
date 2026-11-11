@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { pickSide, sideCardPrompt } from './view-candidates';
 import { clipRing, ringRange, spanAt, type Ring } from '@/lib/hull';
 import { kitToRecipe, type KitArchetype, type ObjectKit } from '@/lib/object-kit';
 import {
@@ -234,15 +235,26 @@ export async function measureObjectViews(
     signal,
     withSide = !ROUND_VIEW_ARCHETYPES.includes(archetype),
     onSideView,
-  }: { signal?: AbortSignal; withSide?: boolean; onSideView?: (png: Buffer) => void } = {}
+    sideV2,
+  }: {
+    signal?: AbortSignal;
+    withSide?: boolean;
+    onSideView?: (png: Buffer) => void;
+    /** Side view cards and candidate pick (PQ-T16): drawings asked per attempt, and Spark's kit for the depth check. */
+    sideV2?: { candidates: number; kit?: ObjectKit };
+  } = {}
 ): Promise<ObjectViews | null> {
   if (!VIEW_ARCHETYPES.includes(archetype)) return null;
   const concepts = VIEW_PART_CONCEPTS[archetype];
   try {
     // The side is drawn while the front is measured (both ≈ 10–35 s).
-    const firstSide = withSide
-      ? imagineSideView(frontUrl, objectSidePrompt(label), signal)
-      : Promise.resolve(null);
+    const sidePrompt = sideV2 ? sideCardPrompt(label, archetype) : objectSidePrompt(label);
+    const perAttempt = sideV2 ? Math.max(1, sideV2.candidates) : 1;
+    const drawSides = () =>
+      Promise.all(
+        Array.from({ length: perAttempt }, () => imagineSideView(frontUrl, sidePrompt, signal))
+      );
+    const firstSides = withSide ? drawSides() : Promise.resolve([null]);
     const front = await measureView(segment, frontUrl, concept, concepts?.front ?? []);
     if (!front) {
       console.info(`[vision] 3D views for "${label}": no silhouette on the 2D view`);
@@ -251,19 +263,35 @@ export async function measureObjectViews(
     if (!withSide) return { front, side: null, frontUrl, sidePng: null };
     for (let attempt = 1; attempt <= VIEW_SIDE_ATTEMPTS; attempt++) {
       if (signal?.aborted) break;
-      const png =
-        attempt === 1
-          ? await firstSide
-          : await imagineSideView(frontUrl, objectSidePrompt(label), signal);
-      if (!png) break;
-      onSideView?.(png);
-      const side = await measureView(
-        segment,
-        `data:image/png;base64,${png.toString('base64')}`,
-        concept,
-        concepts?.side ?? []
+      const pngs = (attempt === 1 ? await firstSides : await drawSides()).filter(
+        (p): p is Buffer => p !== null
       );
-      if (side && sideLooksNew(front, side)) return { front, side, frontUrl, sidePng: png };
+      if (!pngs.length) break;
+      for (const png of pngs) onSideView?.(png);
+      const measured = await Promise.all(
+        pngs.map(async (png) => ({
+          png,
+          side: await measureView(
+            segment,
+            `data:image/png;base64,${png.toString('base64')}`,
+            concept,
+            concepts?.side ?? []
+          ),
+        }))
+      );
+      const readable = measured.filter((m): m is { png: Buffer; side: ViewMeasure } => !!m.side);
+      if (sideV2) {
+        const best = pickSide(readable, front, sideV2.kit);
+        if (best) {
+          console.info(
+            `[vision] 3D side view kept: score ${best.score} of ${readable.length} readable / ${pngs.length} drawn`
+          );
+          return { front, side: best.pick.side, frontUrl, sidePng: best.pick.png };
+        }
+      }
+      const side = readable[0]?.side ?? null;
+      if (!sideV2 && side && sideLooksNew(front, side))
+        return { front, side, frontUrl, sidePng: readable[0]!.png };
       console.info(
         `[vision] 3D side view ${attempt}/${VIEW_SIDE_ATTEMPTS} ${side ? 'looks like the front' : 'unreadable'}${attempt < VIEW_SIDE_ATTEMPTS ? ', drawing it again' : ', dropped'}`
       );

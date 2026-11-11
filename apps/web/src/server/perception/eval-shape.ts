@@ -2,6 +2,7 @@ import 'server-only';
 
 import { readdirSync } from 'node:fs';
 import type { ObjectKit } from '@/lib/object-kit';
+import { recipeIssue } from '@/lib/object-shape';
 import type { PerceptionClient } from './client';
 import { readCapture } from './shape-capture';
 import { KIT_PROMPT_VERSION } from './shape';
@@ -130,6 +131,8 @@ export async function evalCaptures(
       ...compareKits(capture.kit, out.kit),
       seconds,
     });
+    // One line per capture as it lands: a long run that is cut short still leaves its numbers.
+    console.info(`[eval] prompt ${promptVersion} ${id}: ${seconds.toFixed(1)} s (${out.model})`);
   }
   return rows;
 }
@@ -156,7 +159,71 @@ export function evalMarkdown(rows: EvalRow[]): string {
         rows.filter((r) => r.promptVersion === v)
       )
     )
-    .join('\n');
+    .join('\n')
+    .concat(versions.length > 1 ? familyTable(rows, versions) : '');
+}
+
+/** Median of a list of seconds (0 when empty). */
+const medianOf = (xs: number[]) => {
+  const s = [...xs].sort((a, b) => a - b);
+  return s.length ? s[Math.floor((s.length - 1) / 2)]! : 0;
+};
+
+/** Seconds a family card may cost: the median of its prompt version must stay under this (PQ-T12 / PQ-T13). */
+export const FAMILY_MEDIAN_MAX_S = 30;
+
+/**
+ * One line per object family (the truth archetype) and per version after the first: its agreement against
+ * the first version's, and a verdict `on` (agreement not lower, median of that version ≤ 30 s) or `off`
+ * (PQ-T13). A family with one capture is marked `thin`: it can say nothing alone.
+ */
+export function familyTable(rows: EvalRow[], versions: number[]): string {
+  const [base, ...others] = versions;
+  if (base === undefined || !others.length) return '';
+  const medians = new Map(
+    versions.map((v) => [
+      v,
+      medianOf(rows.filter((r) => r.promptVersion === v).map((r) => r.seconds)),
+    ])
+  );
+  const families = [...new Set(rows.map((r) => r.archetype[0]))].sort();
+  const score = (v: number, f: string) =>
+    rows
+      .filter((r) => r.promptVersion === v && r.archetype[0] === f)
+      .reduce(
+        (a, r) => {
+          const { match, total } = agreement(r);
+          return { match: a.match + match, total: a.total + total, n: a.n + 1 };
+        },
+        { match: 0, total: 0, n: 0 }
+      );
+  const lines = [
+    `### Per family, v${others.join(', v')} against v${base}`,
+    '',
+    '| family | captures | v' +
+      base +
+      ' | ' +
+      others.map((v) => `v${v} | verdict v${v}`).join(' | ') +
+      ' |',
+    '| ------ | -------- | --- | ' + others.map(() => '--- | -------').join(' | ') + ' |',
+  ];
+  for (const f of families) {
+    const b = score(base, f);
+    const cells = others.map((v) => {
+      const c = score(v, f);
+      const verdict =
+        c.n === 0
+          ? '—'
+          : c.n < 2
+            ? 'thin'
+            : c.match >= b.match && medians.get(v)! <= FAMILY_MEDIAN_MAX_S
+              ? 'on'
+              : 'off';
+      return `${c.match}/${c.total} | ${verdict}`;
+    });
+    lines.push(`| ${f} | ${b.n} | ${b.match}/${b.total} | ${cells.join(' | ')} |`);
+  }
+  return `\n${lines.join('\n')}\n`;
 }
 
 function versionTable(version: number, rows: EvalRow[]): string {
@@ -190,4 +257,82 @@ function versionTable(version: number, rows: EvalRow[]): string {
     );
   }
   return `${lines.join('\n')}\n`;
+}
+
+export interface PartsEvalRow {
+  id: string;
+  model: string;
+  /** Kit prompt version the free-parts call was asked with (1 = first prompt, 2 = Muse cards). */
+  promptVersion: number;
+  /** Parts in the answer; 0 when it could not be read. */
+  parts: number;
+  /** The answer builds: a readable recipe without a `recipeIssue`. */
+  valid: boolean;
+  seconds: number;
+}
+
+/**
+ * One live free-parts answer per capture in `dir` (PQ-T12: the call had never been measured on the Muse
+ * cards). There is no frozen truth for free parts: the rows say whether the answer builds, how many parts it
+ * has and how long it took. `ids` limits the run (each capture costs one call).
+ */
+export async function evalParts(
+  client: Pick<PerceptionClient, 'describeParts'>,
+  dir: string,
+  promptVersion: number = KIT_PROMPT_VERSION,
+  ids?: ReadonlyArray<string>,
+  signal?: AbortSignal
+): Promise<PartsEvalRow[]> {
+  const all = readdirSync(dir)
+    .filter((f) => f.endsWith('.capture.json'))
+    .map((f) => f.slice(0, -'.capture.json'.length))
+    .sort();
+  const rows: PartsEvalRow[] = [];
+  for (const id of ids?.length ? all.filter((x) => ids.includes(x)) : all) {
+    const { capture, cropPhoto } = await readCapture(dir, id);
+    const url = `data:image/jpeg;base64,${cropPhoto.buffer.toString('base64')}`;
+    const started = Date.now();
+    const out = await client.describeParts(
+      url,
+      { label: capture.target.label, archetype: capture.kit.archetype, promptVersion },
+      signal
+    );
+    const seconds = (Date.now() - started) / 1000;
+    rows.push({
+      id,
+      model: out.model,
+      promptVersion,
+      parts: out.recipe?.parts.length ?? 0,
+      valid: !!out.recipe && !recipeIssue(out.recipe),
+      seconds,
+    });
+    console.info(
+      `[eval] parts prompt ${promptVersion} ${id}: ${out.recipe?.parts.length ?? 0} parts, ${seconds.toFixed(1)} s`
+    );
+  }
+  return rows;
+}
+
+/** Markdown table of the free-parts eval, one section per prompt version with its totals. */
+export function partsEvalMarkdown(rows: PartsEvalRow[]): string {
+  const versions = [...new Set(rows.map((r) => r.promptVersion))].sort((a, b) => a - b);
+  return versions
+    .map((v) => {
+      const mine = rows.filter((r) => r.promptVersion === v);
+      const secs = mine.map((r) => r.seconds).sort((a, b) => a - b);
+      const median = secs.length ? secs[Math.floor((secs.length - 1) / 2)]! : 0;
+      const mean = mine.length ? mine.reduce((n, r) => n + r.parts, 0) / mine.length : 0;
+      return [
+        `### Free parts, prompt v${v} — builds ${mine.filter((r) => r.valid).length}/${mine.length}, mean ${mean.toFixed(1)} parts, median ${median.toFixed(1)} s`,
+        '',
+        '| id | model | builds | parts | s |',
+        '| -- | ----- | ------ | ----- | - |',
+        ...mine.map(
+          (r) =>
+            `| ${r.id} | ${r.model} | ${r.valid ? '✓' : '✗'} | ${r.parts} | ${r.seconds.toFixed(1)} |`
+        ),
+        '',
+      ].join('\n');
+    })
+    .join('\n');
 }

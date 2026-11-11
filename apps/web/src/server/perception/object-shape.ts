@@ -16,7 +16,7 @@ import {
   type ShapeStep,
   type ShapeTarget,
 } from '@/lib/object-shape';
-import { defaultArchetype, kitToRecipe, type ObjectKit } from '@/lib/object-kit';
+import { archetypeOf, kitToRecipe, type KitArchetype, type ObjectKit } from '@/lib/object-kit';
 import { pathToRings } from '@/lib/vision';
 import type { PerceptionClient } from './client';
 import { measureKitColors, type ObjectPixels } from './color-measure';
@@ -24,11 +24,21 @@ import type { PhotoForRegions } from './region';
 import { measurePerspective, type Perspective } from './perspective';
 import { measureRepetition, type GrayGrid, type Repetition } from './repetition';
 import { measureRoof, type RoofMeasure } from './roofline';
-import { confidence, mixColors, mixNumber, mixRecipe, pickCount } from './fusion';
+import {
+  confidence,
+  ledByMeasurement,
+  mixColors,
+  mixNumber,
+  mixRecipe,
+  modelDoubts,
+  pickCount,
+} from './fusion';
 import { coverageForBox, needsFreeParts } from './free-recipe';
+import { conditionsFacts, conditionsTrust, measurePhotoConditions } from './photo-conditions';
 import { fitSilhouette } from './silhouette-fit';
 import {
   EDGE_COLUMNS,
+  sampleNativeGray,
   sampleObjectGray,
   sampleObjectPixels,
   sampleObjectRgb,
@@ -51,7 +61,7 @@ import {
 } from './shape-stages-spark';
 import { formatElevationScore, scoreElevation, type ScoredElevation } from './elevation-score';
 import { ELEVATION_ARCHETYPES, measureFacadeElevations } from './facade-views';
-import { fetchPartMasks } from './part-masks';
+import { fetchPartMasks, partMasksTimeout } from './part-masks';
 import { fitPartParams, hasPartGroups, preparePartFit } from './part-fit';
 import { REGION_GRID, measureRegionColors, withRegionColors } from './region-colors';
 import { withMaskChimney } from './mask-chimney';
@@ -59,6 +69,10 @@ import { withMaskPanels } from './mask-panels';
 import { withMaskWheels } from './mask-wheels';
 import { withProfileBody } from './profile-body';
 import { scoreRecipe } from './score-shape';
+import { voteKits } from './kit-vote';
+import { askFamilies, asFamily } from './kit-ask';
+import type { ShapeResult } from './schemas';
+import { env } from '@/lib/env';
 import { generateImaginedViews } from './views-generation';
 import {
   ROUND_VIEW_ARCHETYPES,
@@ -111,7 +125,7 @@ export function withMeasuredRepetition(
         ? pickCount(
             repetition.units,
             kit.details?.units,
-            confidence.repetition(repetition.strength)
+            ledByMeasurement(confidence.repetition(repetition.strength), modelDoubts(kit, 'counts'))
           )
         : kit.details?.units;
   const details = { ...kit.details };
@@ -167,7 +181,19 @@ export interface ObjectShapeOptions {
   onStageSeed?: (seed: ObjectRecipe, front: Elevation) => void;
   /** Stages that did not fit the first answer: the caller runs them in the background (PG-T18). */
   onStagesLeft?: (rest: StagesContinuation) => void;
+  /**
+   * Kit prompt version for the kit and the free-parts calls (default: `KIT_PROMPT_VERSION`). Routes leave
+   * it unset; evals pass 2 to run the whole pipeline on the Muse cards (PQ-T12).
+   */
+  promptVersion?: number;
+  /** Kit samples voting (PQ-T18, default `SHAPE_KIT_SAMPLES`): 2 asks the kit twice when ≥ 40 s are left. */
+  kitSamples?: number;
+  /** Critic prompt version of `shapeWithCritic` (PQ-T14): 2 = cards + 2 × 2 sheet + extra rounds; default 1. */
+  criticPromptVersion?: number;
 }
+
+/** The second kit sample is asked only with at least this budget (PQ-T18). */
+const SECOND_SAMPLE_MIN_MS = 40_000;
 
 /**
  * Selected object → its 3D shape (PV-T9), Meta models only. One Spark call on a crop around the object
@@ -199,6 +225,8 @@ export async function runObjectShape(
     onStage,
     onStageSeed,
     onStagesLeft,
+    promptVersion,
+    kitSamples = env.SHAPE_KIT_SAMPLES,
   }: ObjectShapeOptions = {}
 ): Promise<ObjectShape> {
   /** Logs each ended stage (first answer and background). */
@@ -254,7 +282,8 @@ export async function runObjectShape(
     }
   };
 
-  const base = { detectionId: target.id };
+  /** `ask` is set once the kit shows doubt about the family (PQ-T41) and rides on every recipe answer. */
+  const base: { detectionId: string; ask?: ObjectShape['ask'] } = { detectionId: target.id };
   const silhouette = (
     reason: NonNullable<ObjectShape['reason']>,
     source: Pick<ObjectShape, 'source' | 'model' | 'fallback' | 'detail'>
@@ -291,37 +320,69 @@ export async function runObjectShape(
             fullImageUrl,
             conceptOf(target),
             target.box,
-            { ...(outlineCrop ? { crop: outlineCrop } : {}), retries: samRetries(target) }
+            {
+              ...(outlineCrop ? { crop: outlineCrop } : {}),
+              retries: samRetries(target),
+            }
           ).then(
             (hit) => hit ?? undefined,
             () => undefined
           )
         : Promise.resolve(target.outline);
+    // PQ-T7: size, sharpness and exposure of the box, measured before the call so Spark is told them.
+    const preGrid: GrayGrid | null = photo
+      ? await sampleObjectGray(photo, target.box, target.outline, EDGE_COLUMNS).catch(() => null)
+      : null;
+    // The box at the photo's own resolution, for the sharpness (same box before and after the call).
+    const nativeGrid: GrayGrid | null = photo
+      ? await sampleNativeGray(photo, target.box).catch(() => null)
+      : null;
+    const preConditions = photo
+      ? measurePhotoConditions({
+          widthPx: target.box.w * photo.width,
+          heightPx: target.box.h * photo.height,
+          grid: preGrid,
+          nativeGrid,
+          hasOutline: false,
+        })
+      : null;
     onStep?.('model');
     const started = Date.now();
     const timeout = AbortSignal.timeout(Math.max(0, timeoutMs));
-    const shapeCall = perception.describeShape(
-      imageUrl,
-      {
-        label: target.label,
-        category: target.category,
-        ...(target.scenery ? { scenery: target.scenery } : {}),
-        ...(aspect > 0 ? { aspect } : {}),
-        ...(target.facadeUrl ? { facadeUrl: target.facadeUrl } : {}),
-      },
-      signal ? AbortSignal.any([signal, timeout]) : timeout
-    );
+    const askKit = () =>
+      perception.describeShape(
+        imageUrl,
+        {
+          label: target.label,
+          category: target.category,
+          ...(target.scenery ? { scenery: target.scenery } : {}),
+          ...(aspect > 0 ? { aspect } : {}),
+          ...(preConditions ? { facts: conditionsFacts(preConditions) } : {}),
+          ...(target.facadeUrl ? { facadeUrl: target.facadeUrl } : {}),
+          ...(target.archetype ? { archetype: target.archetype } : {}),
+          ...(promptVersion ? { promptVersion } : {}),
+        },
+        signal ? AbortSignal.any([signal, timeout]) : timeout
+      );
+    const shapeCall = askKit();
+    // PQ-T18: a second sample in parallel when asked and the budget allows it (≥ 40 s).
+    const secondCall: Promise<ShapeResult | null> | null =
+      kitSamples >= 2 && timeoutMs >= SECOND_SAMPLE_MIN_MS ? askKit().catch(() => null) : null;
     // 2D facade validated (user 2026-11-02): the house is rebuilt from its elevations — front
     // measured by SAM while Muse Image draws the side, then the side measured — in parallel
     // with Spark. Null for other archetypes, the mock, or a facade SAM cannot read.
-    const hint = defaultArchetype(target.category, target.scenery, target.label);
+    const hint = archetypeOf(target);
     const elevations =
       target.facadeUrl && perception.segmentImage && ELEVATION_ARCHETYPES.includes(hint)
         ? measureFacadeElevations(
             perception.segmentImage.bind(perception),
             target.facadeUrl,
             hint,
-            { ...(signal ? { signal } : {}), ...(onSideView ? { onSideView } : {}) }
+            {
+              ...(signal ? { signal } : {}),
+              ...(onSideView ? { onSideView } : {}),
+              ...(env.SHAPE_SIDE_V2 ? { sideCards: true } : {}),
+            }
           ).catch(() => null)
         : Promise.resolve(null);
     // PV-H: any other object with a validated 2D view → hull of that view and its drawn side.
@@ -333,7 +394,11 @@ export async function runObjectShape(
             hint,
             target.label,
             conceptOf(target),
-            { ...(signal ? { signal } : {}), ...(onSideView ? { onSideView } : {}) }
+            {
+              ...(signal ? { signal } : {}),
+              ...(onSideView ? { onSideView } : {}),
+              ...(env.SHAPE_SIDE_V2 ? { sideV2: { candidates: 2 } } : {}),
+            }
           ).catch(() => null)
         : Promise.resolve(null);
     const fetched = await fetchedOutline;
@@ -354,10 +419,67 @@ export async function runObjectShape(
           return null;
         })
       : Promise.resolve(null);
-    const edges: Promise<GrayGrid | null> = photo
-      ? sampleObjectGray(photo, shaped.box, shaped.outline, EDGE_COLUMNS).catch(() => null)
-      : Promise.resolve(null);
-    const found = await shapeCall;
+    // Same box and outline as the pre-call grid (no outline fetched on demand): not sampled twice.
+    const edges: Promise<GrayGrid | null> =
+      photo && !(shaped === target && preGrid)
+        ? sampleObjectGray(photo, shaped.box, shaped.outline, EDGE_COLUMNS).catch(() => null)
+        : Promise.resolve(preGrid);
+    let found = await shapeCall;
+    let splitOther: KitArchetype | undefined;
+    if (secondCall && found.kit && found.source === 'meta') {
+      // A late second sample is not waited for: the first answer stands alone.
+      const left = Math.max(0, timeoutMs / 2 - (Date.now() - started));
+      const late = new Promise<null>((r) => setTimeout(() => r(null), left));
+      const second = await Promise.race([secondCall, late]);
+      const other = second?.kit && second.source === 'meta' ? second.kit : null;
+      const vote = await voteKits(found.kit, other, async (kit) => {
+        if (!photo || !shaped.outline) return null;
+        const r = await scoreRecipe(
+          photo,
+          { box: shaped.box, outline: shaped.outline },
+          kitToRecipe(kit)
+        );
+        return r ? r.score.score : null;
+      });
+      if (vote.kit !== found.kit) {
+        found = { ...found, kit: vote.kit, recipe: kitToRecipe(vote.kit) };
+      }
+      splitOther = vote.outcome === 'split' ? vote.other : undefined;
+      if (vote.outcome !== 'single') {
+        console.info(
+          `[vision] 3D kit vote for "${target.label}": ${vote.outcome}${vote.disagreed.length ? ` (${vote.disagreed.join(',')})` : ''}`
+        );
+      }
+    }
+    // PQ-T41: the operator's pick wins over the model; a doubtful family becomes a question.
+    const chosen = asFamily(target.archetype);
+    if (found.kit && chosen && found.kit.archetype !== chosen) {
+      const kit = { ...found.kit, archetype: chosen };
+      found = { ...found, kit, recipe: kitToRecipe(kit) };
+    }
+    const pair =
+      found.kit && found.source === 'meta'
+        ? askFamilies(found.kit, splitOther ?? hint, {
+            split: splitOther !== undefined,
+            chosen: chosen !== undefined,
+          })
+        : null;
+    if (pair) base.ask = { archetypes: pair };
+    const finalGrid = await edges;
+    // PQ-T7: the conditions ride on every recipe answer (facade house, views, photo pipeline alike),
+    // otherwise the "photo too small / blurred" hint never shows for the objects that take those paths.
+    const conditionsFor = (archetype: KitArchetype | undefined, yaw: number | null) =>
+      photo && preConditions
+        ? measurePhotoConditions({
+            widthPx: target.box.w * photo.width,
+            heightPx: target.box.h * photo.height,
+            grid: finalGrid,
+            nativeGrid,
+            hasOutline: !!shaped.outline,
+            ...(archetype ? { archetype } : {}),
+            yaw,
+          })
+        : undefined;
     const seconds = ((Date.now() - started) / 1000).toFixed(1);
     if (found.kit) onKit?.(found.kit);
     const source = {
@@ -387,6 +509,7 @@ export async function runObjectShape(
             archetype: found.kit.archetype,
             ...(coverage ? { coverage } : {}),
             ...(target.facadeUrl ? { facadeUrl: target.facadeUrl } : {}),
+            ...(promptVersion ? { promptVersion } : {}),
           },
           signal ? AbortSignal.any([signal, timeout]) : timeout
         );
@@ -412,11 +535,27 @@ export async function runObjectShape(
       const elev =
         found.kit && ELEVATION_ARCHETYPES.includes(found.kit.archetype) ? await elevations : null;
       // PG-T22: half-timbered walls take their plaster colour, not plaster + beams averaged.
+      let shadowShare = 0;
       const plaster = !!elev && !!wallTimber(elev.front, found.kit?.details);
       const measuredColors =
-        found.kit && px ? measureKitColors(px, found.kit.archetype, { plaster }) : null;
+        found.kit && px
+          ? measureKitColors(px, found.kit.archetype, {
+              plaster,
+              litSurface: !plaster,
+              onShadowShare: (share) => (shadowShare = share),
+            })
+          : null;
       const conf = {
-        colors: px ? confidence.colors(px.y.length, !!shaped.outline) : 0,
+        colors: px
+          ? ledByMeasurement(
+              Math.round(
+                confidence.colors(px.y.length, !!shaped.outline) *
+                  conditionsTrust(preConditions ?? undefined) *
+                  100
+              ) / 100,
+              modelDoubts(found.kit, 'colors')
+            )
+          : 0,
         yaw: 0,
         fit: 0,
       };
@@ -427,7 +566,7 @@ export async function runObjectShape(
           : null;
       if (found.kit && colors) {
         console.info(
-          `[vision] 3D colours measured for "${target.label}" (${px!.y.length} px${target.outline ? ', outline' : ''}): ${colors.main} ${colors.secondary} ${colors.accent}`
+          `[vision] 3D colours measured for "${target.label}" (${px!.y.length} px${target.outline ? ', outline' : ''}): ${colors.main} ${colors.secondary} ${colors.accent}${shadowShare > 0 ? `, ${Math.round(shadowShare * 100)} % shadow read apart` : ''}`
         );
       }
       if (found.kit && elev) {
@@ -518,12 +657,14 @@ export async function runObjectShape(
         console.info(
           `[vision] 3D facade house for "${target.label}": ${recipe.parts.length} parts, roof ${roofPart ? `${roofPart.shape}${roofPart.shape === 'hip' ? ` ridge ${roofPart.ridge?.toFixed(2)}${roofPart.clip ? ` half-hip ${roofPart.clip.toFixed(2)}` : ''}` : ''}` : 'flat'}, ${front.windows.length} windows, ${front.doors.length} door(s), ${front.chimneys.length} chimney(s), side ${side ? `${side.windows.length} windows, depth ${depthRatio(front, side)?.toFixed(2)}` : 'none'} vs Spark ${(kit.proportions.d / kit.proportions.w).toFixed(2)}, w:h:d ${[recipe.proportions.w, recipe.proportions.h, recipe.proportions.d].map((v) => v.toFixed(2)).join(':')}, yaw ${Math.round((yaw0 * 180) / Math.PI)}° (${seconds} s Spark)`
         );
+        const facadeConditions = conditionsFor(found.kit?.archetype, recipe.yaw ?? null);
         return {
           ...base,
           mode: 'recipe',
           recipe,
           kit: found.kit,
           ...(shaped.outline ? { outline: shaped.outline } : {}),
+          ...(facadeConditions ? { conditions: facadeConditions } : {}),
           ...source,
         };
       }
@@ -605,15 +746,18 @@ export async function runObjectShape(
           `[vision] 3D views for "${target.label}": ${recipe.parts[0]!.shape} body, ${recipe.parts.length} parts, side ${seen.side ? `drawn (length/width ${(seen.side.aspect / seen.front.aspect).toFixed(2)})` : `none (Spark depth ${sparkDepthRatio(kit).toFixed(2)})`}, SAM ${[...counts].map(([c, n]) => `${c}×${n}`).join(', ') || 'no parts'}; silhouette IoU front ${iou.front}${iou.side !== null ? `, side ${iou.side}` : ''}, w:h:d ${[recipe.proportions.w, recipe.proportions.h, recipe.proportions.d].map((v) => v.toFixed(2)).join(':')} (${seconds} s Spark)`
         );
         const issue = recipeIssue(recipe);
-        if (!issue)
+        if (!issue) {
+          const viewsConditions = conditionsFor(found.kit.archetype, recipe.yaw ?? null);
           return {
             ...base,
             mode: 'recipe',
             recipe,
             kit: found.kit,
             ...(shaped.outline ? { outline: shaped.outline } : {}),
+            ...(viewsConditions ? { conditions: viewsConditions } : {}),
             ...source,
           };
+        }
         console.info(`[vision] 3D views recipe rejected (${issue}), photo pipeline`);
       }
       let roofMeasured = false;
@@ -648,7 +792,9 @@ export async function runObjectShape(
       let facadeMasks: FacadeMasks | null = null;
       if (finalKit && photo && segmentImage) {
         [partMasks, facadeMasks] = await Promise.all([
-          fetchPartMasks(segmentImage, imageUrl, finalKit.archetype),
+          fetchPartMasks(segmentImage, imageUrl, finalKit.archetype, {
+            timeoutMs: partMasksTimeout(started + timeoutMs - Date.now()),
+          }),
           target.facadeUrl
             ? fetchFacadeMasks(
                 segmentImage,
@@ -700,7 +846,9 @@ export async function runObjectShape(
             })
           : null;
       const start = fitRecipe(built, aspect, yaw0);
-      conf.fit = fit ? confidence.fit(fit.iou) : 0;
+      conf.fit = fit
+        ? ledByMeasurement(confidence.fit(fit.iou), modelDoubts(finalKit, 'proportions'))
+        : 0;
       let recipe = fit ? mixRecipe(fit.recipe, start, conf.fit) : start;
       if (fit) {
         console.info(
@@ -879,6 +1027,12 @@ export async function runObjectShape(
       // fit values read estimated, a single view never measures depth, the box-fit scale is
       // estimated (metric scale arrives with free placement).
       let coverage: PartCoverage[] | undefined;
+      const conditions = conditionsFor(finalKit?.archetype, recipe.yaw ?? null);
+      if (conditions) {
+        console.info(
+          `[vision] 3D photo conditions for "${target.label}": ${conditionsFacts(conditions).join(', ')}`
+        );
+      }
       if (finalKit) {
         // PQ-T37: hard geometry gates fixed by rule (floating parts pulled in, fused twins merged).
         const repair = repairGraph(finalKit.archetype, recipe);
@@ -902,8 +1056,10 @@ export async function runObjectShape(
                 }
               )
             : (partMasks ?? []);
-        const missing = notBuilt(recipe, onObject);
-        if (onObject.length) coverage = partCoverage(recipe, onObject);
+        // PQ-T37: the parts the kit listed under evidence.visibleParts join the SAM masks.
+        const listed = finalKit.evidence?.visibleParts ?? [];
+        const missing = notBuilt(recipe, onObject, listed);
+        if (onObject.length || listed.length) coverage = partCoverage(recipe, onObject, listed);
         if (missing.length)
           console.info(`[vision] 3D seen, not built for "${target.label}": ${missing.join(', ')}`);
         const graph = buildGraph(finalKit.archetype, recipe, {
@@ -974,6 +1130,7 @@ export async function runObjectShape(
         ...(found.kit ? { kit: found.kit } : {}),
         ...(shaped.outline ? { outline: shaped.outline } : {}),
         ...(coverage ? { coverage } : {}),
+        ...(conditions ? { conditions } : {}),
         ...source,
       };
     }

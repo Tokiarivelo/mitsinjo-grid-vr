@@ -1,4 +1,10 @@
-import type { PartsSubject, PerceptionBackend, PerceptionCall, ShapeSubject } from './backend';
+import type {
+  CriticOptions,
+  PartsSubject,
+  PerceptionBackend,
+  PerceptionCall,
+  ShapeSubject,
+} from './backend';
 import { JUDGE_CRITERIA, type JudgeCriterion } from './rubric-judge';
 import { mockRecipe } from './shape';
 import { boxUnionCoverage } from './parse-sam';
@@ -241,7 +247,9 @@ export class MockPerceptionBackend implements PerceptionBackend {
 
   async criticizeShape(
     _imageUrl: string,
-    _question: string
+    _question: string,
+    _signal?: AbortSignal,
+    _opts?: CriticOptions
   ): Promise<PerceptionCall<CriticResult>> {
     // The mock never patches: the critic round is a no-op without Meta.
     return { model: MOCK_PERCEPTION_MODEL, usage: {}, result: { patch: null } };

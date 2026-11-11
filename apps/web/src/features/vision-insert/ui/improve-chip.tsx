@@ -25,7 +25,12 @@ export function scoreKey(i: ShapeImprove): 'score' | 'alreadyMatches' | 'noGain'
   if (i.before === undefined || i.after === undefined) return 'score';
   if (Math.round(i.after * 100) !== Math.round(i.before * 100)) return 'score';
   if (i.stop === 'gate') return 'alreadyMatches';
-  return i.stop === 'no_gain' || i.stop === 'rounds' ? 'noGain' : 'score';
+  return i.stop === 'no_gain' ||
+    i.stop === 'rounds' ||
+    i.stop === 'repeat' ||
+    i.stop === 'back_and_forth'
+    ? 'noGain'
+    : 'score';
 }
 
 /**

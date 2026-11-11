@@ -4,6 +4,10 @@ import { describe, expect, it } from 'vitest';
 import { ObjectRecipeSchema, recipeIssue } from '@/lib/object-shape';
 import {
   criticQuestion,
+  KIT_PROMPT_CARDS_VERSION,
+  kitJsonSchema,
+  kitPrompt,
+  parseEvidence,
   mergeKitPatch,
   mockRecipe,
   parseKit,
@@ -82,6 +86,13 @@ describe('parseKit (PV-T9b)', () => {
   it('tells Spark how wide the object is on the photo', () => {
     expect(shapeQuestion('lamp post', 0.192)).toContain('0.19 times as wide as it is high');
     expect(shapeQuestion('lamp post')).not.toContain('times as wide');
+  });
+
+  it('carries the facts measured by code as a « Measured: » line, none without facts (PQ-T7)', () => {
+    expect(
+      shapeQuestion('car', 2, undefined, false, ['object 412 × 178 px', 'sharpness low'])
+    ).toContain(' Measured: object 412 × 178 px · sharpness low.');
+    expect(shapeQuestion('car', 2)).not.toContain('Measured:');
   });
 });
 
@@ -251,5 +262,74 @@ describe('Spark depth within real sizes (PT-8)', () => {
     ).toBeGreaterThan(0.2);
     const fine = { w: 1 / 3, h: 1, d: 0.3 };
     expect(mergeKitPatch(k, { proportions: fine }).proportions).toEqual(fine);
+  });
+});
+
+describe('kit evidence and confidence (PQ-T12)', () => {
+  const base = {
+    archetype: 'vehicle',
+    proportions: { w: 1, h: 0.4, d: 0.5 },
+    colors: { main: '#aa2222', secondary: '#222222', accent: '#88aacc' },
+  };
+
+  it('reads the evidence written first, capped at 12 parts, an unknown view dropped', () => {
+    const parts = Array.from({ length: 15 }, (_, i) => `part ${i}`);
+    const k = parseKit(
+      reply({
+        evidence: {
+          view: 'diagonal',
+          hiddenBy: ['Hedge'],
+          visibleParts: parts,
+          repeats: { wheels: 2.4 },
+          unsure: ['proportions.d'],
+        },
+        confidence: { archetype: 0.9, colors: 1.7, counts: 'high' },
+        ...base,
+      })
+    );
+    expect(k!.evidence!.view).toBeUndefined();
+    expect(k!.evidence!.visibleParts).toHaveLength(12);
+    expect(k!.evidence!.hiddenBy).toEqual(['hedge']);
+    expect(k!.evidence!.repeats).toEqual({ wheels: 2 });
+    expect(k!.evidence!.unsure).toEqual(['proportions.d']);
+    expect(k!.confidence).toEqual({ archetype: 0.9, colors: 1 });
+    expect(parseEvidence({ view: 'side' })!.view).toBe('side');
+  });
+
+  it('an answer without evidence is still a valid kit (answers of the first prompt)', () => {
+    const k = parseKit(reply(base));
+    expect(k).not.toBeNull();
+    expect(k!.evidence).toBeUndefined();
+    expect(k!.confidence).toBeUndefined();
+    expect(parseEvidence('nope')).toBeUndefined();
+    expect(parseEvidence({ visibleParts: 'wheel' })).toBeUndefined();
+  });
+
+  it('prompt 2 asks for the evidence before the answer', () => {
+    const keys = Object.keys(kitJsonSchema(KIT_PROMPT_CARDS_VERSION).schema.properties);
+    expect(keys[0]).toBe('evidence');
+    expect(keys).toContain('confidence');
+    expect(kitJsonSchema(KIT_PROMPT_CARDS_VERSION).schema.required).toEqual(
+      SHAPE_JSON_SCHEMA.schema.required
+    );
+  });
+
+  it('regression (PR #12 review): prompt 1 is not offered evidence or confidence', () => {
+    // Before: one schema for both prompts, so the default call could answer the extra fields too
+    // (longer answers, and parts and doubts that were said to be off under prompt 1).
+    const keys = Object.keys(kitJsonSchema().schema.properties);
+    expect(kitJsonSchema()).toBe(SHAPE_JSON_SCHEMA);
+    expect(keys).not.toContain('evidence');
+    expect(keys).not.toContain('confidence');
+    expect(keys[0]).toBe('archetype');
+  });
+
+  it('version 2 is the Muse cards of the hint family: look first, no « answer fast »', () => {
+    const p = kitPrompt(KIT_PROMPT_CARDS_VERSION, 'vehicle');
+    expect(p).toContain('Before you classify, look in this order');
+    expect(p).toContain('VEHICLE');
+    expect(p).not.toMatch(/answer fast/i);
+    expect(kitPrompt(KIT_PROMPT_CARDS_VERSION, 'other')).not.toContain('VEHICLE');
+    expect(() => kitPrompt(99)).toThrow(/unknown kit prompt version 99 \(kept: 1, 2, 3\)/);
   });
 });

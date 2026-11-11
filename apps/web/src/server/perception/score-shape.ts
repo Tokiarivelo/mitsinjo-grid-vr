@@ -27,7 +27,7 @@ import {
 import type { PhotoForRegions } from './region';
 import { sampleObjectRgb } from './shape-colors';
 import { cropRectForShape, type CropRect } from './shape-crop';
-import { fitGrid, ringsMask } from './silhouette-fit';
+import { fitGrid, ringsMask, type Mask } from './silhouette-fit';
 
 export interface RecipeScore {
   score: ModelScore;
@@ -36,6 +36,8 @@ export interface RecipeScore {
   render: FlatRender;
   /** The part masks on the object (outline filter, `masksOnObject`) that the score judged. */
   masks: PartMask[];
+  /** The SAM outline on the fit grid (1 = object): the difference tile of the critic sheet (PQ-T14). */
+  outline: Mask;
 }
 
 /** Part-mask concepts judged as landmarks (PR-0.8): wheels, windows, doors. */
@@ -173,5 +175,6 @@ export async function scoreRecipe(
     crop,
     render,
     masks: onObject,
+    outline,
   };
 }

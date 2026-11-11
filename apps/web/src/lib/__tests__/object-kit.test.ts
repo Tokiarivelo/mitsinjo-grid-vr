@@ -2,6 +2,7 @@ import { APPLIANCE_CATEGORIES } from '@mitsinjo/engine';
 import { describe, expect, it } from 'vitest';
 import {
   ARCHETYPE_SIZE_MM,
+  archetypeOf,
   clampEstimatedDepth,
   decalWidth,
   defaultArchetype,
@@ -322,5 +323,18 @@ describe('flatWaterRecipe', () => {
         front: true,
       },
     ]);
+  });
+});
+
+describe('archetypeOf (PQ-T41)', () => {
+  const fridge = { category: 'fridge' as const, label: 'fridge' };
+  it("the operator's family wins when it is a known one", () => {
+    expect(archetypeOf({ ...fridge, archetype: 'vehicle' })).toBe('vehicle');
+  });
+  it('an unknown or missing pick falls back to the detection', () => {
+    const hint = defaultArchetype('fridge', undefined, 'fridge');
+    expect(archetypeOf(fridge)).toBe(hint);
+    expect(archetypeOf({ ...fridge, archetype: 'spaceship' })).toBe(hint);
+    expect(archetypeOf({ ...fridge, archetype: '' })).toBe(hint);
   });
 });

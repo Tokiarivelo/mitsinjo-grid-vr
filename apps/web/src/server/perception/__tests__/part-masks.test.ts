@@ -168,4 +168,64 @@ describe('part concepts are named in the panel (PQ-T37, PR #10 review)', () => {
     const concepts = [...new Set(Object.values(PART_CONCEPTS).flat())];
     expect(concepts.filter((c) => !labels.includes(c))).toEqual([]);
   });
+
+  it('every SAM word of the Muse cards has a label, in the three languages', async () => {
+    const { CARD_TEXT } = await import('../skills/cards.generated');
+    const { listedConcept } = await import('../object-graph');
+    const { partLabelKey } = await import('@/lib/object-shape');
+    const words = new Set<string>();
+    for (const text of Object.values(CARD_TEXT)) {
+      const list = text.match(/^SAM words: (.+)\.$/m)?.[1];
+      for (const w of list?.split(/,\s*/) ?? []) words.add(partLabelKey(listedConcept(w)));
+    }
+    expect(words.size).toBeGreaterThan(40);
+    for (const locale of ['en', 'fr', 'mg'] as const) {
+      const messages = (await import(`@/messages/${locale}.json`)).default;
+      const labels = Object.keys(messages.features.visionInsert.model3dPart);
+      expect(
+        [...words].filter((w) => !labels.includes(w)),
+        locale
+      ).toEqual([]);
+    }
+  });
+});
+
+describe('part masks timing and retry (PQ-T9)', () => {
+  it('the deadline is a share of the time left, bounded', async () => {
+    const { partMasksTimeout } = await import('../part-masks');
+    expect(partMasksTimeout(60_000)).toBe(8000);
+    expect(partMasksTimeout(20_000)).toBe(5000);
+    expect(partMasksTimeout(2_000)).toBe(3000);
+    expect(partMasksTimeout(-5)).toBe(3000);
+  });
+
+  it('an empty first answer is asked again with another phrasing', async () => {
+    const { fetchPartMasks } = await import('../part-masks');
+    const asked: string[] = [];
+    const seg = (concept: string, n: number) => ({
+      source: 'meta' as const,
+      model: 'sam-3.1',
+      concept,
+      imageWidth: 100,
+      imageHeight: 100,
+      instances: Array.from({ length: n }, () => ({
+        box: { x1: 10, y1: 10, x2: 30, y2: 30 },
+        confidence: 0.9,
+      })),
+      count: n,
+      boxCoverage: 0,
+    });
+    const masks = await fetchPartMasks(
+      async (_u: string, c: string) => {
+        asked.push(c);
+        return seg(c, c === 'tire' ? 2 : 0);
+      },
+      'data:x',
+      'vehicle',
+      { concepts: ['wheel'] }
+    );
+    expect(asked).toEqual(['wheel', 'tire']);
+    expect(masks).toHaveLength(2);
+    expect(masks[0]!.concept).toBe('wheel');
+  });
 });

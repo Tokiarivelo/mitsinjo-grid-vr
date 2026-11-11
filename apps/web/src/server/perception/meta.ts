@@ -6,6 +6,7 @@ import { DEFAULT_META_BASE_URL } from '@/server/copilot/providers/meta';
 import { fetchPreferringContributor } from '@/server/copilot/providers/contributor';
 import type { UsageSample } from '@/server/spend';
 import type {
+  CriticOptions,
   PartsSubject,
   PerceptionBackend,
   PerceptionCall,
@@ -21,7 +22,7 @@ import {
 import {
   parseFreeParts,
   PARTS_JSON_SCHEMA,
-  PARTS_SYSTEM_PROMPT,
+  partsPrompt,
   shapePartsQuestion,
   visibilityFromCoverage,
 } from './free-recipe';
@@ -37,31 +38,36 @@ import {
 } from './rubric-judge';
 import {
   VIEWS_CHECK_JSON_SCHEMA,
+  VIEWS_CHECK_CARDS_VERSION,
   VIEWS_CHECK_PROMPT_VERSION,
-  VIEWS_CHECK_SYSTEM_PROMPT,
+  viewsCheckPrompt,
   parseViewsCheck,
 } from './views-check';
 import { REGION_SYSTEM_PROMPT, regionQuestion } from './region-prompt';
-import { defaultArchetype, kitToRecipe } from '@/lib/object-kit';
+import { archetypeOf, kitToRecipe } from '@/lib/object-kit';
 import {
-  CRITIC_JSON_SCHEMA,
   CRITIC_PROMPT_VERSION,
-  CRITIC_SYSTEM_PROMPT,
-  KIT_PROMPT_VERSION,
+  capPatchFields,
+  criticJsonSchema,
+  criticPrompt,
+  parseKitReasons,
+  kitVersionFor,
   kitPrompt,
   parseKit,
   parseKitPatch,
-  SHAPE_JSON_SCHEMA,
+  kitJsonSchema,
   shapeQuestion,
 } from './shape';
 import { boxUnionCoverage, parseSamOutput } from './parse-sam';
 import {
   SHAPE_SCRIPT_JSON_SCHEMA,
+  SHAPE_SCRIPT_CARDS_VERSION,
   SHAPE_SCRIPT_PROMPT_VERSION,
   shapeScriptSystemPrompt,
   type StageSheet,
   parseStageOps,
 } from './shape-script-prompt';
+import { effortFor } from './effort';
 import { redactDataUrls, redactDataUrlsInText, type VisionCallLog } from './vision-log';
 import {
   ObservationSchema,
@@ -255,8 +261,8 @@ export class MetaPerceptionBackend implements PerceptionBackend {
     );
     const body = (model: string) => ({
       model,
-      // High reasoning on detection + 3D kits: better perception for the operator.
-      reasoning_effort: 'high',
+      // High reasoning on detection + 3D kits: better perception for the operator (table: effort.ts).
+      reasoning_effort: effortFor(log?.kind),
       messages: [
         { role: 'system', content: system },
         {
@@ -364,14 +370,14 @@ export class MetaPerceptionBackend implements PerceptionBackend {
     target: ShapeSubject,
     signal?: AbortSignal
   ): Promise<PerceptionCall<ShapeResult>> {
-    const hint = defaultArchetype(target.category, target.scenery, target.label);
+    const hint = archetypeOf(target);
     // Standard id, not the contributor one: the operator waits on this answer (≈ 15 s vs ≈ 25 s measured).
-    const promptVersion = target.promptVersion ?? KIT_PROMPT_VERSION;
+    const promptVersion = target.promptVersion ?? kitVersionFor(hint, env.SHAPE_KIT_CARD_FAMILIES);
     const { content, model, usage } = await this.visionJson(
-      kitPrompt(promptVersion),
-      shapeQuestion(target.label, target.aspect, hint, Boolean(target.facadeUrl)),
+      kitPrompt(promptVersion, hint),
+      shapeQuestion(target.label, target.aspect, hint, Boolean(target.facadeUrl), target.facts),
       imageUrl,
-      SHAPE_JSON_SCHEMA,
+      kitJsonSchema(promptVersion),
       signal,
       false,
       { kind: 'describeShape', params: { ...target, promptVersion } },
@@ -394,7 +400,7 @@ export class MetaPerceptionBackend implements PerceptionBackend {
   ): Promise<PerceptionCall<ShapeResult>> {
     // Standard id, not the contributor one: the operator waits on this answer (same as the kit call).
     const { content, model, usage } = await this.visionJson(
-      PARTS_SYSTEM_PROMPT,
+      partsPrompt(target.promptVersion),
       shapePartsQuestion(
         target.label,
         target.archetype,
@@ -421,22 +427,27 @@ export class MetaPerceptionBackend implements PerceptionBackend {
   async criticizeShape(
     imageUrl: string,
     question: string,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    opts: CriticOptions = {}
   ): Promise<PerceptionCall<CriticResult>> {
+    const promptVersion = opts.promptVersion ?? CRITIC_PROMPT_VERSION;
     // Standard id, like the kit call: the operator waits on this answer.
     // No separate params: the question already carries the kit and the scores.
     const { content, model, usage } = await this.visionJson(
-      CRITIC_SYSTEM_PROMPT,
+      criticPrompt(promptVersion, opts.archetype),
       question,
       imageUrl,
-      CRITIC_JSON_SCHEMA,
+      criticJsonSchema(promptVersion),
       signal,
       false,
-      { kind: 'criticizeShape', params: { promptVersion: CRITIC_PROMPT_VERSION } }
+      { kind: 'criticizeShape', params: { promptVersion } }
     );
-    const patch = parseKitPatch(content);
+    const parsed = parseKitPatch(content);
+    // Version 2 cuts a long patch to its first 4 fields (PQ-T14).
+    const patch = parsed && promptVersion >= 2 ? capPatchFields(parsed) : parsed;
+    const reasons = promptVersion >= 2 ? parseKitReasons(content) : [];
     console.info(
-      `[vision] 3D critic from ${model}: ${patch ? Object.keys(patch).join(',') : 'no patch'}`
+      `[vision] 3D critic from ${model}: ${patch ? Object.keys(patch).join(',') : 'no patch'}${reasons.length ? ` (${reasons.join(' | ')})` : ''}`
     );
     return { model, usage, result: { patch } };
   }
@@ -469,14 +480,17 @@ export class MetaPerceptionBackend implements PerceptionBackend {
     question: string,
     signal?: AbortSignal
   ): Promise<PerceptionCall<ViewsCheckResult>> {
+    const promptVersion = env.SHAPE_LOOP_CARDS
+      ? VIEWS_CHECK_CARDS_VERSION
+      : VIEWS_CHECK_PROMPT_VERSION;
     const { content, model, usage } = await this.visionJson(
-      VIEWS_CHECK_SYSTEM_PROMPT,
+      viewsCheckPrompt(promptVersion),
       question,
       imageUrl,
       VIEWS_CHECK_JSON_SCHEMA,
       signal,
       false,
-      { kind: 'checkViews', params: { promptVersion: VIEWS_CHECK_PROMPT_VERSION } }
+      { kind: 'checkViews', params: { promptVersion } }
     );
     const check = parseViewsCheck(content);
     console.info(
@@ -492,9 +506,12 @@ export class MetaPerceptionBackend implements PerceptionBackend {
     sheet: StageSheet = 'elevation',
     opts: ShapeOpsOptions = {}
   ): Promise<PerceptionCall<ShapeOpsResult>> {
+    const promptVersion = env.SHAPE_LOOP_CARDS
+      ? SHAPE_SCRIPT_CARDS_VERSION
+      : SHAPE_SCRIPT_PROMPT_VERSION;
     const ask = (baseModel: string) =>
       this.visionJson(
-        shapeScriptSystemPrompt(sheet),
+        shapeScriptSystemPrompt(sheet, env.SHAPE_LOOP_CARDS),
         question,
         imageUrl,
         SHAPE_SCRIPT_JSON_SCHEMA,
@@ -502,7 +519,7 @@ export class MetaPerceptionBackend implements PerceptionBackend {
         false,
         {
           kind: 'proposeShapeOps',
-          params: { promptVersion: SHAPE_SCRIPT_PROMPT_VERSION, sheet, refine: !!opts.refine },
+          params: { promptVersion, sheet, refine: !!opts.refine },
         },
         [],
         baseModel
@@ -526,7 +543,7 @@ export class MetaPerceptionBackend implements PerceptionBackend {
     const { content, model, usage } = answer;
     const ops = parseStageOps(content);
     console.info(
-      `[vision] 3D stage ops from ${model} (prompt v${SHAPE_SCRIPT_PROMPT_VERSION}): ${ops ? ops.map((o) => `${(o as { op: string }).op} ${(o as { id?: string }).id ?? ''}`.trim()).join(', ') || 'none' : 'unusable'}`
+      `[vision] 3D stage ops from ${model} (prompt v${promptVersion}): ${ops ? ops.map((o) => `${(o as { op: string }).op} ${(o as { id?: string }).id ?? ''}`.trim()).join(', ') || 'none' : 'unusable'}`
     );
     return { model, usage, result: { ops } };
   }

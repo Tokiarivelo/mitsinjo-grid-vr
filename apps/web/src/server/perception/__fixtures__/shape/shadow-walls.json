@@ -1,0 +1,170 @@
+[
+  {
+    "id": "shadow-brick",
+    "file": "Shadow of Tree on Brick Building Facade.jpg",
+    "licence": "CC0",
+    "author": "Pecid2180",
+    "source": "https://commons.wikimedia.org/wiki/File:Shadow_of_Tree_on_Brick_Building_Facade.jpg",
+    "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/5/57/Shadow_of_Tree_on_Brick_Building_Facade.jpg/960px-Shadow_of_Tree_on_Brick_Building_Facade.jpg",
+    "box": {
+      "x": 0,
+      "y": 0.05,
+      "w": 1,
+      "h": 0.72
+    },
+    "lit": {
+      "x": 0.82,
+      "y": 0.07,
+      "w": 0.15,
+      "h": 0.12
+    },
+    "coloured": true
+  },
+  {
+    "id": "shadow-yellow",
+    "file": "Shadow of a shrub against the wall of a white and yellow house, Ponte de Sor, Portugal (approx. GPS location) julesvernex2.jpg",
+    "licence": "CC BY-SA 4.0",
+    "author": "Jules Verne Times Two",
+    "source": "https://commons.wikimedia.org/wiki/File:Shadow_of_a_shrub_against_the_wall_of_a_white_and_yellow_house%2C_Ponte_de_Sor%2C_Portugal_%28approx._GPS_location%29_julesvernex2.jpg",
+    "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/a/a5/Shadow_of_a_shrub_against_the_wall_of_a_white_and_yellow_house%2C_Ponte_de_Sor%2C_Portugal_%28approx._GPS_location%29_julesvernex2.jpg/960px-Shadow_of_a_shrub_against_the_wall_of_a_white_and_yellow_house%2C_Ponte_de_Sor%2C_Portugal_%28approx._GPS_location%29_julesvernex2.jpg",
+    "box": {
+      "x": 0.5,
+      "y": 0.15,
+      "w": 0.32,
+      "h": 0.5
+    },
+    "lit": {
+      "x": 0.12,
+      "y": 0.15,
+      "w": 0.2,
+      "h": 0.25
+    },
+    "coloured": true
+  },
+  {
+    "id": "shadow-cream",
+    "file": "Shadows on the Walls at Belhaven - geograph.org.uk - 6394415.jpg",
+    "licence": "CC BY-SA 2.0",
+    "author": "Jennifer Petrie",
+    "source": "https://commons.wikimedia.org/wiki/File:Shadows_on_the_Walls_at_Belhaven_-_geograph.org.uk_-_6394415.jpg",
+    "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/2/2d/Shadows_on_the_Walls_at_Belhaven_-_geograph.org.uk_-_6394415.jpg/960px-Shadows_on_the_Walls_at_Belhaven_-_geograph.org.uk_-_6394415.jpg",
+    "box": {
+      "x": 0.6,
+      "y": 0.1,
+      "w": 0.38,
+      "h": 0.7
+    },
+    "lit": {
+      "x": 0.7,
+      "y": 0.55,
+      "w": 0.1,
+      "h": 0.2
+    },
+    "coloured": true
+  },
+  {
+    "id": "shadow-stone",
+    "file": "Tree shadow on a barn wall - geograph.org.uk - 3752675.jpg",
+    "licence": "CC BY-SA 2.0",
+    "author": "Neil Theasby",
+    "source": "https://commons.wikimedia.org/wiki/File:Tree_shadow_on_a_barn_wall_-_geograph.org.uk_-_3752675.jpg",
+    "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/65/Tree_shadow_on_a_barn_wall_-_geograph.org.uk_-_3752675.jpg/960px-Tree_shadow_on_a_barn_wall_-_geograph.org.uk_-_3752675.jpg",
+    "box": {
+      "x": 0,
+      "y": 0,
+      "w": 1,
+      "h": 1
+    },
+    "lit": {
+      "x": 0.82,
+      "y": 0.5,
+      "w": 0.15,
+      "h": 0.2
+    },
+    "coloured": true
+  },
+  {
+    "id": "shadow-pink",
+    "file": "Latticework with Shadows on Wall - Restaurant of Abbasian Historical House - Kashan - Central Iran (7453888034).jpg",
+    "licence": "CC BY-SA 2.0",
+    "author": "Adam Jones from Kelowna, BC, Canada",
+    "source": "https://commons.wikimedia.org/wiki/File:Latticework_with_Shadows_on_Wall_-_Restaurant_of_Abbasian_Historical_House_-_Kashan_-_Central_Iran_%287453888034%29.jpg",
+    "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/b/bc/Latticework_with_Shadows_on_Wall_-_Restaurant_of_Abbasian_Historical_House_-_Kashan_-_Central_Iran_%287453888034%29.jpg/960px-Latticework_with_Shadows_on_Wall_-_Restaurant_of_Abbasian_Historical_House_-_Kashan_-_Central_Iran_%287453888034%29.jpg",
+    "box": {
+      "x": 0,
+      "y": 0.1,
+      "w": 1,
+      "h": 0.6
+    },
+    "lit": {
+      "x": 0.5,
+      "y": 0.52,
+      "w": 0.13,
+      "h": 0.14
+    },
+    "coloured": true
+  },
+  {
+    "id": "shadow-red",
+    "file": "Tree shadow on red wall and stairs, Jardim Garcia de Orta, Parque das Nações, Lisbon, Portugal julesvernex2.jpg",
+    "licence": "CC BY-SA 4.0",
+    "author": "Jules Verne Times Two",
+    "source": "https://commons.wikimedia.org/wiki/File:Tree_shadow_on_red_wall_and_stairs%2C_Jardim_Garcia_de_Orta%2C_Parque_das_Na%C3%A7%C3%B5es%2C_Lisbon%2C_Portugal_julesvernex2.jpg",
+    "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/f/fe/Tree_shadow_on_red_wall_and_stairs%2C_Jardim_Garcia_de_Orta%2C_Parque_das_Na%C3%A7%C3%B5es%2C_Lisbon%2C_Portugal_julesvernex2.jpg/960px-Tree_shadow_on_red_wall_and_stairs%2C_Jardim_Garcia_de_Orta%2C_Parque_das_Na%C3%A7%C3%B5es%2C_Lisbon%2C_Portugal_julesvernex2.jpg",
+    "box": {
+      "x": 0,
+      "y": 0,
+      "w": 1,
+      "h": 0.72
+    },
+    "lit": {
+      "x": 0.52,
+      "y": 0.4,
+      "w": 0.12,
+      "h": 0.2
+    },
+    "coloured": true
+  },
+  {
+    "id": "shadow-grey",
+    "file": "Haus-Schatten (02) (30636234312).jpg",
+    "licence": "CC BY-SA 2.0",
+    "author": "Rüdiger Stehn from Kiel, Deutschland",
+    "source": "https://commons.wikimedia.org/wiki/File:Haus-Schatten_%2802%29_%2830636234312%29.jpg",
+    "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/b/b9/Haus-Schatten_%2802%29_%2830636234312%29.jpg/960px-Haus-Schatten_%2802%29_%2830636234312%29.jpg",
+    "box": {
+      "x": 0.02,
+      "y": 0.02,
+      "w": 0.96,
+      "h": 0.85
+    },
+    "lit": {
+      "x": 0.2,
+      "y": 0.05,
+      "w": 0.5,
+      "h": 0.2
+    },
+    "coloured": false
+  },
+  {
+    "id": "shadow-tile",
+    "file": "Haus-Schatten (01) (30117470763).jpg",
+    "licence": "CC BY-SA 2.0",
+    "author": "Rüdiger Stehn from Kiel, Deutschland",
+    "source": "https://commons.wikimedia.org/wiki/File:Haus-Schatten_%2801%29_%2830117470763%29.jpg",
+    "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/f/f3/Haus-Schatten_%2801%29_%2830117470763%29.jpg/960px-Haus-Schatten_%2801%29_%2830117470763%29.jpg",
+    "box": {
+      "x": 0,
+      "y": 0.1,
+      "w": 0.9,
+      "h": 0.8
+    },
+    "lit": {
+      "x": 0.86,
+      "y": 0.2,
+      "w": 0.08,
+      "h": 0.5
+    },
+    "coloured": false
+  }
+]

@@ -7,6 +7,8 @@ import {
   needsFreeParts,
   parseFreeParts,
   PARTS_JSON_SCHEMA,
+  PARTS_SYSTEM_PROMPT,
+  partsPrompt,
   shapePartsQuestion,
   toFreePartsOutcome,
   visibilityFromCoverage,
@@ -152,5 +154,17 @@ describe('free part list (PV-T9c)', () => {
     expect(toFreePartsOutcome(recipe, false)).toEqual({ ok: true, recipe });
     expect(toFreePartsOutcome(null, true)).toEqual({ ok: false, reason: 'refused' });
     expect(toFreePartsOutcome(null, false)).toEqual({ ok: false, reason: 'bad-json' });
+  });
+});
+
+describe('partsPrompt (PQ-T12)', () => {
+  it('the first prompt by default; from kit prompt 2 the Muse cards Base + Look + Free parts', () => {
+    expect(partsPrompt()).toBe(PARTS_SYSTEM_PROMPT);
+    expect(partsPrompt(1)).toBe(PARTS_SYSTEM_PROMPT);
+    const cards = partsPrompt(2);
+    expect(cards).not.toBe(PARTS_SYSTEM_PROMPT);
+    expect(cards).toContain('Before you classify, look in this order');
+    expect(cards).toContain('You list the solid parts of the object');
+    expect(cards).toMatch(/Never give watts/);
   });
 });

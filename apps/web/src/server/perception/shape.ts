@@ -3,13 +3,18 @@ import type { SceneryType } from '@/lib/vision';
 import { z } from 'zod';
 import {
   clampEstimatedDepth,
+  EVIDENCE_VIEWS,
   KIT_ARCHETYPES,
+  MAX_VISIBLE_PARTS,
   ObjectKitSchema,
   PART_MATERIAL_KEYS,
   type KitArchetype,
+  type KitConfidence,
+  type KitEvidence,
   type ObjectKit,
 } from '@/lib/object-kit';
 import { RECIPE_MATERIALS, type ObjectRecipe, type RecipePart } from '@/lib/object-shape';
+import { archetypeCard, skillFor } from './skills';
 
 /**
  * Prompts and parsing for the Spark 3D « kit » of one object (PV-T9b). Spark only classifies and reads
@@ -44,12 +49,39 @@ export const SHAPE_SYSTEM_PROMPT = [
 /** Every kit prompt still comparable by version (current = `KIT_PROMPT_VERSION`). */
 export const KIT_PROMPTS: Readonly<Record<number, string>> = { 1: SHAPE_SYSTEM_PROMPT };
 
+/**
+ * Version 2 (PQ-T12): the Muse cards, `skills/` Base + Look + Kit + the card of the detection hint's family.
+ * It depends on the hint, so it is built per call and is not in `KIT_PROMPTS`.
+ */
+export const KIT_PROMPT_CARDS_VERSION = 2;
+
+/**
+ * Version 3 (PQ-T13): version 1 + only the card of the hint's family (no Look card, no evidence): the
+ * short card prompt, switched on per family (`SHAPE_KIT_CARD_FAMILIES`) after its own eval.
+ */
+export const KIT_PROMPT_FAMILY_VERSION = 3;
+
+/** Kit prompt version of a call that named none: the family-card one when that family is switched on. */
+export function kitVersionFor(
+  hint: KitArchetype | undefined,
+  families: ReadonlyArray<string>
+): number {
+  return hint && families.includes(hint) && archetypeCard(hint)
+    ? KIT_PROMPT_FAMILY_VERSION
+    : KIT_PROMPT_VERSION;
+}
+
 /** The kit system prompt of `version` (default: current); throws on a version that was not kept. */
-export function kitPrompt(version: number = KIT_PROMPT_VERSION): string {
+export function kitPrompt(version: number = KIT_PROMPT_VERSION, hint?: KitArchetype): string {
+  if (version === KIT_PROMPT_CARDS_VERSION) return skillFor('kit', hint).text;
+  if (version === KIT_PROMPT_FAMILY_VERSION) {
+    const card = archetypeCard(hint);
+    return card ? `${SHAPE_SYSTEM_PROMPT}\n\n${card}` : SHAPE_SYSTEM_PROMPT;
+  }
   const text = KIT_PROMPTS[version];
   if (!text)
     throw new Error(
-      `unknown kit prompt version ${version} (kept: ${Object.keys(KIT_PROMPTS).join(', ')})`
+      `unknown kit prompt version ${version} (kept: ${[...Object.keys(KIT_PROMPTS), KIT_PROMPT_CARDS_VERSION, KIT_PROMPT_FAMILY_VERSION].join(', ')})`
     );
   return text;
 }
@@ -66,7 +98,8 @@ export function shapeQuestion(
   label: string,
   aspect?: number,
   hint?: KitArchetype,
-  withFacade = false
+  withFacade = false,
+  facts: readonly string[] = []
 ): string {
   const name = label.slice(0, 40).replace(/"/g, "'");
   const seen =
@@ -75,7 +108,8 @@ export function shapeQuestion(
       : '';
   const guess = hint ? ` It is probably a "${hint}".` : '';
   const facade = withFacade ? ` ${FACADE_REFERENCE_LINE}` : '';
-  return `Describe the full 3D "${name}" in the clear rectangle in the middle of this crop with strong 3D imagination and interpolation, even if partially occluded.${seen}${guess}${facade}`;
+  const measured = facts.length ? ` Measured: ${facts.join(' · ')}.` : '';
+  return `Describe the full 3D "${name}" in the clear rectangle in the middle of this crop with strong 3D imagination and interpolation, even if partially occluded.${seen}${guess}${measured}${facade}`;
 }
 
 const color = { type: 'string' };
@@ -128,6 +162,46 @@ export const SHAPE_JSON_SCHEMA = {
   },
 };
 
+/**
+ * Schema of kit prompt 2 (PQ-T12): `evidence` first, so the answer is written in the order of the Look card
+ * (look, then answer), and `confidence`. Kept apart from `SHAPE_JSON_SCHEMA`: under prompt 1 the model is
+ * not offered these fields, so its answers (and their length) stay what the baseline measured.
+ */
+export const SHAPE_JSON_SCHEMA_CARDS = {
+  ...SHAPE_JSON_SCHEMA,
+  schema: {
+    ...SHAPE_JSON_SCHEMA.schema,
+    properties: {
+      evidence: {
+        type: 'object',
+        properties: {
+          view: { type: 'string', enum: [...EVIDENCE_VIEWS] },
+          outline: { type: 'string' },
+          hiddenBy: { type: 'array', items: { type: 'string' } },
+          volumes: { type: 'array', items: { type: 'string' } },
+          visibleParts: { type: 'array', items: { type: 'string' }, maxItems: MAX_VISIBLE_PARTS },
+          repeats: { type: 'object', additionalProperties: int },
+          unsure: { type: 'array', items: { type: 'string' } },
+        },
+      },
+      ...SHAPE_JSON_SCHEMA.schema.properties,
+      confidence: {
+        type: 'object',
+        properties: {
+          archetype: { type: 'number' },
+          proportions: { type: 'number' },
+          colors: { type: 'number' },
+          counts: { type: 'number' },
+        },
+      },
+    },
+  },
+};
+
+/** The JSON schema sent with kit prompt `version`. */
+export const kitJsonSchema = (version: number = KIT_PROMPT_VERSION) =>
+  version === KIT_PROMPT_CARDS_VERSION ? SHAPE_JSON_SCHEMA_CARDS : SHAPE_JSON_SCHEMA;
+
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 const NEUTRAL = '#9aa3ad';
 const HEX = /^#[0-9a-f]{6}$/i;
@@ -140,7 +214,58 @@ const ReplySchema = z.object({
   materials: z.record(z.string(), z.unknown()).optional(),
   partMaterials: z.record(z.string(), z.unknown()).optional(),
   details: z.record(z.string(), z.unknown()).optional(),
+  evidence: z.unknown().optional(),
+  confidence: z.unknown().optional(),
 });
+
+/**
+ * Reads `evidence` leniently (PQ-T12): a wrong type drops that field only, an unknown view is dropped, the
+ * part list is cut at `MAX_VISIBLE_PARTS`. `undefined` when nothing usable is left (answers of prompt 1).
+ */
+export function parseEvidence(raw: unknown): KitEvidence | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const o = raw as Record<string, unknown>;
+  const words = (v: unknown, max: number, len: number): string[] | undefined => {
+    if (!Array.isArray(v)) return undefined;
+    const out = v
+      .filter((x): x is string => typeof x === 'string' && x.trim().length > 0)
+      .map((x) => x.trim().toLowerCase().slice(0, len));
+    return out.length ? [...new Set(out)].slice(0, max) : undefined;
+  };
+  const out: KitEvidence = {};
+  if (typeof o.view === 'string' && (EVIDENCE_VIEWS as readonly string[]).includes(o.view))
+    out.view = o.view as KitEvidence['view'] & string;
+  if (typeof o.outline === 'string' && o.outline.trim())
+    out.outline = o.outline.trim().slice(0, 160);
+  const hiddenBy = words(o.hiddenBy, 6, 40);
+  if (hiddenBy) out.hiddenBy = hiddenBy;
+  const volumes = words(o.volumes, 3, 60);
+  if (volumes) out.volumes = volumes;
+  const visibleParts = words(o.visibleParts, MAX_VISIBLE_PARTS, 40);
+  if (visibleParts) out.visibleParts = visibleParts;
+  if (o.repeats && typeof o.repeats === 'object' && !Array.isArray(o.repeats)) {
+    const repeats: Record<string, number> = {};
+    for (const [k, v] of Object.entries(o.repeats as Record<string, unknown>))
+      if (typeof v === 'number' && Number.isFinite(v))
+        repeats[k.slice(0, 32)] = clamp(Math.round(v), 0, 50);
+    if (Object.keys(repeats).length) out.repeats = repeats;
+  }
+  const unsure = words(o.unsure, 12, 40);
+  if (unsure) out.unsure = unsure;
+  return Object.keys(out).length ? out : undefined;
+}
+
+/** `confidence` of the answer, each value clamped to 0..1; `undefined` when none is a number. */
+export function parseKitConfidence(raw: unknown): KitConfidence | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const o = raw as Record<string, unknown>;
+  const out: KitConfidence = {};
+  for (const k of ['archetype', 'proportions', 'colors', 'counts'] as const) {
+    const v = o[k];
+    if (typeof v === 'number' && Number.isFinite(v)) out[k] = clamp(v, 0, 1);
+  }
+  return Object.keys(out).length ? out : undefined;
+}
 
 const LIMITS = { windows: 8, doors: 3, wheels: 6, legs: 4, floors: 4, units: 8 } as const;
 
@@ -154,6 +279,55 @@ export const CRITIC_SYSTEM_PROMPT = [
   'Counts, sub-type, proportions and part colour roles only: never metres, watts, or geometry numbers.',
   'Empty patch ({}) when the model already matches.',
 ].join(' ');
+
+/** Version 2 (PQ-T14): Base + Critic card + the family's card, for the 2 × 2 sheet. Built per call. */
+export const CRITIC_PROMPT_CARDS_VERSION = 2;
+
+/** The critic system prompt of `version`; throws on an unknown one. */
+export function criticPrompt(
+  version: number = CRITIC_PROMPT_VERSION,
+  archetype?: KitArchetype
+): string {
+  if (version === CRITIC_PROMPT_CARDS_VERSION) return skillFor('critic', archetype).text;
+  if (version === CRITIC_PROMPT_VERSION) return CRITIC_SYSTEM_PROMPT;
+  throw new Error(`unknown critic prompt version ${version}`);
+}
+
+/** Fields of one patch at most (PQ-T14): the largest red / blue areas first, the model's list order. */
+export const CRITIC_MAX_FIELDS = 4;
+
+/** Order the fields are kept in when a patch names too many: family, volumes, counts, then paint. */
+const PATCH_PRIORITY = [
+  'archetype',
+  'subtype',
+  'proportions',
+  'details',
+  'colors',
+  'materials',
+] as const;
+
+/** A patch cut to `max` fields, by priority (PQ-T14: a long patch is a guess). */
+export function capPatchFields(
+  patch: Partial<ObjectKit>,
+  max: number = CRITIC_MAX_FIELDS
+): Partial<ObjectKit> {
+  const keys = PATCH_PRIORITY.filter((k) => patch[k] !== undefined).slice(0, max);
+  return Object.fromEntries(keys.map((k) => [k, patch[k]])) as Partial<ObjectKit>;
+}
+
+/** The `reasons` of a critic reply: one short line per changed field, at most 6 lines of 160 characters. */
+export function parseKitReasons(content: string): string[] {
+  try {
+    const r = (JSON.parse(content) as { reasons?: unknown }).reasons;
+    const lines = Array.isArray(r) ? r : r && typeof r === 'object' ? Object.values(r) : [];
+    return lines
+      .filter((l): l is string => typeof l === 'string' && l.trim().length > 0)
+      .slice(0, 6)
+      .map((l) => l.trim().slice(0, 160));
+  } catch {
+    return [];
+  }
+}
 
 /** Partial kit: every field optional, nothing required (patches only change what they name). */
 export const CRITIC_JSON_SCHEMA = {
@@ -193,11 +367,34 @@ export const CRITIC_JSON_SCHEMA = {
   },
 };
 
+/** The critic schema of version 2: the patch fields plus `reasons`. */
+export const criticJsonSchema = (version: number = CRITIC_PROMPT_VERSION) =>
+  version === CRITIC_PROMPT_CARDS_VERSION
+    ? {
+        name: CRITIC_JSON_SCHEMA.name,
+        schema: {
+          ...CRITIC_JSON_SCHEMA.schema,
+          properties: {
+            ...CRITIC_JSON_SCHEMA.schema.properties,
+            reasons: { type: 'array', items: { type: 'string' } },
+          },
+        },
+      }
+    : CRITIC_JSON_SCHEMA;
+
 /** User turn: current kit JSON + the score numbers the patch must raise. */
 export function criticQuestion(
   kit: ObjectKit,
-  score: { score: number; iou: number; edgeF1: number; deltaE: number }
+  score: { score: number; iou: number; edgeF1: number; deltaE: number },
+  version: number = CRITIC_PROMPT_VERSION
 ): string {
+  if (version === CRITIC_PROMPT_CARDS_VERSION) {
+    return (
+      `Current kit: ${JSON.stringify(kit)}. ` +
+      `Scores: ${score.score}/100 (silhouette IoU ${score.iou}, edge F1 ${score.edgeF1}, colour ΔE ${score.deltaE}). ` +
+      `Answer the JSON patch of the kit (at most ${CRITIC_MAX_FIELDS} fields) and "reasons".`
+    );
+  }
   return (
     `Left is the photo of the selected object, right is our 3D model seen from the same view. ` +
     `Current kit: ${JSON.stringify(kit)}. ` +
@@ -371,7 +568,11 @@ export function parseKit(content: string, fallback: KitArchetype = 'other'): Obj
     const m = RECIPE_MATERIALS.find((x) => x === reply.data.partMaterials?.[k]);
     if (m) partMaterials[k] = m;
   }
+  const evidence = parseEvidence(reply.data.evidence);
+  const kitConfidence = parseKitConfidence(reply.data.confidence);
   const kit = ObjectKitSchema.safeParse({
+    ...(evidence ? { evidence } : {}),
+    ...(kitConfidence ? { confidence: kitConfidence } : {}),
     archetype,
     ...(subtype ? { subtype } : {}),
     // Spark only estimates the depth: keep it within the archetype's real size range (PT-8).

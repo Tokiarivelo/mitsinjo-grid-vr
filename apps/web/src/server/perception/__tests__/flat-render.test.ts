@@ -2,6 +2,7 @@
 import { describe, expect, it, vi } from 'vitest';
 vi.mock('server-only', () => ({}));
 import { frameColor } from '@/features/vision-insert/utils/openings';
+import { cpuMs } from '@/test/cpu-time';
 import { kitToRecipe } from '@/lib/object-kit';
 import { fitRecipe, type ObjectRecipe, type RecipePart } from '@/lib/object-shape';
 import { hexToRgb } from '../color-measure';
@@ -28,7 +29,7 @@ const pixel = (r: ReturnType<typeof renderFlat>, c: number, row: number, cols: n
   return [r.rgb[i]!, r.rgb[i + 1]!, r.rgb[i + 2]!];
 };
 
-/** Render budget per object: strict alone (`make test-shape`), looser when the whole suite shares the CPU. */
+/** Render budget per object, in CPU time (`cpuMs`: the other test files of the full suite do not count). */
 const RENDER_BUDGET_MS = process.env.SHAPE_BUDGET_STRICT ? 100 : 500;
 
 describe('renderFlat (PR-0.1)', () => {
@@ -127,9 +128,9 @@ describe('renderFlat (PR-0.1)', () => {
     for (const c of GOLDEN_SHAPES) {
       const rec = kitToRecipe(c.prior);
       const aspect = rec.proportions.w / rec.proportions.h;
-      const t0 = performance.now();
+      const t0 = cpuMs();
       const flat = renderFlat(rec, aspect, 128, Math.round(128 / aspect));
-      const ms = performance.now() - t0;
+      const ms = cpuMs() - t0;
       const sil = renderRecipe(rec, aspect, 128, Math.round(128 / aspect));
       expect(iou(flat.mask, sil), c.name).toBeGreaterThan(0.95);
       expect(ms, c.name).toBeLessThan(RENDER_BUDGET_MS);
@@ -381,9 +382,9 @@ describe('assembly details (PQ-T3): the judge sees what the viewer shows', () =>
       0
     );
     renderFlat(house, 1, 128, 128); // warm-up
-    const t0 = performance.now();
+    const t0 = cpuMs();
     const r = renderFlat(house, 1, 128, 128);
-    const ms = performance.now() - t0;
+    const ms = cpuMs() - t0;
     expect(r.mask.data.some((v) => v === 1)).toBe(true);
     expect(ms).toBeLessThan(process.env.SHAPE_BUDGET_STRICT ? 300 : 900);
   });

@@ -3,7 +3,7 @@ import 'server-only';
 import sharp from 'sharp';
 import type { ObjectRecipe, ShapeTarget } from '@/lib/object-shape';
 import { CANONICAL_ANGLES, type CanonicalAngle, type ImaginedAngleView } from '@/lib/object-shape';
-import { defaultArchetype } from '@/lib/object-kit';
+import { archetypeOf } from '@/lib/object-kit';
 import { renderFlat, type FlatView } from './flat-render';
 
 /** Canonical views for the 6 angles of 2D imagination. */
@@ -214,7 +214,7 @@ export async function generateImaginedViews(
   photoAspect = 1,
   size = 256
 ): Promise<ImaginedAngleView[]> {
-  const archetype = defaultArchetype(target.category, target.scenery, target.label);
+  const archetype = archetypeOf(target);
   const views: ImaginedAngleView[] = [];
 
   for (const angle of CANONICAL_ANGLES) {

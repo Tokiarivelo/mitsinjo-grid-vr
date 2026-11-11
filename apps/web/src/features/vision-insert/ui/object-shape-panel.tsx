@@ -28,7 +28,9 @@ import {
   type ShapeStep,
 } from '@/lib/object-shape';
 import type { ApplianceDetection } from '@/lib/vision';
+import { FamilyQuestion } from './family-question';
 import { PartCoverageLine } from './part-coverage-line';
+import { PhotoWarningLine } from './photo-warning-line';
 import { cn } from '@/lib/utils';
 import { useElapsedSeconds } from '../hooks/use-elapsed-seconds';
 import type { ObjectShapeState } from '../hooks/use-object-shape';
@@ -180,6 +182,8 @@ export interface ObjectShapePanelProps extends ObjectShapeState {
   onRetry?: () => void;
   /** « Regenerate the 3D model »: re-run Spark for an existing 3D model, skipping cache. */
   onRegenerate?: () => void;
+  /** The operator picked a family when the model doubted it (PQ-T41): rebuilds with it as the hint. */
+  onChooseFamily?: (archetype: string) => void;
   /** « Cancel » on the improvement chip: stops the background stages. */
   onCancelImprove?: () => void;
   /** « Generate the 3D model »: nothing is asked to Spark before (selecting only shows a kept model). */
@@ -209,6 +213,7 @@ export function ObjectShapePanel({
   imageUrl,
   onRetry,
   onRegenerate,
+  onChooseFamily,
   onCancelImprove,
   onGenerate,
   sessionId,
@@ -419,6 +424,10 @@ export function ObjectShapePanel({
           {shape.mode === 'recipe' && shape.recipe && <DimStatusLine recipe={shape.recipe} />}
           {shape.mode === 'recipe' && shape.coverage && (
             <PartCoverageLine coverage={shape.coverage} />
+          )}
+          {shape.mode === 'recipe' && <PhotoWarningLine conditions={shape.conditions} />}
+          {shape.mode === 'recipe' && shape.ask && onChooseFamily && (
+            <FamilyQuestion archetypes={shape.ask.archetypes} onChoose={onChooseFamily} />
           )}
           {webgl && (
             <p className="flex items-center gap-1.5 text-xs text-text-muted">

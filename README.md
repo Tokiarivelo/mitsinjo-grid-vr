@@ -342,6 +342,14 @@ make test-shape
 # 3D shape report: scores + contact sheet (photo | flat | ¾) → test-results/shape-report/
 # (synthetic table + « Real » table from the local captures in __fixtures__/shape/real/)
 make shape-report
+# Colour under a shadow, litSurface on vs off: painted on the real photos + real walls in shadow (no API call)
+make shadow-photos   # once: downloads the 8 shadowed-wall photos (Wikimedia Commons) into the local fixtures
+make shadow-compare
+# One real photo per family the real set lacked (tank, panel, bush, animal, person, building), then capture each
+make family-photos   # once: Wikimedia Commons → local fixtures (ids and labels in __fixtures__/shape/family-photos.json)
+make shape-capture PHOTO=apps/web/src/server/perception/__fixtures__/shape/real/photos/cow.jpg ID=cow LABEL=zebu
+# Free-parts call on live Spark, first prompt vs Muse cards (costs API calls; IDS limits the run)
+make eval-parts PROMPT=1,2 IDS=pump,fan
 # Which SAM word outlines a capture? best box IoU per word, photo and crop (costs SAM calls)
 make sam-probe ID=utility-pole CONCEPTS="pole,utility pole"
 # Rubric judge (Muse Wonder) on the real captures, intact vs damaged → calibration (costs API calls)

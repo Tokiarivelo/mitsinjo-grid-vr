@@ -58,7 +58,42 @@ const count = (max: number) => z.number().int().min(0).max(max);
 export const PART_MATERIAL_KEYS = ['roof', 'walls', 'frame', 'plinth', 'chimney', 'door'] as const;
 export type PartMaterialKey = (typeof PART_MATERIAL_KEYS)[number];
 
+/** Views the model may report facing (PQ-T12). Anything else is dropped. */
+export const EVIDENCE_VIEWS = ['front', 'side', 'back', 'three_quarter', 'top'] as const;
+
+/** Most parts the model may list as visible (PQ-T12). */
+export const MAX_VISIBLE_PARTS = 12;
+
+/**
+ * What the model saw before it answered (PQ-T12, methodology §6.3). Written first in the answer, so the
+ * fields after it follow from it. `visibleParts` are plain SAM words (« wheel », « door handle »).
+ */
+export const KitEvidenceSchema = z.object({
+  view: z.enum(EVIDENCE_VIEWS).optional(),
+  outline: z.string().max(160).optional(),
+  hiddenBy: z.array(z.string().max(40)).max(6).optional(),
+  volumes: z.array(z.string().max(60)).max(3).optional(),
+  visibleParts: z.array(z.string().max(40)).max(MAX_VISIBLE_PARTS).optional(),
+  /** Counts of what repeats on the photo (windows per floor, wheels on this side…). */
+  repeats: z.record(z.string().max(32), z.number().int().min(0).max(50)).optional(),
+  /** Fields the model guessed instead of saw (« proportions.d », « colors »). Fusion leads them by measurement. */
+  unsure: z.array(z.string().max(40)).max(12).optional(),
+});
+export type KitEvidence = z.infer<typeof KitEvidenceSchema>;
+
+/** How sure the model is of each group of fields, 0 to 1; under 0.5 « mostly a guess » (PQ-T12). */
+export const KitConfidenceSchema = z.object({
+  archetype: z.number().min(0).max(1).optional(),
+  proportions: z.number().min(0).max(1).optional(),
+  colors: z.number().min(0).max(1).optional(),
+  counts: z.number().min(0).max(1).optional(),
+});
+export type KitConfidence = z.infer<typeof KitConfidenceSchema>;
+
 export const ObjectKitSchema = z.object({
+  /** Written before the answer (PQ-T12); absent on answers of the first prompt. */
+  evidence: KitEvidenceSchema.optional(),
+  confidence: KitConfidenceSchema.optional(),
   archetype: z.enum(KIT_ARCHETYPES),
   /** Optional subtype (vehicle: sedan, hatchback, vintage, van, truck; house: cottage, gable; tree: round, conifer). */
   subtype: z.string().max(32).optional(),
@@ -189,6 +224,19 @@ export function flatWaterRecipe(recipe: ObjectRecipe): ObjectRecipe {
       },
     ],
   };
+}
+
+/** The family asked of the model: the operator's pick when valid (PQ-T41), else the detection's. */
+export function archetypeOf(target: {
+  category: ApplianceCategory;
+  scenery?: SceneryType | undefined;
+  label?: string | undefined;
+  archetype?: string | undefined;
+}): KitArchetype {
+  const picked = (KIT_ARCHETYPES as readonly string[]).includes(target.archetype ?? '')
+    ? (target.archetype as KitArchetype)
+    : null;
+  return picked ?? defaultArchetype(target.category, target.scenery, target.label);
 }
 
 /** Archetype the detection already implies (mock mode, and the hint sent to Spark). */

@@ -10,6 +10,7 @@ import {
   scoreElevation,
 } from './elevation-score';
 import type { Elevation } from './facade-house';
+import { env } from '@/lib/env';
 import { stageQuestion } from './shape-script-prompt';
 import {
   FINAL_STAGE,
@@ -145,6 +146,7 @@ export function sparkStageProposer(input: SparkStageInput): Proposer<ElevationSt
       components: ctx.components,
       editable: ctx.editable,
       ...(ctx.feedback ? { feedback: ctx.feedback } : {}),
+      cards: env.SHAPE_LOOP_CARDS,
       notes: stageNotes(scored),
     });
     const { result } = await input.proposeShapeOps(
@@ -414,6 +416,7 @@ export function viewStageLoop(input: ViewLoopInput) {
       components: ctx.components,
       editable: ctx.editable,
       ...(ctx.feedback ? { feedback: ctx.feedback } : {}),
+      cards: env.SHAPE_LOOP_CARDS,
       notes: viewStageNotes(scoreViews(ctx.recipe, views, judged)),
     });
     const { result } = await input.proposeShapeOps(
