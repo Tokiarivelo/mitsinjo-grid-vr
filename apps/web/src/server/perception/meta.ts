@@ -38,8 +38,9 @@ import {
 } from './rubric-judge';
 import {
   VIEWS_CHECK_JSON_SCHEMA,
+  VIEWS_CHECK_CARDS_VERSION,
   VIEWS_CHECK_PROMPT_VERSION,
-  VIEWS_CHECK_SYSTEM_PROMPT,
+  viewsCheckPrompt,
   parseViewsCheck,
 } from './views-check';
 import { REGION_SYSTEM_PROMPT, regionQuestion } from './region-prompt';
@@ -60,6 +61,7 @@ import {
 import { boxUnionCoverage, parseSamOutput } from './parse-sam';
 import {
   SHAPE_SCRIPT_JSON_SCHEMA,
+  SHAPE_SCRIPT_CARDS_VERSION,
   SHAPE_SCRIPT_PROMPT_VERSION,
   shapeScriptSystemPrompt,
   type StageSheet,
@@ -477,14 +479,17 @@ export class MetaPerceptionBackend implements PerceptionBackend {
     question: string,
     signal?: AbortSignal
   ): Promise<PerceptionCall<ViewsCheckResult>> {
+    const promptVersion = env.SHAPE_LOOP_CARDS
+      ? VIEWS_CHECK_CARDS_VERSION
+      : VIEWS_CHECK_PROMPT_VERSION;
     const { content, model, usage } = await this.visionJson(
-      VIEWS_CHECK_SYSTEM_PROMPT,
+      viewsCheckPrompt(promptVersion),
       question,
       imageUrl,
       VIEWS_CHECK_JSON_SCHEMA,
       signal,
       false,
-      { kind: 'checkViews', params: { promptVersion: VIEWS_CHECK_PROMPT_VERSION } }
+      { kind: 'checkViews', params: { promptVersion } }
     );
     const check = parseViewsCheck(content);
     console.info(
@@ -500,9 +505,12 @@ export class MetaPerceptionBackend implements PerceptionBackend {
     sheet: StageSheet = 'elevation',
     opts: ShapeOpsOptions = {}
   ): Promise<PerceptionCall<ShapeOpsResult>> {
+    const promptVersion = env.SHAPE_LOOP_CARDS
+      ? SHAPE_SCRIPT_CARDS_VERSION
+      : SHAPE_SCRIPT_PROMPT_VERSION;
     const ask = (baseModel: string) =>
       this.visionJson(
-        shapeScriptSystemPrompt(sheet),
+        shapeScriptSystemPrompt(sheet, env.SHAPE_LOOP_CARDS),
         question,
         imageUrl,
         SHAPE_SCRIPT_JSON_SCHEMA,
@@ -510,7 +518,7 @@ export class MetaPerceptionBackend implements PerceptionBackend {
         false,
         {
           kind: 'proposeShapeOps',
-          params: { promptVersion: SHAPE_SCRIPT_PROMPT_VERSION, sheet, refine: !!opts.refine },
+          params: { promptVersion, sheet, refine: !!opts.refine },
         },
         [],
         baseModel
@@ -534,7 +542,7 @@ export class MetaPerceptionBackend implements PerceptionBackend {
     const { content, model, usage } = answer;
     const ops = parseStageOps(content);
     console.info(
-      `[vision] 3D stage ops from ${model} (prompt v${SHAPE_SCRIPT_PROMPT_VERSION}): ${ops ? ops.map((o) => `${(o as { op: string }).op} ${(o as { id?: string }).id ?? ''}`.trim()).join(', ') || 'none' : 'unusable'}`
+      `[vision] 3D stage ops from ${model} (prompt v${promptVersion}): ${ops ? ops.map((o) => `${(o as { op: string }).op} ${(o as { id?: string }).id ?? ''}`.trim()).join(', ') || 'none' : 'unusable'}`
     );
     return { model, usage, result: { ops } };
   }

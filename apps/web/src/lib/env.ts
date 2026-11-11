@@ -17,6 +17,11 @@ const envSchema = z.object({
   /** Rubric judge of the 3D models (PQ-T4, offline `make shape-judge`). */
   META_JUDGE_MODEL: z.string().default('muse-wonder-1.0'),
   META_SEGMENT_MODEL: z.string().default('sam-3.1'),
+  /** Muse cards in the stage loop, views check and final check (PQ-T15, off until `make eval-stages` shows no loss). */
+  SHAPE_LOOP_CARDS: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
   /** Kit samples per photo (PQ-T18): 2 votes between two parallel calls when ≥ 40 s are left. */
   SHAPE_KIT_SAMPLES: z.coerce.number().int().min(1).max(2).default(1),
   META_IMAGE_MODEL: z.string().default('muse-image-1.0'),
@@ -53,6 +58,7 @@ export const env = envSchema.parse({
   META_REFINE_MODEL: process.env.META_REFINE_MODEL || undefined,
   META_JUDGE_MODEL: process.env.META_JUDGE_MODEL || undefined,
   META_SEGMENT_MODEL: process.env.META_SEGMENT_MODEL || undefined,
+  SHAPE_LOOP_CARDS: process.env.SHAPE_LOOP_CARDS || undefined,
   SHAPE_KIT_SAMPLES: process.env.SHAPE_KIT_SAMPLES || undefined,
   META_IMAGE_MODEL: process.env.META_IMAGE_MODEL || undefined,
   META_SPEND_CAP_USD: process.env.META_SPEND_CAP_USD || undefined,

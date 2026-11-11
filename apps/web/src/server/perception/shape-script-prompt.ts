@@ -1,5 +1,6 @@
 import { MAX_PANES, RECIPE_MATERIALS, type RecipePart } from '@/lib/object-shape';
 import { FACES, MAX_REPEAT, WALL_FACES, type Component } from '@/lib/shape-script';
+import { cardText } from './skills';
 import type { RoundFeedback } from './shape-stages';
 import type { OpTrial } from './stage-steps';
 
@@ -13,6 +14,8 @@ import type { OpTrial } from './stage-steps';
 
 /** Bump when the wording changes; logged with every stage call (eval keeps the best). */
 export const SHAPE_SCRIPT_PROMPT_VERSION = 3;
+/** Version 4 (PQ-T15): version 3 + the Stage ops card. Opt-in (`SHAPE_LOOP_CARDS`). */
+export const SHAPE_SCRIPT_CARDS_VERSION = 4;
 /** Most ops kept from one answer. */
 export const MAX_STAGE_OPS = 12;
 /** Ops Spark may use; `add` only for boxes (no rings, no lathe profiles). */
@@ -59,8 +62,8 @@ const promptLines = (sheet: StageSheet) => [
 ];
 
 /** System prompt of the stage loop for one kind of sheet (prompt v`SHAPE_SCRIPT_PROMPT_VERSION`). */
-export const shapeScriptSystemPrompt = (sheet: StageSheet = 'elevation') =>
-  promptLines(sheet).join(' ');
+export const shapeScriptSystemPrompt = (sheet: StageSheet = 'elevation', cards = false) =>
+  cards ? `${promptLines(sheet).join(' ')}\n\n${cardText('stages')}` : promptLines(sheet).join(' ');
 
 /** The house elevation variant (kept for callers and tests). */
 export const SHAPE_SCRIPT_SYSTEM_PROMPT = shapeScriptSystemPrompt('elevation');
@@ -169,6 +172,8 @@ export interface StageQuestionInput {
   notes?: ReadonlyArray<string>;
   /** What the previous round's ops did (a retry after no gain). */
   feedback?: RoundFeedback;
+  /** Muse cards on (PQ-T15): the final check reads its card instead of the short line. */
+  cards?: boolean;
 }
 
 const OUTCOME_TEXT: Record<OpTrial['outcome'], string> = {
@@ -213,7 +218,9 @@ export function stageQuestion(q: StageQuestionInput): string {
     ...(q.feedback ? feedbackLines(q.feedback) : []),
     ...(q.stage === 'final'
       ? [
-          'Final check: every earlier stage is done. Compare the WHOLE model with the drawing, part by part, and fix what still differs (missing, extra, misplaced or wrongly sized parts, wrong materials). Empty list when the model already matches.',
+          q.cards
+            ? cardText('final')
+            : 'Final check: every earlier stage is done. Compare the WHOLE model with the drawing, part by part, and fix what still differs (missing, extra, misplaced or wrongly sized parts, wrong materials). Empty list when the model already matches.',
         ]
       : []),
     `Editable components:\n${edit.map(describeComponent).join('\n') || '(none yet — add or cut them)'}`,

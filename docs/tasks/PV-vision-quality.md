@@ -259,6 +259,7 @@ Meta API calls; all others run offline.
       `final` stage question; versions bumped.
       **Test:** `shape-script-prompt.test.ts`, `views-check.test.ts` (prompt contains the card, version changed).
       **Done when:** `make eval-stages` on the recorded loops: accepted ops per round not lower, no stage lower.
+      _Built 2026-11-11, unticked, off (`SHAPE_LOOP_CARDS=false`):_ stage prompt v4 (`shapeScriptSystemPrompt(sheet, true)`), views check v2 (`viewsCheckPrompt(2)`), the Final check card in the `final` question (`stageQuestion({ cards })`). Replays use recorded answers, so they cannot show a prompt change: it needs live `make facade-e2e` recordings under both settings; only 1 loop is recorded.
 - [ ] **PQ-T16 View cards and candidate pick** _(API)_. `object-views.ts`, `facade-views.ts`: side prompts
       built from the Side view card and its family line. New `server/perception/view-candidates.ts`: score a
       generated side against the front (same height within 5 %, top line correlation, colour ΔE per material,
