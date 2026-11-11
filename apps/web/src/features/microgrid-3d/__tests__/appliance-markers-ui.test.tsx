@@ -249,7 +249,7 @@ describe('ApplianceMarkers with Placed Models (PI-T2)', () => {
     );
 
     // p1 has a placed 3D model: rendered via placed-appliance-models mesh
-    const placedMesh = container.querySelector('mesh[name="placed-appliance-models"]');
+    const placedMesh = container.querySelector('mesh[name^="placed-appliance-models"]');
     expect(placedMesh).not.toBeNull();
 
     // p2 is a standard marker: 1 plinth + 1 body instance rendered
@@ -257,7 +257,7 @@ describe('ApplianceMarkers with Placed Models (PI-T2)', () => {
     expect(instances).toHaveLength(2);
   });
 
-  it('draws 30 placed objects in a single merged mesh (draw call budget: ≤ +2)', () => {
+  it('draws 30 placed objects in one merged mesh per surface family (draw call budget: ≤ 5)', () => {
     const thirtyPumps: Appliance[] = Array.from({ length: 30 }, (_, i) => ({
       ...pump,
       id: `pump-${i}`,
@@ -278,9 +278,10 @@ describe('ApplianceMarkers with Placed Models (PI-T2)', () => {
       <ApplianceMarkers markers={markers} selectedSector={null} tagOf={(m) => m.name} />
     );
 
-    // All 30 models merged into ONE single mesh!
-    const placedMeshes = container.querySelectorAll('mesh[name="placed-appliance-models"]');
-    expect(placedMeshes).toHaveLength(1);
+    // All 30 models merged into one mesh per surface family, never more than 5 (PQ-T32).
+    const placedMeshes = container.querySelectorAll('mesh[name^="placed-appliance-models"]');
+    expect(placedMeshes.length).toBeGreaterThanOrEqual(1);
+    expect(placedMeshes.length).toBeLessThanOrEqual(5);
 
     // Standard instances are completely empty (0 standard markers)
     expect(screen.queryByTestId('mock-instance')).toBeNull();

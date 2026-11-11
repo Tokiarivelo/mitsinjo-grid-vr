@@ -246,7 +246,8 @@ describe('runObjectShape measured colours (PF-T2)', () => {
   it('no photo (crop impossible) → Spark colours kept', async () => {
     const p = client(meta(kitToRecipe(guessed), { kit: guessed }));
     const out = await runObjectShape(p, null, 'data:full', cottage);
-    expect(out.recipe!.parts.some((x) => x.color === '#000000')).toBe(true);
+    // Spark's #000000 is kept as the guess, clamped to the PBR floor 30 (PQ-T39): pure black is never a base colour.
+    expect(out.recipe!.parts.some((x) => x.color === '#1e1e1e')).toBe(true);
   });
 
   it('missing outline is segmented on demand: full measurement restored', async () => {
