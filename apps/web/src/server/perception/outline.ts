@@ -5,8 +5,11 @@ import { iou, MATCH_MIN_IOU } from './box-match';
 import { remapOutlineToPhoto } from './mask-outline';
 import { pickConsensus, type OutlineCandidate } from './sam-consensus';
 
-/** Longest wait for one SAM call; past it the Muse box is kept. */
-export const SEGMENT_TIMEOUT_MS = 8000;
+/**
+ * Default wait for one SAM call: none — the generation is awaited until it answers (the Muse box
+ * is kept only on failure or a mock answer). Callers may still pass an explicit `timeoutMs`.
+ */
+export const SEGMENT_TIMEOUT_MS: number | null = null;
 /** Most SAM calls per photo (one per distinct label), to bound cost and latency. */
 export const MAX_SEGMENT_CONCEPTS = 8;
 /** Phrasings asked together by the consensus (the noun, the full label, a lookalike). */
@@ -99,19 +102,28 @@ export function samRetries(d: Pick<ApplianceDetection, 'label'>): string[] {
 const HEAD_CUT =
   /\s(?:with|on|near|in|at|under|beside|next to|behind|avec|sur|près de|devant|derrière)\s/;
 
-/** Resolves to TIMEOUT after `ms` (the client also gets the abort signal), null on error. */
+/**
+ * `run` bounded by `ms`, or unbounded when `ms` is null/undefined/non-finite (the generation is
+ * awaited). Resolves to TIMEOUT on an explicit bound, null on error.
+ */
 const TIMEOUT = Symbol('timeout');
 async function withTimeout<T>(
   run: (signal: AbortSignal) => Promise<T>,
-  ms: number
+  ms: number | null | undefined
 ): Promise<T | null | typeof TIMEOUT> {
+  if (ms === null || ms === undefined || !Number.isFinite(ms)) {
+    return run(new AbortController().signal).catch(() => null);
+  }
   const controller = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<typeof TIMEOUT>((resolve) => {
-    timer = setTimeout(() => {
-      controller.abort();
-      resolve(TIMEOUT);
-    }, ms);
+    timer = setTimeout(
+      () => {
+        controller.abort();
+        resolve(TIMEOUT);
+      },
+      Math.max(0, ms)
+    );
   });
   try {
     return await Promise.race([run(controller.signal).catch(() => null), timeout]);
@@ -199,7 +211,7 @@ function pickOutline(
 /** A usable SAM answer, else the miss cause (timeout, failure, or mock). */
 function usableAnswer(
   seg: (SegmentResult & PerceptionSource) | null | typeof TIMEOUT,
-  timeoutMs: number
+  timeoutMs: number | null | undefined
 ): { seg: SegmentResult & PerceptionSource } | { miss: string } {
   if (seg === TIMEOUT) return { miss: `SAM timed out after ${timeoutMs}ms` };
   if (!seg || seg.source !== 'meta' || seg.fallback) {
@@ -229,7 +241,8 @@ export async function fetchOutlineForBox(
     consensus = false,
     skipFull = false,
   }: {
-    timeoutMs?: number;
+    /** Explicit bound; null/undefined (default) awaits the generation. */
+    timeoutMs?: number | null;
     crop?: OutlineCrop;
     /**
      * Concepts tried in order while SAM answers `concept` without a match (`samRetries`: the full label,
@@ -344,15 +357,19 @@ export async function fetchOutlineForBox(
 }
 
 /**
- * Refines Muse boxes with SAM (PV-T5): one call per distinct label, in parallel, each bounded by
- * `timeoutMs`. A matched detection takes the SAM box (pixel-precise) and its mask outline. Failure, timeout, spend cap
- * or a mock answer → the Muse box is kept. Never throws. The SAM mask outline comes along when decoded.
+ * Refines Muse boxes with SAM (PV-T5): one call per distinct label, in parallel, each awaited
+ * (or bounded by an explicit `timeoutMs`). A matched detection takes the SAM box (pixel-precise)
+ * and its mask outline. Failure, timeout, spend cap or a mock answer → the Muse box is kept.
+ * Never throws. The SAM mask outline comes along when decoded.
  */
 export async function refineDetections(
   perception: Pick<PerceptionClient, 'segmentImage'>,
   imageUrl: string,
   detections: ApplianceDetection[],
-  { timeoutMs = SEGMENT_TIMEOUT_MS, maxConcepts = MAX_SEGMENT_CONCEPTS } = {}
+  {
+    timeoutMs = SEGMENT_TIMEOUT_MS,
+    maxConcepts = MAX_SEGMENT_CONCEPTS,
+  }: { timeoutMs?: number | null; maxConcepts?: number } = {}
 ): Promise<RefineResult> {
   const byConcept = new Map<string, number[]>();
   detections.forEach((d, i) => {

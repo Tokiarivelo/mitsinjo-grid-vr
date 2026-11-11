@@ -3,6 +3,7 @@ import 'server-only';
 import type { KitArchetype } from '@/lib/object-kit';
 import { pathToRings } from '@/lib/vision';
 import type { PerceptionClient } from './client';
+import { timeoutSignal } from './abort';
 import {
   measureElevation,
   sideConsistent,
@@ -25,8 +26,8 @@ import type { NormBox } from './schemas';
 /** Archetypes rebuilt from their elevations; others keep the photo pipeline. */
 export const ELEVATION_ARCHETYPES: ReadonlyArray<KitArchetype> = ['house', 'building'];
 
-/** Detail concepts (plinth, step, panes, beams): dropped past this, the elevation is kept. */
-export const DETAIL_SAM_TIMEOUT_MS = 15_000;
+/** Default wait for the detail concepts (plinth, step, panes, beams): none — all are awaited. */
+export const DETAIL_SAM_TIMEOUT_MS: number | null = null;
 /** Data URLs longer than this are re-encoded before SAM (≈ 400 kB of image). */
 const COMPACT_ABOVE = 550_000;
 
@@ -46,10 +47,10 @@ export async function compactDataUrl(url: string): Promise<string> {
   }
 }
 
-/** One SAM call on an elevation: measured ≈ 5–10 s, run in parallel per image. */
-export const ELEVATION_SAM_TIMEOUT_MS = 25_000;
-/** Muse Image side elevation: measured ≈ 35 s. */
-export const SIDE_VIEW_TIMEOUT_MS = 60_000;
+/** Default wait for one SAM call on an elevation: none — the generation is awaited. */
+export const ELEVATION_SAM_TIMEOUT_MS: number | null = null;
+/** Default wait for the Muse Image side elevation: none — the drawing is awaited. */
+export const SIDE_VIEW_TIMEOUT_MS: number | null = null;
 /** SAM answers below this confidence are dropped (windows drawn faint, hatching). */
 const MIN_CONFIDENCE = 0.5;
 const MAX_PER_CONCEPT = 12;
@@ -83,12 +84,21 @@ interface Found {
   height: number;
 }
 
+/** Tighter of two optional bounds (null/undefined = unbounded). */
+function minTimeout(a: number | null | undefined, b: number | null | undefined): number | null {
+  const x = a ?? null;
+  const y = b ?? null;
+  if (x === null) return y;
+  if (y === null) return x;
+  return Math.min(x, y);
+}
+
 /** One concept on one image: real SAM boxes by confidence, or none. */
 async function find(
   segment: Segment,
   url: string,
   concept: string,
-  signal: AbortSignal
+  signal: AbortSignal | undefined
 ): Promise<Found | null> {
   try {
     const seg = await segment(url, concept, signal);
@@ -133,7 +143,7 @@ export async function measureElevationImage(
     withDoors = true,
   } = {}
 ): Promise<{ elevation: Elevation; masks: ElevationMasks } | null> {
-  const signal = AbortSignal.timeout(timeoutMs);
+  const signal = timeoutSignal(timeoutMs);
   // Live 2026-11-02: a 2.4 MB PNG data URL sent 10 times in parallel timed every SAM call out.
   const src = await compactDataUrl(url);
   const concepts = [
@@ -147,8 +157,8 @@ export async function measureElevationImage(
   // PG-T3: base, steps, panes and timber beams, in parallel with the rest; a miss only drops that detail.
   // Plain words SAM knows (live 2026-11-02: « plinth », « step » found nothing on the drawing).
   const extra = ['stone foundation', 'doorstep', 'window pane', 'timber beam'];
-  // Own, shorter time limit: a slow detail never costs the measurement itself.
-  const detailSignal = AbortSignal.timeout(Math.min(timeoutMs, detailTimeoutMs));
+  // Own, shorter time limit when bounded: a slow detail never costs the measurement itself.
+  const detailSignal = timeoutSignal(minTimeout(timeoutMs, detailTimeoutMs));
   const [found, [plinths, steps, panes, beams]] = await Promise.all([
     Promise.all(concepts.map((c) => find(segment, src, c, signal))),
     Promise.all(extra.map((c) => find(segment, src, c, detailSignal))),
@@ -196,12 +206,7 @@ export async function imagineSideView(
   if (!museImageReady()) return null;
   console.info(`[vision] 3D side view → params {"promptVersion":${SIDE_VIEW_PROMPT_VERSION}}`);
   try {
-    const timeout = AbortSignal.timeout(SIDE_VIEW_TIMEOUT_MS);
-    return await museImage(
-      prompt,
-      [frontUrl],
-      signal ? AbortSignal.any([signal, timeout]) : timeout
-    );
+    return await museImage(prompt, [frontUrl], timeoutSignal(SIDE_VIEW_TIMEOUT_MS, signal));
   } catch (err) {
     console.warn('[vision] 3D side view failed:', err instanceof Error ? err.message : err);
     return null;

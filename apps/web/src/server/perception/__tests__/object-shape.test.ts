@@ -64,7 +64,8 @@ describe('runObjectShape (PV-T9)', () => {
       // PQ-T7: facts measured by code, sent as the « Measured: » line.
       facts: ['object 40 × 60 px', 'sharpness low'],
     });
-    expect(signal).toBeInstanceOf(AbortSignal);
+    // No default budget: no signal unless the caller passes one (or an explicit timeoutMs).
+    expect(signal).toBeUndefined();
   });
 
   it('recipe with wrong proportions is fitted to the photo box, not rejected', async () => {
@@ -151,15 +152,15 @@ describe('runObjectShape (PV-T9)', () => {
 
   it('an expired budget (timeoutMs ≤ 0) still builds the recipe — the signal just starts aborted', async () => {
     // Before: AbortSignal.timeout(-146) threw RangeError ("shape failed"), e.g. the critic retry
-    // firing 146 ms past the 60 s budget; the clamp turns it into an instantly-aborted signal.
+    // firing 146 ms past an explicit budget; the clamp turns it into an instantly-aborted signal.
     const p = client(meta(tall));
     const out = await runObjectShape(p, await photo(), 'data:full', target, { timeoutMs: -146 });
     expect(out).toMatchObject({ mode: 'recipe', source: 'meta' });
     expect(p.describeShape.mock.calls[0]![2]).toBeInstanceOf(AbortSignal);
   });
 
-  it('gives Spark 60 s (it needs 15–40 s) and reports each step', async () => {
-    expect(SHAPE_TIMEOUT_MS).toBe(60_000);
+  it('waits for Spark with no default limit (it needs 15–40 s) and reports each step', async () => {
+    expect(SHAPE_TIMEOUT_MS).toBeNull();
     const steps: string[] = [];
     await runObjectShape(client(meta(tall)), await photo(), 'data:full', target, {
       onStep: (s) => steps.push(s),
@@ -554,7 +555,8 @@ describe('free recipe (PV-T9c)', () => {
     const [url, subject, signal] = p.describeParts.mock.calls[0]!;
     expect(url).toMatch(/^data:image\/jpeg;base64,/);
     expect(subject).toEqual({ label: 'Guard', archetype: 'person' });
-    expect(signal).toBeInstanceOf(AbortSignal);
+    // No default budget: no signal unless the caller passes one (or an explicit timeoutMs).
+    expect(signal).toBeUndefined();
     expect(ObjectShapeSchema.safeParse(out).success).toBe(true);
   });
 

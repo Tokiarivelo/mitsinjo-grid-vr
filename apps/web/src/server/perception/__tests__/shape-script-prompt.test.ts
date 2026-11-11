@@ -11,7 +11,13 @@ import {
   shapeScriptSystemPrompt,
   stageQuestion,
 } from '../shape-script-prompt';
-import { facadeStageLoop, stageNotes, stageSheet, sparkStageProposer } from '../shape-stages-spark';
+import {
+  facadeStageLoop,
+  stageNotes,
+  stageSheet,
+  sparkStageProposer,
+  type StageProgress,
+} from '../shape-stages-spark';
 import { HOUSE_STAGES, houseStageScorer, runShapeStages } from '../shape-stages';
 import { facadeHouseRecipe, measureElevation } from '../facade-house';
 import { scoreElevation } from '../elevation-score';
@@ -200,6 +206,23 @@ describe('facadeStageLoop (PG-T18)', () => {
     expect(events.every((e) => e.phase === 'first')).toBe(true);
     expect(events.some((e) => (e as { stage?: string }).stage === 'final')).toBe(false);
     expect(out.recipe.swatches).toEqual(base.recipe.swatches);
+  });
+
+  it('streams the seed model at loop start, so the viewer paints while stage 1 asks Spark', async () => {
+    const proposeShapeOps = vi.fn(async () => ({ result: { ops: [] } }));
+    const events: StageProgress[] = [];
+    await facadeStageLoop({
+      ...base,
+      proposeShapeOps,
+      firstBudgetMs: 30_000,
+      onProgress: (e) => events.push(e),
+    });
+    expect(events[0]).toMatchObject({
+      phase: 'first',
+      state: 'running',
+      stage: 'massing',
+      recipe: base.recipe,
+    });
   });
 
   it('an aborted background run ends with cause aborted', async () => {

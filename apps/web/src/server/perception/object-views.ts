@@ -83,8 +83,8 @@ export const VIEW_PART_CONCEPTS: Partial<
   lamp_post: { front: ['lamp'], side: [] },
 };
 
-/** One SAM call on a view (object or parts). */
-export const VIEW_SAM_TIMEOUT_MS = 20_000;
+/** Default wait for one SAM call on a view (object or parts): none — the generation is awaited. */
+export const VIEW_SAM_TIMEOUT_MS: number | null = null;
 /** Side drawings tried before keeping the front alone (Muse Image may redraw the front). */
 export const VIEW_SIDE_ATTEMPTS = 2;
 const MIN_CONFIDENCE = 0.5;
@@ -126,11 +126,11 @@ export async function measureView(
   url: string,
   concept: string,
   partConcepts: ReadonlyArray<string>,
-  { timeoutMs = VIEW_SAM_TIMEOUT_MS }: { timeoutMs?: number } = {}
+  { timeoutMs = VIEW_SAM_TIMEOUT_MS }: { timeoutMs?: number | null } = {}
 ): Promise<ViewMeasure | null> {
   const src = await compactDataUrl(url);
   const [seg, masks] = await Promise.all([
-    segment(src, concept, AbortSignal.timeout(timeoutMs)).catch(() => null),
+    segment(src, concept, timeoutSignal(timeoutMs)).catch(() => null),
     partConcepts.length
       ? fetchPartMasks(segment, src, 'other', { concepts: partConcepts, timeoutMs })
       : Promise.resolve([]),
@@ -915,11 +915,7 @@ export async function imageBytes(url: string, signal?: AbortSignal): Promise<Buf
   const m = /^data:[^;,]+;base64,(.*)$/s.exec(url);
   if (m) return Buffer.from(m[1]!, 'base64');
   try {
-    const res = await fetch(url, {
-      signal: signal
-        ? AbortSignal.any([signal, AbortSignal.timeout(10_000)])
-        : AbortSignal.timeout(10_000),
-    });
+    const res = await fetch(url, { ...(signal ? { signal } : {}) });
     return res.ok ? Buffer.from(await res.arrayBuffer()) : null;
   } catch {
     return null;
@@ -1008,8 +1004,8 @@ export async function viewsSheet(
 export const VIEW_CHECK_ROUNDS = 2;
 /** One check round, measured live (Spark ≈ 20–30 s + SAM ≈ 10 s): started only with this left. */
 export const VIEW_CHECK_ROUND_MS = 35_000;
-/** Whole views path, first answer included (the house path's « up to 90 s »). */
-export const VIEWS_TOTAL_MS = 90_000;
+/** Default budget of the whole views path: none — the drawings and the AI check are awaited. */
+export const VIEWS_TOTAL_MS: number | null = null;
 
 const meanIou = (recipe: ObjectRecipe, v: ObjectViews) => {
   const f = viewIou(recipe, v.front, 'front');
@@ -1117,8 +1113,9 @@ export async function checkViewsModel(
     const sheet = await viewsSheet(best.recipe, best.views, signal);
     if (!sheet) break;
     let check: ViewsCheck | null = null;
-    // The deadline also bounds the call itself: a stalled Spark answer once ran into Vercel's
-    // 300 s kill (live 2026-11-03). Aborted = no answer, the model is kept.
+    // An explicit deadline also bounds the call itself (live 2026-11-03 a stalled Spark answer
+    // ran into Vercel's 300 s kill); without one the check is awaited. Aborted = no answer,
+    // the model is kept.
     const callSignal = timeoutSignal(deadline - Date.now(), signal);
     try {
       const out = await perception.checkViews(

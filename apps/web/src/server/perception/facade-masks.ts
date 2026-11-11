@@ -6,6 +6,7 @@ import type { NormBox } from '@/lib/vision';
 import type { PerceptionClient } from './client';
 import type { MaskMapGeom } from './mask-geometry';
 import { samBoxToNorm } from './outline';
+import { timeoutSignal } from './abort';
 import { fetchPartMasks, PART_MASKS_TIMEOUT_MS } from './part-masks';
 
 /**
@@ -62,11 +63,11 @@ export async function fetchFacadeMasks(
   facadeUrl: string,
   archetype: KitArchetype,
   objectConcept: string,
-  { timeoutMs = PART_MASKS_TIMEOUT_MS }: { timeoutMs?: number } = {}
+  { timeoutMs = PART_MASKS_TIMEOUT_MS }: { timeoutMs?: number | null } = {}
 ): Promise<FacadeMasks | null> {
   const concepts = FACADE_CONCEPTS[archetype];
   if (!concepts?.length) return null;
-  const signal = AbortSignal.timeout(timeoutMs);
+  const signal = timeoutSignal(timeoutMs);
   const [object, masks] = await Promise.all([
     segmentImage(facadeUrl, objectConcept, signal).catch(() => null),
     fetchPartMasks(segmentImage, facadeUrl, archetype, { timeoutMs, concepts }),

@@ -141,10 +141,10 @@ interface ResponsesPayload {
 }
 
 /**
- * Hard cap on one vision call, whatever the caller's budget: a stalled answer is aborted (the
- * caller falls back) instead of holding the request until Vercel's 300 s kill.
+ * Default cap on one vision call: none — the generation is awaited until it answers (only the
+ * caller's own signal, e.g. the browser leaving, aborts it).
  */
-export const VISION_CALL_MAX_MS = 150_000;
+export const VISION_CALL_MAX_MS: number | null = null;
 
 /** Perception through the Meta Model API (same key and base URL as the chat). */
 export class MetaPerceptionBackend implements PerceptionBackend {

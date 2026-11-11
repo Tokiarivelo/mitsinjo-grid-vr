@@ -364,6 +364,45 @@ describe('useObjectShape staged improvement (PG-T17/T18)', () => {
     expect(result.current.shape!.recipe!.parts[0]!.color).toBe('#cc8844');
   });
 
+  it('streams first-answer stage recipes as a live preview, cleared when the shape lands', async () => {
+    let finish!: () => void;
+    const gate = new Promise<void>((r) => (finish = r));
+    const body = new ReadableStream<Uint8Array>({
+      async start(c) {
+        const enc = new TextEncoder();
+        c.enqueue(
+          enc.encode(
+            ev('shape_stage', {
+              phase: 'first',
+              index: 1,
+              total: 4,
+              stage: 'massing',
+              state: 'running',
+              kinds: ['wall'],
+              recipe: better,
+            })
+          )
+        );
+        await gate;
+        c.enqueue(enc.encode(ev('shape_result', { shape: recipeShape })));
+        c.enqueue(enc.encode(ev('done', {})));
+        c.close();
+      },
+    });
+    fetchMock.mockResolvedValue(new Response(body));
+    const { result } = renderHook(() => useObjectShape());
+    act(() => {
+      void result.current.requestShape('data:image/png;base64,AA', target);
+    });
+    await waitFor(() => expect(result.current.preview).toEqual(better));
+    expect(result.current.status).toBe('loading');
+    expect(result.current.improve).toMatchObject({ status: 'running', stage: 'massing' });
+    act(() => finish());
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+    expect(result.current.preview).toBeUndefined();
+    expect(result.current.shape).toEqual(recipeShape);
+  });
+
   it('a dropped stream resumes from the last stage seen', async () => {
     fetchMock
       .mockResolvedValueOnce(

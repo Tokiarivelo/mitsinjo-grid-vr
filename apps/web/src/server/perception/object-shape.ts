@@ -71,6 +71,7 @@ import { withMaskPanels } from './mask-panels';
 import { withMaskWheels } from './mask-wheels';
 import { withProfileBody } from './profile-body';
 import { scoreRecipe } from './score-shape';
+import { timeoutSignal } from './abort';
 import { voteKits } from './kit-vote';
 import { askFamilies, asFamily } from './kit-ask';
 import type { ShapeResult } from './schemas';
@@ -167,7 +168,8 @@ export function measuredYaw(
 
 export interface ObjectShapeOptions {
   signal?: AbortSignal;
-  timeoutMs?: number;
+  /** Explicit Spark budget (default: none — the answer is awaited). Evals pass one. */
+  timeoutMs?: number | null;
   /** Live progress (SSE `shape_step`). */
   onStep?: (step: ShapeStep) => void;
   /** Whether to render the 6 canonical 2D imagined views (defaults to false so core math stays in budget). */
@@ -198,6 +200,13 @@ export interface ObjectShapeOptions {
 /** The second kit sample is asked only with at least this budget (PQ-T18). */
 const SECOND_SAMPLE_MIN_MS = 40_000;
 
+/** End of a budget started at `from` (Infinity when unbounded: every stage runs, all masks wait). */
+function budgetEnd(from: number, budgetMs: number | null | undefined): number {
+  return budgetMs === null || budgetMs === undefined || !Number.isFinite(budgetMs)
+    ? Infinity
+    : from + budgetMs;
+}
+
 /**
  * Selected object → its 3D shape (PV-T9), Meta models only. One Spark call on a crop around the object
  * returns a kit → parts recipe, fitted to the photo box (`fitRecipe`); archetypes without a real kit
@@ -207,8 +216,9 @@ const SECOND_SAMPLE_MIN_MS = 40_000;
  * read on that outline (PF-T3) and the houses / windows counted by edge repetition (PF-T4); straight-edged objects are turned by the yaw read on
  * their vanishing points (PF-T5); with an outline, the template parameters are then fitted to it
  * (PF-T6, `fit.iou`). Fallbacks → `silhouette` mode, built in
- * the browser from the SAM outline (no extra call), with a precise `reason`: `timeout` (past
- * `SHAPE_TIMEOUT_MS`), `provider_error` + `detail` (`http_429`…), `spend_cap`, `malformed`, `no_body`.
+ * the browser from the SAM outline (no extra call), with a precise `reason`: `timeout` (an
+ * explicit `timeoutMs` ran out; routes set none and wait), `provider_error` + `detail` (`http_429`…),
+ * `spend_cap`, `malformed`, `no_body`.
  * Mock mode: fixed recipe per category, not checked. Never throws.
  */
 export async function runObjectShape(
@@ -320,7 +330,7 @@ export async function runObjectShape(
       }
     }
     // PR-2.20: without an outline every box pixel counts (hedge outvotes the car): segment the
-    // photo for this object while Spark thinks. Best effort, usually free (SAM's 8 s deadline
+    // photo for this object while Spark thinks. Best effort, usually free (SAM's call
     // resolves long before Spark answers); the box is always kept, only the outline is adopted.
     const fetchedOutline: Promise<string | undefined> =
       !target.outline && photo && perception.segmentImage
@@ -357,7 +367,8 @@ export async function runObjectShape(
       : null;
     onStep?.('model');
     const started = Date.now();
-    const timeout = AbortSignal.timeout(Math.max(0, timeoutMs));
+    // No default budget: the caller's signal only (an explicit `timeoutMs` still bounds it).
+    const kitSignal = timeoutSignal(timeoutMs, signal);
     const askKit = () =>
       perception.describeShape(
         imageUrl,
@@ -371,12 +382,18 @@ export async function runObjectShape(
           ...(target.archetype ? { archetype: target.archetype } : {}),
           ...(promptVersion ? { promptVersion } : {}),
         },
-        signal ? AbortSignal.any([signal, timeout]) : timeout
+        kitSignal
       );
     const shapeCall = askKit();
-    // PQ-T18: a second sample in parallel when asked and the budget allows it (≥ 40 s).
+    // PQ-T18: a second sample in parallel when asked and the budget allows it (≥ 40 s, or unbounded).
     const secondCall: Promise<ShapeResult | null> | null =
-      kitSamples >= 2 && timeoutMs >= SECOND_SAMPLE_MIN_MS ? askKit().catch(() => null) : null;
+      kitSamples >= 2 &&
+      (timeoutMs === null ||
+        timeoutMs === undefined ||
+        !Number.isFinite(timeoutMs) ||
+        timeoutMs >= SECOND_SAMPLE_MIN_MS)
+        ? askKit().catch(() => null)
+        : null;
     // 2D facade validated (user 2026-11-02): the house is rebuilt from its elevations — front
     // measured by SAM while Muse Image draws the side, then the side measured — in parallel
     // with Spark. Null for other archetypes, the mock, or a facade SAM cannot read.
@@ -436,10 +453,16 @@ export async function runObjectShape(
     let found = await shapeCall;
     let splitOther: KitArchetype | undefined;
     if (secondCall && found.kit && found.source === 'meta') {
-      // A late second sample is not waited for: the first answer stands alone.
-      const left = Math.max(0, timeoutMs / 2 - (Date.now() - started));
-      const late = new Promise<null>((r) => setTimeout(() => r(null), left));
-      const second = await Promise.race([secondCall, late]);
+      // An explicit budget never waits for a late second sample: the first answer stands alone.
+      const second =
+        timeoutMs === null || timeoutMs === undefined || !Number.isFinite(timeoutMs)
+          ? await secondCall
+          : await Promise.race([
+              secondCall,
+              new Promise<null>((r) =>
+                setTimeout(r, Math.max(0, timeoutMs / 2 - (Date.now() - started)))
+              ),
+            ]);
       const other = second?.kit && second.source === 'meta' ? second.kit : null;
       const vote = await voteKits(found.kit, other, async (kit) => {
         if (!photo || !shaped.outline) return null;
@@ -520,7 +543,7 @@ export async function runObjectShape(
             ...(target.facadeUrl ? { facadeUrl: target.facadeUrl } : {}),
             ...(promptVersion ? { promptVersion } : {}),
           },
-          signal ? AbortSignal.any([signal, timeout]) : timeout
+          kitSignal
         );
         freeRecipe = parts.recipe;
         console.info(
@@ -641,7 +664,7 @@ export async function runObjectShape(
                 }),
                 drawing: () =>
                   target.facadeUrl ? imageBytes(target.facadeUrl, signal) : Promise.resolve(null),
-                firstBudgetMs: started + timeoutMs - STAGE_SAFETY_MS - Date.now(),
+                firstBudgetMs: budgetEnd(started, timeoutMs) - STAGE_SAFETY_MS - Date.now(),
                 ...(signal ? { signal } : {}),
                 onProgress: stageProgress,
               }),
@@ -700,7 +723,7 @@ export async function runObjectShape(
             kit,
             target.label,
             conceptOf(target),
-            { ...(signal ? { signal } : {}), deadline: started + VIEWS_TOTAL_MS }
+            { ...(signal ? { signal } : {}), deadline: budgetEnd(started, VIEWS_TOTAL_MS) }
           );
           recipe = checked.recipe;
           seen.front = checked.views.front;
@@ -727,7 +750,7 @@ export async function runObjectShape(
                 proposeShapeOps: async (img, q, sig, sheet, opts) => ({
                   result: await proposeShapeOps(img, q, sig, sheet, opts),
                 }),
-                firstBudgetMs: started + VIEWS_TOTAL_MS - STAGE_SAFETY_MS - Date.now(),
+                firstBudgetMs: budgetEnd(started, VIEWS_TOTAL_MS) - STAGE_SAFETY_MS - Date.now(),
                 ...(signal ? { signal } : {}),
                 onProgress: stageProgress,
               }),
@@ -806,7 +829,7 @@ export async function runObjectShape(
       if (finalKit && photo && segmentImage) {
         [partMasks, facadeMasks] = await Promise.all([
           fetchPartMasks(segmentImage, imageUrl, finalKit.archetype, {
-            timeoutMs: partMasksTimeout(started + timeoutMs - Date.now()),
+            timeoutMs: partMasksTimeout(budgetEnd(started, timeoutMs) - Date.now()),
           }),
           target.facadeUrl
             ? fetchFacadeMasks(
@@ -1155,7 +1178,7 @@ export async function runObjectShape(
                 proposeShapeOps: async (img, q, sig, sheet, opts) => ({
                   result: await proposeShapeOps(img, q, sig, sheet, opts),
                 }),
-                firstBudgetMs: started + timeoutMs - STAGE_SAFETY_MS - Date.now(),
+                firstBudgetMs: budgetEnd(started, timeoutMs) - STAGE_SAFETY_MS - Date.now(),
                 ...(signal ? { signal } : {}),
                 onProgress: stageProgress,
               }),

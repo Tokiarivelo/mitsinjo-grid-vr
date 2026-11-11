@@ -310,7 +310,7 @@ describe.skipIf(!LIVE)('make shape-capture', () => {
 
     let kit: ObjectKit | undefined;
     const started = Date.now();
-    // Offline tooling, not the live path: give Spark room (the 60 s budget stays for routes).
+    // Offline tooling, not the live path: an explicit budget (routes set none and wait).
     const shape = await runObjectShape(perception, size, dataUrl, target, {
       timeoutMs: 150_000,
       onKit: (k) => (kit = k),
