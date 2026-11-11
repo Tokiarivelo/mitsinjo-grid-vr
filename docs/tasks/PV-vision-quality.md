@@ -420,6 +420,8 @@ _Ticked 2026-11-11 on the owner's request: the code and tests are in; every « d
       **Test:** `photo-conditions.test.ts` (lit side read on a fixture), viewer test (key light angle changes
       only in compare view).
       **Done when:** the operator reads photo and model more alike in compare view; cut first if time is short.
+      _Cut 2026-11-11 (Q4 pass):_ the panel has no compare view to carry it (it would be a new screen, with its
+      design gate), and the task says to cut it first. Left unticked.
 
 - [x] **PQ-T32 Same look in the three views.** Today the village draws every placed object with one material
       (`appliance-markers.tsx`: roughness 0.7, metalness 0.2; `mergeGeometries` drops the groups) and VR builds
