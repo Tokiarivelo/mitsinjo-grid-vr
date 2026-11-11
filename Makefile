@@ -119,6 +119,11 @@ outline-compare: ## Outline hits on the real photos: plain SAM walk vs SAM agree
 	$(need_ws)
 	eval "$$(make -s env-export)" && OUTLINE_COMPARE=1 SHAPE_REAL_DIR="$(CURDIR)/apps/web/src/server/perception/__fixtures__/shape/real" $(PNPM) --filter $(WEB) exec vitest run src/server/perception/__tests__/outline-compare.test.ts
 
+skills-gen: ## Regenerate the Muse skill cards module from docs/vision-to-3d-muse-skills.md (PQ-T11, no API call)
+	$(need_ws)
+	SKILLS_GEN=1 $(PNPM) --filter $(WEB) exec vitest run src/server/perception/__tests__/skills.test.ts -t "writes cards"
+	$(PNPM) --filter $(WEB) exec prettier --write src/server/perception/skills/cards.generated.ts
+
 shadow-compare: ## Main colour under a painted shadow on the real photos, litSurface on vs off (PQ-T10, no API call)
 	$(need_ws)
 	SHADOW_COMPARE=1 SHAPE_REAL_DIR="$(CURDIR)/apps/web/src/server/perception/__fixtures__/shape/real" $(PNPM) --filter $(WEB) exec vitest run src/server/perception/__tests__/shadow-compare.test.ts
