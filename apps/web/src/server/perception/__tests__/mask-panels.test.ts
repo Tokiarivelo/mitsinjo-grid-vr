@@ -6,6 +6,7 @@ vi.mock('server-only', () => ({}));
 
 import { kitToRecipe, TAIL_LIGHT_COLOR, type ObjectKit } from '@/lib/object-kit';
 import {
+  MAX_COMPONENTS,
   MAX_RECIPE_PARTS,
   ObjectRecipeSchema,
   type ObjectRecipe,
@@ -144,10 +145,12 @@ describe('convexHull / minAreaRect', () => {
   });
 });
 
+const free = (r: ObjectRecipe): ObjectRecipe => ({ ...r, source: 'free' });
+
 describe('withMaskPanels (PR-2.7)', () => {
   it('vehicle: shell takes the body colour, measured glass both sides, decals fund the room', () => {
     const geom = geomA();
-    const recipe = kitToRecipe(vehicleKit());
+    const recipe = free(kitToRecipe(vehicleKit()));
     expect(recipe.parts).toHaveLength(12);
     const out = withMaskPanels(
       'vehicle',
@@ -245,7 +248,7 @@ describe('withMaskPanels (PR-2.7)', () => {
     // 3 windows + 2 doors need 21 parts: overlays, near side, budget held.
     const many = withMaskPanels(
       'house',
-      kitToRecipe(houseKit()),
+      free(kitToRecipe(houseKit())),
       [
         rectMask(geom, 'window', 30, 46, 50, 62),
         rectMask(geom, 'window', 60, 46, 80, 62),
@@ -266,7 +269,7 @@ describe('withMaskPanels (PR-2.7)', () => {
     const geom = geomA();
     const out = withMaskPanels(
       'vehicle',
-      kitToRecipe(vehicleKit()),
+      free(kitToRecipe(vehicleKit())),
       [
         rectMask(geom, 'window', 60, 16, 84, 32),
         rectMask(geom, 'window', 88, 16, 112, 32),
@@ -285,6 +288,26 @@ describe('withMaskPanels (PR-2.7)', () => {
     expect(out.parts.some((p) => p.shape === 'cylinder' && p.axis === 'x' && p.at[0]! > 0)).toBe(
       false
     );
+  });
+
+  it('measured parts past 12 are kept on a photo recipe, an imagined list stays at 12 (PQ-T21)', () => {
+    const geom = geomA();
+    const masks = [
+      rectMask(geom, 'window', 60, 16, 84, 32),
+      rectMask(geom, 'window', 88, 16, 112, 32),
+      rectMask(geom, 'window', 116, 16, 140, 32),
+    ];
+    const kit = kitToRecipe(vehicleKit());
+    const measured = withMaskPanels('vehicle', kit, masks, geom);
+    const glass = (r: ObjectRecipe) =>
+      r.parts.filter((p) => p.shape === 'box' && p.size[2] === 0.02);
+    // Every measured window, both sides, and no template part dropped to make room.
+    expect(glass(measured)).toHaveLength(6);
+    expect(measured.parts.length).toBeGreaterThan(MAX_RECIPE_PARTS);
+    expect(measured.parts.length).toBeLessThanOrEqual(MAX_COMPONENTS);
+    const imagined = withMaskPanels('vehicle', free(kit), masks, geom);
+    expect(imagined.parts.length).toBeLessThanOrEqual(MAX_RECIPE_PARTS);
+    expect(glass(imagined)).toHaveLength(3);
   });
 
   it('rotated, floating and tiny masks are skipped, panels clamp into the span', () => {
@@ -450,7 +473,7 @@ describe('withMaskPanels (PR-2.7)', () => {
       const measured = await runObjectShape({ ...spark, segmentImage }, photo, 'data:full', target);
       expect(measured.mode).toBe('recipe');
       expect(measured.partMasks!.filter((m) => m.concept === 'window')).toHaveLength(2);
-      expect(measured.recipe!.parts.length).toBeLessThanOrEqual(MAX_RECIPE_PARTS);
+      expect(measured.recipe!.parts.length).toBeLessThanOrEqual(MAX_COMPONENTS);
       // Shell recolored to the body, four glass panels (both sides) at the old glass colour.
       // Biggest box above the main body, like the plain locator: Fit v2 (PR-2.9) may shift the
       // cabin in y, so the shell is not matched by its height anymore.
@@ -576,7 +599,7 @@ describe('withMaskPanels (PR-2.7)', () => {
     const measured = await runObjectShape({ ...spark, segmentImage }, photo, 'data:full', target);
     expect(measured.mode).toBe('recipe');
     expect(measured.partMasks!.filter((m) => m.concept === 'window')).toHaveLength(1);
-    expect(measured.recipe!.parts.length).toBeLessThanOrEqual(MAX_RECIPE_PARTS);
+    expect(measured.recipe!.parts.length).toBeLessThanOrEqual(MAX_COMPONENTS);
     // The wall is gone, replaced by full-depth strips in the wall paint (ΔE: a later
     // pass may re-tint the front strip a digit, like Fit v2 does the shell).
     const wallLab = hexToLab(wall.color);

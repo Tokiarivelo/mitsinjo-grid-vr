@@ -1,6 +1,12 @@
 import 'server-only';
 
-import { MAX_RECIPE_PARTS, type PartMask, type RecipePart } from '@/lib/object-shape';
+import {
+  MAX_COMPONENTS,
+  MAX_RECIPE_PARTS,
+  type ObjectRecipe,
+  type PartMask,
+  type RecipePart,
+} from '@/lib/object-shape';
 import type { NormBox } from '@/lib/vision';
 import { insideRings } from './color-measure';
 import type { CropRect } from './shape-crop';
@@ -92,6 +98,15 @@ export const MASK_YAW_HARD_MAX = 1.05;
 
 /** |z| below this is the centre plane, not a far side. */
 export const PART_MIRROR_MIN_Z = 0.05;
+
+/**
+ * Most parts a recipe may hold while a mask pass adds measured ones (PQ-T21): `MAX_COMPONENTS` when the
+ * extra parts come from SAM masks, `MAX_RECIPE_PARTS` for a Spark-imagined list (`source: 'free'`) and for
+ * the passes that only deduce (hidden sides), so an imagined or inferred part never takes a measured one's room.
+ */
+export function partCeiling(recipe: Pick<ObjectRecipe, 'source'>): number {
+  return recipe.source === 'free' ? MAX_RECIPE_PARTS : MAX_COMPONENTS;
+}
 
 /** Template wheels: z-axis cylinders below the body's middle (PR-2.2/2.6/2.7 share this). */
 export function isWheelPart(p: RecipePart, midY: number): boolean {

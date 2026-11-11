@@ -326,10 +326,13 @@ _Ticked 2026-11-11 on the owner's request: the code and tests are in; every « d
       viewer and on the flat render.
       _Built 2026-11-11:_ `RecipePart.details` (+ `set` op field), `detailPartsOf` / `outlineDetails`, used by
       `renderRecipe`. Nothing sets `details` yet: Spark / builders opt in (T24, loop), no live check done.
-- [ ] **PQ-T21 More components when they are measured.** Photo-path recipes may hold up to `MAX_COMPONENTS`
+- [x] **PQ-T21 More components when they are measured.** Photo-path recipes may hold up to `MAX_COMPONENTS`
       (32) when the extra parts come from SAM masks or kept loop ops; Spark-imagined part lists stay at 12.
       **Test:** `object-shape.test.ts` (a measured 14th part is kept; an imagined one is not).
       **Done when:** no real object loses a measured part to the budget.
+      _Built 2026-11-11:_ `partCeiling(recipe)` in `mask-geometry.ts` (32, or 12 for `source: 'free'`) used by the
+      wheel, panel and chimney passes; hidden-side deduction keeps 12 so an inferred part never takes the room.
+      Test: `mask-panels.test.ts`. Real-set check (`make shape-report`) not run.
 - [ ] **PQ-T22 Hidden sides by symmetry.** `hidden-sides.ts`: mirror the measured side's parts to the hidden
       side for families that are symmetric (vehicle, cabinet, house ends), status `inferred`; never mirror
       what is one-sided (a door, a handle, a chimney).

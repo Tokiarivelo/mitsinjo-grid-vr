@@ -3,7 +3,6 @@ import 'server-only';
 import type { KitArchetype } from '@/lib/object-kit';
 import {
   frontPartIndex,
-  MAX_RECIPE_PARTS,
   type ObjectRecipe,
   type PartMask,
   type RecipePart,
@@ -12,6 +11,7 @@ import { pathToRings } from '@/lib/vision';
 import {
   cropToPhoto,
   enforcePartBudget,
+  partCeiling,
   MASK_YAW_MAX,
   photoToObject,
   roofTopAbove,
@@ -138,16 +138,19 @@ export function withMaskChimney(
 
   // Room for the stacks: soft-drop decals (never structure); a structure-full recipe keeps
   // its template stack.
+  const ceiling = partCeiling(recipe);
   const kept = recipe.parts.filter((p) => !removed.includes(p));
   const protect = kept.filter((p) => p === main || p.at[1] + p.size[1] / 2 > eave);
   const base = enforcePartBudget(kept, protect, {
-    max: MAX_RECIPE_PARTS - stacks.length,
+    max: ceiling - stacks.length,
     soft: true,
   });
-  const room = MAX_RECIPE_PARTS - base.parts.length;
+  const room = ceiling - base.parts.length;
   if (room <= 0) return recipe;
   const use = stacks.slice(0, room);
-  const { parts: fit, dropped } = enforcePartBudget([...base.parts, ...use], [...protect, ...use]);
+  const { parts: fit, dropped } = enforcePartBudget([...base.parts, ...use], [...protect, ...use], {
+    max: ceiling,
+  });
   const softDropped = kept.length - base.parts.length;
   if (softDropped > 0 || dropped.length > 0) {
     console.info(

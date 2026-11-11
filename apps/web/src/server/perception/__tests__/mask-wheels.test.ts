@@ -6,8 +6,10 @@ vi.mock('server-only', () => ({}));
 
 import { kitToRecipe, TAIL_LIGHT_COLOR, type ObjectKit } from '@/lib/object-kit';
 import {
+  MAX_COMPONENTS,
   MAX_RECIPE_PARTS,
   ObjectRecipeSchema,
+  type ObjectRecipe,
   type PartMask,
   type ShapeTarget,
 } from '@/lib/object-shape';
@@ -77,13 +79,15 @@ describe('fitCircle', () => {
   });
 });
 
+const free = (r: ObjectRecipe): ObjectRecipe => ({ ...r, source: 'free' });
+
 describe('withMaskWheels (PR-2.6)', () => {
   it('two wheel masks → measured tyres + rims, mirrored, template wheels gone', () => {
     const geom = geomA();
     expect([geom.crop.left, geom.crop.top, geom.crop.width, geom.crop.height]).toEqual([
       0, 0, 200, 100,
     ]);
-    const recipe = kitToRecipe(kit());
+    const recipe = free(kitToRecipe(kit()));
     expect(recipe.parts).toHaveLength(12);
     const out = withMaskWheels(
       'vehicle',
@@ -328,7 +332,7 @@ describe('withMaskWheels (PR-2.6)', () => {
       const measured = await runObjectShape({ ...spark, segmentImage }, photo, 'data:full', target);
       expect(measured.mode).toBe('recipe');
       expect(measured.partMasks!.filter((m) => m.concept === 'wheel')).toHaveLength(masks.length);
-      expect(measured.recipe!.parts.length).toBeLessThanOrEqual(MAX_RECIPE_PARTS);
+      expect(measured.recipe!.parts.length).toBeLessThanOrEqual(MAX_COMPONENTS);
       expect(ObjectRecipeSchema.safeParse(measured.recipe!).success).toBe(true);
       console.info(
         `[test] car wheels: iou ${plain.fit!.iou} → ${measured.fit!.iou}, parts ${plain.recipe!.parts.length} → ${measured.recipe!.parts.length}`

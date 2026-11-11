@@ -11,6 +11,7 @@ import { pathToRings } from '@/lib/vision';
 import {
   cropToPhoto,
   enforcePartBudget,
+  partCeiling,
   MASK_YAW_MAX,
   PART_MIRROR_MIN_Z,
   photoToObject,
@@ -214,7 +215,9 @@ export function withMaskWheels(
     }
   }
   // Budget backstop: smallest decals go first, the body and structural parts never.
-  const { parts: fit, dropped } = enforcePartBudget(parts, [main]);
+  const { parts: fit, dropped } = enforcePartBudget(parts, [main], {
+    max: partCeiling(recipe),
+  });
   if (dropped.length > 0) {
     console.info(
       `[vision] 3D wheels: budget dropped ${dropped.length} part(s): ${dropped.join(' ')}`
