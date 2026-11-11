@@ -45,6 +45,37 @@ export async function sampleObjectGray(
     columns / 4,
     Math.min(2 * columns, Math.round((width * px.height) / px.width))
   );
+  return readGray(photo, box, px, width, height, outline);
+}
+
+/** Longest side of the grid the sharpness is read on: the photo's own pixels up to this, never enlarged. */
+export const SHARPNESS_MAX_SIDE = 1024;
+
+/**
+ * Grey levels of the box at the photo's own resolution (PQ-T7 sharpness): a blur of a few pixels only shows
+ * there, the fixed-width grids above shrink it away on a large object and invent it on a small one. No mask:
+ * sharpness is read on the whole box.
+ */
+export async function sampleNativeGray(photo: PhotoForRegions, box: NormBox): Promise<GrayGrid> {
+  const px = pixelBox(photo, box);
+  const scale = Math.min(1, SHARPNESS_MAX_SIDE / Math.max(px.width, px.height));
+  return readGray(
+    photo,
+    box,
+    px,
+    Math.max(1, Math.round(px.width * scale)),
+    Math.max(1, Math.round(px.height * scale))
+  );
+}
+
+async function readGray(
+  photo: PhotoForRegions,
+  box: NormBox,
+  px: ReturnType<typeof pixelBox>,
+  width: number,
+  height: number,
+  outline?: string
+): Promise<GrayGrid> {
   const { data } = await sharp(photo.buffer, { failOn: 'none' })
     .extract(px)
     .resize({ width, height, fit: 'fill' })

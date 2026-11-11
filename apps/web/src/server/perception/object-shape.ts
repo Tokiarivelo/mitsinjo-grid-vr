@@ -30,6 +30,7 @@ import { conditionsFacts, conditionsTrust, measurePhotoConditions } from './phot
 import { fitSilhouette } from './silhouette-fit';
 import {
   EDGE_COLUMNS,
+  sampleNativeGray,
   sampleObjectGray,
   sampleObjectPixels,
   sampleObjectRgb,
@@ -305,11 +306,16 @@ export async function runObjectShape(
     const preGrid: GrayGrid | null = photo
       ? await sampleObjectGray(photo, target.box, target.outline, EDGE_COLUMNS).catch(() => null)
       : null;
+    // The box at the photo's own resolution, for the sharpness (same box before and after the call).
+    const nativeGrid: GrayGrid | null = photo
+      ? await sampleNativeGray(photo, target.box).catch(() => null)
+      : null;
     const preConditions = photo
       ? measurePhotoConditions({
           widthPx: target.box.w * photo.width,
           heightPx: target.box.h * photo.height,
           grid: preGrid,
+          nativeGrid,
           hasOutline: false,
         })
       : null;
@@ -386,6 +392,7 @@ export async function runObjectShape(
             widthPx: target.box.w * photo.width,
             heightPx: target.box.h * photo.height,
             grid: finalGrid,
+            nativeGrid,
             hasOutline: !!shaped.outline,
             ...(archetype ? { archetype } : {}),
             yaw,

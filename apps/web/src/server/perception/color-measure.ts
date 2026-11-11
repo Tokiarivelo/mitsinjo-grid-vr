@@ -148,11 +148,24 @@ interface Group {
 
 /** A colour is read on its brightest share of pixels: the lit surface, not the shadow mixed in (PQ-T10). */
 export const LIT_SHARE = 0.6;
-/** A group is the shadow of a brighter one when its hue is within this a/b distance… */
-export const SHADOW_CHROMA_MAX = 14;
+/**
+ * A group is the shadow of a brighter one when its a, b sit within this distance of the brighter group's a, b
+ * faded to its lightness (`shadeOf`: a shadow darkens a surface and fades its colour with it)…
+ */
+export const SHADOW_CHROMA_MAX = 10;
 /** …and it is darker by this much CIELAB L (at least, at most). */
 export const SHADOW_L_MIN = 6;
 export const SHADOW_L_MAX = 50;
+/**
+ * …and the brighter group has a colour of its own (CIELAB chroma). Greys all share one hue: without this a
+ * black object (cast-iron pump, black motorbike) was read as the shadow of its own grey highlights. A grey
+ * wall in shadow is therefore not read apart. Values set with `make shadow-compare` (13 real photos, a shadow
+ * painted over each): main colour kept in 20 of 39 cases against 12 without, none lost.
+ */
+export const SHADOW_LIT_CHROMA_MIN = 16;
+
+/** Factor on the a, b of `lit` to get the a, b expected for it at `dark`'s lightness. */
+const shadeOf = (lit: Group, dark: Group) => (dark.lightness + 16) / (lit.lightness + 16);
 
 /**
  * Object pixels → the kit's 3 colours (PF-T2), or null when too few pixels were measured.
@@ -171,8 +184,9 @@ export function measureKitColors(
   }: {
     plaster?: boolean;
     /**
-     * Read the lit surface (PQ-T10): a darker group of the same hue counts as the shadow of a brighter one and
-     * its pixels go to it. Off by default: dark beams and a shadow cannot be told apart by colour alone.
+     * Read the lit surface (PQ-T10): a darker group of the same hue counts as the shadow of a brighter,
+     * coloured one and its pixels go to it. Off by default: dark beams and a shadow cannot be told apart by
+     * colour alone.
      */
     litSurface?: boolean;
     /** Receives the share of object pixels read as shadow of a brighter group (0–1). */
@@ -224,9 +238,10 @@ export function measureKitColors(
     const lit = (litSurface && g.inSecondary < 0.5 * g.count ? groups : [])
       .filter(
         (o) =>
+          Math.hypot(o.a, o.b) >= SHADOW_LIT_CHROMA_MIN &&
           o.lightness - g.lightness >= SHADOW_L_MIN &&
           o.lightness - g.lightness <= SHADOW_L_MAX &&
-          Math.hypot(o.a - g.a, o.b - g.b) <= SHADOW_CHROMA_MAX
+          Math.hypot(o.a * shadeOf(o, g) - g.a, o.b * shadeOf(o, g) - g.b) <= SHADOW_CHROMA_MAX
       )
       .sort((p, q) => q.count - p.count)[0];
     if (lit) {

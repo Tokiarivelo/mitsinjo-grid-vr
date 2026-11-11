@@ -50,16 +50,29 @@ describe('photo conditions (PQ-T7)', () => {
       widthPx: 400,
       heightPx: 300,
       grid: sharp,
+      nativeGrid: sharp,
       hasOutline: false,
     });
     const b = measurePhotoConditions({
       widthPx: 400,
       heightPx: 300,
       grid: blurred(sharp),
+      nativeGrid: blurred(sharp),
       hasOutline: false,
     });
     expect(a.sharpness).toBe('high');
     expect(b.sharpness).toBe('low');
+  });
+
+  it('sharpness is read on the native grid only: without it, it is not reported', () => {
+    const c = measurePhotoConditions({
+      widthPx: 400,
+      heightPx: 300,
+      grid: checker(),
+      hasOutline: false,
+    });
+    expect(c.sharpness).toBeUndefined();
+    expect(c.exposure).toBe('low');
   });
 
   it('half-covered outline → hidden ≈ 0.5 (unit fill)', () => {

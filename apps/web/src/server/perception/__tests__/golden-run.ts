@@ -3,6 +3,7 @@ import { vi } from 'vitest';
 import { kitToRecipe } from '@/lib/object-kit';
 import type { ShapeTarget } from '@/lib/object-shape';
 import type { ObjectKit } from '@/lib/object-kit';
+import { cpuMs } from '@/test/cpu-time';
 import { runObjectShape } from '../object-shape';
 import {
   remapBoxToCrop,
@@ -46,8 +47,9 @@ export async function runGolden(c: GoldenCase, onKit?: (kit: ObjectKit) => void)
     describeParts: vi.fn().mockResolvedValue({ recipe: null }),
   };
   const t0 = performance.now();
+  const cpu0 = cpuMs();
   const shape = await runObjectShape(spark, photo, 'data:full', target, onKit ? { onKit } : {});
-  return { shape, ms: performance.now() - t0, photo, target };
+  return { shape, ms: performance.now() - t0, cpuMs: cpuMs() - cpu0, photo, target };
 }
 
 /** A golden case run and written as a capture (`<dir>/<id>.capture.json` + crop JPEG), like `make shape-capture`. */

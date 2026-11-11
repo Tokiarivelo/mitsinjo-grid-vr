@@ -7,9 +7,13 @@ import type { GrayGrid } from './repetition';
  * Feeds the « Measured: » line of the kit question, the fusion confidences and the panel hint.
  */
 
-/** Variance of the Laplacian (grey 0–1) under / from these values: low / medium / high sharpness. */
-export const SHARP_LOW_VAR = 0.0006;
-export const SHARP_HIGH_VAR = 0.003;
+/**
+ * Variance of the Laplacian (grey 0–1, photo's own pixels) under / from these values: low / medium / high
+ * sharpness. Calibrated on the 13 real photos and their Gaussian-blurred copies (σ in photo pixels): untouched
+ * 0.0096–0.84 (all high), σ 1 → 0.0009–0.029 (never low), σ 2 → 0.00015–0.0012, σ 3 → ≤ 0.0003 (all low).
+ */
+export const SHARP_LOW_VAR = 0.0008;
+export const SHARP_HIGH_VAR = 0.005;
 /** A pixel this close to black or white counts as clipped. */
 export const CLIP_EDGE = 0.02;
 /** Clipped share from this value is « medium », from the next « high ». */
@@ -100,8 +104,10 @@ export interface PhotoConditionsInput {
   /** Object box in photo pixels. */
   widthPx: number;
   heightPx: number;
-  /** Grey grid of the box, mask = SAM outline (all ones without). */
+  /** Grey grid of the box, mask = SAM outline (all ones without): exposure and hidden share. */
   grid: GrayGrid | null;
+  /** Grey grid of the box at the photo's own resolution (`sampleNativeGray`): sharpness. */
+  nativeGrid?: GrayGrid | null;
   /** Needs an outline: without one the hidden share is unknown. */
   hasOutline: boolean;
   archetype?: KitArchetype;
@@ -111,10 +117,12 @@ export interface PhotoConditionsInput {
 
 /** Conditions of the photo for one object; fields without a measurement behind them are left out. */
 export function measurePhotoConditions(input: PhotoConditionsInput): PhotoConditions {
-  const { widthPx, heightPx, grid, hasOutline, archetype, yaw } = input;
+  const { widthPx, heightPx, grid, nativeGrid, hasOutline, archetype, yaw } = input;
   const out: PhotoConditions = { widthPx: Math.round(widthPx), heightPx: Math.round(heightPx) };
+  // Sharpness only on the photo's own pixels: a resized grid hides the blur of a large object.
+  if (nativeGrid)
+    out.sharpness = level(laplacianVariance(nativeGrid), SHARP_LOW_VAR, SHARP_HIGH_VAR);
   if (grid) {
-    out.sharpness = level(laplacianVariance(grid), SHARP_LOW_VAR, SHARP_HIGH_VAR);
     // Exposure is a problem level: low = fine, high = mostly clipped.
     out.exposure = level(clippedShare(grid), EXPOSURE_MEDIUM, EXPOSURE_HIGH);
     if (hasOutline && archetype)

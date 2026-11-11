@@ -123,6 +123,10 @@ Meta API calls; all others run offline.
       **Test:** `photo-conditions.test.ts` (blurred copy of a fixture classed lower; half-covered outline →
       hidden ≈ 0.5), panel test for the hint.
       **Done when:** the log prints one conditions line per object and the facts line reaches Spark.
+      _PR #11 review (2026-11-11):_ sharpness is read on the photo's own pixels (`sampleNativeGray`, long side
+      ≤ 1024, never enlarged), no longer on the 256-column grid, which hid the blur of a large object and
+      called a small sharp one blurred. Limits recalibrated on the 13 real photos and their Gaussian-blurred
+      copies: low < 0.0008, high ≥ 0.005 (untouched: all high; σ 1 px: never low; σ 3 px: all low).
 - [x] **PQ-T8 Two images for the kit** _(API to evaluate)_. `shape-crop.ts`: keep the context crop; add a tight
       crop of the object alone (outline when there is one, background set to neutral grey), long side up to the
       size `compactDataUrl` allows. `describeShape` sends context, then tight; the question says which is which.
@@ -165,6 +169,14 @@ Meta API calls; all others run offline.
       real mean 53 and colour ΔE 10.1 both with and without the change (A/B run: `LIT_SHARE` 1 and `litSurface` off
       give the identical table): the real photos hold no shadowed wall, so « lower than baseline » is not shown.
       The unit test (wall 65 % in shadow reads the lit colour, ΔE < 5) is the only proof.
+      _PR #11 review (2026-11-11), still unticked:_ new `make shadow-compare` (no API call) paints a shadow over
+      each real object and reads the main colour with and without `litSurface`. It showed the first version
+      was not neutral: greys share one hue, so a black object (pump, motorbike) was read as the shadow of its
+      grey highlights and came out grey. Fixed: the lit group must be coloured (`SHADOW_LIT_CHROMA_MIN` 16)
+      and the dark one must match the lit colour faded to its lightness (`SHADOW_CHROMA_MAX` 10). Result on
+      13 photos × 3 shadows: main colour kept (ΔE < 5) 20/39 against 12/39 without, none lost, mean ΔE 14.9
+      against 20.2; one untouched photo changes (the red car reads red, not dark brown). Not handled: a grey
+      or white wall in shadow (house-front, solar panel). « Done when » still needs a real shadowed wall.
 
 **Exit Q1:** fewer cascades from a missed outline; kit calls see the object large and alone.
 

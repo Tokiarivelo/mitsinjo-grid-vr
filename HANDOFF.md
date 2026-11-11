@@ -1,6 +1,6 @@
 # HANDOFF — read first, overwrite at end of session (≤40 lines)
 
-**Updated:** 2026-11-10 · **By:** Claude Code · **Branch:** feat/pq-q1-pixels (PR #11 open; PR #10 merged)
+**Updated:** 2026-11-11 · **By:** Claude Code · **Branch:** feat/pq-q1-pixels (PR #11 open; PR #10 merged)
 
 ## Current state
 
@@ -10,11 +10,12 @@
   - PQ-T8 tight crop: **reverted** (`make eval-shape` 98/118 vs 99/116, median 28.9 vs 24.5 s, window counts worse).
   - PQ-T9 SAM agreement: `make outline-compare` 12/13 = plain 12/13 → **off** (option kept, tested). Part-mask retry
     and time share stay. Only miss: solar street light (SAM returns the panel alone).
-  - PQ-T10 lit colours: in, unticked — shape-report identical with and without it (no shadowed wall in the real set).
+  - PQ-T10 lit colours: in, unticked. `make shadow-compare` (painted shadow on the real photos): main colour kept
+    20/39 vs 12/39 without, none lost. Review bug fixed: a black object was read as the shadow of its grey highlights.
+  - PR #11 review: sharpness read on the photo's own pixels (`sampleNativeGray`), limits recalibrated; box IoU in
+    `box-match.ts`; consensus crop fallback keeps every phrasing.
 - Real baseline unchanged: mean 53 (synthetic 93). PQ-T37 open: only `evidence.visibleParts` (PQ-T12, Q2).
-- Machine: if dev says `Can't resolve 'three'` → stop dev, `make install`.
-- Full vitest run flaked on wall-clock budgets (golden-shape 1026 ms vs 1000); loosened in full-suite mode only
-  (strict budgets stay in `make test-shape`).
+- Test time budgets are CPU time (`src/test/cpu-time.ts`), back to 500 / 1000 ms: the full suite no longer inflates them.
 
 ## Next
 
@@ -24,7 +25,8 @@
 ## Files touched (Q1)
 
 - New: `server/perception/photo-conditions.ts`, `sam-consensus.ts`; `lib/photo-warning.ts`;
-  `features/vision-insert/ui/photo-warning-line.tsx`; `__tests__/outline-compare.test.ts` (+ tests).
+  `features/vision-insert/ui/photo-warning-line.tsx`; `__tests__/outline-compare.test.ts`,
+  `shadow-compare.test.ts`; `box-match.ts`; `src/test/cpu-time.ts` (+ tests).
 - Changed: `object-shape.ts` (conditions, facts, lit colours, part-mask timeout), `shape.ts` (`facts`),
   `outline.ts` (`consensus`, `skipFull`), `part-masks.ts` (`partMasksTimeout`, `PART_RETRY`), `color-measure.ts`
   (`LIT_SHARE`, `litSurface`), `lib/object-shape.ts` (`conditions`), messages en/fr/mg, Makefile `outline-compare`.
@@ -32,6 +34,7 @@
 
 ## Decisions
 
-- Blur does not lower colour confidence (broke the goldens); only clipped exposure does.
-- Shadow folding opt-in (`litSurface`), off for plaster, never for the secondary band, no chains.
-- Test scenarios V235–V238 (`test-scenarios/06-village.md`, local).
+- Machine: if dev says `Can't resolve 'three'` → stop dev, `make install`.
+- Scenarios V235–V240 (local `test-scenarios/06-village.md`). Blur does not lower colour confidence (broke the goldens); only clipped exposure does.
+- Shadow folding opt-in (`litSurface`), off for plaster, never for the secondary band, no chains, only under a
+  coloured lit group (a grey wall in shadow is not corrected).

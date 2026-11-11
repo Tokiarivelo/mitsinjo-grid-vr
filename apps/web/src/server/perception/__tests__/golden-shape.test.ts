@@ -6,20 +6,20 @@ import { GOLDEN_SHAPES } from '../__fixtures__/shape';
 import { runGolden as run } from './golden-run';
 
 /**
- * Math budget per object (best of 3 runs): 300 ms when run alone (`make test-shape` sets
- * SHAPE_BUDGET_STRICT); inside the full suite (many test files share the CPU; 1026 ms seen once against
- * a 1000 ms budget) it is only a guard against a gross regression.
+ * Math budget per object (best of 3 runs), in CPU time (`cpuMs`), so the other test files of the full suite
+ * do not count: the wall clock was seen at 1026 ms there for the same math. 300 ms when run alone
+ * (`make test-shape` sets SHAPE_BUDGET_STRICT).
  */
-const BUDGET_MS = process.env.SHAPE_BUDGET_STRICT ? 300 : 2500;
+const BUDGET_MS = process.env.SHAPE_BUDGET_STRICT ? 300 : 1000;
 const dE = (a: string, b: string) => deltaE2000(hexToLab(a), hexToLab(b));
 
 describe('golden shapes (PF-T9)', () => {
   it.each(GOLDEN_SHAPES.map((c) => [c.name, c] as const))('%s', async (_, c) => {
     // Best of 3 (the first also warms sharp and the JIT): the budget is the steady-state math, and the
-    // fastest run filters out CPU contention from other test files running in parallel.
+    // fastest run filters out what is left of the contention from other test files running in parallel.
     const runs = [await run(c), await run(c), await run(c)];
     const { shape } = runs[runs.length - 1]!;
-    const ms = Math.min(...runs.map((r) => r.ms));
+    const ms = Math.min(...runs.map((r) => r.cpuMs));
     expect(shape.mode).toBe('recipe');
     const recipe = shape.recipe!;
     // Silhouette matches the expected outline.

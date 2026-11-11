@@ -194,6 +194,24 @@ describe('colour on the lit surface (PQ-T10)', () => {
     expect(shadow).toBeGreaterThan(0.3);
   });
 
+  it('regression (PR #11 review): a black object is not the shadow of its grey highlights', () => {
+    // Real pump and motorbike: black body 70 %, grey reflections 30 %. Greys share one hue, so the body was
+    // folded into the highlights and the object came out grey.
+    const BLACK: Rgb = [26, 26, 25];
+    const HIGHLIGHT: Rgb = [150, 152, 155];
+    const body = [
+      { rgb: BLACK, share: 0.7 },
+      { rgb: HIGHLIGHT, share: 0.3 },
+    ];
+    let shadow = -1;
+    const c = measureKitColors(bands([body, body, body]), 'machine', {
+      litSurface: true,
+      onShadowShare: (s) => (shadow = s),
+    })!;
+    expect(shadow).toBe(0);
+    expect(hexToLab(c.main)[0]).toBeLessThan(20);
+  });
+
   it('a different material is not taken for a shadow (blue sky stays apart)', () => {
     const px = bands([
       [{ rgb: SKY, share: 1 }],

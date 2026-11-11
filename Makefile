@@ -119,6 +119,10 @@ outline-compare: ## Outline hits on the real photos: plain SAM walk vs SAM agree
 	$(need_ws)
 	eval "$$(make -s env-export)" && OUTLINE_COMPARE=1 SHAPE_REAL_DIR="$(CURDIR)/apps/web/src/server/perception/__fixtures__/shape/real" $(PNPM) --filter $(WEB) exec vitest run src/server/perception/__tests__/outline-compare.test.ts
 
+shadow-compare: ## Main colour under a painted shadow on the real photos, litSurface on vs off (PQ-T10, no API call)
+	$(need_ws)
+	SHADOW_COMPARE=1 SHAPE_REAL_DIR="$(CURDIR)/apps/web/src/server/perception/__fixtures__/shape/real" $(PNPM) --filter $(WEB) exec vitest run src/server/perception/__tests__/shadow-compare.test.ts
+
 shape-judge: ## Rubric judge (META_JUDGE_MODEL) on the real captures, intact vs damaged → calibration (PQ-T4, costs API calls; REPLAY=1 = stored answers only)
 	$(need_ws)
 	eval "$$(make -s env-export)" && SHAPE_JUDGE=1 $(if $(REPLAY),SHAPE_JUDGE_REPLAY=1) SHAPE_REAL_DIR="$(CURDIR)/apps/web/src/server/perception/__fixtures__/shape/real" $(PNPM) --filter $(WEB) exec vitest run src/server/perception/__tests__/rubric-judge.test.ts -t "make shape-judge"
