@@ -233,6 +233,9 @@ describe('runObjectShape with a validated facade', () => {
     expect(r.parts.filter((p) => p.material === 'glass')).toHaveLength(2);
     expect(r.parts.find((p) => p.material === 'wood')?.color).toBe(DOOR_COLOR);
     expect(r.dimStatus?.eave).toBe('measured');
+    // PQ-T7: the facade path carries the photo conditions too, or the small / blurred hint never shows.
+    expect(out.conditions).toMatchObject({ sharpness: expect.any(String) });
+    expect(out.conditions!.widthPx).toBeGreaterThan(0);
   });
 
   it('the staged loop asks Spark per stage and never makes the house worse (PG-T16)', async () => {

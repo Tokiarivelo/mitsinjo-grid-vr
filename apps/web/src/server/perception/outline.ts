@@ -1,23 +1,18 @@
 import type { PerceptionClient } from './client';
 import type { ApplianceDetection, NormBox, PerceptionSource, SegmentResult } from './schemas';
 import type { CropRect } from './shape-crop';
+import { iou, MATCH_MIN_IOU } from './box-match';
 import { remapOutlineToPhoto } from './mask-outline';
+import { pickConsensus, type OutlineCandidate } from './sam-consensus';
 
 /** Longest wait for one SAM call; past it the Muse box is kept. */
 export const SEGMENT_TIMEOUT_MS = 8000;
 /** Most SAM calls per photo (one per distinct label), to bound cost and latency. */
 export const MAX_SEGMENT_CONCEPTS = 8;
-/** Minimum box overlap (IoU) for a SAM instance to belong to a Muse detection. */
-export const MATCH_MIN_IOU = 0.3;
+/** Phrasings asked together by the consensus (the noun, the full label, a lookalike). */
+export const MAX_CONSENSUS_PHRASINGS = 3;
 
-/** Intersection over union of two image-fraction boxes (0–1). */
-export function iou(a: NormBox, b: NormBox): number {
-  const ix = Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x));
-  const iy = Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y));
-  const inter = ix * iy;
-  const union = a.w * a.h + b.w * b.h - inter;
-  return union > 0 ? inter / union : 0;
-}
+export { iou, MATCH_MIN_IOU };
 
 /** SAM box (inclusive pixels) → image fractions; null without image size. */
 export function samBoxToNorm(
@@ -177,9 +172,9 @@ export interface OutlineCrop {
 function pickOutline(
   seg: SegmentResult,
   box: NormBox
-): { outline: string; score: number } | { miss: string } {
+): { outline: string; score: number; box: NormBox } | { miss: string } {
   if (seg.instances.length === 0) return { miss: 'SAM found nothing' };
-  let best: { outline: string; score: number } | null = null;
+  let best: { outline: string; score: number; box: NormBox } | null = null;
   let closest = 0;
   let outlined = 0;
   for (const inst of seg.instances) {
@@ -190,7 +185,7 @@ function pickOutline(
     const score = iou(box, found);
     if (score > closest) closest = score;
     if (score >= MATCH_MIN_IOU && (!best || score > best.score)) {
-      best = { outline: inst.outline, score };
+      best = { outline: inst.outline, score, box: found };
     }
   }
   if (!best) {
@@ -231,6 +226,8 @@ export async function fetchOutlineForBox(
     timeoutMs = SEGMENT_TIMEOUT_MS,
     crop,
     retries = [],
+    consensus = false,
+    skipFull = false,
   }: {
     timeoutMs?: number;
     crop?: OutlineCrop;
@@ -239,20 +236,66 @@ export async function fetchOutlineForBox(
      * then a lookalike). A timeout, a failed call or a mock answer ends the walk: no word fixes those.
      */
     retries?: ReadonlyArray<string>;
+    /**
+     * Ask `concept` and `retries` together on the full photo and let `pickConsensus` choose (PQ-T9), instead
+     * of walking the retries one by one. More SAM calls (≤ 3), but a merged answer no longer wins by being first.
+     */
+    consensus?: boolean;
+    /** The full photo was already asked for every phrasing (consensus): the walk asks the crop only. */
+    skipFull?: boolean;
   } = {}
 ): Promise<string | null> {
-  const full = await withTimeout((signal) => segmentImage(imageUrl, concept, signal), timeoutMs);
-  // Only a real SAM answer counts (the mock's boxes belong to another image).
-  const answered = usableAnswer(full, timeoutMs);
-  let miss: string;
+  if (consensus) {
+    const phrasings = [concept, ...retries.map((r) => r.trim().toLowerCase())]
+      .filter((c, i, all) => c && all.indexOf(c) === i)
+      .slice(0, MAX_CONSENSUS_PHRASINGS);
+    const answers = await Promise.all(
+      phrasings.map((c) => withTimeout((signal) => segmentImage(imageUrl, c, signal), timeoutMs))
+    );
+    const candidates: OutlineCandidate[] = [];
+    const misses: string[] = [];
+    let heardAny = false;
+    answers.forEach((raw, i) => {
+      const answered = usableAnswer(raw, timeoutMs);
+      if ('miss' in answered) return void misses.push(`${phrasings[i]}: ${answered.miss}`);
+      heardAny = true;
+      const picked = pickOutline(answered.seg, box);
+      if ('miss' in picked) return void misses.push(`${phrasings[i]}: ${picked.miss}`);
+      candidates.push({ concept: phrasings[i]!, ...picked });
+    });
+    const chosen = pickConsensus(candidates);
+    if (chosen) {
+      console.info(
+        `[vision] 3D outline for "${concept}": ${chosen.why} (${chosen.agreeing}/${candidates.length} of ${phrasings.length} phrasings, kept "${chosen.pick.concept}")`
+      );
+      return chosen.pick.outline;
+    }
+    console.warn(`[vision] 3D outline consensus missed for "${concept}": ${misses.join('; ')}`);
+    // Timeouts, failures or mock answers only: no word and no crop fixes those (as in the plain walk).
+    if (!crop || !heardAny) return null;
+    // SAM answered and found nothing on the full photo: every phrasing still gets its chance on the crop.
+    return fetchOutlineForBox(segmentImage, imageUrl, concept, box, {
+      timeoutMs,
+      crop,
+      retries: phrasings.slice(1),
+      skipFull: true,
+    });
+  }
+  let miss = 'full photo asked above';
   // Another word only helps when SAM answered and found nothing: not on a timeout, a failure or a mock.
-  let heard = !('miss' in answered);
-  if ('miss' in answered) {
-    miss = answered.miss;
-  } else {
-    const picked = pickOutline(answered.seg, box);
-    if ('outline' in picked) return picked.outline;
-    miss = picked.miss;
+  let heard = true;
+  if (!skipFull) {
+    const full = await withTimeout((signal) => segmentImage(imageUrl, concept, signal), timeoutMs);
+    // Only a real SAM answer counts (the mock's boxes belong to another image).
+    const answered = usableAnswer(full, timeoutMs);
+    heard = !('miss' in answered);
+    if ('miss' in answered) {
+      miss = answered.miss;
+    } else {
+      const picked = pickOutline(answered.seg, box);
+      if ('outline' in picked) return picked.outline;
+      miss = picked.miss;
+    }
   }
   if (crop) {
     const boxInCrop: NormBox = {
@@ -293,6 +336,8 @@ export async function fetchOutlineForBox(
       timeoutMs,
       ...(crop ? { crop } : {}),
       retries: rest.slice(1),
+      // The consensus already asked every phrasing on the full photo: the walk stays on the crop.
+      ...(skipFull ? { skipFull } : {}),
     });
   }
   return null;

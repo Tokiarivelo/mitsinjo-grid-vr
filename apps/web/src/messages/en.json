@@ -1183,6 +1183,8 @@
       "model3dCoverage": "Parts seen on the photo:",
       "model3dCoverageItem": "{name} {built}/{seen}",
       "model3dCoverageMissing": "not built: {count}",
+      "photoTooSmall": "Object too small on the photo: parts may be missing. A closer photo helps.",
+      "photoBlurred": "Photo blurred: details may be missing. A sharper photo helps.",
       "model3dPart": {
         "wheel": "Wheels",
         "window": "Windows",

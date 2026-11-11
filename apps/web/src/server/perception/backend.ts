@@ -127,6 +127,8 @@ export interface ShapeSubject {
   scenery?: SceneryType;
   /** Width / height of the object on the photo, in pixels (thin pole ≈ 0.1, wide car ≈ 2). */
   aspect?: number;
+  /** Photo facts measured by code (PQ-T7), sent as the « Measured: » line of the question. */
+  facts?: string[];
   /**
    * Validated 2D facade (front elevation, unoccluded): a second image beside the crop. The crop
    * keeps size, pose and measured colours; the facade refines windows, doors, materials, parts.

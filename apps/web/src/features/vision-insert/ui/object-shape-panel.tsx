@@ -29,6 +29,7 @@ import {
 } from '@/lib/object-shape';
 import type { ApplianceDetection } from '@/lib/vision';
 import { PartCoverageLine } from './part-coverage-line';
+import { PhotoWarningLine } from './photo-warning-line';
 import { cn } from '@/lib/utils';
 import { useElapsedSeconds } from '../hooks/use-elapsed-seconds';
 import type { ObjectShapeState } from '../hooks/use-object-shape';
@@ -420,6 +421,7 @@ export function ObjectShapePanel({
           {shape.mode === 'recipe' && shape.coverage && (
             <PartCoverageLine coverage={shape.coverage} />
           )}
+          {shape.mode === 'recipe' && <PhotoWarningLine conditions={shape.conditions} />}
           {webgl && (
             <p className="flex items-center gap-1.5 text-xs text-text-muted">
               <Move3d className="h-3 w-3 shrink-0" aria-hidden="true" />

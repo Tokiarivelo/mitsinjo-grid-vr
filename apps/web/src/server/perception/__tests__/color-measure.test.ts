@@ -168,3 +168,58 @@ describe('deltaE2000 (PF-T9)', () => {
     expect(hexToLab('#ffffff')[0]).toBeCloseTo(100, 1);
   });
 });
+
+describe('colour on the lit surface (PQ-T10)', () => {
+  const SHADOWED: Rgb = [105, 90, 63];
+
+  it('a wall mostly in shadow reads the lit colour within ΔE 5, and reports the shadow share', () => {
+    // 35 % lit stone, 65 % the same stone in shadow (before: the biggest group = the shadow).
+    const px = bands([
+      [{ rgb: ROOF, share: 1 }],
+      [
+        { rgb: STONE, share: 0.35 },
+        { rgb: SHADOWED, share: 0.65 },
+      ],
+      [
+        { rgb: STONE, share: 0.35 },
+        { rgb: SHADOWED, share: 0.65 },
+      ],
+    ]);
+    let shadow = 0;
+    const c = measureKitColors(px, 'house', {
+      litSurface: true,
+      onShadowShare: (s) => (shadow = s),
+    })!;
+    expect(deltaE2000(hexToLab(c.main), hexToLab('#c8aa78'))).toBeLessThan(5);
+    expect(shadow).toBeGreaterThan(0.3);
+  });
+
+  it('regression (PR #11 review): a black object is not the shadow of its grey highlights', () => {
+    // Real pump and motorbike: black body 70 %, grey reflections 30 %. Greys share one hue, so the body was
+    // folded into the highlights and the object came out grey.
+    const BLACK: Rgb = [26, 26, 25];
+    const HIGHLIGHT: Rgb = [150, 152, 155];
+    const body = [
+      { rgb: BLACK, share: 0.7 },
+      { rgb: HIGHLIGHT, share: 0.3 },
+    ];
+    let shadow = -1;
+    const c = measureKitColors(bands([body, body, body]), 'machine', {
+      litSurface: true,
+      onShadowShare: (s) => (shadow = s),
+    })!;
+    expect(shadow).toBe(0);
+    expect(hexToLab(c.main)[0]).toBeLessThan(20);
+  });
+
+  it('a different material is not taken for a shadow (blue sky stays apart)', () => {
+    const px = bands([
+      [{ rgb: SKY, share: 1 }],
+      [{ rgb: STONE, share: 1 }],
+      [{ rgb: STONE, share: 1 }],
+    ]);
+    let shadow = -1;
+    measureKitColors(px, 'house', { litSurface: true, onShadowShare: (s) => (shadow = s) });
+    expect(shadow).toBe(0);
+  });
+});

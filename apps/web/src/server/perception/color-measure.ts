@@ -141,7 +141,31 @@ interface Group {
   inSecondary: number;
   lightness: number;
   hex: string;
+  /** Mean CIELAB a, b: the hue and chroma, to tell a shadow from another material. */
+  a: number;
+  b: number;
 }
+
+/** A colour is read on its brightest share of pixels: the lit surface, not the shadow mixed in (PQ-T10). */
+export const LIT_SHARE = 0.6;
+/**
+ * A group is the shadow of a brighter one when its a, b sit within this distance of the brighter group's a, b
+ * faded to its lightness (`shadeOf`: a shadow darkens a surface and fades its colour with it)…
+ */
+export const SHADOW_CHROMA_MAX = 10;
+/** …and it is darker by this much CIELAB L (at least, at most). */
+export const SHADOW_L_MIN = 6;
+export const SHADOW_L_MAX = 50;
+/**
+ * …and the brighter group has a colour of its own (CIELAB chroma). Greys all share one hue: without this a
+ * black object (cast-iron pump, black motorbike) was read as the shadow of its own grey highlights. A grey
+ * wall in shadow is therefore not read apart. Values set with `make shadow-compare` (13 real photos, a shadow
+ * painted over each): main colour kept in 20 of 39 cases against 12 without, none lost.
+ */
+export const SHADOW_LIT_CHROMA_MIN = 16;
+
+/** Factor on the a, b of `lit` to get the a, b expected for it at `dark`'s lightness. */
+const shadeOf = (lit: Group, dark: Group) => (dark.lightness + 16) / (lit.lightness + 16);
 
 /**
  * Object pixels → the kit's 3 colours (PF-T2), or null when too few pixels were measured.
@@ -153,33 +177,80 @@ interface Group {
 export function measureKitColors(
   px: ObjectPixels,
   archetype: KitArchetype,
-  { plaster = false }: { plaster?: boolean } = {}
+  {
+    plaster = false,
+    litSurface = false,
+    onShadowShare,
+  }: {
+    plaster?: boolean;
+    /**
+     * Read the lit surface (PQ-T10): a darker group of the same hue counts as the shadow of a brighter,
+     * coloured one and its pixels go to it. Off by default: dark beams and a shadow cannot be told apart by
+     * colour alone.
+     */
+    litSurface?: boolean;
+    /** Receives the share of object pixels read as shadow of a brighter group (0–1). */
+    onShadowShare?: (share: number) => void;
+  } = {}
 ): ObjectKit['colors'] | null {
   const n = px.y.length;
   if (n < MIN_MEASURED_PIXELS) return null;
   const labels = kmeansLab(px.lab, COLOR_CLUSTERS);
   const band = SECONDARY_BAND[archetype];
-  const acc = Array.from({ length: COLOR_CLUSTERS }, () => ({
-    count: 0,
-    inSecondary: 0,
-    l: 0,
-    rgb: [0, 0, 0],
-  }));
+  const members: number[][] = Array.from({ length: COLOR_CLUSTERS }, () => []);
+  const inSec = new Array<number>(COLOR_CLUSTERS).fill(0);
   for (let i = 0; i < n; i++) {
-    const g = acc[labels[i]!]!;
-    g.count++;
-    if (inBand(band, px.y[i]!)) g.inSecondary++;
-    g.l += px.lab[i * 3]!;
-    for (let c = 0; c < 3; c++) g.rgb[c]! += px.linear[i * 3 + c]!;
+    members[labels[i]!]!.push(i);
+    if (inBand(band, px.y[i]!)) inSec[labels[i]!]!++;
   }
-  const groups: Group[] = acc
-    .filter((g) => g.count > 0)
-    .map((g) => ({
-      count: g.count,
-      inSecondary: g.inSecondary,
-      lightness: g.l / g.count,
-      hex: linearToHex(g.rgb[0]! / g.count, g.rgb[1]! / g.count, g.rgb[2]! / g.count),
-    }));
+  const all: Group[] = [];
+  members.forEach((idx, k) => {
+    if (idx.length === 0) return;
+    let l = 0;
+    let a = 0;
+    let b = 0;
+    for (const i of idx) {
+      l += px.lab[i * 3]!;
+      a += px.lab[i * 3 + 1]!;
+      b += px.lab[i * 3 + 2]!;
+    }
+    // Colour on the brighter part of the group only.
+    const lit = [...idx]
+      .sort((p, q) => px.lab[q * 3]! - px.lab[p * 3]!)
+      .slice(0, Math.max(1, Math.ceil(idx.length * LIT_SHARE)));
+    const rgb = [0, 0, 0];
+    for (const i of lit) for (let c = 0; c < 3; c++) rgb[c]! += px.linear[i * 3 + c]!;
+    all.push({
+      count: idx.length,
+      inSecondary: inSec[k]!,
+      lightness: l / idx.length,
+      a: a / idx.length,
+      b: b / idx.length,
+      hex: linearToHex(rgb[0]! / lit.length, rgb[1]! / lit.length, rgb[2]! / lit.length),
+    });
+  });
+  // A darker group of the same hue as a brighter one is its shadow: its pixels count for the lit group.
+  // Brightest first, and a group only joins a group that stayed (no chains: roof → shadow → wall).
+  const groups: Group[] = [];
+  let shadowPixels = 0;
+  for (const g of [...all].sort((p, q) => q.lightness - p.lightness)) {
+    // A group living in the secondary band (roof, trunk) is a part of its own, never a shadow.
+    const lit = (litSurface && g.inSecondary < 0.5 * g.count ? groups : [])
+      .filter(
+        (o) =>
+          Math.hypot(o.a, o.b) >= SHADOW_LIT_CHROMA_MIN &&
+          o.lightness - g.lightness >= SHADOW_L_MIN &&
+          o.lightness - g.lightness <= SHADOW_L_MAX &&
+          Math.hypot(o.a * shadeOf(o, g) - g.a, o.b * shadeOf(o, g) - g.b) <= SHADOW_CHROMA_MAX
+      )
+      .sort((p, q) => q.count - p.count)[0];
+    if (lit) {
+      lit.count += g.count;
+      lit.inSecondary += g.inSecondary;
+      shadowPixels += g.count;
+    } else groups.push(g);
+  }
+  onShadowShare?.(shadowPixels / n);
   const by = (score: (g: Group) => number, from: Group[]) =>
     from.reduce<Group | undefined>(
       (best, g) => (!best || score(g) > score(best) ? g : best),

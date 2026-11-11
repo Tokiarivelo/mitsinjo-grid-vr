@@ -30,6 +30,26 @@ export const PART_CONCEPTS: Record<KitArchetype, ReadonlyArray<string>> = {
 /** The whole batch (all concepts in parallel) resolves inside this, stragglers dropped. */
 export const PART_MASKS_TIMEOUT_MS = 5000;
 
+/** Share of the time left that part masks may use (PQ-T9), bounded below and above. */
+export const PART_MASKS_TIME_SHARE = 0.25;
+export const PART_MASKS_MIN_MS = 3000;
+export const PART_MASKS_MAX_MS = 8000;
+
+/** Deadline of the part-mask batch from the time left in the request (never the old fixed 5 s on a short budget). */
+export function partMasksTimeout(timeLeftMs: number): number {
+  const share = Math.round(Math.max(0, timeLeftMs) * PART_MASKS_TIME_SHARE);
+  return Math.min(PART_MASKS_MAX_MS, Math.max(PART_MASKS_MIN_MS, share));
+}
+
+/** Second phrasing tried once when the first answer for a part is empty (PQ-T9). */
+export const PART_RETRY: Readonly<Record<string, string>> = {
+  wheel: 'tire',
+  window: 'glass window',
+  door: 'doorway',
+  chimney: 'chimney stack',
+  lamp: 'light',
+};
+
 /** Most instances kept per concept, highest confidence first. */
 export const PART_MASKS_PER_CONCEPT = 8;
 
@@ -73,7 +93,24 @@ export async function fetchPartMasks(
         const late: Promise<Settled> = new Promise((resolve) =>
           setTimeout(() => resolve({ status: 'late' }), remaining)
         );
-        const settled = await Promise.race([call, late]);
+        let settled = await Promise.race([call, late]);
+        // First answer empty (a real SAM answer with no instance): one more phrasing, inside the same deadline.
+        const retry = PART_RETRY[concept];
+        if (
+          retry &&
+          settled.status === 'answer' &&
+          settled.seg.source === 'meta' &&
+          !settled.seg.fallback &&
+          settled.seg.instances.length === 0 &&
+          Date.now() < deadline
+        ) {
+          const again: Promise<Settled> = segmentImage(cropUrl, retry, controller.signal).then(
+            (seg) => ({ status: 'answer', seg }) as const,
+            () => ({ status: 'error' }) as const
+          );
+          const second = await Promise.race([again, late]);
+          if (second.status === 'answer' && second.seg.instances.length > 0) settled = second;
+        }
         if (settled.status !== 'answer') {
           missed.set(concept, settled.status === 'late' ? 'timed out' : 'call failed');
           return [];

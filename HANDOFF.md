@@ -1,33 +1,40 @@
 # HANDOFF — read first, overwrite at end of session (≤40 lines)
 
-**Updated:** 2026-11-10 · **By:** Claude Code · **Branch:** feat/pq-t37-part-list (PR open; Q0 PR #9 merged)
+**Updated:** 2026-11-11 · **By:** Claude Code · **Branch:** feat/pq-q1-pixels (PR #11 open; PR #10 merged)
 
 ## Current state
 
-- **PV-Q phase Q0:** PQ-T1–T6, T36 done. PQ-T37 almost done: « Not built » explained for every real object,
-  panel part list shipped; only `evidence.visibleParts` left (waits for Q1 PQ-T12).
-- **Real baseline (15 of 16 scored, Wikimedia Commons photos, local only):** mean ≈ 54 vs synthetic 93. Judge
-  77 % of 13 pairs < 90 % → developer note only. Only the solar street light has no outline (PQ-T9).
-- Photos: `resources/real-photos/` and `__fixtures__/shape/real/photos/` (+ `SOURCES.md`), gitignored.
-- Machine: if dev says `Can't resolve 'three'` → stop dev, `make install` (broken install since the full disk).
+- **PV-Q Q1 measured and closed as far as the data allows:**
+  - PQ-T7 photo conditions: in, ticked. Design gate done on a real run (2026-11-11; shots in local `design/shots/pq-t7/`).
+    Bug found and fixed there: the facade and views answers dropped `conditions`, so the hint never showed for houses.
+  - PQ-T8 tight crop: **reverted** (`make eval-shape` 98/118 vs 99/116, median 28.9 vs 24.5 s, window counts worse).
+  - PQ-T9 SAM agreement: `make outline-compare` 12/13 = plain 12/13 → **off** (option kept, tested). Part-mask retry
+    and time share stay. Only miss: solar street light (SAM returns the panel alone).
+  - PQ-T10 lit colours: in, unticked. `make shadow-compare` (painted shadow on the real photos): main colour kept
+    20/39 vs 12/39 without, none lost. Review bug fixed: a black object was read as the shadow of its grey highlights.
+  - PR #11 review: sharpness read on the photo's own pixels (`sampleNativeGray`), limits recalibrated; box IoU in
+    `box-match.ts`; consensus crop fallback keeps every phrasing.
+- Real baseline unchanged: mean 53 (synthetic 93). PQ-T37 open: only `evidence.visibleParts` (PQ-T12, Q2).
+- Test time budgets are CPU time (`src/test/cpu-time.ts`), back to 500 / 1000 ms: the full suite no longer inflates them.
 
 ## Next
 
-1. Review + merge the PQ-T37 part-list PR.
-2. Q1 from PQ-T7; PQ-T12 brings `evidence.visibleParts` (then close PQ-T37); PQ-T9 has the SAM evidence.
+1. Merge PR #11 once CI is green.
+2. Q2 from PQ-T11 (skill loader); PQ-T12 brings `evidence.visibleParts` and closes PQ-T37.
 
-## Files touched (this session, after PR #9)
+## Files touched (Q1)
 
-- `server/perception/mask-geometry.ts` (`masksOnObject`), `score-shape.ts`, `shape-report.ts`: only SAM masks on
-  the object's outline count as seen (commit 1086347, on main).
-- `server/perception/object-graph.ts` (`partCoverage`), `object-shape.ts` (`coverage` on the result),
-  `lib/object-shape.ts` (`PartCoverageSchema`, `ObjectShape.coverage?`).
-- `features/vision-insert/ui/part-coverage-line.tsx` (new) + `object-shape-panel.tsx`, messages en/fr/mg, tests.
-- Docs: `contracts.md`, `design/screens/village.md`, `design/stitch-map.md`, `tasks/PV-vision-quality.md`.
+- New: `server/perception/photo-conditions.ts`, `sam-consensus.ts`; `lib/photo-warning.ts`;
+  `features/vision-insert/ui/photo-warning-line.tsx`; `__tests__/outline-compare.test.ts`,
+  `shadow-compare.test.ts`; `box-match.ts`; `src/test/cpu-time.ts` (+ tests).
+- Changed: `object-shape.ts` (conditions, facts, lit colours, part-mask timeout), `shape.ts` (`facts`),
+  `outline.ts` (`consensus`, `skipFull`), `part-masks.ts` (`partMasksTimeout`, `PART_RETRY`), `color-measure.ts`
+  (`LIT_SHARE`, `litSurface`), `lib/object-shape.ts` (`conditions`), messages en/fr/mg, Makefile `outline-compare`.
+- Docs: `contracts.md`, `copilot.md`, `design/screens/village.md`, `tasks/PV-vision-quality.md`, loop log row.
 
 ## Decisions
 
-- Part list = per SAM concept « built/seen »; missing ones get « not built: n » with a `warning-amber` icon only
-  (amber text fails AA on light). Shown only for AI shapes with part masks; no plurals (no ICU in the i18n wrapper).
-- Built without mockup; gate-out 1440 + 390, dark + light, stubbed shape (temp script deleted).
-- Test scenarios V233–V234 (`test-scenarios/06-village.md`, local).
+- Machine: if dev says `Can't resolve 'three'` → stop dev, `make install`.
+- Scenarios V235–V240 (local `test-scenarios/06-village.md`). Blur does not lower colour confidence (broke the goldens); only clipped exposure does.
+- Shadow folding opt-in (`litSurface`), off for plaster, never for the secondary band, no chains, only under a
+  coloured lit group (a grey wall in shadow is not corrected).

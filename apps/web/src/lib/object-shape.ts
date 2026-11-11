@@ -337,6 +337,24 @@ export const PartCoverageSchema = z.object({
 });
 export type PartCoverage = z.infer<typeof PartCoverageSchema>;
 
+/** How good the photo pixels of the object are (PQ-T7). Measured by code, never by AI. */
+export const PHOTO_LEVELS = ['low', 'medium', 'high'] as const;
+export type PhotoLevel = (typeof PHOTO_LEVELS)[number];
+export const PHOTO_VIEWS = ['front', 'three_quarter', 'side'] as const;
+export type PhotoView = (typeof PHOTO_VIEWS)[number];
+export const PhotoConditionsSchema = z.object({
+  widthPx: z.number().int().min(0),
+  heightPx: z.number().int().min(0),
+  /** low = blurred. */
+  sharpness: z.enum(PHOTO_LEVELS).optional(),
+  /** Share of clipped pixels, classed (low = fine). */
+  exposure: z.enum(PHOTO_LEVELS).optional(),
+  /** Share of the object hidden, 0–1 (needs an outline). */
+  hidden: z.number().min(0).max(1).optional(),
+  view: z.enum(PHOTO_VIEWS).optional(),
+});
+export type PhotoConditions = z.infer<typeof PhotoConditionsSchema>;
+
 export const ObjectShapeSchema = z.object({
   detectionId: z.string(),
   mode: z.enum(['recipe', 'silhouette']),
@@ -358,6 +376,8 @@ export const ObjectShapeSchema = z.object({
   outline: z.string().optional(),
   /** Parts seen on the photo vs built, per SAM concept (PQ-T37); absent without part masks. Computed, not AI. */
   coverage: z.array(PartCoverageSchema).optional(),
+  /** Photo conditions of the object (PQ-T7): size, sharpness, exposure, hidden share, view. Computed, not AI. */
+  conditions: PhotoConditionsSchema.optional(),
 });
 export type ObjectShape = z.infer<typeof ObjectShapeSchema>;
 

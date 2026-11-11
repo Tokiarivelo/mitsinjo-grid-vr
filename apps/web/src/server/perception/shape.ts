@@ -66,7 +66,8 @@ export function shapeQuestion(
   label: string,
   aspect?: number,
   hint?: KitArchetype,
-  withFacade = false
+  withFacade = false,
+  facts: readonly string[] = []
 ): string {
   const name = label.slice(0, 40).replace(/"/g, "'");
   const seen =
@@ -75,7 +76,8 @@ export function shapeQuestion(
       : '';
   const guess = hint ? ` It is probably a "${hint}".` : '';
   const facade = withFacade ? ` ${FACADE_REFERENCE_LINE}` : '';
-  return `Describe the full 3D "${name}" in the clear rectangle in the middle of this crop with strong 3D imagination and interpolation, even if partially occluded.${seen}${guess}${facade}`;
+  const measured = facts.length ? ` Measured: ${facts.join(' · ')}.` : '';
+  return `Describe the full 3D "${name}" in the clear rectangle in the middle of this crop with strong 3D imagination and interpolation, even if partially occluded.${seen}${guess}${measured}${facade}`;
 }
 
 const color = { type: 'string' };

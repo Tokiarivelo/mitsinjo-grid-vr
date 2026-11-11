@@ -342,6 +342,8 @@ make test-shape
 # 3D shape report: scores + contact sheet (photo | flat | ¾) → test-results/shape-report/
 # (synthetic table + « Real » table from the local captures in __fixtures__/shape/real/)
 make shape-report
+# Colour under a painted shadow on the real photos, litSurface on vs off (no API call)
+make shadow-compare
 # Which SAM word outlines a capture? best box IoU per word, photo and crop (costs SAM calls)
 make sam-probe ID=utility-pole CONCEPTS="pole,utility pole"
 # Rubric judge (Muse Wonder) on the real captures, intact vs damaged → calibration (costs API calls)

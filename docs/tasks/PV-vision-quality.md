@@ -113,21 +113,30 @@ Meta API calls; all others run offline.
 
 ## Q1 — Better pixels and steadier measurements
 
-- [ ] **PQ-T7 Photo conditions.** New `server/perception/photo-conditions.ts`, pure: object size in pixels,
+- [x] **PQ-T7 Photo conditions.** New `server/perception/photo-conditions.ts`, pure: object size in pixels,
       sharpness (variance of the Laplacian inside the box, classed low / medium / high), exposure (share of
       clipped pixels), hidden share (outline area against the box and the archetype's usual fill), view class
       from the measured yaw. Used three ways: the « Measured: » line of the question (skills §14), confidences
       in `fusion.ts`, and a hint in `object-shape-panel.tsx` when the photo is too small or too blurred
-      (`messages/{en,fr,mg}.json`, design gate).
+      (`messages/{en,fr,mg}.json`, design gate: real run 2026-11-11, 1440 + 390 × dark + light, both hints,
+      no horizontal overflow; `conditions` ride on the facade and views answers too, not only the photo pipeline).
       **Test:** `photo-conditions.test.ts` (blurred copy of a fixture classed lower; half-covered outline →
       hidden ≈ 0.5), panel test for the hint.
       **Done when:** the log prints one conditions line per object and the facts line reaches Spark.
-- [ ] **PQ-T8 Two images for the kit** _(API to evaluate)_. `shape-crop.ts`: keep the context crop; add a tight
+      _PR #11 review (2026-11-11):_ sharpness is read on the photo's own pixels (`sampleNativeGray`, long side
+      ≤ 1024, never enlarged), no longer on the 256-column grid, which hid the blur of a large object and
+      called a small sharp one blurred. Limits recalibrated on the 13 real photos and their Gaussian-blurred
+      copies: low < 0.0008, high ≥ 0.005 (untouched: all high; σ 1 px: never low; σ 3 px: all low).
+- [x] **PQ-T8 Two images for the kit** _(API to evaluate)_. `shape-crop.ts`: keep the context crop; add a tight
       crop of the object alone (outline when there is one, background set to neutral grey), long side up to the
       size `compactDataUrl` allows. `describeShape` sends context, then tight; the question says which is which.
       **Test:** `shape-crop.test.ts` (tight crop bounds, grey outside the outline, no outline → one image as today).
       **Done when:** `make eval-shape` agreement is not lower and counts (windows, wheels) are not worse on the
       real set; else revert and log why.
+      _Evaluated 2026-11-10, **reverted**: `make eval-shape` on the 16 real captures, context crop only → agree
+      99/116, median 24.5 s; with the tight crop as second image → 98/118, median 28.9 s, and window counts worse
+      (car-corner 1→4, car-hidden 1→2, units added on house-row/hut/refrigerator). « Not lower » failed, so the
+      code (`tightCropForShape`, question lines, `tightUrl`) was removed._
 - [ ] **PQ-T9 SAM agreement.** New `server/perception/sam-consensus.ts` (methodology §6.5), used by
       `outline.ts` (`fetchOutlineForBox`) and for the parts whose first answer is empty in `part-masks.ts`;
       `PART_MASKS_TIMEOUT_MS` becomes a share of the time left instead of a fixed 5 s.
@@ -142,11 +151,32 @@ Meta API calls; all others run offline.
       0 instances on two photos; lookalike « fire hydrant » and « metal object »: 0.89; « object » alone: 0), and
       thin assemblies come back as one part (solar street light: « street light » 0.27, « solar panel » 0.33).
       Phrasings to try in the consensus: the label, the head noun, a lookalike, « <material> object ».
+      _Built 2026-11-10, unticked:_ `sam-consensus.ts` (`pickConsensus`) + `fetchOutlineForBox({ consensus: true })` (noun,
+      full label, lookalike asked together; used by `object-shape.ts`), `partMasksTimeout` (25 % of the time left,
+      3–8 s) and one retry phrasing per empty part (`PART_RETRY`). Measured with `make outline-compare` on the 13 real
+      photos: plain walk 12/13, agreement 12/13 (no gain; the only miss, solar street light, gets the panel alone,
+      IoU 0.33, a wrong outline for the lamp). The agreement is therefore **off** in the pipeline (`consensus`
+      option kept, tested, not passed by `object-shape.ts`); the part-mask retry and time share stay. Open: no
+      phrasing found for thin assemblies.
 - [ ] **PQ-T10 Colour of the lit surface.** `color-measure.ts`, `region-colors.ts`: read each region's colour
       on its brighter 60 % of pixels (median, as today), report the shadow share apart. First check what
       `measureKitColors` already does for `plaster`, and extend that logic instead of adding a second one.
       **Test:** `color-measure.test.ts`: a wall half in shadow reads the lit colour within ΔE 5 (before: the mix).
       **Done when:** mean colour-per-part ΔE on the real set is lower than at baseline.
+      _Built 2026-11-10, unticked:_ `measureKitColors` reads each group on its brightest 60 % (`LIT_SHARE`) and, with
+      `litSurface` (off for plaster), folds a darker same-hue group outside the secondary band into the lit one
+      (`onShadowShare` reports the share; logged). `region-colors.ts` not touched. `make shape-report` after Q1:
+      real mean 53 and colour ΔE 10.1 both with and without the change (A/B run: `LIT_SHARE` 1 and `litSurface` off
+      give the identical table): the real photos hold no shadowed wall, so « lower than baseline » is not shown.
+      The unit test (wall 65 % in shadow reads the lit colour, ΔE < 5) is the only proof.
+      _PR #11 review (2026-11-11), still unticked:_ new `make shadow-compare` (no API call) paints a shadow over
+      each real object and reads the main colour with and without `litSurface`. It showed the first version
+      was not neutral: greys share one hue, so a black object (pump, motorbike) was read as the shadow of its
+      grey highlights and came out grey. Fixed: the lit group must be coloured (`SHADOW_LIT_CHROMA_MIN` 16)
+      and the dark one must match the lit colour faded to its lightness (`SHADOW_CHROMA_MAX` 10). Result on
+      13 photos × 3 shadows: main colour kept (ΔE < 5) 20/39 against 12/39 without, none lost, mean ΔE 14.9
+      against 20.2; one untouched photo changes (the red car reads red, not dark brown). Not handled: a grey
+      or white wall in shadow (house-front, solar panel). « Done when » still needs a real shadowed wall.
 
 **Exit Q1:** fewer cascades from a missed outline; kit calls see the object large and alone.
 
