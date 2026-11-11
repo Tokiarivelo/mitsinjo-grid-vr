@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { Canvas, useLoader, useThree } from '@react-three/fiber';
 import { ContactShadows, OrbitControls } from '@react-three/drei';
-import { EffectComposer, ToneMapping } from '@react-three/postprocessing';
+import { EffectComposer, N8AO, ToneMapping } from '@react-three/postprocessing';
 import { ToneMappingMode } from 'postprocessing';
 import * as THREE from 'three';
 import { TOKEN_HEX } from '@/features/microgrid-3d/utils/scene-palette';
@@ -61,6 +61,15 @@ function StudioEnvironment() {
   }, [get]);
   return null;
 }
+
+/**
+ * Parts shade each other (PQ-T33): N8AO (half resolution, performance quality) in the composer and one soft
+ * shadow map on the key light. Both draw on demand with the rest of the frame, so nothing costs at rest. The AO
+ * tint stays light and its strength moderate so the measured colours hold.
+ */
+export const EDITOR_AO = { radius: 0.35, intensity: 1.2, falloff: 0.5, color: '#201a18' } as const;
+/** Shadow map side of the key light, and its blur radius. */
+export const KEY_SHADOW = { size: 1024, radius: 4 } as const;
 
 /** Ink strength in the editor (PT-5): a clear drawn edge on the single object. */
 export const EDITOR_INK = 0.6;
@@ -148,7 +157,7 @@ function ObjectModel({
       />
       <group scale={scale}>
         {vertexColors ? (
-          <mesh geometry={mesh} material={surfaces} />
+          <mesh geometry={mesh} material={surfaces} castShadow receiveShadow />
         ) : (
           <mesh geometry={mesh}>
             <meshStandardMaterial color={tint ?? TOKEN_HEX.idle} roughness={0.6} metalness={0.05} />
@@ -186,6 +195,7 @@ export function ObjectEditor3d(props: ObjectEditor3dProps) {
         warm ? 'opacity-100' : 'opacity-0'
       )}
       frameloop="demand"
+      shadows
       dpr={[1, 1.5]}
       camera={{ position: CAMERA_POSITION, fov: 35, near: 0.05, far: 20 }}
       gl={{
@@ -197,7 +207,20 @@ export function ObjectEditor3d(props: ObjectEditor3dProps) {
     >
       <StudioEnvironment />
       {/* Soft key from the upper right front. */}
-      <directionalLight position={[2, 3, 2.5]} intensity={1.2} />
+      <directionalLight
+        position={[2, 3, 2.5]}
+        intensity={1.2}
+        castShadow
+        shadow-mapSize={[KEY_SHADOW.size, KEY_SHADOW.size]}
+        shadow-radius={KEY_SHADOW.radius}
+        shadow-bias={-0.0005}
+        shadow-camera-near={0.5}
+        shadow-camera-far={8}
+        shadow-camera-left={-1.2}
+        shadow-camera-right={1.2}
+        shadow-camera-top={1.2}
+        shadow-camera-bottom={-1.2}
+      />
       {/* Rim light from behind: outlines dark objects (black TV, pump) against the backdrop. */}
       <directionalLight position={[-0.5, 1.6, -3]} intensity={1.1} />
       <Suspense fallback={null}>
@@ -211,6 +234,14 @@ export function ObjectEditor3d(props: ObjectEditor3dProps) {
         frameBufferType={THREE.HalfFloatType}
         enableNormalPass={false}
       >
+        <N8AO
+          halfRes
+          aoRadius={EDITOR_AO.radius}
+          intensity={EDITOR_AO.intensity}
+          distanceFalloff={EDITOR_AO.falloff}
+          quality="performance"
+          color={EDITOR_AO.color}
+        />
         <ToneMapping mode={ToneMappingMode.NEUTRAL} />
         <Ink strength={EDITOR_INK} />
       </EffectComposer>

@@ -436,12 +436,15 @@ _Ticked 2026-11-11 on the owner's request: the code and tests are in; every « d
       lists a recipe's materials) is shared by the viewer and VR (maps, swatches, baked studio env on the materials
       only). Village: `PLACED_FAMILIES` matt / gloss / glass / metal + `glow` (5th mesh only while a lit appliance
       runs, one more than the ≤ 4 planned: the audit budget is unchecked), no maps on either tier.
-- [ ] **PQ-T33 Parts shade each other in the viewer.** `object-editor-3d.tsx`: N8AO in the existing composer
+- [x] **PQ-T33 Parts shade each other in the viewer.** `object-editor-3d.tsx`: N8AO in the existing composer
       and one soft shadow map on the key light (cast and receive on the object). Drawn on demand, so no cost
       at rest. Colours must stay as measured.
       **Test:** viewer test (pass present, shadow flags set); `make shape-shots` before / after.
       **Done when:** `/designer-3d` grade not lower on any object, dark and light, 320 px and desktop; ΔE of the
       lit faces against the measured colours not higher by more than 2.
+      _Built 2026-11-11 (the `/designer-3d` grade and the ΔE check on `make shape-shots` are pending; no GPU
+      here, the viewer test reads the source and the exported knobs):_ N8AO (half res, performance) before tone
+      mapping in the existing composer, one 1024 soft shadow map on the key light, the object casts and receives.
 - [x] **PQ-T34 Lamps and screens glow.** `surface-look.ts`: emissive for part kinds lamp, display, headlight.
       Village: on only when the engine says the appliance runs (data-driven, bloom rule of `/designer-3d`);
       viewer: fixed low glow under 1.
