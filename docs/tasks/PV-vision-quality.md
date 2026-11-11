@@ -277,6 +277,7 @@ Meta API calls; all others run offline.
       **Test:** `object-shape.test.ts` (agreeing samples → one kit; split archetype → the better-scoring one;
       one sample late → the other is used alone).
       **Done when:** on the real set, kit field agreement across two runs of the same photo is higher than with 1.
+      _Built 2026-11-11, unticked:_ `kit-vote.ts` (`voteKits`), `SHAPE_KIT_SAMPLES` (env, `.env.example`), second sample in `runObjectShape` (≥ 40 s budget, waits at most half of it). Agreement across two runs not measured yet (API).
 
 - [ ] **PQ-T38 A critic that prefers « no fix », and a loop that knows when to stop.** Critic, stage ops
       and final check cards gain: « when the model is good enough, answer no change; a needless fix can break a

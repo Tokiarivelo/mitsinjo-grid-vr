@@ -614,3 +614,50 @@ describe('free recipe (PV-T9c)', () => {
     expect(out).not.toHaveProperty('fit');
   });
 });
+
+describe('runObjectShape kit samples (PQ-T18)', () => {
+  const car = (n: number): ObjectKit => ({
+    archetype: 'vehicle',
+    subtype: 'sedan',
+    proportions: { w: 1, h: 0.5, d: 0.4 },
+    colors: { main: '#223344', secondary: '#223344', accent: '#445566' },
+    details: { wheels: n },
+  });
+  const answer = (n: number) => meta(kitToRecipe(car(n)), { kit: car(n) });
+
+  it('asks the kit once by default', async () => {
+    const p = client(answer(4));
+    await runObjectShape(p, await photo(), 'data:full', target);
+    expect(p.describeShape).toHaveBeenCalledTimes(1);
+  });
+
+  it('two samples need the budget: under 40 s still one call', async () => {
+    const p = client(answer(4));
+    await runObjectShape(p, await photo(), 'data:full', target, {
+      kitSamples: 2,
+      timeoutMs: 30_000,
+    });
+    expect(p.describeShape).toHaveBeenCalledTimes(1);
+  });
+
+  it('two samples: two calls, the answer still builds', async () => {
+    const p = client(answer(4));
+    p.describeShape.mockResolvedValueOnce(answer(4)).mockResolvedValueOnce(answer(6));
+    const out = await runObjectShape(p, await photo(), 'data:full', target, {
+      kitSamples: 2,
+      timeoutMs: 60_000,
+    });
+    expect(p.describeShape).toHaveBeenCalledTimes(2);
+    expect(out.mode).toBe('recipe');
+  });
+
+  it('a failing second sample leaves the first alone', async () => {
+    const p = client(answer(4));
+    p.describeShape.mockResolvedValueOnce(answer(4)).mockRejectedValueOnce(new Error('x'));
+    const out = await runObjectShape(p, await photo(), 'data:full', target, {
+      kitSamples: 2,
+      timeoutMs: 60_000,
+    });
+    expect(out.mode).toBe('recipe');
+  });
+});

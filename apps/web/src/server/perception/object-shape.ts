@@ -69,6 +69,9 @@ import { withMaskPanels } from './mask-panels';
 import { withMaskWheels } from './mask-wheels';
 import { withProfileBody } from './profile-body';
 import { scoreRecipe } from './score-shape';
+import { voteKits } from './kit-vote';
+import type { ShapeResult } from './schemas';
+import { env } from '@/lib/env';
 import { generateImaginedViews } from './views-generation';
 import {
   ROUND_VIEW_ARCHETYPES,
@@ -182,7 +185,12 @@ export interface ObjectShapeOptions {
    * it unset; evals pass 2 to run the whole pipeline on the Muse cards (PQ-T12).
    */
   promptVersion?: number;
+  /** Kit samples voting (PQ-T18, default `SHAPE_KIT_SAMPLES`): 2 asks the kit twice when ≥ 40 s are left. */
+  kitSamples?: number;
 }
+
+/** The second kit sample is asked only with at least this budget (PQ-T18). */
+const SECOND_SAMPLE_MIN_MS = 40_000;
 
 /**
  * Selected object → its 3D shape (PV-T9), Meta models only. One Spark call on a crop around the object
@@ -215,6 +223,7 @@ export async function runObjectShape(
     onStageSeed,
     onStagesLeft,
     promptVersion,
+    kitSamples = env.SHAPE_KIT_SAMPLES,
   }: ObjectShapeOptions = {}
 ): Promise<ObjectShape> {
   /** Logs each ended stage (first answer and background). */
@@ -336,19 +345,24 @@ export async function runObjectShape(
     onStep?.('model');
     const started = Date.now();
     const timeout = AbortSignal.timeout(Math.max(0, timeoutMs));
-    const shapeCall = perception.describeShape(
-      imageUrl,
-      {
-        label: target.label,
-        category: target.category,
-        ...(target.scenery ? { scenery: target.scenery } : {}),
-        ...(aspect > 0 ? { aspect } : {}),
-        ...(preConditions ? { facts: conditionsFacts(preConditions) } : {}),
-        ...(target.facadeUrl ? { facadeUrl: target.facadeUrl } : {}),
-        ...(promptVersion ? { promptVersion } : {}),
-      },
-      signal ? AbortSignal.any([signal, timeout]) : timeout
-    );
+    const askKit = () =>
+      perception.describeShape(
+        imageUrl,
+        {
+          label: target.label,
+          category: target.category,
+          ...(target.scenery ? { scenery: target.scenery } : {}),
+          ...(aspect > 0 ? { aspect } : {}),
+          ...(preConditions ? { facts: conditionsFacts(preConditions) } : {}),
+          ...(target.facadeUrl ? { facadeUrl: target.facadeUrl } : {}),
+          ...(promptVersion ? { promptVersion } : {}),
+        },
+        signal ? AbortSignal.any([signal, timeout]) : timeout
+      );
+    const shapeCall = askKit();
+    // PQ-T18: a second sample in parallel when asked and the budget allows it (≥ 40 s).
+    const secondCall: Promise<ShapeResult | null> | null =
+      kitSamples >= 2 && timeoutMs >= SECOND_SAMPLE_MIN_MS ? askKit().catch(() => null) : null;
     // 2D facade validated (user 2026-11-02): the house is rebuilt from its elevations — front
     // measured by SAM while Muse Image draws the side, then the side measured — in parallel
     // with Spark. Null for other archetypes, the mock, or a facade SAM cannot read.
@@ -397,7 +411,33 @@ export async function runObjectShape(
       photo && !(shaped === target && preGrid)
         ? sampleObjectGray(photo, shaped.box, shaped.outline, EDGE_COLUMNS).catch(() => null)
         : Promise.resolve(preGrid);
-    const found = await shapeCall;
+    let found = await shapeCall;
+    if (secondCall && found.kit && found.source === 'meta') {
+      // A late second sample is not waited for: the first answer stands alone.
+      const left = Math.max(0, timeoutMs / 2 - (Date.now() - started));
+      const late = new Promise<null>((r) => setTimeout(() => r(null), left));
+      const second = await Promise.race([secondCall, late]);
+      const other = second?.kit && second.source === 'meta' ? second.kit : null;
+      const vote = await voteKits(found.kit, other, async (kit) => {
+        if (!photo || !shaped.outline) return null;
+        const r = await scoreRecipe(
+          photo,
+          { box: shaped.box, outline: shaped.outline },
+          kitToRecipe(kit)
+        );
+        return r ? r.score.score : null;
+      });
+      if (vote.kit !== found.kit) {
+        found = { ...found, kit: vote.kit, recipe: kitToRecipe(vote.kit) };
+      } else if (vote.disagreed.length) {
+        found = { ...found, kit: vote.kit };
+      }
+      if (vote.outcome !== 'single') {
+        console.info(
+          `[vision] 3D kit vote for "${target.label}": ${vote.outcome}${vote.disagreed.length ? ` (${vote.disagreed.join(',')})` : ''}`
+        );
+      }
+    }
     const finalGrid = await edges;
     // PQ-T7: the conditions ride on every recipe answer (facade house, views, photo pipeline alike),
     // otherwise the "photo too small / blurred" hint never shows for the objects that take those paths.
