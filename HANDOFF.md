@@ -20,7 +20,6 @@ template as the final model.** Read that file first (§1.2, §7.4, §8bis, §12 
   evals; only the host `maxDuration` 300 s slices background stages). Docs aligned (performance, PV-*, methodology).
 - **Live 3D print:** server streams the seed (`shape_stage` first/running + recipe), hook `preview`, viewer wipes it
   in bottom-up (`PrintWipe`, instant under reduced motion). V263 manual check pending.
-- **2D sticker reverted** earlier on user request.
 - **Docs:** `vision-to-3d-universal-pipeline.md` (merged spec: diagnosis, modeller method, code sandbox, generators,
   houses §7.4) replaces the short-lived fidelity plan. The « Muse never writes code » rule is REMOVED (methodology §2,
   PV-capture-lab, PV-vision-quality aligned); still forbidden: energy values from a model, photo pasted on the model.
@@ -34,11 +33,9 @@ template as the final model.** Read that file first (§1.2, §7.4, §8bis, §12 
 
 - Wonder's code validity rate vs the template draft (task 13); QuickJS cold start + function memory on Vercel;
   checkpoint size with code; an API model bigger than `muse-wonder-1.0` for `META_CODE_MODEL`.
-- Hosting: Vercel (slices) or OVHcloud (`limitMs = Infinity`), same code.
-- Known: `golden-shape/fridge` flakes under parallel load (5/5 alone); `make test-shape` strict 300 ms budget is
-  slow on this machine.
+- Known: `golden-shape/fridge` flakes under load; `make test-shape` 300 ms budget is slow here.
 
 ## Decisions
 
 - Sandbox = QuickJS WASM (never `eval` / Node `vm`); limits on generated code only, never a clock on Meta.
-- `reason: 'timeout'`, explicit budgets, Vercel slice limits, copilot chat budgets kept.
+- Kept: `reason: 'timeout'`, explicit budgets, Vercel slices (OVH: `limitMs = Infinity`), copilot chat budgets.
