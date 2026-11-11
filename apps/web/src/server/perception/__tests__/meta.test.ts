@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { CALL_EFFORT, DEFAULT_EFFORT, effortFor } from '../effort';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { kitToRecipe, type ObjectKit } from '@/lib/object-kit';
 import { MetaPerceptionBackend } from '../meta';
@@ -112,6 +113,22 @@ describe('MetaPerceptionBackend (shapes recorded from real calls, 2026-10-30)', 
     const body = JSON.parse(lastRequest(fetchMock).init.body as string);
     expect(body.response_format.json_schema.name).toBe('KitPatch');
     expect(out.result).toEqual({ patch: { subtype: 'sedan', details: { wheels: 4 } } });
+  });
+
+  it('each call sends its configured reasoning effort (PQ-T17)', async () => {
+    const reply = {
+      choices: [{ message: { content: '{}' } }],
+      usage: { prompt_tokens: 1, completion_tokens: 1 },
+    };
+    const fetchMock = respond(reply);
+    await backend.criticizeShape('data:image/png;base64,AA', 'Patch?');
+    const body = JSON.parse(lastRequest(fetchMock).init.body as string);
+    expect(body.reasoning_effort).toBe(effortFor('criticizeShape'));
+    // Unnamed kinds and unknown kinds use the default.
+    expect(effortFor()).toBe(DEFAULT_EFFORT);
+    expect(effortFor('nope')).toBe(DEFAULT_EFFORT);
+    for (const kind of Object.keys(CALL_EFFORT))
+      expect(['low', 'medium', 'high']).toContain(effortFor(kind));
   });
 
   it('prefers the contributor vision model and resends on the standard one when refused', async () => {

@@ -67,6 +67,7 @@ import {
   type StageSheet,
   parseStageOps,
 } from './shape-script-prompt';
+import { effortFor } from './effort';
 import { redactDataUrls, redactDataUrlsInText, type VisionCallLog } from './vision-log';
 import {
   ObservationSchema,
@@ -260,8 +261,8 @@ export class MetaPerceptionBackend implements PerceptionBackend {
     );
     const body = (model: string) => ({
       model,
-      // High reasoning on detection + 3D kits: better perception for the operator.
-      reasoning_effort: 'high',
+      // High reasoning on detection + 3D kits: better perception for the operator (table: effort.ts).
+      reasoning_effort: effortFor(log?.kind),
       messages: [
         { role: 'system', content: system },
         {

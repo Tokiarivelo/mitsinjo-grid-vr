@@ -274,6 +274,7 @@ Meta API calls; all others run offline.
       latency at each value on the captures; write the chosen table in `docs/copilot.md`.
       **Test:** `meta.test.ts` (each call sends its configured effort).
       **Done when:** the table is measured, not assumed; no call is slower without being more accurate.
+      _Built 2026-11-11, unticked:_ `effort.ts` (`CALL_EFFORT`, `effortFor(kind)`), `visionJson` sends the kind's value; every kind is `high` (unchanged). Not done: confirming on the Meta API which values `reasoning_effort` accepts, and the per-kind measure (API).
 - [ ] **PQ-T18 Two kit samples vote** _(API)_. `SHAPE_KIT_SAMPLES` (default 1) in `lib/env.ts` and
       `.env.example`. With 2 and ≥ 40 s left: two kit calls in parallel; archetype and subtype must agree, else
       the one whose flat render scores higher wins; counts that differ are marked unsure.
