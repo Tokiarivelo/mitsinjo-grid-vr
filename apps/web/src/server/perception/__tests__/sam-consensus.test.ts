@@ -88,6 +88,64 @@ describe('fetchOutlineForBox with consensus (PQ-T9)', () => {
     }
   });
 
+  const crop = {
+    url: 'data:crop',
+    rect: { left: 0, top: 0, width: 100, height: 100, outWidth: 100, outHeight: 100 },
+    photoW: 100,
+    photoH: 100,
+  };
+
+  it('nothing on the full photo: every phrasing is asked on the crop, the full photo never again', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const info = vi.spyOn(console, 'info').mockImplementation(() => {});
+    try {
+      const calls: string[] = [];
+      const hit = seg('hand pump', [20, 40, 49, 59]);
+      hit.instances[0]!.outline = 'M0.2 0.4L0.5 0.4L0.5 0.6L0.2 0.6Z';
+      const out = await fetchOutlineForBox(
+        async (u, c) => {
+          calls.push(`${u}|${c}`);
+          return u === 'data:crop' && c === 'hand pump' ? hit : seg(c, null);
+        },
+        'data:x',
+        'pump',
+        box,
+        { retries: ['hand pump'], consensus: true, crop }
+      );
+      expect(out).toBe('M0.2 0.4L0.5 0.4L0.5 0.6L0.2 0.6Z');
+      expect(calls).toEqual([
+        'data:x|pump',
+        'data:x|hand pump',
+        'data:crop|pump',
+        'data:crop|hand pump',
+      ]);
+    } finally {
+      warn.mockRestore();
+      info.mockRestore();
+    }
+  });
+
+  it('mock or failed answers only: no crop call (no word fixes those)', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const calls: string[] = [];
+      const out = await fetchOutlineForBox(
+        async (u, c) => {
+          calls.push(u);
+          return { ...seg(c, [20, 40, 49, 59]), source: 'mock' as const };
+        },
+        'data:x',
+        'pump',
+        box,
+        { retries: ['hand pump'], consensus: true, crop }
+      );
+      expect(out).toBeNull();
+      expect(calls).toEqual(['data:x', 'data:x']);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
   it('all phrasings miss → null and the cause is reported once', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {

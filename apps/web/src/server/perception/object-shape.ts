@@ -371,9 +371,11 @@ export async function runObjectShape(
           return null;
         })
       : Promise.resolve(null);
-    const edges: Promise<GrayGrid | null> = photo
-      ? sampleObjectGray(photo, shaped.box, shaped.outline, EDGE_COLUMNS).catch(() => null)
-      : Promise.resolve(null);
+    // Same box and outline as the pre-call grid (no outline fetched on demand): not sampled twice.
+    const edges: Promise<GrayGrid | null> =
+      photo && !(shaped === target && preGrid)
+        ? sampleObjectGray(photo, shaped.box, shaped.outline, EDGE_COLUMNS).catch(() => null)
+        : Promise.resolve(preGrid);
     const found = await shapeCall;
     const finalGrid = await edges;
     // PQ-T7: the conditions ride on every recipe answer (facade house, views, photo pipeline alike),

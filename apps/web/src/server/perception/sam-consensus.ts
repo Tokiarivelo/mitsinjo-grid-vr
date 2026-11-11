@@ -1,3 +1,4 @@
+import { iou, MATCH_MIN_IOU } from './box-match';
 import type { NormBox } from './schemas';
 
 /**
@@ -8,8 +9,6 @@ import type { NormBox } from './schemas';
 
 /** Boxes of two answers with at least this overlap count as the same object. */
 export const AGREE_IOU = 0.8;
-/** Least overlap with the detection box for an answer to be a candidate (as `MATCH_MIN_IOU`). */
-export const CANDIDATE_MIN_IOU = 0.3;
 
 export interface OutlineCandidate {
   /** The phrasing that gave it. */
@@ -19,14 +18,6 @@ export interface OutlineCandidate {
   box: NormBox;
   /** Overlap of that box with the detection box. */
   score: number;
-}
-
-function boxIou(a: NormBox, b: NormBox): number {
-  const ix = Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x));
-  const iy = Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y));
-  const inter = ix * iy;
-  const union = a.w * a.h + b.w * b.h - inter;
-  return union > 0 ? inter / union : 0;
 }
 
 export interface Consensus {
@@ -39,14 +30,14 @@ export interface Consensus {
 
 /** Picks the outline from the candidates, or null when none overlaps the detection box. */
 export function pickConsensus(candidates: ReadonlyArray<OutlineCandidate>): Consensus | null {
-  const usable = candidates.filter((c) => c.score >= CANDIDATE_MIN_IOU);
+  const usable = candidates.filter((c) => c.score >= MATCH_MIN_IOU);
   if (usable.length === 0) return null;
   const byScore = [...usable].sort((a, b) => b.score - a.score);
   if (usable.length === 1) return { pick: byScore[0]!, agreeing: 1, why: 'single' };
   // Largest group of answers that agree with each other (by box), ties → best overlap with the box.
   let best: { members: OutlineCandidate[] } | null = null;
   for (const seed of byScore) {
-    const members = byScore.filter((c) => c === seed || boxIou(c.box, seed.box) >= AGREE_IOU);
+    const members = byScore.filter((c) => c === seed || iou(c.box, seed.box) >= AGREE_IOU);
     if (!best || members.length > best.members.length) best = { members };
   }
   if (best!.members.length >= 2) {

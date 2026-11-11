@@ -115,9 +115,8 @@ export function measurePhotoConditions(input: PhotoConditionsInput): PhotoCondit
   const out: PhotoConditions = { widthPx: Math.round(widthPx), heightPx: Math.round(heightPx) };
   if (grid) {
     out.sharpness = level(laplacianVariance(grid), SHARP_LOW_VAR, SHARP_HIGH_VAR);
-    const clip = clippedShare(grid);
     // Exposure is a problem level: low = fine, high = mostly clipped.
-    out.exposure = clip >= EXPOSURE_HIGH ? 'high' : clip >= EXPOSURE_MEDIUM ? 'medium' : 'low';
+    out.exposure = level(clippedShare(grid), EXPOSURE_MEDIUM, EXPOSURE_HIGH);
     if (hasOutline && archetype)
       out.hidden = Math.round(hiddenShare(outlineFill(grid), archetype) * 100) / 100;
   }

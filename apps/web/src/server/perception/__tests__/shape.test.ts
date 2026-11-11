@@ -83,6 +83,13 @@ describe('parseKit (PV-T9b)', () => {
     expect(shapeQuestion('lamp post', 0.192)).toContain('0.19 times as wide as it is high');
     expect(shapeQuestion('lamp post')).not.toContain('times as wide');
   });
+
+  it('carries the facts measured by code as a « Measured: » line, none without facts (PQ-T7)', () => {
+    expect(
+      shapeQuestion('car', 2, undefined, false, ['object 412 × 178 px', 'sharpness low'])
+    ).toContain(' Measured: object 412 × 178 px · sharpness low.');
+    expect(shapeQuestion('car', 2)).not.toContain('Measured:');
+  });
 });
 
 describe('parseKit materials (AI)', () => {

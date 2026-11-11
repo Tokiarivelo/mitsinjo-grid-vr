@@ -1,6 +1,7 @@
 import type { KitArchetype } from '@/lib/object-kit';
 import type { ObjectRecipe, PartKind } from '@/lib/object-shape';
 import type { NormBox } from '@/lib/vision';
+import { iou as boxIou } from './box-match';
 import { renderFlat, type FlatView } from './flat-render';
 import type { StageScorer, StageSpec } from './shape-stages';
 
@@ -149,14 +150,6 @@ export function renderView(
   });
   return { silhouette: union ? inter / union : 0, parts };
 }
-
-const boxIou = (a: NormBox, b: NormBox) => {
-  const iw = Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x));
-  const ih = Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y));
-  const i = iw * ih;
-  const u = a.w * a.h + b.w * b.h - i;
-  return u > 0 ? i / u : 0;
-};
 
 /**
  * Drawn boxes against built boxes: greedy best-IoU pairs, score = Σ IoU / max(drawn, built), so a
