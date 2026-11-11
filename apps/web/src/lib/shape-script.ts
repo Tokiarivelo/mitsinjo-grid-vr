@@ -10,6 +10,8 @@ import {
   RECIPE_BOUND,
   RecipeMaterialSchema,
   RecipePartSchema,
+  DetailKindSchema,
+  DETAIL_KINDS,
   type ObjectRecipe,
   type PartKind,
   type RecipePart,
@@ -66,6 +68,7 @@ const options = {
   ridge: share.optional(),
   clip: z.number().min(0).max(HIP_CLIP_MAX).optional(),
   apex: share.optional(),
+  details: z.array(DetailKindSchema).max(DETAIL_KINDS.length).optional(),
 };
 
 export const ShapeOpSchema = z.discriminatedUnion('op', [

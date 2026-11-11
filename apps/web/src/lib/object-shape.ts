@@ -85,6 +85,23 @@ export const PART_KINDS = [
   'head',
 ] as const;
 export const PartKindSchema = z.enum(PART_KINDS);
+/**
+ * Small parts a host part carries (PQ-T20), expanded by the viewer and drawn by the flat render, never
+ * template parts: `handle`, `seam` (door line), `vent` on a body; `mirror`, `arch` (wheel arch) and `rim`
+ * on a vehicle; `gutter` along a roof eave; `foot` under a body. Dropped first past `MAX_TRIANGLES`.
+ */
+export const DETAIL_KINDS = [
+  'handle',
+  'seam',
+  'mirror',
+  'arch',
+  'rim',
+  'gutter',
+  'vent',
+  'foot',
+] as const;
+export const DetailKindSchema = z.enum(DETAIL_KINDS);
+export type DetailKind = z.infer<typeof DetailKindSchema>;
 /** Most timber posts or rails on one wall (PV-G). */
 export const MAX_TIMBER = 12;
 /** Most glass panes across or down one window (PG-T8). */
@@ -207,6 +224,8 @@ export const RecipePartSchema = z
     cap: z.boolean().optional(),
     bulge: z.number().min(0).max(MAX_ROOF_BULGE).optional(),
     rim: z.boolean().optional(),
+    /** Detail kinds this part carries (PQ-T20); `rim` here equals `rim: true` on a wheel. */
+    details: z.array(DetailKindSchema).max(DETAIL_KINDS.length).optional(),
   })
   .superRefine((p, ctx) => {
     if ((p.shape === 'extrude' || p.shape === 'hull') && !p.points)

@@ -315,7 +315,7 @@ _Ticked 2026-11-11 on the owner's request: the code and tests are in; every « d
       side parts are not editable), replay of one recorded loop in `eval-stages`.
       **Done when:** on the real photo-path objects, the background loop raises the detail score and never
       lowers the score (by construction, checked on the captures).
-- [ ] **PQ-T20 Detail assemblies.** `lib/object-shape.ts`, `lib/shape-script.ts`: detail kinds `handle`,
+- [x] **PQ-T20 Detail assemblies.** `lib/object-shape.ts`, `lib/shape-script.ts`: detail kinds `handle`,
       `seam`, `mirror`, `arch` (wheel arch), `rim`, `gutter`, `vent`, `foot`.
       `features/vision-insert/utils/view-assemblies.ts` and `object-geometry.ts` expand them; `flat-render.ts`
       draws them (PQ-T3); `silhouette-fit.ts` `unitPoints` for the ones that change the outline. They cost
@@ -324,6 +324,8 @@ _Ticked 2026-11-11 on the owner's request: the code and tests are in; every « d
       with every detail on the heaviest object).
       **Done when:** the fridge has its handle and door line, the car its mirrors and wheel arches, in the
       viewer and on the flat render.
+      _Built 2026-11-11:_ `RecipePart.details` (+ `set` op field), `detailPartsOf` / `outlineDetails`, used by
+      `renderRecipe`. Nothing sets `details` yet: Spark / builders opt in (T24, loop), no live check done.
 - [ ] **PQ-T21 More components when they are measured.** Photo-path recipes may hold up to `MAX_COMPONENTS`
       (32) when the extra parts come from SAM masks or kept loop ops; Spark-imagined part lists stay at 12.
       **Test:** `object-shape.test.ts` (a measured 14th part is kept; an imagined one is not).
