@@ -9,6 +9,7 @@ import { prepareVisionImage } from '../prepare-image';
 import { readCapture } from '../shape-capture';
 import { pixelBox, sampleObjectPixels } from '../shape-colors';
 import { photoSize } from '../vision-request';
+import SHADOW_WALLS from '../__fixtures__/shape/shadow-walls.json';
 
 /** Share of the box width put in shadow, and how dark the shadow is (black at this opacity). */
 const SHADOWS = [
@@ -95,6 +96,79 @@ describe.runIf(process.env.SHADOW_COMPARE)('make shadow-compare', () => {
         `kept (ΔE < ${SAME_COLOR}): off ${sum.kept.off}/${sum.n}, litSurface ${sum.kept.on}/${sum.n} (gained ${sum.gains}, lost ${sum.harms}); ` +
         `mean ΔE: off ${(sum.off / sum.n).toFixed(1)}, litSurface ${(sum.on / sum.n).toFixed(1)}\n\n` +
         `## Untouched photos whose colours litSurface changes (${changed.length})\n\n| id | off | litSurface |\n| -- | --- | ---------- |\n${changed.join('\n')}`
+    );
+  }, 300_000);
+
+  /** Median CIELAB of a patch: the colour of the lit wall, read where no shadow falls. */
+  const medianLab = (lab: Float32Array): [number, number, number] => {
+    const mid = (c: number) => {
+      const v = Array.from({ length: lab.length / 3 }, (_, k) => lab[k * 3 + c]!).sort(
+        (a, b) => a - b
+      );
+      return v[Math.floor(v.length / 2)] ?? 0;
+    };
+    return [mid(0), mid(1), mid(2)];
+  };
+
+  /**
+   * Real walls partly in shadow (`__fixtures__/shape/shadow-walls.json`, photos fetched by
+   * `make shadow-photos`): the wall colour read on the whole box, against the colour of a patch of the same
+   * wall that the sun reaches. No painted shadow here: this is the « done when » of PQ-T10.
+   */
+  it('real walls in shadow: wall colour against its lit patch, litSurface on vs off', async () => {
+    const dir =
+      process.env.SHAPE_REAL_DIR ??
+      join(process.cwd(), 'src/server/perception/__fixtures__/shape/real');
+    const rows: string[] = [];
+    const sum = { on: 0, off: 0, n: 0, better: 0, worse: 0, rolesOn: 0, rolesOff: 0 };
+    const grey = { on: 0, off: 0, n: 0 };
+    for (const wall of SHADOW_WALLS) {
+      const photoPath = join(dir, 'photos', `${wall.id}.jpg`);
+      if (!existsSync(photoPath)) continue;
+      const prepared = await prepareVisionImage(readFileSync(photoPath), 'image/jpeg');
+      const size = await photoSize(prepared.buffer);
+      if (!size) continue;
+      const photo = { ...size, buffer: prepared.buffer };
+      const truth = medianLab((await sampleObjectPixels(photo, wall.lit)).lab);
+      const pixels = await sampleObjectPixels(photo, wall.box);
+      let share = 0;
+      const on = measureKitColors(pixels, 'building', {
+        litSurface: true,
+        onShadowShare: (v) => (share = v),
+      });
+      const off = measureKitColors(pixels, 'building');
+      if (!on || !off) continue;
+      const dOn = deltaE2000(hexToLab(on.main), truth);
+      const dOff = deltaE2000(hexToLab(off.main), truth);
+      const bucket = wall.coloured ? sum : grey;
+      bucket.n += 1;
+      bucket.on += dOn;
+      bucket.off += dOff;
+      if (wall.coloured && dOn < dOff - 1) sum.better += 1;
+      if (wall.coloured && dOn > dOff + 1) sum.worse += 1;
+      // A shadow that stays a group of its own is handed out as the roof or the accent colour: count the
+      // colour roles that are the lit wall's own colour, darkened (same hue, darker than the lit patch).
+      const shadowRoles = (c: NonNullable<typeof on>) =>
+        [c.secondary, c.accent].filter((hex) => {
+          const [l, a, b] = hexToLab(hex);
+          const fade = (l + 16) / (truth[0] + 16);
+          return truth[0] - l > 8 && Math.hypot(truth[1] * fade - a, truth[2] * fade - b) < 10;
+        }).length;
+      if (wall.coloured) {
+        sum.rolesOn += shadowRoles(on);
+        sum.rolesOff += shadowRoles(off);
+      }
+      rows.push(
+        `| ${wall.id} | ${wall.coloured ? 'coloured' : 'grey'} | ${off.main} ${dOff.toFixed(1)} · ${off.secondary} ${off.accent} | ${on.main} ${dOn.toFixed(1)} · ${on.secondary} ${on.accent} | ${Math.round(share * 100)} % |`
+      );
+    }
+    if (sum.n + grey.n === 0) throw new Error('No shadowed-wall photo: run make shadow-photos');
+    const mean = (b: { on: number; off: number; n: number }) =>
+      b.n ? `off ${(b.off / b.n).toFixed(1)}, litSurface ${(b.on / b.n).toFixed(1)}` : 'none';
+    console.info(
+      `\n## Real walls in shadow (ΔE of the wall colour to its lit patch)\n\n| id | wall | off: main ΔE · secondary accent | litSurface: main ΔE · secondary accent | shadow read apart |\n| -- | ---- | --- | ---------- | ----------------- |\n${rows.join('\n')}\n\n` +
+        `coloured walls (${sum.n}): mean ΔE ${mean(sum)}; closer on ${sum.better}, further on ${sum.worse}; secondary / accent that are the wall's own shadow: off ${sum.rolesOff}, litSurface ${sum.rolesOn}\n` +
+        `grey walls (${grey.n}, not handled by design): mean ΔE ${mean(grey)}`
     );
   }, 300_000);
 });

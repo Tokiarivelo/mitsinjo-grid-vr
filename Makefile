@@ -119,7 +119,15 @@ outline-compare: ## Outline hits on the real photos: plain SAM walk vs SAM agree
 	$(need_ws)
 	eval "$$(make -s env-export)" && OUTLINE_COMPARE=1 SHAPE_REAL_DIR="$(CURDIR)/apps/web/src/server/perception/__fixtures__/shape/real" $(PNPM) --filter $(WEB) exec vitest run src/server/perception/__tests__/outline-compare.test.ts
 
-shadow-compare: ## Main colour under a painted shadow on the real photos, litSurface on vs off (PQ-T10, no API call)
+skills-gen: ## Regenerate the Muse skill cards module from docs/vision-to-3d-muse-skills.md (PQ-T11, no API call)
+	$(need_ws)
+	SKILLS_GEN=1 $(PNPM) --filter $(WEB) exec vitest run src/server/perception/__tests__/skills.test.ts -t "writes cards"
+	$(PNPM) --filter $(WEB) exec prettier --write src/server/perception/skills/cards.generated.ts
+
+shadow-photos: ## Download the real photos of walls partly in shadow (Wikimedia Commons, PQ-T10) into the local fixtures
+	./scripts/fetch-shadow-photos.sh
+
+shadow-compare: ## Colour under a shadow, litSurface on vs off: painted on the real photos + real shadowed walls (PQ-T10, no API call)
 	$(need_ws)
 	SHADOW_COMPARE=1 SHAPE_REAL_DIR="$(CURDIR)/apps/web/src/server/perception/__fixtures__/shape/real" $(PNPM) --filter $(WEB) exec vitest run src/server/perception/__tests__/shadow-compare.test.ts
 
@@ -131,6 +139,10 @@ eval-shape: ## Kit eval on live Spark over the real captures (MODEL=…, PROMPT=
 	$(need_ws)
 	eval "$$(make -s env-export)" && EVAL_SHAPE=1 EVAL_SHAPE_DIR="$(CURDIR)/apps/web/src/server/perception/__fixtures__/shape/real" $(if $(MODEL),META_VISION_MODEL="$(MODEL)") $(if $(PROMPT),EVAL_SHAPE_PROMPTS="$(PROMPT)") $(PNPM) --filter $(WEB) exec vitest run src/server/perception/__tests__/eval-shape.test.ts -t "make eval-shape"
 	@$(MAKE) -s eval-stages
+
+eval-parts: ## Free-parts call on live Spark over the real captures (PROMPT=1,2, IDS=pump,fan limits the run; PQ-T12, costs API calls)
+	$(need_ws)
+	eval "$$(make -s env-export)" && EVAL_PARTS=1 EVAL_SHAPE_DIR="$(CURDIR)/apps/web/src/server/perception/__fixtures__/shape/real" $(if $(PROMPT),EVAL_SHAPE_PROMPTS="$(PROMPT)") $(if $(IDS),EVAL_PARTS_IDS="$(IDS)") $(PNPM) --filter $(WEB) exec vitest run src/server/perception/__tests__/eval-shape.test.ts -t "make eval-parts"
 
 eval-stages: ## Replay recorded stage loops offline (shape/real/*.stages.json from facade-e2e ID=…), no API cost
 	$(need_ws)

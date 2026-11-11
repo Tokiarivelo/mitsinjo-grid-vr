@@ -175,18 +175,24 @@ describe('ObjectShapePanel (PV-T10)', () => {
     expect(screen.queryByText(/not built: 0/)).toBeNull();
   });
 
-  it('a SAM concept without a label is left out, never shown as a raw key (PR #10 review)', () => {
+  it('a part without a label is counted under « Other parts », never shown as a raw key', () => {
     renderPanel({
       shape: {
         ...shape('recipe'),
         coverage: [
           { concept: 'wheel', seen: 2, built: 2 },
-          { concept: 'mirror', seen: 1, built: 0 },
+          { concept: 'side mirror', seen: 2, built: 0 },
+          { concept: 'roof rack', seen: 1, built: 0 },
+          { concept: 'antenna', seen: 1, built: 1 },
         ],
       },
     });
     expect(screen.getByText(/Wheels 2\/2/)).toBeTruthy();
-    expect(screen.queryByText(/model3dPart|mirror/)).toBeNull();
+    // A SAM word of the Muse cards has its own label (two words → one key).
+    expect(screen.getByText(/Side mirrors 0\/2/)).toBeTruthy();
+    // Before: the kit's free words were left out of the panel and only logged.
+    expect(screen.getByText(/Other parts 1\/2/)).toBeTruthy();
+    expect(screen.queryByText(/model3dPart|roof rack|antenna|side_mirror/)).toBeNull();
   });
 
   it('small or blurred photo: a hint; a good photo: none (PQ-T7)', () => {

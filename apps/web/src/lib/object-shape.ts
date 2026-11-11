@@ -337,6 +337,9 @@ export const PartCoverageSchema = z.object({
 });
 export type PartCoverage = z.infer<typeof PartCoverageSchema>;
 
+/** Message key of a part concept under `model3dPart` (« side mirror » → `side_mirror`). */
+export const partLabelKey = (concept: string) => concept.trim().toLowerCase().replace(/\s+/g, '_');
+
 /** How good the photo pixels of the object are (PQ-T7). Measured by code, never by AI. */
 export const PHOTO_LEVELS = ['low', 'medium', 'high'] as const;
 export type PhotoLevel = (typeof PHOTO_LEVELS)[number];

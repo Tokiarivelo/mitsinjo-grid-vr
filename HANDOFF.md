@@ -1,40 +1,40 @@
 # HANDOFF — read first, overwrite at end of session (≤40 lines)
 
-**Updated:** 2026-11-11 · **By:** Claude Code · **Branch:** feat/pq-q1-pixels (PR #11 open; PR #10 merged)
+**Updated:** 2026-11-11 · **By:** Claude Code · **Branch:** feat/pq-q1-leftovers (PR open; PR #11 merged)
 
 ## Current state
 
-- **PV-Q Q1 measured and closed as far as the data allows:**
-  - PQ-T7 photo conditions: in, ticked. Design gate done on a real run (2026-11-11; shots in local `design/shots/pq-t7/`).
-    Bug found and fixed there: the facade and views answers dropped `conditions`, so the hint never showed for houses.
-  - PQ-T8 tight crop: **reverted** (`make eval-shape` 98/118 vs 99/116, median 28.9 vs 24.5 s, window counts worse).
-  - PQ-T9 SAM agreement: `make outline-compare` 12/13 = plain 12/13 → **off** (option kept, tested). Part-mask retry
-    and time share stay. Only miss: solar street light (SAM returns the panel alone).
-  - PQ-T10 lit colours: in, unticked. `make shadow-compare` (painted shadow on the real photos): main colour kept
-    20/39 vs 12/39 without, none lost. Review bug fixed: a black object was read as the shadow of its grey highlights.
-  - PR #11 review: sharpness read on the photo's own pixels (`sampleNativeGray`), limits recalibrated; box IoU in
-    `box-match.ts`; consensus crop fallback keeps every phrasing.
-- Real baseline unchanged: mean 53 (synthetic 93). PQ-T37 open: only `evidence.visibleParts` (PQ-T12, Q2).
-- Test time budgets are CPU time (`src/test/cpu-time.ts`), back to 500 / 1000 ms: the full suite no longer inflates them.
+- **PV-Q Q1 leftovers** (real baseline unchanged: mean 53, synthetic 93; `make check`: 2431 tests pass):
+  - PQ-T9 ticked: 12/13 real photos with an outline against 6/13 at the PQ-T1 baseline (agreement itself is off).
+  - PQ-T10 **unticked again**: 8 real walls in shadow (`make shadow-photos`, then `make shadow-compare`): main
+    colour the same with and without `litSurface` (ΔE 13.2 both); gain only on the other roles (shadow handed out
+    as secondary / accent 5 → 2). Painted-shadow measure unchanged (ΔE 14.9 vs 20.2).
+  - PQ-T11 skill loader: `skills/` (`skillFor`), generated from the doc by `make skills-gen` (checked by `skills.test.ts`).
+  - PQ-T12 built but **unticked, prompt 2 off**: `make eval-shape PROMPT=1,2` on 16 real captures: v1 95/117 agree,
+    median 22.9 s; v2 (cards + evidence first) 83/121, median 47.3 s. `KIT_PROMPT_VERSION` stays 1.
+  - PQ-T37 ticked: `evidence.visibleParts` feeds `notBuilt` / panel coverage through `listedConcept` (prompt 2 only;
+    prompt 1 keeps its own JSON schema, `kitJsonSchema`). Panel: card SAM words labelled, the rest « Other parts ».
+  - Free-parts call on the cards (`make eval-parts`, 6 captures): v1 6/6, 9.5 parts, 44.5 s; v2 6/6, 8.7 parts, 68.8 s → off.
 
 ## Next
 
-1. Merge PR #11 once CI is green.
-2. Q2 from PQ-T11 (skill loader); PQ-T12 brings `evidence.visibleParts` and closes PQ-T37.
+1. Merge the PR once CI is green.
+2. PQ-T12 follow-up: bring v2 under 30 s (shorter Look card, evidence reduced to `visibleParts`), re-measure with
+   `make eval-shape PROMPT=1,2` (≈ 30 min, alone). If dev says `Can't resolve 'three'` → `make install`.
+3. PQ-T13 onwards (archetype cards, one family at a time) only after T12's gain is shown.
 
-## Files touched (Q1)
+## Files touched
 
-- New: `server/perception/photo-conditions.ts`, `sam-consensus.ts`; `lib/photo-warning.ts`;
-  `features/vision-insert/ui/photo-warning-line.tsx`; `__tests__/outline-compare.test.ts`,
-  `shadow-compare.test.ts`; `box-match.ts`; `src/test/cpu-time.ts` (+ tests).
-- Changed: `object-shape.ts` (conditions, facts, lit colours, part-mask timeout), `shape.ts` (`facts`),
-  `outline.ts` (`consensus`, `skipFull`), `part-masks.ts` (`partMasksTimeout`, `PART_RETRY`), `color-measure.ts`
-  (`LIT_SHARE`, `litSurface`), `lib/object-shape.ts` (`conditions`), messages en/fr/mg, Makefile `outline-compare`.
-- Docs: `contracts.md`, `copilot.md`, `design/screens/village.md`, `tasks/PV-vision-quality.md`, loop log row.
+- New: `skills/{index,extract,cards.generated}.ts`, `__tests__/skills.test.ts`, `__fixtures__/shape/shadow-walls.json`,
+  `scripts/fetch-shadow-photos.sh`; Makefile `skills-gen`, `shadow-photos`, `eval-parts`.
+- Changed: `lib/object-kit.ts` (`evidence`, `confidence`), `shape.ts` (schema, `parseEvidence`, `kitPrompt(v, hint)`),
+  `free-recipe.ts` (`partsPrompt`), `fusion.ts` (`modelDoubts`, `ledByMeasurement`), `object-graph.ts`
+  (`listedConcept`), `object-shape.ts` (`promptVersion`), `meta.ts`, `eval-shape.ts` (`evalParts`), messages (part labels).
+- Docs: `contracts.md`, `copilot.md`, `design/screens/village.md`, `tasks/PV-vision-quality.md`, README.
 
 ## Decisions
 
-- Machine: if dev says `Can't resolve 'three'` → stop dev, `make install`.
-- Scenarios V235–V240 (local `test-scenarios/06-village.md`). Blur does not lower colour confidence (broke the goldens); only clipped exposure does.
-- Shadow folding opt-in (`litSurface`), off for plaster, never for the secondary band, no chains, only under a
-  coloured lit group (a grey wall in shadow is not corrected).
+- The doc is the source of the cards; the module is generated (no hand copy). Versions = hash of the composed text.
+- Prompt 2 is not the default: its eval fails both « done when » (agreement lower, median > 30 s).
+- A field the kit lists as unsure (or confidence < ½) is led by the measurement, half-way to full trust.
+- Scenario V241 (local). `jiti` is missing (`make gen-evals` fails).

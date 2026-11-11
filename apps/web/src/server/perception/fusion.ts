@@ -45,6 +45,40 @@ export const confidence = {
   fit: (iou: number) => round2(clamp01((iou - 0.4) / 0.4)),
 };
 
+/** Share of the way to full trust a doubted field is moved when a measurement exists (PQ-T12). */
+export const UNSURE_LEAD = 0.5;
+
+type KitDoubts = Pick<ObjectKit, 'evidence' | 'confidence'>;
+
+/**
+ * How `evidence.unsure` names each group: the field path the cards ask for (`proportions.d`, `colors.main`,
+ * `details.windows`), and the plain words a model writes instead (« depth », « color », « wheels »).
+ */
+const DOUBT_WORDS = {
+  archetype: /^(archetype|subtype|family)/,
+  proportions: /^(proportions?|depth|width|height|size)/,
+  colors: /^(colou?rs?|main|secondary|accent)/,
+  counts: /^(details?|counts?|windows?|doors?|wheels?|legs?|floors?|units?|chimneys?)/,
+} as const;
+
+/**
+ * True when the kit says it guessed this group of fields: it listed it (or one of its fields, `colors.main`)
+ * under `evidence.unsure`, or gave it a confidence under ½ (PQ-T12). Kits of the first prompt never doubt.
+ */
+export function modelDoubts(
+  kit: KitDoubts | undefined,
+  group: 'archetype' | 'proportions' | 'colors' | 'counts'
+): boolean {
+  if (!kit) return false;
+  const c = kit.confidence?.[group];
+  if (c !== undefined && c < 0.5) return true;
+  return (kit.evidence?.unsure ?? []).some((u) => DOUBT_WORDS[group].test(u));
+}
+
+/** A measured confidence raised toward 1 when the model doubts that field; 0 stays 0 (nothing measured). */
+export const ledByMeasurement = (c: number, doubted: boolean): number =>
+  c > 0 && doubted ? round2(c + (1 - c) * UNSURE_LEAD) : c;
+
 export const mixNumber = (measured: number, prior: number, c: number) =>
   prior + clamp01(c) * (measured - prior);
 

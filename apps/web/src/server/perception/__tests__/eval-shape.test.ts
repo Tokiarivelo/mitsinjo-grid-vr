@@ -11,6 +11,8 @@ import {
   compareKits,
   evalCaptures,
   evalMarkdown,
+  evalParts,
+  partsEvalMarkdown,
   parsePromptVersions,
 } from '../eval-shape';
 import { KIT_PROMPT_VERSION, kitPrompt, SHAPE_SYSTEM_PROMPT } from '../shape';
@@ -102,20 +104,85 @@ describe('evalCaptures (PR-3.1)', () => {
   });
 });
 
+describe('evalParts (PQ-T12)', () => {
+  it('asks the free-parts call with the chosen prompt and reports builds, parts and time', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'parts-eval-'));
+    await writeGoldenCapture(dir, 'fridge');
+    const part = { shape: 'box' as const, at: [0, 0, 0], size: [0.6, 1, 0.5], color: '#cccccc' };
+    const client = {
+      describeParts: vi
+        .fn()
+        .mockResolvedValueOnce({
+          recipe: { proportions: { w: 0.6, h: 1, d: 0.5 }, parts: [{ ...part, front: true }] },
+          model: 'm',
+        })
+        .mockResolvedValueOnce({ recipe: null, model: 'm' }),
+    };
+    const rows = [
+      ...(await evalParts(client, dir, 1)),
+      ...(await evalParts(client, dir, 2, ['fridge'])),
+      ...(await evalParts(client, dir, 2, ['not-there'])),
+    ];
+    expect(client.describeParts.mock.calls.map((c) => c[1].promptVersion)).toEqual([1, 2]);
+    expect(client.describeParts.mock.calls[0]![1]).toMatchObject({ archetype: 'cabinet' });
+    expect(rows.map((r) => [r.promptVersion, r.parts, r.valid])).toEqual([
+      [1, 1, true],
+      [2, 0, false],
+    ]);
+    const md = partsEvalMarkdown(rows);
+    expect(md).toMatch(
+      /### Free parts, prompt v1 — builds 1\/1, mean 1\.0 parts, median \d+\.\d s/
+    );
+    expect(md).toMatch(/### Free parts, prompt v2 — builds 0\/1/);
+    expect(md).toContain('| fridge | m | ✗ | 0 |');
+  }, 60_000);
+});
+
 const LIVE = process.env.EVAL_SHAPE === '1';
 
 describe.skipIf(!LIVE)('make eval-shape', () => {
-  it('scores the real captures on live Spark', async () => {
-    const dir =
-      process.env.EVAL_SHAPE_DIR ??
-      join(process.cwd(), 'src/server/perception/__fixtures__/shape/real');
-    const client = getPerceptionClient('eval-shape');
-    if (!client.callsMeta) throw new Error('Refusing to eval mock: set LLM_PROVIDER=meta');
-    const rows = [];
-    for (const v of parsePromptVersions(process.env.EVAL_SHAPE_PROMPTS))
-      rows.push(...(await evalCaptures(client, dir, undefined, v)));
-    const md = `# Kit eval — ${new Date().toISOString().slice(0, 10)}\n\n${evalMarkdown(rows)}`;
-    console.info(`\n${md}`);
-    expect(rows.length).toBeGreaterThan(0);
-  }, 600_000);
+  it(
+    'scores the real captures on live Spark',
+    async () => {
+      const dir =
+        process.env.EVAL_SHAPE_DIR ??
+        join(process.cwd(), 'src/server/perception/__fixtures__/shape/real');
+      const client = getPerceptionClient('eval-shape');
+      if (!client.callsMeta) throw new Error('Refusing to eval mock: set LLM_PROVIDER=meta');
+      const rows = [];
+      for (const v of parsePromptVersions(process.env.EVAL_SHAPE_PROMPTS))
+        rows.push(...(await evalCaptures(client, dir, undefined, v)));
+      const md = `# Kit eval — ${new Date().toISOString().slice(0, 10)}\n\n${evalMarkdown(rows)}`;
+      console.info(`\n${md}`);
+      expect(rows.length).toBeGreaterThan(0);
+      // 20 min per prompt version: 16 real captures, ≈ 20 s each on prompt 1, far more on prompt 2 (PQ-T12 runs timed out at 10 and 20 min).
+    },
+    1_200_000 * Math.max(1, parsePromptVersions(process.env.EVAL_SHAPE_PROMPTS).length)
+  );
+});
+
+/** `make eval-parts` (EVAL_PARTS=1, costs one call per capture and prompt): the free-parts call, first prompt vs Muse cards. */
+describe.skipIf(process.env.EVAL_PARTS !== '1')('make eval-parts', () => {
+  it(
+    'asks the free-parts call on the real captures',
+    async () => {
+      const dir =
+        process.env.EVAL_SHAPE_DIR ??
+        join(process.cwd(), 'src/server/perception/__fixtures__/shape/real');
+      const client = getPerceptionClient('eval-parts');
+      if (!client.callsMeta) throw new Error('Refusing to eval mock: set LLM_PROVIDER=meta');
+      const ids = (process.env.EVAL_PARTS_IDS ?? '')
+        .split(',')
+        .map((x) => x.trim())
+        .filter(Boolean);
+      const rows = [];
+      for (const v of parsePromptVersions(process.env.EVAL_SHAPE_PROMPTS))
+        rows.push(...(await evalParts(client, dir, v, ids)));
+      console.info(
+        `\n# Free-parts eval — ${new Date().toISOString().slice(0, 10)}\n\n${partsEvalMarkdown(rows)}`
+      );
+      expect(rows.length).toBeGreaterThan(0);
+    },
+    1_200_000 * Math.max(1, parsePromptVersions(process.env.EVAL_SHAPE_PROMPTS).length)
+  );
 });

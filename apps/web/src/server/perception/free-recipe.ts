@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { KitArchetype } from '@/lib/object-kit';
-import { FACADE_REFERENCE_LINE } from './shape';
+import { FACADE_REFERENCE_LINE, KIT_PROMPT_CARDS_VERSION, KIT_PROMPT_VERSION } from './shape';
+import { skillFor } from './skills';
 import {
   MAX_RECIPE_PARTS,
   ObjectRecipeSchema,
@@ -104,6 +105,14 @@ export const PARTS_SYSTEM_PROMPT = [
   'front = true on the single main body part.',
   `Answer with at most ${MAX_RECIPE_PARTS} parts covering the whole object. Never give watts, kW or any energy value.`,
 ].join(' ');
+
+/**
+ * System prompt of the free-parts call (PQ-T12): the first prompt, or from kit prompt version 2 the Muse cards
+ * Base + Look + Free parts, so both calls look first with the same words.
+ */
+export function partsPrompt(version: number = KIT_PROMPT_VERSION): string {
+  return version === KIT_PROMPT_CARDS_VERSION ? skillFor('free').text : PARTS_SYSTEM_PROMPT;
+}
 
 /** User turn; the label is the detection name, quoted. The crop is the image. */
 export function shapePartsQuestion(

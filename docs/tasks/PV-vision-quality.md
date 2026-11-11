@@ -88,7 +88,7 @@ Meta API calls; all others run offline.
       **Test:** `detail-score.test.ts` (a model with its windows deleted drops in the window band while IoU
       stays; a paper-thin car fails, a TV does not).
       **Done when:** both show in the report; no real object passes with a blank band or a degenerate view.
-- [ ] **PQ-T37 Part coverage gate.** After the build, compare `evidence.visibleParts` (PQ-T12) and the SAM
+- [x] **PQ-T37 Part coverage gate.** After the build, compare `evidence.visibleParts` (PQ-T12) and the SAM
       parts with the recipe: every listed part is built, or reported as « seen, not built » in the log and
       the panel's part list. Hard checks in `object-graph.ts`: no part floating (each touches its parent or
       the ground), no two parts of the same kind fused at one place. Hard failures go back to the builder
@@ -98,7 +98,7 @@ Meta API calls; all others run offline.
       **Done when:** the report has a « Not built » column and it is empty or explained for every real object.
       _Partly done 2026-11-10:_ `repairGraph` (floating part = held by neither the ground, its parent, nor a held part; pulled against its parent, fused twin merged, by rule,
       before the statuses; log `[vision] 3D graph repair …`), `notBuilt` (SAM masks beyond the parts that draw them + listed names; log `[vision] 3D seen, not built …`), « Not built » report column (— without masks: every
-      current capture). **Open, to redo after PQ-T12 (Q1):** wire `evidence.visibleParts` into `notBuilt` / `partCoverage`, then tick. _Panel part list done 2026-11-10:_ `ObjectShape.coverage`
+      current capture). **Closed 2026-11-11:** `evidence.visibleParts` (plural read as singular) joins the SAM masks in `notBuilt` and `partCoverage`; it only carries parts under kit prompt 2 (off by default, see PQ-T12), so the panel and report read as before under prompt 1. _Panel part list done 2026-11-10:_ `ObjectShape.coverage`
       (`partCoverage`, SAM masks on the object vs built parts) → « Parts seen on the photo: Wheels 2/2 · Windows 1/3 ⚠ not built: 2 ».
       _« Not built » explained 2026-11-10 (15 real captures):_ SAM masks outside the object's outline no longer count
       (`masksOnObject`: car-side « window ×8 » was 5 windows of the car behind and the building). Left, all real:
@@ -137,7 +137,7 @@ Meta API calls; all others run offline.
       99/116, median 24.5 s; with the tight crop as second image → 98/118, median 28.9 s, and window counts worse
       (car-corner 1→4, car-hidden 1→2, units added on house-row/hut/refrigerator). « Not lower » failed, so the
       code (`tightCropForShape`, question lines, `tightUrl`) was removed._
-- [ ] **PQ-T9 SAM agreement.** New `server/perception/sam-consensus.ts` (methodology §6.5), used by
+- [x] **PQ-T9 SAM agreement.** New `server/perception/sam-consensus.ts` (methodology §6.5), used by
       `outline.ts` (`fetchOutlineForBox`) and for the parts whose first answer is empty in `part-masks.ts`;
       `PART_MASKS_TIMEOUT_MS` becomes a share of the time left instead of a fixed 5 s.
       **Test:** `sam-consensus.test.ts`: two phrasings agree → kept; they disagree → the mask inside the box
@@ -158,6 +158,8 @@ Meta API calls; all others run offline.
       IoU 0.33, a wrong outline for the lamp). The agreement is therefore **off** in the pipeline (`consensus`
       option kept, tested, not passed by `object-shape.ts`); the part-mask retry and time share stay. Open: no
       phrasing found for thin assemblies.
+      _Closed 2026-11-11:_ « done when » met: 12 of 13 real photos end with an outline against 6 of 13 at the PQ-T1
+      baseline (the gain came from the head noun + full-label retry; the agreement itself added none).
 - [ ] **PQ-T10 Colour of the lit surface.** `color-measure.ts`, `region-colors.ts`: read each region's colour
       on its brighter 60 % of pixels (median, as today), report the shadow share apart. First check what
       `measureKitColors` already does for `plaster`, and extend that logic instead of adding a second one.
@@ -176,7 +178,20 @@ Meta API calls; all others run offline.
       and the dark one must match the lit colour faded to its lightness (`SHADOW_CHROMA_MAX` 10). Result on
       13 photos × 3 shadows: main colour kept (ΔE < 5) 20/39 against 12/39 without, none lost, mean ΔE 14.9
       against 20.2; one untouched photo changes (the red car reads red, not dark brown). Not handled: a grey
-      or white wall in shadow (house-front, solar panel). « Done when » still needs a real shadowed wall.
+      or white wall in shadow (house-front, solar panel). « Done when » needs a real shadowed wall, which the real set does not hold.
+      _Closed 2026-11-11:_ ticked on the painted-shadow measure (mean ΔE 14.9 against 20.2, main colour kept 20/39
+      against 12/39, none lost) and neutral on the unshadowed real set (ΔE 10.1 both). A white or grey wall in shadow
+      stays uncorrected on purpose (it cannot be told from a grey object). Add a real shadowed photo to the set
+      to prove the original wording.
+      _Real shadowed walls, 2026-11-11 (PR #12 review), **unticked again**:_ 8 photos of walls partly in shadow
+      (Wikimedia Commons, `__fixtures__/shape/shadow-walls.json`, fetched by `make shadow-photos`), wall colour
+      against a lit patch of the same wall (`make shadow-compare`, second table). On the 6 coloured walls the main
+      colour is **the same with and without `litSurface`** (mean ΔE 13.2 both; 40–62 % of shadow read apart on
+      brick, yellow and stone): the lit group already wins there, the brightest 60 % does the work. What changes is
+      the other roles: the wall's own shadow is handed out as secondary or accent 5 times without it, 2 with it
+      (brick: secondary = shadowed brick → window grey). Not gained: a wall mostly in deep shadow (red wall, ΔE 51
+      both) and the 2 grey walls (ΔE 54.5 both, by design). So « lower than at baseline » is not shown for the
+      wall colour on real photos; the measured gain is fewer shadow colours on the roof and accent parts.
 
 **Exit Q1:** fewer cascades from a missed outline; kit calls see the object large and alone.
 
@@ -184,7 +199,7 @@ Meta API calls; all others run offline.
 
 ## Q2 — Muse skills (prompts that prepare the model)
 
-- [ ] **PQ-T11 Skill loader.** New `server/perception/skills/` (`index.ts` with `skillFor(call, archetype)`,
+- [x] **PQ-T11 Skill loader.** New `server/perception/skills/` (`index.ts` with `skillFor(call, archetype)`,
       `base.ts`, `archetypes.ts`, `critic.ts`, `stages.ts`, `views.ts`, `judge.ts`): the cards of
       `docs/vision-to-3d-muse-skills.md` as versioned string arrays. No call uses them yet.
       **Test:** `skills.test.ts`: every archetype of `KIT_ARCHETYPES` resolves (`other` → no card); composed
@@ -201,6 +216,26 @@ Meta API calls; all others run offline.
       still valid), `fusion.test.ts` (an unsure field is led by the measurement).
       **Done when:** `make eval-shape PROMPT=<new>` against the current version: agreement not lower, median
       ≤ 30 s; detail score on the real set not lower. Bump `KIT_PROMPT_VERSION`.
+      _Built 2026-11-11, unticked:_ `lib/object-kit.ts` (`evidence`, `confidence`, both optional), `shape.ts`
+      (`SHAPE_JSON_SCHEMA` evidence first, `parseEvidence`, `parseKitConfidence`, `kitPrompt(2, hint)` = Base + Look + Kit +
+      family card, no « answer fast »), `free-recipe.ts` (`partsPrompt()`), `fusion.ts` (`modelDoubts`,
+      `ledByMeasurement`: an unsure colour, count or proportion is led by the measurement). `mock.ts` untouched (it
+      returns a recipe, no kit). `make eval-shape PROMPT=1,2` on the 16 real captures: **v1 95/117 agree, median
+      22.9 s; v2 83/121, median 47.3 s.** Both « done when » fail (agreement lower, median over 30 s: the evidence and
+      the longer card double every call), so `KIT_PROMPT_VERSION` stays 1 and prompt 2 stays opt-in (`PROMPT=2`).
+      Open: a shorter Look card or a smaller evidence (parts only) to bring v2 under 30 s, then re-measure.
+      _PR #12 review (2026-11-11):_ the schema with `evidence` and `confidence` was sent with prompt 1 too, so the
+      default call could fill them; now `kitJsonSchema(version)`, prompt 1 keeps the schema of the baseline.
+      `modelDoubts` also reads plain words in `unsure` (« depth », « color », « wheels »); `partsPrompt` takes the
+      version from `PartsSubject.promptVersion`. Listed parts go through `listedConcept` (PQ-T37): the Look card
+      asks for « wheel, lower left », which matched nothing and reported built wheels as not built.
+      _Free-parts call measured, 2026-11-11:_ `runObjectShape({ promptVersion })` now reaches both calls, and
+      `make eval-parts PROMPT=1,2 IDS=pump,water-tank,fan,TV,tree,motorbike` (new) asks the free-parts call
+      alone on 6 real captures: **v1 builds 6/6, mean 9.5 parts, median 44.5 s; v2 (Base + Look + Free parts)
+      builds 6/6, mean 8.7 parts, median 68.8 s.** Same answers built, fewer parts, slower: the cards stay off for
+      this call too. No frozen truth exists for free parts, so this says nothing on likeness.
+      _Panel:_ every SAM word of the cards has a `model3dPart` label (en / fr / mg); any other word the kit lists
+      is counted under « Other parts » instead of being left to the log.
       **Then finish PQ-T37 (same PR):** pass `evidence.visibleParts` to `notBuilt` / `partCoverage`, so every
       listed part is built or shown « not built » in the panel and the report; then tick PQ-T37.
 - [ ] **PQ-T13 Archetype cards, one family at a time** _(API)_. Enable the cards in this order, each with its
