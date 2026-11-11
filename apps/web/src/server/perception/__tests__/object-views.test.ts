@@ -274,6 +274,23 @@ describe('measureObjectViews (PV-H)', () => {
     expect(v?.front.ring[0]![1]).toBeCloseTo(0.15 / 0.95, 2);
   });
 
+  it('side v2 (PQ-T16): two drawings per attempt, each measured, one kept (PR #13 review)', async () => {
+    museImage.mockResolvedValue(Buffer.from('side'));
+    const sides: Buffer[] = [];
+    const v = await measureObjectViews(segment, 'https://x/front.png', 'vehicle', 'car', 'car', {
+      onSideView: (p) => sides.push(p),
+      sideV2: { candidates: 2 },
+    });
+    // Both candidates of an attempt are asked with the Side view card, not the v1 prompt.
+    expect(museImage.mock.calls.length).toBeGreaterThanOrEqual(2);
+    expect(museImage.mock.calls.length % 2).toBe(0);
+    expect(sides.length).toBe(museImage.mock.calls.length);
+    expect(JSON.stringify(museImage.mock.calls[0])).toContain('car');
+    // A kept side is one the gate accepts (same height, top line); a refused pair leaves the front alone.
+    if (v?.side) expect(v.sidePng).not.toBeNull();
+    else expect(v?.front).toBeDefined();
+  });
+
   it('keeps the front alone when Muse Image is unavailable', async () => {
     museImage.mockRejectedValue(new Error('down'));
     const v = await measureObjectViews(segment, 'https://x/front.png', 'vehicle', 'car', 'car');

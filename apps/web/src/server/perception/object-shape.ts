@@ -443,8 +443,6 @@ export async function runObjectShape(
       });
       if (vote.kit !== found.kit) {
         found = { ...found, kit: vote.kit, recipe: kitToRecipe(vote.kit) };
-      } else if (vote.disagreed.length) {
-        found = { ...found, kit: vote.kit };
       }
       splitOther = vote.outcome === 'split' ? vote.other : undefined;
       if (vote.outcome !== 'single') {

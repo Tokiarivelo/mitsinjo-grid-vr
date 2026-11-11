@@ -9,6 +9,7 @@ import type { RgbGrid } from '../model-score';
 import { runObjectShape } from '../object-shape';
 import { scoreRecipe } from '../score-shape';
 import {
+  CRITIC_ROUNDS,
   CRITIC_TILE,
   CRITIC_WIDTH,
   criticFires,
@@ -108,6 +109,36 @@ describe('live critic round (PR-0.6)', () => {
       ).recipe
     );
   }, 60_000);
+
+  it('version 2 (PQ-T14): a round that gains nothing ends the rounds, the original stands (PR #13 review)', async () => {
+    const photo = await fridgePhoto();
+    const spark = sparkFor(lampPrior, { patch: { subtype: 'x' } });
+    const shape = await shapeWithCritic(spark, photo, 'data:full', fridgeTarget(), {
+      criticPromptVersion: 2,
+    });
+    // Not kept → no second round is paid for.
+    expect(spark.criticizeShape).toHaveBeenCalledTimes(1);
+    expect(shape.kit?.archetype).toBe('lamp_post');
+    // The call carries version 2 and the family, and the 2 × 2 sheet as a PNG.
+    const [image, question, , opts] = spark.criticizeShape.mock.calls[0]!;
+    expect(String(image).startsWith('data:image/png;base64,')).toBe(true);
+    expect(String(question)).toContain('"reasons"');
+    expect(opts).toEqual({ promptVersion: 2, archetype: 'lamp_post' });
+  }, 60_000);
+
+  it('version 2 (PQ-T14): a kept round is followed by another, at most 3 in all, kept only on gain', async () => {
+    const photo = await fridgePhoto();
+    const spark = sparkFor(lampPrior, { patch: { archetype: 'cabinet' } });
+    const shape = await shapeWithCritic(spark, photo, 'data:full', fridgeTarget(), {
+      criticPromptVersion: 2,
+    });
+    expect(shape.kit?.archetype).toBe('cabinet');
+    const calls = spark.criticizeShape.mock.calls.length;
+    expect(calls).toBeGreaterThanOrEqual(1);
+    expect(calls).toBeLessThanOrEqual(CRITIC_ROUNDS);
+    // The same patch again changes nothing: the later rounds never replace the kept model.
+    expect(spark.describeShape).toHaveBeenCalledTimes(1);
+  }, 90_000);
 
   it('the paid-for round completes even when the patch arrives past the budget', async () => {
     const photo = await fridgePhoto();

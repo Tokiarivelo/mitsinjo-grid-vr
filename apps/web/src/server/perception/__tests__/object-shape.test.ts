@@ -689,6 +689,23 @@ describe('runObjectShape asks about the family (PQ-T41)', () => {
     expect(out.kit?.archetype).toBe('cabinet');
   });
 
+  it('two samples that name different families → the kept one first, the other as second choice (PR #13 review)', async () => {
+    const sure = (a: 'vehicle' | 'cabinet') => ({ ...lowKit(a), confidence: { archetype: 0.9 } });
+    const p = client(answer(sure('cabinet')));
+    p.describeShape
+      .mockResolvedValueOnce(answer(sure('cabinet')))
+      .mockResolvedValueOnce(answer(sure('vehicle')));
+    const out = await runObjectShape(p, await photo(), 'data:full', target, {
+      kitSamples: 2,
+      timeoutMs: 60_000,
+    });
+    expect(p.describeShape).toHaveBeenCalledTimes(2);
+    const kept = out.kit!.archetype;
+    expect(out.ask).toEqual({
+      archetypes: [kept, kept === 'cabinet' ? 'vehicle' : 'cabinet'],
+    });
+  });
+
   it('a confident answer asks nothing', async () => {
     const kit = { ...lowKit('cabinet'), confidence: { archetype: 0.9 } };
     const out = await runObjectShape(client(answer(kit)), await photo(), 'data:full', target);

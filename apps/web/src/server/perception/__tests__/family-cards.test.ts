@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 vi.mock('server-only', () => ({}));
@@ -16,7 +16,8 @@ import {
 import { archetypeCard } from '../skills';
 
 const dir = join(__dirname, '..', '__fixtures__', 'shape', 'real');
-const captures = readdirSync(dir)
+// The real set is local (gitignored): no capture on a fresh clone or in CI, the replay then has no case.
+const captures = (existsSync(dir) ? readdirSync(dir) : [])
   .filter((f) => f.endsWith('.capture.json'))
   .map((f) => ({
     id: f.replace('.capture.json', ''),

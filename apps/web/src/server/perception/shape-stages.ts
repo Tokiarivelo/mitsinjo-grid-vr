@@ -395,7 +395,12 @@ export async function runShapeStages<S extends string>({
             step.after.stage >= current.stage + STAGE_MIN_GAIN &&
             step.after.overall >= current.overall;
           feedback = { round, kept: Boolean(gained), trials: step.trials, refused };
-          for (const op of patch) tried.add(opKey(op));
+          // An op kept at a part of its step may be asked again: the next round moves it further.
+          patch.forEach((op, i) => {
+            const t = step.trials[i];
+            const partial = gained && t?.outcome === 'kept' && (t.share ?? 1) < 1;
+            if (!partial) tried.add(opKey(op));
+          });
           if (gained && step.out?.recipe) {
             lastKept = (step.ops as unknown[]).map((op) => {
               const f = setFields(op);

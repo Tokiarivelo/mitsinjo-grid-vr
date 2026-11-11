@@ -47,6 +47,12 @@ describe('ImproveChip (PG-T18)', () => {
     expect(scoreKey({ ...running, before: 0.68, after: 0.95, stop: 'gate' })).toBe('score');
     expect(scoreKey({ ...running, before: 0.8, after: 0.8, stop: 'rounds' })).toBe('noGain');
     expect(scoreKey({ ...running, before: 0.8, after: 0.8, stop: 'timeout' })).toBe('score');
+    // PQ-T38 stops: a stage ended on a repeat or a back-and-forth with no gain reads « no gain ».
+    expect(scoreKey({ ...running, before: 0.8, after: 0.8, stop: 'repeat' })).toBe('noGain');
+    expect(scoreKey({ ...running, before: 0.8, after: 0.8, stop: 'back_and_forth' })).toBe(
+      'noGain'
+    );
+    expect(scoreKey({ ...running, before: 0.8, after: 0.9, stop: 'repeat' })).toBe('score');
     expect(scoreKey(running)).toBe('score');
   });
 
