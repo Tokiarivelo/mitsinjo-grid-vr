@@ -375,7 +375,11 @@ export async function runObjectShape(
             perception.segmentImage.bind(perception),
             target.facadeUrl,
             hint,
-            { ...(signal ? { signal } : {}), ...(onSideView ? { onSideView } : {}) }
+            {
+              ...(signal ? { signal } : {}),
+              ...(onSideView ? { onSideView } : {}),
+              ...(env.SHAPE_SIDE_V2 ? { sideCards: true } : {}),
+            }
           ).catch(() => null)
         : Promise.resolve(null);
     // PV-H: any other object with a validated 2D view → hull of that view and its drawn side.
@@ -387,7 +391,11 @@ export async function runObjectShape(
             hint,
             target.label,
             conceptOf(target),
-            { ...(signal ? { signal } : {}), ...(onSideView ? { onSideView } : {}) }
+            {
+              ...(signal ? { signal } : {}),
+              ...(onSideView ? { onSideView } : {}),
+              ...(env.SHAPE_SIDE_V2 ? { sideV2: { candidates: 2 } } : {}),
+            }
           ).catch(() => null)
         : Promise.resolve(null);
     const fetched = await fetchedOutline;

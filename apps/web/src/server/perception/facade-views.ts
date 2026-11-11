@@ -11,6 +11,7 @@ import {
   type ElevationMasks,
 } from './facade-house';
 import { museImage, museImageReady } from './facade-specialist';
+import { sideCardPrompt } from './view-candidates';
 import { samBoxToNorm } from './outline';
 import { prepareVisionImage } from './prepare-image';
 import type { NormBox } from './schemas';
@@ -229,14 +230,27 @@ export async function measureFacadeElevations(
     signal,
     withSide = true,
     onSideView,
-  }: { signal?: AbortSignal; withSide?: boolean; onSideView?: (png: Buffer) => void } = {}
+    sideCards = false,
+  }: {
+    signal?: AbortSignal;
+    withSide?: boolean;
+    onSideView?: (png: Buffer) => void;
+    /** The Side view card with the roof family line instead of `SIDE_VIEW_PROMPT` (PQ-T16). */
+    sideCards?: boolean;
+  } = {}
 ): Promise<FacadeElevations | null> {
   if (!ELEVATION_ARCHETYPES.includes(archetype)) return null;
   const concept = archetype === 'building' ? 'building' : 'house';
   const front = (await measureElevationImage(segment, frontUrl, concept))?.elevation;
   if (!front) return null;
   if (!withSide) return { front, side: null };
-  const prompt = sideViewPrompt(front);
+  const prompt = sideCards
+    ? sideCardPrompt(
+        archetype === 'building' ? 'building' : 'house',
+        archetype,
+        sideRoofHint(front)
+      )
+    : sideViewPrompt(front);
   for (let attempt = 1; attempt <= SIDE_VIEW_ATTEMPTS; attempt++) {
     if (signal?.aborted) break;
     const png = await imagineSideView(frontUrl, prompt, signal);

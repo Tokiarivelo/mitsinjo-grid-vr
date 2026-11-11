@@ -268,6 +268,7 @@ Meta API calls; all others run offline.
       **Test:** `view-candidates.test.ts` (a copy of the front scores as « not a side »; a taller drawing is
       rejected; the better of two is chosen).
       **Done when:** on the same fronts, kept side views per attempt are not fewer than before.
+      _Built 2026-11-11, unticked, off (`SHAPE_SIDE_V2=false`):_ `view-candidates.ts` (`sideCardPrompt` = Side card + family line, `scoreSide`: not the front / same height ±5 % / top-line correlation / depth vs the kit, `pickSide`); `measureObjectViews` asks 2 drawings per attempt in parallel and keeps the better; house sides (`facade-views.ts`) use the card + roof line, one drawing. Colour ΔE per material not checked (views carry no SAM colours). Kept sides per attempt not measured (API).
 - [ ] **PQ-T17 Reasoning effort per call** _(API)_. `meta.ts` `visionJson`: effort is a parameter. First
       confirm on the Meta API which values `reasoning_effort` accepts. Measure, per call kind, accept rate and
       latency at each value on the captures; write the chosen table in `docs/copilot.md`.
