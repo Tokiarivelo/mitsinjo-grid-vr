@@ -16,7 +16,7 @@ import {
   type ShapeStep,
   type ShapeTarget,
 } from '@/lib/object-shape';
-import { defaultArchetype, kitToRecipe, type KitArchetype, type ObjectKit } from '@/lib/object-kit';
+import { archetypeOf, kitToRecipe, type KitArchetype, type ObjectKit } from '@/lib/object-kit';
 import { pathToRings } from '@/lib/vision';
 import type { PerceptionClient } from './client';
 import { measureKitColors, type ObjectPixels } from './color-measure';
@@ -70,6 +70,7 @@ import { withMaskWheels } from './mask-wheels';
 import { withProfileBody } from './profile-body';
 import { scoreRecipe } from './score-shape';
 import { voteKits } from './kit-vote';
+import { askFamilies, asFamily } from './kit-ask';
 import type { ShapeResult } from './schemas';
 import { env } from '@/lib/env';
 import { generateImaginedViews } from './views-generation';
@@ -281,7 +282,8 @@ export async function runObjectShape(
     }
   };
 
-  const base = { detectionId: target.id };
+  /** `ask` is set once the kit shows doubt about the family (PQ-T41) and rides on every recipe answer. */
+  const base: { detectionId: string; ask?: ObjectShape['ask'] } = { detectionId: target.id };
   const silhouette = (
     reason: NonNullable<ObjectShape['reason']>,
     source: Pick<ObjectShape, 'source' | 'model' | 'fallback' | 'detail'>
@@ -357,6 +359,7 @@ export async function runObjectShape(
           ...(aspect > 0 ? { aspect } : {}),
           ...(preConditions ? { facts: conditionsFacts(preConditions) } : {}),
           ...(target.facadeUrl ? { facadeUrl: target.facadeUrl } : {}),
+          ...(target.archetype ? { archetype: target.archetype } : {}),
           ...(promptVersion ? { promptVersion } : {}),
         },
         signal ? AbortSignal.any([signal, timeout]) : timeout
@@ -368,7 +371,7 @@ export async function runObjectShape(
     // 2D facade validated (user 2026-11-02): the house is rebuilt from its elevations — front
     // measured by SAM while Muse Image draws the side, then the side measured — in parallel
     // with Spark. Null for other archetypes, the mock, or a facade SAM cannot read.
-    const hint = defaultArchetype(target.category, target.scenery, target.label);
+    const hint = archetypeOf(target);
     const elevations =
       target.facadeUrl && perception.segmentImage && ELEVATION_ARCHETYPES.includes(hint)
         ? measureFacadeElevations(
@@ -422,6 +425,7 @@ export async function runObjectShape(
         ? sampleObjectGray(photo, shaped.box, shaped.outline, EDGE_COLUMNS).catch(() => null)
         : Promise.resolve(preGrid);
     let found = await shapeCall;
+    let splitOther: KitArchetype | undefined;
     if (secondCall && found.kit && found.source === 'meta') {
       // A late second sample is not waited for: the first answer stands alone.
       const left = Math.max(0, timeoutMs / 2 - (Date.now() - started));
@@ -442,12 +446,27 @@ export async function runObjectShape(
       } else if (vote.disagreed.length) {
         found = { ...found, kit: vote.kit };
       }
+      splitOther = vote.outcome === 'split' ? vote.other : undefined;
       if (vote.outcome !== 'single') {
         console.info(
           `[vision] 3D kit vote for "${target.label}": ${vote.outcome}${vote.disagreed.length ? ` (${vote.disagreed.join(',')})` : ''}`
         );
       }
     }
+    // PQ-T41: the operator's pick wins over the model; a doubtful family becomes a question.
+    const chosen = asFamily(target.archetype);
+    if (found.kit && chosen && found.kit.archetype !== chosen) {
+      const kit = { ...found.kit, archetype: chosen };
+      found = { ...found, kit, recipe: kitToRecipe(kit) };
+    }
+    const pair =
+      found.kit && found.source === 'meta'
+        ? askFamilies(found.kit, splitOther ?? hint, {
+            split: splitOther !== undefined,
+            chosen: chosen !== undefined,
+          })
+        : null;
+    if (pair) base.ask = { archetypes: pair };
     const finalGrid = await edges;
     // PQ-T7: the conditions ride on every recipe answer (facade house, views, photo pipeline alike),
     // otherwise the "photo too small / blurred" hint never shows for the objects that take those paths.

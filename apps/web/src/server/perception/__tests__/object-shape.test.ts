@@ -661,3 +661,37 @@ describe('runObjectShape kit samples (PQ-T18)', () => {
     expect(out.mode).toBe('recipe');
   });
 });
+
+describe('runObjectShape asks about the family (PQ-T41)', () => {
+  const lowKit = (archetype: 'vehicle' | 'cabinet'): ObjectKit => ({
+    archetype,
+    proportions: { w: 1, h: 0.5, d: 0.4 },
+    colors: { main: '#223344', secondary: '#223344', accent: '#445566' },
+    confidence: { archetype: 0.3 },
+  });
+  const answer = (k: ObjectKit) => meta(kitToRecipe(k), { kit: k });
+
+  it('a doubtful family → ask with the kit family and the detection hint', async () => {
+    const p = client(answer(lowKit('vehicle')));
+    const out = await runObjectShape(p, await photo(), 'data:full', target);
+    // « Fridge » is a cabinet by the detection hint; Spark says vehicle with 0.3.
+    expect(out.ask).toEqual({ archetypes: ['vehicle', 'cabinet'] });
+  });
+
+  it("the operator's pick is the hint, the kit family, and ends the question", async () => {
+    const p = client(answer(lowKit('vehicle')));
+    const out = await runObjectShape(p, await photo(), 'data:full', {
+      ...target,
+      archetype: 'cabinet',
+    });
+    expect(p.describeShape.mock.calls[0]![1]).toMatchObject({ archetype: 'cabinet' });
+    expect(out.ask).toBeUndefined();
+    expect(out.kit?.archetype).toBe('cabinet');
+  });
+
+  it('a confident answer asks nothing', async () => {
+    const kit = { ...lowKit('cabinet'), confidence: { archetype: 0.9 } };
+    const out = await runObjectShape(client(answer(kit)), await photo(), 'data:full', target);
+    expect(out.ask).toBeUndefined();
+  });
+});

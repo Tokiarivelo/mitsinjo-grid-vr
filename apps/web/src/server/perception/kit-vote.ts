@@ -17,6 +17,8 @@ export interface Vote {
   outcome: VoteOutcome;
   /** Fields marked unsure because the samples differ. */
   disagreed: string[];
+  /** The family the other sample named (a split only): the second choice of the question (PQ-T41). */
+  other?: ObjectKit['archetype'];
 }
 
 const norm = (s: string | undefined) => (s ?? '').trim().toLowerCase();
@@ -48,7 +50,12 @@ export async function voteKits(
   if (!sameFamily(a, b)) {
     const [sa, sb] = await Promise.all([score(a).catch(() => null), score(b).catch(() => null)]);
     const kit = sb !== null && (sa === null || sb > sa) ? b : a;
-    return { kit, outcome: 'split', disagreed: ['archetype'] };
+    return {
+      kit,
+      outcome: 'split',
+      disagreed: ['archetype'],
+      other: kit === b ? a.archetype : b.archetype,
+    };
   }
   const disagreed = differingCounts(a, b);
   if (!disagreed.length) return { kit: a, outcome: 'agree', disagreed };

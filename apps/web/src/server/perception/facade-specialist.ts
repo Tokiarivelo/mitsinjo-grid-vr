@@ -1,7 +1,7 @@
 import 'server-only';
 
 import sharp from 'sharp';
-import { defaultArchetype, type KitArchetype } from '@/lib/object-kit';
+import { archetypeOf, type KitArchetype } from '@/lib/object-kit';
 import type { ShapeTarget } from '@/lib/object-shape';
 import { env } from '@/lib/env';
 import { isR2Configured, uploadBufferToR2 } from '@/server/storage/r2';
@@ -212,7 +212,7 @@ export interface FacadeResult {
  */
 export async function generateFacadeImage(options: GenerateFacadeOptions): Promise<FacadeResult> {
   const { target, userPrompt, signal, photo } = options;
-  const archetype = defaultArchetype(target.category, target.scenery, target.label);
+  const archetype = archetypeOf(target);
   const isMeta = museImageReady();
   const reference =
     isMeta && photo

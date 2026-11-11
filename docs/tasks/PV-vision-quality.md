@@ -296,6 +296,7 @@ Meta API calls; all others run offline.
       build (one tap, three languages, both themes, mobile; design gate).
       **Test:** panel test (question shown only under the gate; the choice becomes the hint of the next call).
       **Done when:** on the hard real photos, no model is built from a family the operator would reject.
+      _Built 2026-11-11, unticked:_ `kit-ask.ts` (`askFamilies`), `ObjectShape.ask`, `ShapeTarget.archetype` (`archetypeOf`), `FamilyQuestion` in the panel (en / fr / mg, 44 px), hook `chooseFamily`. Deviation: the question shows with the first model, not before the build (asking before would hide the model for one tap). The confidence only exists under kit prompt 2 (off), so today only a split of two samples (`SHAPE_KIT_SAMPLES=2`) asks. Hard-photo result not measured (API). No Stitch mockup: built from the existing panel lines.
 
 **Exit Q2:** each Muse call starts with the knowledge of its object family, and every prompt change is a measured choice.
 

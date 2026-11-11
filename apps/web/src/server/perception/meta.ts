@@ -44,7 +44,7 @@ import {
   parseViewsCheck,
 } from './views-check';
 import { REGION_SYSTEM_PROMPT, regionQuestion } from './region-prompt';
-import { defaultArchetype, kitToRecipe } from '@/lib/object-kit';
+import { archetypeOf, kitToRecipe } from '@/lib/object-kit';
 import {
   CRITIC_PROMPT_VERSION,
   capPatchFields,
@@ -370,7 +370,7 @@ export class MetaPerceptionBackend implements PerceptionBackend {
     target: ShapeSubject,
     signal?: AbortSignal
   ): Promise<PerceptionCall<ShapeResult>> {
-    const hint = defaultArchetype(target.category, target.scenery, target.label);
+    const hint = archetypeOf(target);
     // Standard id, not the contributor one: the operator waits on this answer (≈ 15 s vs ≈ 25 s measured).
     const promptVersion = target.promptVersion ?? KIT_PROMPT_VERSION;
     const { content, model, usage } = await this.visionJson(

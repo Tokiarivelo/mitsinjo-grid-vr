@@ -89,7 +89,7 @@ export const keepShape = (shape: ObjectShape) =>
  * asks Spark again instead of returning the model made without it (or with an older one).
  */
 export const shapeRequestKey = (t: ShapeRequest) =>
-  t.facadeKey ? `${shapeKey(t)}|facade:${t.facadeKey}` : shapeKey(t);
+  `${shapeKey(t)}${t.facadeKey ? `|facade:${t.facadeKey}` : ''}${t.archetype ? `|family:${t.archetype}` : ''}`;
 
 /** Object to model; `adjusted` = the operator corrected its box, so the box is part of the key. */
 export type ShapeRequest = ShapeTarget & { adjusted?: true };
@@ -126,6 +126,7 @@ async function shapeForm(imageDataUrl: string, target: ShapeRequest, sessionId?:
         : {}),
       ...(target.facadeUrl ? { facadeUrl: target.facadeUrl } : {}),
       ...(target.facadeKey ? { facadeKey: target.facadeKey } : {}),
+      ...(target.archetype ? { archetype: target.archetype } : {}),
     })
   );
   if (sessionId) form.append('sessionId', sessionId);
@@ -155,6 +156,8 @@ export function useObjectShape(scope?: string) {
     'shapeFacades',
     () => new Map<string, Pick<ShapeRequest, 'facadeUrl' | 'facadeKey'>>()
   );
+  /** Family the operator picked per object (PQ-T41): « Regenerate » keeps asking with it. */
+  const familiesRef = useKeptRef(scope, 'shapeFamilies', () => new Map<string, string>());
   const lastRef = useKeptRef<{ image: string; target: ShapeRequest; sessionId?: string } | null>(
     scope,
     'shapeLast',
@@ -230,9 +233,11 @@ export function useObjectShape(scope?: string) {
           facadeKey: request.facadeKey,
         });
       }
-      const target = request.facadeUrl
-        ? request
-        : { ...request, ...facadesRef.current.get(objectKey) };
+      const family = familiesRef.current.get(objectKey);
+      const target = {
+        ...(request.facadeUrl ? request : { ...request, ...facadesRef.current.get(objectKey) }),
+        ...(family ? { archetype: family } : {}),
+      };
       lastRef.current = { image: imageDataUrl, target, ...(sessionId ? { sessionId } : {}) };
       forKeyRef.current = objectKey;
       const key = shapeRequestKey(target);
@@ -431,7 +436,7 @@ export function useObjectShape(scope?: string) {
         if ((await followDropped(true)) === 'aborted') return;
       }
     },
-    [cancelJob, abortRef, cacheRef, facadesRef, lastRef, forKeyRef, jobRef, setState]
+    [cancelJob, abortRef, cacheRef, facadesRef, familiesRef, lastRef, forKeyRef, jobRef, setState]
   );
 
   /**
@@ -470,6 +475,20 @@ export function useObjectShape(scope?: string) {
   }, [requestShape, lastRef]);
 
   /**
+   * The operator answers « Which is it? » (PQ-T41): the family becomes the hint of the next call
+   * (and of every later « Regenerate » of this object); the cache is skipped.
+   */
+  const chooseFamily = useCallback(
+    (archetype: string) => {
+      const last = lastRef.current;
+      if (!last) return;
+      familiesRef.current.set(shapeKey(last.target), archetype);
+      void requestShape(last.image, last.target, last.sessionId, true);
+    },
+    [requestShape, lastRef, familiesRef]
+  );
+
+  /**
    * « Cancel » on the improvement chip: stops the background stages on the server (the stages
    * otherwise wait for Meta with no time limit, request after request); the last model is kept.
    */
@@ -496,12 +515,23 @@ export function useObjectShape(scope?: string) {
     cacheRef.current.clear();
     viewsCacheRef.current.clear();
     facadesRef.current.clear();
+    familiesRef.current.clear();
     lastRef.current = null;
     forKeyRef.current = null;
     abortRef.current?.abort();
     cancelJob();
     setState(IDLE);
-  }, [cancelJob, abortRef, cacheRef, viewsCacheRef, facadesRef, lastRef, forKeyRef, setState]);
+  }, [
+    cancelJob,
+    abortRef,
+    cacheRef,
+    viewsCacheRef,
+    facadesRef,
+    familiesRef,
+    lastRef,
+    forKeyRef,
+    setState,
+  ]);
 
   return {
     ...state,
@@ -510,6 +540,7 @@ export function useObjectShape(scope?: string) {
     peek,
     retry,
     regenerate,
+    chooseFamily,
     cancelImprove,
     reset,
     clear,
