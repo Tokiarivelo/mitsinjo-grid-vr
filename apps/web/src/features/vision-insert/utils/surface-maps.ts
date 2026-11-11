@@ -12,6 +12,14 @@ export const MAP_SIZE = 128;
 /** Object units covered by one texture repeat (largest object side = 1). */
 export const MAP_TILE = 0.25;
 
+/**
+ * Tiles the shade map spans per side (PQ-T35): the pattern repeats inside it, a larger noise layer does not,
+ * so the light variation repeats every `SHADE_SPAN` tiles instead of every tile and the grid of repeats breaks.
+ */
+export const SHADE_SPAN = 2;
+/** Share of the shade map's light variation that comes from the large noise layer. */
+export const SHADE_LARGE_SHARE = 0.25;
+
 /** Texture side for photo swatches (PR-1.5), pixels. */
 export const SWATCH_SIZE = 64;
 /** Baseline grey level of the normalised swatch (0–255), keeps highlights and shadows without clipping. */
@@ -146,8 +154,14 @@ export interface SurfaceMaps {
   normal: Uint8Array;
   /** RGBA bytes, roughness factor in green (three reads G), 1 = the material's own roughness. */
   roughness: Uint8Array;
-  /** RGBA bytes, grey 205–255: grooves slightly darker (cheap occlusion), multiplies the part colour. */
+  /**
+   * RGBA bytes, grey 205–255: grooves slightly darker (cheap occlusion), multiplies the part colour. Spans
+   * `SHADE_SPAN` × `SHADE_SPAN` tiles (`shadeSize` pixels a side): the pattern repeats in it, a large noise layer
+   * (PQ-T35) does not.
+   */
   shade: Uint8Array;
+  /** Side of the shade map, pixels (`size` × `SHADE_SPAN`). */
+  shadeSize: number;
   /** Brightness multiplier so the shade map does not darken the measured colour on average (PR-1.5). */
   gain: number;
 }
@@ -170,7 +184,8 @@ export function surfaceMaps(surface: Surface, size = MAP_SIZE): SurfaceMaps | nu
   const at = (x: number, y: number) => h[mod(y, size) * size + mod(x, size)]!;
   const normal = new Uint8Array(size * size * 4);
   const roughness = new Uint8Array(size * size * 4);
-  const shade = new Uint8Array(size * size * 4);
+  const shadeSize = size * SHADE_SPAN;
+  const shade = new Uint8Array(shadeSize * shadeSize * 4);
   let sumLinear = 0;
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
@@ -184,15 +199,39 @@ export function surfaceMaps(surface: Surface, size = MAP_SIZE): SurfaceMaps | nu
       // Grooves and mortar rougher, raised faces a bit smoother.
       const r = Math.min(255, Math.round(255 * (1.1 - 0.3 * v)));
       roughness.set([r, r, r, 255], i);
+    }
+  }
+  // Shade (PQ-T35): the pattern's grooves plus a large noise layer whose period is the whole map.
+  const seed = SURFACE_SEED[surface] ?? 0;
+  for (let y = 0; y < shadeSize; y++) {
+    for (let x = 0; x < shadeSize; x++) {
+      const large = valueNoise(x, y, shadeSize, SHADE_SPAN * 2, SHADE_SPAN * 2, 101 + seed);
+      const v =
+        (1 - SHADE_LARGE_SHARE) * h[mod(y, size) * size + mod(x, size)]! +
+        SHADE_LARGE_SHARE * large;
       const s = Math.round(205 + 50 * v);
-      shade.set([s, s, s, 255], i);
+      shade.set([s, s, s, 255], (y * shadeSize + x) * 4);
       const srgb = s / 255;
       sumLinear += srgb <= 0.04045 ? srgb / 12.92 : Math.pow((srgb + 0.055) / 1.055, 2.4);
     }
   }
-  const meanLinear = sumLinear / (size * size);
+  const meanLinear = sumLinear / (shadeSize * shadeSize);
   const gain = Math.round((1 / meanLinear) * 1000) / 1000;
-  return { size, normal, roughness, shade, gain };
+  return { size, normal, roughness, shade, shadeSize, gain };
+}
+
+/** Seed of each surface's large noise layer and UV offset: same surface → same look, run after run. */
+const SURFACE_SEED: Partial<Record<Surface, number>> = Object.fromEntries(
+  Object.keys(PATTERNS).map((k, i) => [k, i + 1])
+);
+
+/**
+ * Seeded UV offset of a surface, in texture repeats (0–1 each way, PQ-T35): two materials never start their
+ * pattern at the same corner. Applied to the surface's maps alike, so a wall stays continuous across its parts.
+ */
+export function surfaceOffset(surface: Surface): [number, number] {
+  const seed = SURFACE_SEED[surface] ?? 0;
+  return [hash(seed, 1, 7), hash(seed, 2, 13)];
 }
 
 /** A face is a roof slope (not a wall, not a flat top) when its normal's up share is inside this. */

@@ -139,3 +139,4 @@ them after mount (re-targeting races React root unmounts and can leave a label e
 - Photo de scan (1280×720) calculée sur CPU au tir seulement (pixels de la pièce mis en cache), jamais par image.
 
 - **Vertex AO (PQ-T27):** `vertex-ao.ts` bakes joint and ground shadow into the vertex colours once per recipe (both tiers); parts that cannot reach each other are skipped per part, 24 boxes build in well under 500 ms.
+- **Shade map span (PQ-T35):** the shade map is 2 × 2 tiles (256² px, ≈ 256 kB RGBA per mapped surface, built once per session); normal and roughness maps stay 128².

@@ -442,12 +442,15 @@ _Ticked 2026-11-11 on the owner's request: the code and tests are in; every « d
       viewer: fixed low glow under 1.
       **Test:** `surface-look.test.ts` (emissive only on those kinds, under 1 in the viewer).
       **Done when:** a lamp post reads as a lamp in the viewer and lights up in the village when powered.
-- [ ] **PQ-T35 Break texture repetition.** `planarUvs` maps object position ÷ 0.25 with no variation, so a
+- [x] **PQ-T35 Break texture repetition.** `planarUvs` maps object position ÷ 0.25 with no variation, so a
       tile repeats four times across the object. `surface-maps.ts`: a second, larger noise layer in the shade
       map and a seeded UV offset per material; patterns stay continuous across the parts of one wall.
       **Test:** `surface-maps.test.ts` (shade map has energy below the tile frequency; same seed → same result;
       mean brightness unchanged so the gain still holds).
       **Done when:** no visible grid of repeats on walls and roofs in `make shape-shots`.
+      _Built 2026-11-11 (visual check on `make shape-shots` pending):_ the shade map spans `SHADE_SPAN` = 2 tiles a
+      side (the pattern repeats in it, a large noise layer, 25 % of the variation, does not), so the light varies
+      every 2 tiles; `surfaceOffset` gives each surface a seeded UV offset applied to its three maps alike.
 
 - [ ] **PQ-T39 Physical material rules.** `lib/object-shape.ts`: add `painted` to `RECIPE_MATERIALS`
       (contract change → `docs/contracts.md`; not stored in Neon as a new field, so no migration: say so in

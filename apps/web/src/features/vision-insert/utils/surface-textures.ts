@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { Surface } from './surface-look';
-import { surfaceMaps } from './surface-maps';
+import { SHADE_SPAN, surfaceMaps, surfaceOffset } from './surface-maps';
 
 export interface SurfaceTextures {
   normalMap: THREE.DataTexture;
@@ -13,9 +13,18 @@ export interface SurfaceTextures {
 
 const cache = new Map<Surface, SurfaceTextures | null>();
 
-function texture(data: Uint8Array, size: number, srgb: boolean): THREE.DataTexture {
+function texture(
+  data: Uint8Array,
+  size: number,
+  srgb: boolean,
+  offset: readonly [number, number],
+  span = 1
+): THREE.DataTexture {
   const t = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  // The maps of a surface line up: a map spanning `span` tiles repeats `span` times less often (PQ-T35).
+  t.repeat.set(1 / span, 1 / span);
+  t.offset.set(offset[0] / span, offset[1] / span);
   t.magFilter = THREE.LinearFilter;
   t.minFilter = THREE.LinearMipmapLinearFilter;
   t.generateMipmaps = true;
@@ -32,12 +41,13 @@ function texture(data: Uint8Array, size: number, srgb: boolean): THREE.DataTextu
 export function surfaceTextures(surface: Surface): SurfaceTextures | null {
   if (!cache.has(surface)) {
     const m = surfaceMaps(surface);
+    const offset = surfaceOffset(surface);
     cache.set(
       surface,
       m && {
-        normalMap: texture(m.normal, m.size, false),
-        roughnessMap: texture(m.roughness, m.size, false),
-        map: texture(m.shade, m.size, true),
+        normalMap: texture(m.normal, m.size, false, offset),
+        roughnessMap: texture(m.roughness, m.size, false, offset),
+        map: texture(m.shade, m.shadeSize, true, offset, SHADE_SPAN),
         gain: m.gain,
       }
     );
