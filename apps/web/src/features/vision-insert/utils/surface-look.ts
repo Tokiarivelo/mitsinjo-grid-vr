@@ -32,7 +32,7 @@ export type Surface = (typeof SURFACES)[number];
 /**
  * Look per surface. Matte for stone, thatch, leaves; shiny for glass, water, metal. Metalness is 0 or 1
  * (PQ-T39, PBR metal / roughness workflow): only `metal` (bare metal: galvanised sheet, chrome, aluminium)
- * is 1, its base colour lifted by `liftMetal`; paint, rust and dirt are non-metal (`painted` = metalness 0
+ * is 1, its base colour lifted by `baseColorFor`; paint, rust and dirt are non-metal (`painted` = metalness 0
  * with a clearcoat). Edges: rounded most on pressed / moulded surfaces (metal, plastic, rubber), barely on
  * masonry. Clearcoat (PT-3) only on lacquered or glazed surfaces; metal stays fairly rough (0.45) so its
  * highlights are broad streaks.

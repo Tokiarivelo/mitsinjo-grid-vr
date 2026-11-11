@@ -9,29 +9,32 @@
   T27 `vertex-ao.ts` · T35 2-tile shade map + `surfaceOffset` · T39 `painted` + PBR rules (`pbr-rules.ts`) ·
   T34 glow surfaces `lamp` / `screen` · T32 `buildRecipeMaterials` + village families · T33 N8AO + key shadow ·
   T40 `LOOKDEV=1 make shape-shots`. Details per task in `docs/tasks/PV-vision-quality.md`.
+- **PR #15 review (2026-11-11, real GPU + dev server + live Meta):** viewer shots and `LOOKDEV=1` (36) fine. Fixed:
+  gloss read contrast, not highlights (walls, foliage came out gloss) and was dropped on the photo path; a dark
+  `metal` part turned pale silver → now `painted`. New `make gloss-report`; two-tone car in `family-photos.json`.
 - **T28 cut** (no compare view in the panel; the task allows cutting it). Left unticked.
 - Nothing stored in Neon changed (recipe JSON fields only): no migration.
 
 ## Next
 
 1. Merge the Q4 PR once CI is green.
-2. With a GPU + dev server: `make shape-shots` (and `LOOKDEV=1`), `/designer-3d` on the shots, ΔE of the red car
-   body vs baseline (T39), no grid of repeats (T35), vertex AO look (T27), `make scene-audit` (village now ≤ 5
-   meshes for placed models, one over the plan) and `make vr-probe` (T32).
-3. With a Meta key: T25 on a real two-tone photo, T26 gloss classes on real objects.
-4. T28 if a compare view is wanted (new screen, design gate first).
+2. T25 on the views path: the `car-two-tone` capture went down the photo path (extruded body), so the hull cut
+   did not run. Try it from /village with the 2D view first.
+3. `make scene-audit-gpu` fails on the base scene, no placed model involved: low tier 651 k triangles (≤ 150 k),
+   167 draw calls (< 150); high tier 2.4 M (≤ 800 k). To check against `main` and fix apart from Q4.
+4. Village families with placed models: unit-tested only (≤ 5 meshes); `make vr-probe` not run. T28 if wanted.
 
 ## Files touched
 
 - `lib/{object-shape,object-kit}.ts`, `server/perception/{region-colors,gloss-measure,pbr-rules,object-shape}.ts`,
-  `skills/cards.generated.ts`, `features/vision-insert/{utils/{surface-look,surface-maps,surface-textures,vertex-ao,
-recipe-materials,studio-env,lookdev,object-geometry}.ts,ui/object-editor-3d.tsx,ui/xr/spawned-object-3d.tsx}`,
-  `features/microgrid-3d/{utils/placed-models-geometry.ts,ui/appliance-markers.tsx}`, `scripts/{lookdev-plan.mjs,
-object-viewer-shot.mjs}`, docs (`contracts`, `copilot`, `performance`, methodology, muse skills, tasks).
+  `features/vision-insert/{utils,ui}` (surfaces, maps, AO, materials, lookdev, viewer, XR), `features/microgrid-3d`
+  (placed models), `scripts/{lookdev-plan,object-viewer-shot}.mjs`, `Makefile`, `family-photos.json`, docs.
 
 ## Decisions
 
 - Gloss is per material on the recipe (the viewer has one material per surface), not per part.
 - A named `metal` on a vehicle / cabinet main role becomes `painted`; non-metal base colours clamp to 30–240 sRGB.
+- Gloss: only smooth materials are classed, glass and water never matt, read per part against the 90th
+  percentile, as the last pipeline step (`finishLook`). Limits 8 / 14 L\* from the real captures.
 - Glow surfaces are internal (`GLOW_SURFACES`), not recipe materials: the AI never names them.
-- Local scenarios V253–V261 (test-scenarios is gitignored). Hub dataset not republished: no bench / eval output changed.
+- Local scenarios V253–V262 (test-scenarios is gitignored). Hub dataset not republished: no bench / eval output changed.

@@ -7,7 +7,7 @@ import { chromium } from '@playwright/test';
 import { mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { resolvePort } from './port.mjs';
-import { LOOKDEV_LIGHTS } from './lookdev-plan.mjs';
+import { LOOKDEV_LIGHTS, shotFile, THEMES } from './lookdev-plan.mjs';
 
 const [
   baseUrl = `http://localhost:${resolvePort()}`,
@@ -18,7 +18,7 @@ if (!reportDir) throw new Error('Usage: object-viewer-shot.mjs <baseUrl> <report
 const recipes = JSON.parse(readFileSync(join(reportDir, 'recipes.json'), 'utf8'));
 // LOOKDEV=1 (PQ-T40): each object under the studio, a low side light and a back light, dark and light.
 const lights = process.env.LOOKDEV ? LOOKDEV_LIGHTS : [null];
-const suffix = process.env.SHOT_SUFFIX ? `-${process.env.SHOT_SUFFIX}` : '';
+const suffix = process.env.SHOT_SUFFIX ?? '';
 const GL_ARGS =
   process.env.SHOT_GL === 'gpu'
     ? ['--use-angle=gl', '--enable-gpu', '--ignore-gpu-blocklist']
@@ -39,7 +39,7 @@ const detection = (name) => ({
 
 mkdirSync(outDir, { recursive: true });
 const browser = await chromium.launch({ args: GL_ARGS });
-for (const theme of ['dark', 'light']) {
+for (const theme of THEMES) {
   // SHOT_WIDTH=320: phone-width shots (height follows a 16:10 → 9:19.5 phone ratio).
   const width = Number(process.env.SHOT_WIDTH) || 1440;
   const height = width < 768 ? Math.round(width * 2.1) : 900;
@@ -124,10 +124,7 @@ for (const theme of ['dark', 'light']) {
       await viewer.locator('canvas').waitFor({ timeout: 30_000 });
       await viewer.scrollIntoViewIfNeeded();
       await page.waitForTimeout(1500); // frameloop="demand": let the env map and shadow settle
-      const file = join(
-        outDir,
-        `${name.replace(/\W+/g, '-')}${light ? `-lookdev-${light}` : ''}${suffix}-${theme}.png`
-      );
+      const file = join(outDir, shotFile(name, { light, suffix, theme }));
       await viewer.screenshot({ path: file });
       console.log(`✓ ${file}`);
       await page.unrouteAll();

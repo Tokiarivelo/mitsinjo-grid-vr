@@ -39,6 +39,13 @@ describe('golden shapes (PF-T9)', () => {
       expect(recipe.swatches?.stone).toBeDefined();
       expect(recipe.swatches?.slate).toBeDefined();
     }
+    // The look rules reach the answer (PR #15 review): the gloss read on the photo is on the final recipe and
+    // only for smooth materials; a flat drawn car body has no highlight (its windows and wheels are read apart).
+    // The lamp post's dark pole is paint over metal: it keeps its measured colour instead of turning silver.
+    if (c.name === 'car') expect(['matt', 'satin']).toContain(recipe.gloss?.painted);
+    for (const m of ['stone', 'slate', 'foliage', 'wood'] as const)
+      expect(recipe.gloss?.[m]).toBeUndefined();
+    if (c.name === 'lamp post') expect(recipe.parts[0]!.material).toBe('painted');
     // All the math (crop, samples, colours, roof, repetition, perspective, fit) inside the budget.
     expect(ms).toBeLessThan(BUDGET_MS);
   });

@@ -397,6 +397,9 @@ _Ticked 2026-11-11 on the owner's request: the code and tests are in; every « d
       body at the lower edge of the SAM `roof` (vehicle) / `tree crown` / `foliage` region when its colour is ΔE ≥ 10
       from the rest of the outline: lower part keeps `front`, the upper part is appended last (indices stable).
       Wired on the views path by `toneHullBody` (`object-shape.ts`), best effort.
+      _Live try 2026-11-11:_ a two-tone car photo added (`car-two-tone`, `make family-photos`) and captured with
+      `make shape-capture`: the run went down the photo path (extruded body, not a hull), so the cut did not run
+      there. Still to see on the views path (2D view first).
 - [x] **PQ-T26 Gloss from the photo.** New `server/perception/gloss-measure.ts`: per region, the gap between
       the brightest 1 % and the median luminance, classed matt / satin / gloss. `surface-look.ts` shifts
       roughness and clearcoat within ± 0.2 of the material's entry; status `measured`.
@@ -406,6 +409,14 @@ _Ticked 2026-11-11 on the owner's request: the code and tests are in; every « d
       _Built 2026-11-11 (live `/designer-3d` pass pending):_ the class is stored per material on the recipe
       (`ObjectRecipe.gloss`, a JSON field of the recipe: no migration), not per part, because the viewer has one
       material per surface. `measureRecipeGloss` + `withPhotoGloss` (views and photo paths), `surfaceLook`.
+      _PR #15 review, 2026-11-11 (`make gloss-report`, 25 real captures, no API):_ the first measure (brightest 1 %
+      against the median, per material) read contrast, not highlights: plaster walls, foliage and a wooden pole
+      came out `gloss`. Now: the gap is read against the 90th percentile, inside each part (the smallest part wins
+      a cell, so windows and wheels leave the body), only for smooth materials (`SPECULAR_MATERIALS`: painted,
+      plastic, metal, glass, tile, water), glass and water are never `matt`, limits 8 / 14 L\*. Result: 4 car
+      bodies gloss or satin, fridge, TV and lamp matt, no rough material classed. The class is added as the last
+      pipeline step (`finishLook`): a live capture showed the photo path dropped it before the answer.
+      Limit: a part is read on its front rectangle, so a wrongly placed part still bleeds into its neighbour.
 - [x] **PQ-T27 Shadow where parts meet.** New `features/vision-insert/utils/vertex-ao.ts`: darken vertex
       colours near part joints and near the ground at merge time (pure, once per recipe, both quality tiers).
       **Test:** `vertex-ao.test.ts` (vertices at a joint darker than free ones; factor never under 0.6, so no
@@ -479,6 +490,9 @@ _Ticked 2026-11-11 on the owner's request: the code and tests are in; every « d
       _Built 2026-11-11 (ΔE and look check on `make shape-shots` pending):_ no migration (`material` lives in the
       recipe JSON, not in a Neon column). A named `metal` on a vehicle or cabinet main role becomes `painted`
       (`kitToRecipe`); `make skills-gen` regenerated the cards.
+      _PR #15 review, 2026-11-11 (real viewer shots, before / after):_ the golden lamp post's black pole, named
+      `metal`, came out pale silver. A `metal` part whose brightest channel is under 110 is coated metal:
+      `applyPbrRules` turns it into `painted` and logs it, so it keeps its measured colour.
 - [x] **PQ-T40 Look-development sheet.** `make shape-shots` gains `LOOKDEV=1`: each object under three lights
       (the studio, a low side light, a back light), dark and light theme, one sheet per object.
       **Test:** script smoke test in mock mode (three shots per object written).
@@ -488,6 +502,8 @@ _Ticked 2026-11-11 on the owner's request: the code and tests are in; every « d
       `LOOKDEV=1 make shape-shots` loads `/village?lookdev=studio|side|back` (`utils/lookdev.ts`, dev only) and writes
       `name-lookdev-<light>-<theme>.png`, three files per object and theme rather than one montage; the plan is
       `scripts/lookdev-plan.mjs`, tested.
+      _Run 2026-11-11 (dev server, 6 report objects × 3 lights × 2 themes = 36 shots):_ nothing black or blown
+      out under any light. The script now takes its file names from the tested plan (`shotFile`).
 
 **Exit Q4:** surfaces differ by measured colour and gloss, and parts read as assembled.
 

@@ -760,7 +760,6 @@ export async function runObjectShape(
           segmentImage: perception.segmentImage?.bind(perception),
           timeoutMs: partMasksTimeout(started + timeoutMs - Date.now()),
         });
-        recipe = await withPhotoGloss(recipe, photo, target.box, shaped.outline);
         const iou = {
           front: viewIou(recipe, seen.front, 'front'),
           side: seen.side ? viewIou(recipe, seen.side, 'side') : null,
@@ -777,7 +776,7 @@ export async function runObjectShape(
           return {
             ...base,
             mode: 'recipe',
-            recipe: withPbrRules(recipe, target.label),
+            recipe: await finishLook(recipe, target, photo, shaped.outline),
             kit: found.kit,
             ...(shaped.outline ? { outline: shaped.outline } : {}),
             ...(viewsConditions ? { conditions: viewsConditions } : {}),
@@ -965,7 +964,6 @@ export async function runObjectShape(
             console.warn('[vision] region colours failed:', err);
           }
         }
-        recipe = await withPhotoGloss(recipe, photo, target.box, shaped.outline);
         // PR-2.9: per-part parameters (wheels, cabin, eave) by coordinate descent on the
         // model score. Best effort, kept only when the score rises; no groups = no cost.
         if (photo && target.outline && hasPartGroups(finalKit.archetype, recipe)) {
@@ -1204,7 +1202,7 @@ export async function runObjectShape(
       return {
         ...base,
         mode: 'recipe',
-        recipe: withPbrRules(recipe, target.label),
+        recipe: await finishLook(recipe, target, photo, shaped.outline),
         ...(imaginedViews ? { imaginedViews } : {}),
         ...(fitIou !== undefined ? { fit: { iou: fitIou } } : {}),
         ...(partMasks ? { partMasks } : {}),
@@ -1282,6 +1280,20 @@ async function toneHullBody(
     console.warn('[vision] two-tone body failed:', err);
     return recipe;
   }
+}
+
+/**
+ * Last step of the views and photo paths: the physical rules (PQ-T39), then the gloss of each material read on
+ * the photo (PQ-T26). In this order and at the very end: the gloss is keyed by the final materials (a dark
+ * `metal` has become `painted`), and no later step can rebuild the recipe without it.
+ */
+async function finishLook(
+  recipe: ObjectRecipe,
+  target: ShapeTarget,
+  photo: PhotoForRegions | null,
+  outline: string | undefined
+): Promise<ObjectRecipe> {
+  return withPhotoGloss(withPbrRules(recipe, target.label), photo, target.box, outline);
 }
 
 /**

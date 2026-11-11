@@ -4,7 +4,15 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('server-only', () => ({}));
 
 import type { ObjectRecipe } from '@/lib/object-shape';
-import { applyPbrRules, clampBaseColor, PBR_MAX, PBR_MIN, withPbrRules } from '../pbr-rules';
+import {
+  applyPbrRules,
+  BARE_METAL_MIN,
+  clampBaseColor,
+  coatedMetal,
+  PBR_MAX,
+  PBR_MIN,
+  withPbrRules,
+} from '../pbr-rules';
 
 const recipe = (
   ...parts: Array<[string, ObjectRecipe['parts'][number]['material']?]>
@@ -47,5 +55,21 @@ describe('pbr-rules (PQ-T39)', () => {
     withPbrRules(recipe(['#000000', 'rubber']), 'tyre');
     expect(spy).toHaveBeenCalledWith(expect.stringContaining('tyre'));
     spy.mockRestore();
+  });
+  it('a dark part named metal is coated metal: it becomes painted and keeps its measured colour', () => {
+    // Black lamp post pole (was lifted to pale silver in the viewer), next to a galvanised cap.
+    const { recipe: out, clamps } = applyPbrRules(
+      recipe(['#394047', 'metal'], ['#c8ccd0', 'metal'])
+    );
+    expect(out.parts[0]).toMatchObject({ material: 'painted', color: '#394047' });
+    expect(out.parts[1]).toMatchObject({ material: 'metal', color: '#c8ccd0' });
+    expect(clamps).toEqual(['part 0 metal → painted (#394047)']);
+    expect(coatedMetal('#0a0a0a')).toBe(true);
+    expect(coatedMetal(`#${BARE_METAL_MIN.toString(16)}0000`)).toBe(false);
+    // A black one is repainted, then clamped like any paint.
+    expect(applyPbrRules(recipe(['#000000', 'metal'])).recipe.parts[0]).toMatchObject({
+      material: 'painted',
+      color: '#1e1e1e',
+    });
   });
 });

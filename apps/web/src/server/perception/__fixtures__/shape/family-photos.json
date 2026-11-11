@@ -78,5 +78,15 @@
     "author": "The Chroniclers",
     "source": "https://commons.wikimedia.org/wiki/File:Shalom_Shalome_Apartment_(View_from_NE_to_SW).jpg",
     "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/d/df/Shalom_Shalome_Apartment_%28View_from_NE_to_SW%29.jpg/960px-Shalom_Shalome_Apartment_%28View_from_NE_to_SW%29.jpg"
+  },
+  {
+    "id": "car-two-tone",
+    "label": "two-tone car",
+    "family": "vehicle",
+    "file": "2CV Dolly seite.jpg",
+    "licence": "CC BY-SA 2.5",
+    "author": "Manuel Strehl",
+    "source": "https://commons.wikimedia.org/wiki/File:2CV_Dolly_seite.jpg",
+    "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/f/f0/2CV_Dolly_seite.jpg/1280px-2CV_Dolly_seite.jpg"
   }
 ]
