@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { type NextRequest } from 'next/server';
+import { z } from 'zod';
 import { ShapeTargetSchema } from '@/lib/object-shape';
 import { generateFacadeImage } from '@/server/perception/facade-specialist';
 import { deleteObjectFromR2 } from '@/server/storage/r2';
@@ -10,6 +11,11 @@ import {
   photoSize,
   readVisionRequest,
 } from '@/server/perception/vision-request';
+
+const CleanFrontSchema = z.object({
+  hiddenBy: z.array(z.string().max(40)).max(6).default([]),
+  visibleParts: z.array(z.string().max(40)).max(12).default([]),
+});
 
 /**
  * 2D Facade Imagination endpoint (Muse Image 1.0 + Specialist Skill).
@@ -23,6 +29,8 @@ export async function POST(req: NextRequest) {
   if (!target) return jsonResponse({ error: 'Invalid target' }, 400);
 
   const userPrompt = read.form.get('userPrompt')?.toString();
+  // Clean front of a hidden object (PQ-T23): what the kit saw, from the operator's request.
+  const cleanFront = jsonField(read.form, 'cleanFront', CleanFrontSchema) ?? undefined;
   const { sessionId } = read;
 
   try {
@@ -31,6 +39,7 @@ export async function POST(req: NextRequest) {
       // The object as photographed goes along as reference (drawn as itself, not a generic one).
       photo: await photoSize(read.photo.buffer),
       userPrompt,
+      ...(cleanFront ? { cleanFront } : {}),
       sessionId,
       signal: req.signal,
     });

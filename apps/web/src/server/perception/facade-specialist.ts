@@ -9,6 +9,7 @@ import { DEFAULT_META_BASE_URL } from '@/server/copilot/providers/meta';
 import type { PhotoForRegions } from './region';
 import { cropForShape } from './shape-crop';
 import { inlineImageUrl } from './inline-image';
+import { imageCard } from './skills';
 
 /**
  * Sent with the photo crop as reference (user 2026-11-05): without it Muse Image drew a generic
@@ -70,6 +71,22 @@ export function buildFacadePrompt(
   }
 
   return basePrompt;
+}
+
+/** What the kit saw of a hidden object (`evidence`): the Clean front card's two blanks. */
+export interface CleanFrontEvidence {
+  hiddenBy: ReadonlyArray<string>;
+  visibleParts: ReadonlyArray<string>;
+}
+
+/** The Clean front card (skills §12.2) filled with the object's name and what the kit saw. */
+export function buildCleanFrontPrompt(label: string, evidence: Partial<CleanFrontEvidence> = {}) {
+  const list = (v: ReadonlyArray<string> | undefined, none: string) =>
+    v && v.length ? v.join(', ') : none;
+  return imageCard('cleanFront')
+    .replaceAll('{name}', label)
+    .replaceAll('{hiddenBy}', list(evidence.hiddenBy, 'other objects'))
+    .replaceAll('{visibleParts}', list(evidence.visibleParts, 'the visible parts'));
 }
 
 /**
@@ -196,9 +213,13 @@ export interface GenerateFacadeOptions {
   userPrompt?: string;
   sessionId?: string;
   signal?: AbortSignal;
+  /** Clean front of a hidden object (PQ-T23): the Clean front card replaces the elevation prompt. */
+  cleanFront?: Partial<CleanFrontEvidence>;
 }
 
 export interface FacadeResult {
+  /** True when the drawing is a clean front (its parts are inferred, PQ-T23). */
+  clean?: boolean;
   imageUrl: string;
   fileKey: string;
   prompt: string;
@@ -224,9 +245,11 @@ export async function generateFacadeImage(options: GenerateFacadeOptions): Promi
           return null;
         })
       : null;
-  let prompt = buildFacadePrompt(archetype, target.label, userPrompt, {
-    fromPhoto: reference !== null,
-  });
+  // The card speaks of « this photo »: without the photo as reference it falls back to the elevation prompt.
+  const clean = options.cleanFront && reference !== null ? options.cleanFront : null;
+  let prompt = clean
+    ? buildCleanFrontPrompt(target.label, clean)
+    : buildFacadePrompt(archetype, target.label, userPrompt, { fromPhoto: reference !== null });
 
   let pngBuffer: Buffer;
   let source: 'meta' | 'mock' = 'mock';
@@ -282,5 +305,6 @@ export async function generateFacadeImage(options: GenerateFacadeOptions): Promi
     prompt,
     archetype,
     source,
+    ...(clean ? { clean: true } : {}),
   };
 }

@@ -39,6 +39,8 @@ export const EXTRUDE_POINTS_MAX = 64;
 /** Profile points of a `lathe` part (PR-2.3): radius-vs-height, non-decreasing y. */
 export const LATHE_PROFILE_MAX = 32;
 export const MAX_RECIPE_PARTS = 12;
+/** Hidden share (PQ-T7) from which the panel offers « draw a clean front » (PQ-T23). */
+export const CLEAN_FRONT_MIN_HIDDEN = 0.3;
 /** Highest half-hip gable share: above it the end is a plain gable (ridge 1). */
 export const HIP_CLIP_MAX = 0.9;
 /**
@@ -301,6 +303,8 @@ export const ShapeTargetSchema = z.object({
   facadeKey: z.string().optional(),
   /** Family the operator picked when asked (PQ-T41): it becomes the kit hint and the kit's archetype. */
   archetype: z.string().max(16).optional(),
+  /** The validated 2D view is a clean front drawn from a hidden object (PQ-T23): its parts are inferred. */
+  cleanFront: z.boolean().optional(),
 });
 export type ShapeTarget = z.infer<typeof ShapeTargetSchema>;
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, type SetStateAction } from 'react';
+import { useCallback, useEffect, useRef, type SetStateAction } from 'react';
 import type { ShapeRequest } from './use-object-shape';
 import { shapeKey } from './use-object-shape';
 import { prepareVisionImage } from '../utils/prepare-image';
@@ -14,16 +14,25 @@ export interface FacadeData {
   archetype: string;
   detectionId: string;
   source: 'meta' | 'mock';
+  /** A clean front drawn from a hidden object (PQ-T23): its parts will be inferred. */
+  clean?: boolean;
 }
 
 /** What the 3D call needs from a validated facade: the image and its storage key (unique per generation). */
 export interface ValidatedFacade {
   url: string;
   key: string;
+  clean?: boolean;
+}
+
+/** What the kit saw of a hidden object, sent with « draw a clean front » (Clean front card blanks). */
+export interface CleanFrontRequest {
+  hiddenBy: string[];
+  visibleParts: string[];
 }
 
 export const validatedFacade = (f?: FacadeData): ValidatedFacade | undefined =>
-  f ? { url: f.imageUrl, key: f.fileKey } : undefined;
+  f ? { url: f.imageUrl, key: f.fileKey, ...(f.clean ? { clean: true } : {}) } : undefined;
 
 export interface FacadeState {
   status: 'idle' | 'generating' | 'ready' | 'deleting' | 'error';
@@ -65,6 +74,8 @@ export function useFacade2d(
   /** Object the running generation belongs to (kept sessions only). */
   const abortForRef = useKeptRef<string | null>(scope, 'facadeAbortFor', () => null);
 
+  /** Evidence of the last « clean front » request: a retry of that drawing asks for a clean front again. */
+  const cleanRef = useRef<CleanFrontRequest | undefined>(undefined);
   const objectKey = target ? shapeKey(target) : '';
   if (cache.current.photo !== imageDataUrl) {
     cache.current = { photo: imageDataUrl, byKey: new Map() };
@@ -100,8 +111,9 @@ export function useFacade2d(
   }, [scope, cacheKey, abortRef, abortForRef]);
 
   const generate = useCallback(
-    async (extraPrompt?: string) => {
+    async (extraPrompt?: string, cleanFront?: CleanFrontRequest) => {
       if (!imageDataUrl || !target) return;
+      if (cleanFront) cleanRef.current = cleanFront;
 
       abortRef.current?.abort();
       const controller = new AbortController();
@@ -134,6 +146,7 @@ export function useFacade2d(
         if (promptToSend.trim()) {
           form.append('userPrompt', promptToSend.trim());
         }
+        if (cleanFront) form.append('cleanFront', JSON.stringify(cleanFront));
         if (sessionId) {
           form.append('sessionId', sessionId);
         }
@@ -156,6 +169,7 @@ export function useFacade2d(
           archetype: string;
           detectionId: string;
           source: 'meta' | 'mock';
+          clean?: boolean;
         };
 
         if (controller.signal.aborted) return;
@@ -167,6 +181,7 @@ export function useFacade2d(
           archetype: data.archetype,
           detectionId: data.detectionId,
           source: data.source,
+          ...(data.clean ? { clean: true } : {}),
         };
 
         if (cache.current.photo === imageDataUrl) {
@@ -193,10 +208,13 @@ export function useFacade2d(
   );
 
   const retry = useCallback(
-    (extraPrompt?: string) => {
-      void generate(extraPrompt);
+    (extraPrompt?: string, cleanFront?: CleanFrontRequest) => {
+      void generate(
+        extraPrompt,
+        cleanFront ?? (state.facade?.clean ? cleanRef.current : undefined)
+      );
     },
-    [generate]
+    [generate, state.facade?.clean]
   );
 
   const deleteFacade = useCallback(async () => {

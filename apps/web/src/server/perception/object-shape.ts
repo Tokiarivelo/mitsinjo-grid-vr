@@ -85,6 +85,7 @@ import {
   measureObjectViews,
   roundViewRecipe,
   keepPlausibleSide,
+  markDrawnInferred,
   sparkDepthRatio,
   viewIou,
   viewsRecipe,
@@ -679,6 +680,8 @@ export async function runObjectShape(
         // Round objects (PG-T19): lathe of the drawn silhouette, no side, no views check.
         const round = ROUND_VIEW_ARCHETYPES.includes(kit.archetype);
         let recipe = round ? roundViewRecipe(seen.front, kit) : viewsRecipe(seen, kit);
+        // PQ-T23: what exists only on a clean front drawn from a hidden object is inferred.
+        if (target.cleanFront) recipe = markDrawnInferred(recipe);
         // After the build, the AI checks every side against the drawings and the model is fixed.
         if (!round && perception.checkViews && perception.segmentImage) {
           onStep?.('check');

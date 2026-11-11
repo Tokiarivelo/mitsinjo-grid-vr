@@ -883,6 +883,19 @@ export function viewsRecipe(
   };
 }
 
+/**
+ * A clean front drawn from a hidden object (PQ-T23) is imagined where the photo shows nothing: every part
+ * read on it is `inferred`, never `measured`, except the body that the photo's own silhouette also fixes. Pure.
+ */
+export function markDrawnInferred(recipe: ObjectRecipe): ObjectRecipe {
+  return {
+    ...recipe,
+    parts: recipe.parts.map((p) =>
+      p.status === 'measured' && !p.front ? { ...p, status: 'inferred' as const } : p
+    ),
+  };
+}
+
 /** Front and side cameras of the view score (the side camera sees +z on the left). */
 export const VIEW_CAMERAS: Record<'front' | 'side', FlatView> = VIEW_STAGE_CAMERAS;
 

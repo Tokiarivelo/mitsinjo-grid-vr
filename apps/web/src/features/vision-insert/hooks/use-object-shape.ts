@@ -126,6 +126,7 @@ async function shapeForm(imageDataUrl: string, target: ShapeRequest, sessionId?:
         : {}),
       ...(target.facadeUrl ? { facadeUrl: target.facadeUrl } : {}),
       ...(target.facadeKey ? { facadeKey: target.facadeKey } : {}),
+      ...(target.cleanFront ? { cleanFront: true } : {}),
       ...(target.archetype ? { archetype: target.archetype } : {}),
     })
   );
@@ -154,7 +155,7 @@ export function useObjectShape(scope?: string) {
   const facadesRef = useKeptRef(
     scope,
     'shapeFacades',
-    () => new Map<string, Pick<ShapeRequest, 'facadeUrl' | 'facadeKey'>>()
+    () => new Map<string, Pick<ShapeRequest, 'facadeUrl' | 'facadeKey' | 'cleanFront'>>()
   );
   /** Family the operator picked per object (PQ-T41): « Regenerate » keeps asking with it. */
   const familiesRef = useKeptRef(scope, 'shapeFamilies', () => new Map<string, string>());
@@ -231,6 +232,7 @@ export function useObjectShape(scope?: string) {
         facadesRef.current.set(objectKey, {
           facadeUrl: request.facadeUrl,
           facadeKey: request.facadeKey,
+          ...(request.cleanFront ? { cleanFront: true } : {}),
         });
       }
       const family = familiesRef.current.get(objectKey);

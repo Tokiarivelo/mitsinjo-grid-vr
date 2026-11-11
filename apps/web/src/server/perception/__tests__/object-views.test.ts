@@ -30,6 +30,7 @@ import {
   SIDE_DEPTH_MAX_FACTOR,
   sparkDepthRatio,
   viewIou,
+  markDrawnInferred,
   viewsRecipe,
   PERSON_TORSO,
 } from '../object-views';
@@ -527,6 +528,16 @@ describe('AI views check (PV-H)', () => {
     const r = viewsRecipe(withBack, KIT);
     expect(r.parts.filter((p) => p.color === TAIL_LIGHT_COLOR)).toHaveLength(0);
     expect(r.parts.filter((p) => p.status === 'inferred' && p.kind === 'light')).toHaveLength(0);
+  });
+
+  it('a clean front makes every drawn part inferred, the body keeps its status (PQ-T23)', () => {
+    const r = viewsRecipe({ front, side }, KIT);
+    expect(r.parts.some((p) => p.status === 'measured' && !p.front)).toBe(true);
+    const clean = markDrawnInferred(r);
+    expect(clean.parts.some((p) => p.status === 'measured' && !p.front)).toBe(false);
+    expect(clean.parts.filter((p) => p.status === 'inferred').length).toBeGreaterThan(0);
+    expect(clean.parts[0]!.status).toBe(r.parts[0]!.status);
+    expect(clean.parts).toHaveLength(r.parts.length);
   });
 
   it('skips a round with no time left, and never asks SAM again for a part it already measured', async () => {

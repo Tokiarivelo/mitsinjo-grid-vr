@@ -101,6 +101,34 @@ const renderPanel = (props: Partial<Parameters<typeof ObjectShapePanel>[0]> = {}
     </I18nProvider>
   );
 
+describe('ObjectShapePanel clean front (PQ-T23)', () => {
+  const hiddenShape = (hidden: number): ObjectShape => ({
+    ...shape('recipe'),
+    conditions: { widthPx: 400, heightPx: 300, hidden },
+    kit: {
+      archetype: 'vehicle',
+      proportions: { w: 1, h: 0.4, d: 0.4 },
+      colors: { main: '#a33327', secondary: '#cfd6dd', accent: '#1d1c1c' },
+      evidence: { hiddenBy: ['hedge'], visibleParts: ['wheel'] },
+    } as ObjectShape['kit'],
+  });
+
+  it('a hidden object offers « Draw a clean front »: the kit evidence goes with the request, the facade tab opens', () => {
+    facadeMock.generate.mockClear();
+    renderPanel({ shape: hiddenShape(0.45) });
+    fireEvent.click(screen.getByRole('button', { name: 'Draw a clean front' }));
+    expect(facadeMock.generate).toHaveBeenCalledWith(undefined, {
+      hiddenBy: ['hedge'],
+      visibleParts: ['wheel'],
+    });
+  });
+
+  it('a mostly visible object does not offer it', () => {
+    renderPanel({ shape: hiddenShape(0.1) });
+    expect(screen.queryByRole('button', { name: 'Draw a clean front' })).toBeNull();
+  });
+});
+
 describe('ObjectShapePanel (PV-T10)', () => {
   it('idle: « Not built yet », the 2D facade comes first, no 3D shortcut, no viewer', () => {
     const onGenerate = vi.fn();

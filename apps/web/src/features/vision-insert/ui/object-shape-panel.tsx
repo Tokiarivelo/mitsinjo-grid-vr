@@ -28,6 +28,7 @@ import {
   type ShapeStep,
 } from '@/lib/object-shape';
 import type { ApplianceDetection } from '@/lib/vision';
+import { CleanFrontOffer } from './clean-front-offer';
 import { FamilyQuestion } from './family-question';
 import { PartCoverageLine } from './part-coverage-line';
 import { PhotoWarningLine } from './photo-warning-line';
@@ -428,6 +429,20 @@ export function ObjectShapePanel({
           {shape.mode === 'recipe' && <PhotoWarningLine conditions={shape.conditions} />}
           {shape.mode === 'recipe' && shape.ask && onChooseFamily && (
             <FamilyQuestion archetypes={shape.ask.archetypes} onChoose={onChooseFamily} />
+          )}
+          {shape.mode === 'recipe' && (
+            <CleanFrontOffer
+              hidden={shape.conditions?.hidden}
+              busy={facade.status === 'generating'}
+              onDraw={() => {
+                const evidence = shape.kit?.evidence;
+                facade.generate(undefined, {
+                  hiddenBy: evidence?.hiddenBy ?? [],
+                  visibleParts: evidence?.visibleParts ?? [],
+                });
+                setTab('facade');
+              }}
+            />
           )}
           {webgl && (
             <p className="flex items-center gap-1.5 text-xs text-text-muted">

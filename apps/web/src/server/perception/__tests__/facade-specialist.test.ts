@@ -1,8 +1,31 @@
 import { describe, expect, it } from 'vitest';
-import { buildFacadePrompt, generateFacadeImage } from '../facade-specialist';
+import {
+  buildCleanFrontPrompt,
+  buildFacadePrompt,
+  generateFacadeImage,
+} from '../facade-specialist';
 import type { ShapeTarget } from '@/lib/object-shape';
 
 describe('facade-specialist', () => {
+  describe('buildCleanFrontPrompt (PQ-T23)', () => {
+    it('fills the Clean front card with the name and what the kit saw', () => {
+      const prompt = buildCleanFrontPrompt('red car', {
+        hiddenBy: ['hedge', 'person'],
+        visibleParts: ['wheel', 'door handle'],
+      });
+      expect(prompt).toContain('This photo shows a red car partly hidden by hedge, person.');
+      expect(prompt).toContain('number and position of wheel, door handle');
+      expect(prompt).toContain('with nothing in front of it');
+      expect(prompt).not.toMatch(/[{}]/);
+    });
+
+    it('says something plain when the kit listed nothing', () => {
+      const prompt = buildCleanFrontPrompt('pump');
+      expect(prompt).toContain('partly hidden by other objects');
+      expect(prompt).not.toMatch(/[{}]/);
+    });
+  });
+
   describe('buildFacadePrompt', () => {
     it('builds an orthographic architectural prompt for a house', () => {
       const prompt = buildFacadePrompt('house', 'rural clinic cottage');
