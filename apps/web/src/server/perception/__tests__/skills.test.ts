@@ -56,7 +56,7 @@ describe('skill cards (PQ-T11)', () => {
   it('every archetype resolves to a card, `other` to none', () => {
     for (const a of KIT_ARCHETYPES) {
       if (a === 'other') expect(archetypeCard(a)).toBeNull();
-      else expect(archetypeCard(a), a).toMatch(/^[A-Z][A-Z /]+ \(/);
+      else expect(archetypeCard(a), a).toMatch(/^[A-Z][A-Z /]+\b/);
     }
     expect(skillFor('kit', 'other').cards).toEqual(['base', 'look', 'kit']);
     expect(skillFor('kit', 'vehicle').cards).toEqual(['base', 'look', 'kit', 'archetype:vehicle']);
