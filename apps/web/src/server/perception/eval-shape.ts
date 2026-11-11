@@ -130,6 +130,8 @@ export async function evalCaptures(
       ...compareKits(capture.kit, out.kit),
       seconds,
     });
+    // One line per capture as it lands: a long run that is cut short still leaves its numbers.
+    console.info(`[eval] prompt ${promptVersion} ${id}: ${seconds.toFixed(1)} s (${out.model})`);
   }
   return rows;
 }

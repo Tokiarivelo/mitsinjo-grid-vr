@@ -1,7 +1,15 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import type { ObjectRecipe } from '@/lib/object-shape';
-import { confidence, mixColor, mixNumber, mixRecipe, pickCount } from '../fusion';
+import {
+  confidence,
+  ledByMeasurement,
+  mixColor,
+  mixNumber,
+  mixRecipe,
+  modelDoubts,
+  pickCount,
+} from '../fusion';
 
 describe('confidence (PF-T7)', () => {
   it('grows with what the measure saw, stays in [0, 1]', () => {
@@ -62,5 +70,27 @@ describe('mix', () => {
     const half = mixRecipe(fitted, start, 0.5);
     expect(half.proportions.h).toBeCloseTo(0.65, 6);
     expect(half.yaw).toBeCloseTo(0.2, 6);
+  });
+});
+
+describe('fields the model doubts are led by the measurement (PQ-T12)', () => {
+  it('doubts a group listed as unsure or under confidence ½, never on a first-prompt kit', () => {
+    expect(modelDoubts(undefined, 'colors')).toBe(false);
+    expect(modelDoubts({}, 'colors')).toBe(false);
+    expect(modelDoubts({ evidence: { unsure: ['colors.main'] } }, 'colors')).toBe(true);
+    expect(modelDoubts({ evidence: { unsure: ['details.windows'] } }, 'counts')).toBe(true);
+    expect(modelDoubts({ evidence: { unsure: ['colors'] } }, 'proportions')).toBe(false);
+    expect(modelDoubts({ confidence: { proportions: 0.4 } }, 'proportions')).toBe(true);
+    expect(modelDoubts({ confidence: { proportions: 0.8 } }, 'proportions')).toBe(false);
+  });
+
+  it('an unsure field moves half-way to full trust in the measurement; nothing measured stays 0', () => {
+    expect(ledByMeasurement(0.5, true)).toBe(0.75);
+    expect(ledByMeasurement(0.5, false)).toBe(0.5);
+    expect(ledByMeasurement(0, true)).toBe(0);
+    // The mixed colour is then closer to the measurement than before.
+    const plain = mixColor('#ff0000', '#0000ff', 0.5);
+    const led = mixColor('#ff0000', '#0000ff', ledByMeasurement(0.5, true));
+    expect(parseInt(led.slice(1, 3), 16)).toBeGreaterThan(parseInt(plain.slice(1, 3), 16));
   });
 });

@@ -105,17 +105,22 @@ describe('evalCaptures (PR-3.1)', () => {
 const LIVE = process.env.EVAL_SHAPE === '1';
 
 describe.skipIf(!LIVE)('make eval-shape', () => {
-  it('scores the real captures on live Spark', async () => {
-    const dir =
-      process.env.EVAL_SHAPE_DIR ??
-      join(process.cwd(), 'src/server/perception/__fixtures__/shape/real');
-    const client = getPerceptionClient('eval-shape');
-    if (!client.callsMeta) throw new Error('Refusing to eval mock: set LLM_PROVIDER=meta');
-    const rows = [];
-    for (const v of parsePromptVersions(process.env.EVAL_SHAPE_PROMPTS))
-      rows.push(...(await evalCaptures(client, dir, undefined, v)));
-    const md = `# Kit eval — ${new Date().toISOString().slice(0, 10)}\n\n${evalMarkdown(rows)}`;
-    console.info(`\n${md}`);
-    expect(rows.length).toBeGreaterThan(0);
-  }, 600_000);
+  it(
+    'scores the real captures on live Spark',
+    async () => {
+      const dir =
+        process.env.EVAL_SHAPE_DIR ??
+        join(process.cwd(), 'src/server/perception/__fixtures__/shape/real');
+      const client = getPerceptionClient('eval-shape');
+      if (!client.callsMeta) throw new Error('Refusing to eval mock: set LLM_PROVIDER=meta');
+      const rows = [];
+      for (const v of parsePromptVersions(process.env.EVAL_SHAPE_PROMPTS))
+        rows.push(...(await evalCaptures(client, dir, undefined, v)));
+      const md = `# Kit eval — ${new Date().toISOString().slice(0, 10)}\n\n${evalMarkdown(rows)}`;
+      console.info(`\n${md}`);
+      expect(rows.length).toBeGreaterThan(0);
+      // 20 min per prompt version: 16 real captures, ≈ 20 s each on prompt 1, far more on prompt 2 (PQ-T12 runs timed out at 10 and 20 min).
+    },
+    1_200_000 * Math.max(1, parsePromptVersions(process.env.EVAL_SHAPE_PROMPTS).length)
+  );
 });

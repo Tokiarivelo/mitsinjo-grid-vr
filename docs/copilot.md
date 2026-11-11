@@ -86,6 +86,7 @@ features/copilot/          # ChatPanel, ChatMessage, ToolActivity, ConfirmPropos
   calibration (damaged models lower in ≥ 90 % of pairs). Run 2026-11-10: 77 % of 13 pairs → **developer note
   only**. Only live Meta answers count and are stored (`liveJudgement`: a mock or fallback grade 3 never does);
   captures under three parts are skipped (`damage` removes nothing).
+  **Kit prompt 2 (PQ-T11/T12):** `kitPrompt(2, hint)` = the Muse cards of `docs/vision-to-3d-muse-skills.md` (`skills/`: Base + Look + Kit + the card of the hint's family; the free-parts call: Base + Look + Free parts, `partsPrompt()`), JSON schema with `evidence` first and `confidence`. The cards are generated from the doc (`make skills-gen`; `skills.test.ts` fails when the module is behind). `KIT_PROMPT_VERSION` stays on the version its eval kept.
   **Prompt versions (PQ-T5):** `KIT_PROMPT_VERSION`, `CRITIC_PROMPT_VERSION` (`shape.ts`),
   `VIEWS_CHECK_PROMPT_VERSION` (`views-check.ts`), `SIDE_VIEW_PROMPT_VERSION` (`facade-views.ts`), all 1, beside
   `SHAPE_SCRIPT_PROMPT_VERSION`. Each call logs its `promptVersion` in the `[vision] 3D … → params` line; captures

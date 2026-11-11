@@ -24,7 +24,15 @@ import type { PhotoForRegions } from './region';
 import { measurePerspective, type Perspective } from './perspective';
 import { measureRepetition, type GrayGrid, type Repetition } from './repetition';
 import { measureRoof, type RoofMeasure } from './roofline';
-import { confidence, mixColors, mixNumber, mixRecipe, pickCount } from './fusion';
+import {
+  confidence,
+  ledByMeasurement,
+  mixColors,
+  mixNumber,
+  mixRecipe,
+  modelDoubts,
+  pickCount,
+} from './fusion';
 import { coverageForBox, needsFreeParts } from './free-recipe';
 import { conditionsFacts, conditionsTrust, measurePhotoConditions } from './photo-conditions';
 import { fitSilhouette } from './silhouette-fit';
@@ -113,7 +121,7 @@ export function withMeasuredRepetition(
         ? pickCount(
             repetition.units,
             kit.details?.units,
-            confidence.repetition(repetition.strength)
+            ledByMeasurement(confidence.repetition(repetition.strength), modelDoubts(kit, 'counts'))
           )
         : kit.details?.units;
   const details = { ...kit.details };
@@ -464,11 +472,14 @@ export async function runObjectShape(
           : null;
       const conf = {
         colors: px
-          ? Math.round(
-              confidence.colors(px.y.length, !!shaped.outline) *
-                conditionsTrust(preConditions ?? undefined) *
-                100
-            ) / 100
+          ? ledByMeasurement(
+              Math.round(
+                confidence.colors(px.y.length, !!shaped.outline) *
+                  conditionsTrust(preConditions ?? undefined) *
+                  100
+              ) / 100,
+              modelDoubts(found.kit, 'colors')
+            )
           : 0,
         yaw: 0,
         fit: 0,
@@ -760,7 +771,9 @@ export async function runObjectShape(
             })
           : null;
       const start = fitRecipe(built, aspect, yaw0);
-      conf.fit = fit ? confidence.fit(fit.iou) : 0;
+      conf.fit = fit
+        ? ledByMeasurement(confidence.fit(fit.iou), modelDoubts(finalKit, 'proportions'))
+        : 0;
       let recipe = fit ? mixRecipe(fit.recipe, start, conf.fit) : start;
       if (fit) {
         console.info(
@@ -968,8 +981,10 @@ export async function runObjectShape(
                 }
               )
             : (partMasks ?? []);
-        const missing = notBuilt(recipe, onObject);
-        if (onObject.length) coverage = partCoverage(recipe, onObject);
+        // PQ-T37: the parts the kit listed under evidence.visibleParts join the SAM masks.
+        const listed = finalKit.evidence?.visibleParts ?? [];
+        const missing = notBuilt(recipe, onObject, listed);
+        if (onObject.length || listed.length) coverage = partCoverage(recipe, onObject, listed);
         if (missing.length)
           console.info(`[vision] 3D seen, not built for "${target.label}": ${missing.join(', ')}`);
         const graph = buildGraph(finalKit.archetype, recipe, {

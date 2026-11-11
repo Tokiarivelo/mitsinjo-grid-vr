@@ -21,7 +21,7 @@ import {
 import {
   parseFreeParts,
   PARTS_JSON_SCHEMA,
-  PARTS_SYSTEM_PROMPT,
+  partsPrompt,
   shapePartsQuestion,
   visibilityFromCoverage,
 } from './free-recipe';
@@ -368,7 +368,7 @@ export class MetaPerceptionBackend implements PerceptionBackend {
     // Standard id, not the contributor one: the operator waits on this answer (≈ 15 s vs ≈ 25 s measured).
     const promptVersion = target.promptVersion ?? KIT_PROMPT_VERSION;
     const { content, model, usage } = await this.visionJson(
-      kitPrompt(promptVersion),
+      kitPrompt(promptVersion, hint),
       shapeQuestion(target.label, target.aspect, hint, Boolean(target.facadeUrl), target.facts),
       imageUrl,
       SHAPE_JSON_SCHEMA,
@@ -394,7 +394,7 @@ export class MetaPerceptionBackend implements PerceptionBackend {
   ): Promise<PerceptionCall<ShapeResult>> {
     // Standard id, not the contributor one: the operator waits on this answer (same as the kit call).
     const { content, model, usage } = await this.visionJson(
-      PARTS_SYSTEM_PROMPT,
+      partsPrompt(),
       shapePartsQuestion(
         target.label,
         target.archetype,

@@ -3,13 +3,18 @@ import type { SceneryType } from '@/lib/vision';
 import { z } from 'zod';
 import {
   clampEstimatedDepth,
+  EVIDENCE_VIEWS,
   KIT_ARCHETYPES,
+  MAX_VISIBLE_PARTS,
   ObjectKitSchema,
   PART_MATERIAL_KEYS,
   type KitArchetype,
+  type KitConfidence,
+  type KitEvidence,
   type ObjectKit,
 } from '@/lib/object-kit';
 import { RECIPE_MATERIALS, type ObjectRecipe, type RecipePart } from '@/lib/object-shape';
+import { skillFor } from './skills';
 
 /**
  * Prompts and parsing for the Spark 3D « kit » of one object (PV-T9b). Spark only classifies and reads
@@ -44,12 +49,19 @@ export const SHAPE_SYSTEM_PROMPT = [
 /** Every kit prompt still comparable by version (current = `KIT_PROMPT_VERSION`). */
 export const KIT_PROMPTS: Readonly<Record<number, string>> = { 1: SHAPE_SYSTEM_PROMPT };
 
+/**
+ * Version 2 (PQ-T12): the Muse cards, `skills/` Base + Look + Kit + the card of the detection hint's family.
+ * It depends on the hint, so it is built per call and is not in `KIT_PROMPTS`.
+ */
+export const KIT_PROMPT_CARDS_VERSION = 2;
+
 /** The kit system prompt of `version` (default: current); throws on a version that was not kept. */
-export function kitPrompt(version: number = KIT_PROMPT_VERSION): string {
+export function kitPrompt(version: number = KIT_PROMPT_VERSION, hint?: KitArchetype): string {
+  if (version === KIT_PROMPT_CARDS_VERSION) return skillFor('kit', hint).text;
   const text = KIT_PROMPTS[version];
   if (!text)
     throw new Error(
-      `unknown kit prompt version ${version} (kept: ${Object.keys(KIT_PROMPTS).join(', ')})`
+      `unknown kit prompt version ${version} (kept: ${[...Object.keys(KIT_PROMPTS), KIT_PROMPT_CARDS_VERSION].join(', ')})`
     );
   return text;
 }
@@ -89,6 +101,19 @@ export const SHAPE_JSON_SCHEMA = {
   schema: {
     type: 'object',
     properties: {
+      // First, so the answer is written in the order of the Look card (PQ-T12): look, then answer.
+      evidence: {
+        type: 'object',
+        properties: {
+          view: { type: 'string', enum: [...EVIDENCE_VIEWS] },
+          outline: { type: 'string' },
+          hiddenBy: { type: 'array', items: { type: 'string' } },
+          volumes: { type: 'array', items: { type: 'string' } },
+          visibleParts: { type: 'array', items: { type: 'string' }, maxItems: MAX_VISIBLE_PARTS },
+          repeats: { type: 'object', additionalProperties: int },
+          unsure: { type: 'array', items: { type: 'string' } },
+        },
+      },
       archetype: { type: 'string', enum: [...KIT_ARCHETYPES] },
       subtype: { type: 'string' },
       proportions: {
@@ -108,6 +133,15 @@ export const SHAPE_JSON_SCHEMA = {
       partMaterials: {
         type: 'object',
         properties: Object.fromEntries(PART_MATERIAL_KEYS.map((k) => [k, material])),
+      },
+      confidence: {
+        type: 'object',
+        properties: {
+          archetype: { type: 'number' },
+          proportions: { type: 'number' },
+          colors: { type: 'number' },
+          counts: { type: 'number' },
+        },
       },
       details: {
         type: 'object',
@@ -142,7 +176,58 @@ const ReplySchema = z.object({
   materials: z.record(z.string(), z.unknown()).optional(),
   partMaterials: z.record(z.string(), z.unknown()).optional(),
   details: z.record(z.string(), z.unknown()).optional(),
+  evidence: z.unknown().optional(),
+  confidence: z.unknown().optional(),
 });
+
+/**
+ * Reads `evidence` leniently (PQ-T12): a wrong type drops that field only, an unknown view is dropped, the
+ * part list is cut at `MAX_VISIBLE_PARTS`. `undefined` when nothing usable is left (answers of prompt 1).
+ */
+export function parseEvidence(raw: unknown): KitEvidence | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const o = raw as Record<string, unknown>;
+  const words = (v: unknown, max: number, len: number): string[] | undefined => {
+    if (!Array.isArray(v)) return undefined;
+    const out = v
+      .filter((x): x is string => typeof x === 'string' && x.trim().length > 0)
+      .map((x) => x.trim().toLowerCase().slice(0, len));
+    return out.length ? [...new Set(out)].slice(0, max) : undefined;
+  };
+  const out: KitEvidence = {};
+  if (typeof o.view === 'string' && (EVIDENCE_VIEWS as readonly string[]).includes(o.view))
+    out.view = o.view as KitEvidence['view'] & string;
+  if (typeof o.outline === 'string' && o.outline.trim())
+    out.outline = o.outline.trim().slice(0, 160);
+  const hiddenBy = words(o.hiddenBy, 6, 40);
+  if (hiddenBy) out.hiddenBy = hiddenBy;
+  const volumes = words(o.volumes, 3, 60);
+  if (volumes) out.volumes = volumes;
+  const visibleParts = words(o.visibleParts, MAX_VISIBLE_PARTS, 40);
+  if (visibleParts) out.visibleParts = visibleParts;
+  if (o.repeats && typeof o.repeats === 'object' && !Array.isArray(o.repeats)) {
+    const repeats: Record<string, number> = {};
+    for (const [k, v] of Object.entries(o.repeats as Record<string, unknown>))
+      if (typeof v === 'number' && Number.isFinite(v))
+        repeats[k.slice(0, 32)] = clamp(Math.round(v), 0, 50);
+    if (Object.keys(repeats).length) out.repeats = repeats;
+  }
+  const unsure = words(o.unsure, 12, 40);
+  if (unsure) out.unsure = unsure;
+  return Object.keys(out).length ? out : undefined;
+}
+
+/** `confidence` of the answer, each value clamped to 0..1; `undefined` when none is a number. */
+export function parseKitConfidence(raw: unknown): KitConfidence | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const o = raw as Record<string, unknown>;
+  const out: KitConfidence = {};
+  for (const k of ['archetype', 'proportions', 'colors', 'counts'] as const) {
+    const v = o[k];
+    if (typeof v === 'number' && Number.isFinite(v)) out[k] = clamp(v, 0, 1);
+  }
+  return Object.keys(out).length ? out : undefined;
+}
 
 const LIMITS = { windows: 8, doors: 3, wheels: 6, legs: 4, floors: 4, units: 8 } as const;
 
@@ -373,7 +458,11 @@ export function parseKit(content: string, fallback: KitArchetype = 'other'): Obj
     const m = RECIPE_MATERIALS.find((x) => x === reply.data.partMaterials?.[k]);
     if (m) partMaterials[k] = m;
   }
+  const evidence = parseEvidence(reply.data.evidence);
+  const kitConfidence = parseKitConfidence(reply.data.confidence);
   const kit = ObjectKitSchema.safeParse({
+    ...(evidence ? { evidence } : {}),
+    ...(kitConfidence ? { confidence: kitConfidence } : {}),
     archetype,
     ...(subtype ? { subtype } : {}),
     // Spark only estimates the depth: keep it within the archetype's real size range (PT-8).

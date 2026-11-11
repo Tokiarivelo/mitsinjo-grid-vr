@@ -302,6 +302,16 @@ describe('repairGraph + notBuilt (PQ-T37)', () => {
     expect(notBuilt(r)).toEqual([]);
   });
 
+  it("the kit's listed parts (evidence.visibleParts) are read in the plural and join the part list (PQ-T37)", () => {
+    const r = car([body, wheel(-0.3), wheel(0.3)]);
+    expect(notBuilt(r, [], ['Wheels', 'side mirrors'])).toEqual(['side mirror']);
+    const cov = partCoverage(r, [], ['wheels', 'mirror']);
+    expect(cov).toEqual([
+      { concept: 'wheel', seen: 1, built: 1 },
+      { concept: 'mirror', seen: 1, built: 0 },
+    ]);
+  });
+
   it('partCoverage: seen vs built per SAM concept, for the panel (built never above seen)', () => {
     const r = car([body, wheel(-0.3), wheel(0.3)]);
     const m = (concept: string) => ({ concept, box: { x: 0.1, y: 0.1, w: 0.1, h: 0.1 } });

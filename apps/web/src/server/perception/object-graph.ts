@@ -338,11 +338,18 @@ export function notBuilt(
     .filter((c) => c.seen > c.built)
     .map((c) => `${c.concept} ×${c.seen - c.built}`);
   const seen = new Set(coverage.map((c) => c.concept));
-  for (const name of new Set(listed)) {
+  for (const name of new Set(listed.map(singular))) {
     if (!seen.has(name) && builtCount(recipe, name) === 0) out.push(name);
   }
   return out;
 }
+
+/** « wheels » → « wheel »: the kit lists parts in the plural as often as not. */
+const singular = (name: string) =>
+  name
+    .trim()
+    .toLowerCase()
+    .replace(/(?<=[a-z]{3})s$/, '');
 
 /** Model parts that can draw `concept` (its `CONCEPT_KINDS`, else the concept as a kind). */
 function builtCount(recipe: ObjectRecipe, concept: string): number {
@@ -354,9 +361,15 @@ function builtCount(recipe: ObjectRecipe, concept: string): number {
  * Per SAM concept, how many parts the photo shows and how many the model builds (PQ-T37), in the
  * order SAM answered: the panel's part list. Pass only the masks on the object (`masksOnObject`). Pure.
  */
-export function partCoverage(recipe: ObjectRecipe, masks: ReadonlyArray<PartMask>): PartCoverage[] {
+export function partCoverage(
+  recipe: ObjectRecipe,
+  masks: ReadonlyArray<PartMask>,
+  listed: ReadonlyArray<string> = []
+): PartCoverage[] {
   const seen = new Map<string, number>();
   for (const m of masks) seen.set(m.concept, (seen.get(m.concept) ?? 0) + 1);
+  // Parts the kit listed that SAM did not find count once (PQ-T12): the operator sees them built or not.
+  for (const name of listed.map(singular)) if (!seen.has(name)) seen.set(name, 1);
   return [...seen].map(([concept, n]) => ({
     concept,
     seen: n,
