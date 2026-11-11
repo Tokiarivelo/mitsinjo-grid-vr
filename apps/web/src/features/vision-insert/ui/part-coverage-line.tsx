@@ -1,10 +1,13 @@
 import { Fragment } from 'react';
 import { ListChecks, TriangleAlert } from 'lucide-react';
 import { useTranslations } from '@/lib/i18n';
-import type { PartCoverage } from '@/lib/object-shape';
+import { partLabelKey, type PartCoverage } from '@/lib/object-shape';
 import en from '@/messages/en.json';
 
-/** SAM part concepts with a `model3dPart` label (same keys in every locale; the server's `PART_CONCEPTS`). */
+/**
+ * Part concepts with a `model3dPart` label (same keys in every locale): the server's `PART_CONCEPTS` and the
+ * SAM words of the Muse cards. Any other word the kit lists is counted under « Other parts ».
+ */
 const LABELLED: ReadonlySet<string> = new Set(Object.keys(en.features.visionInsert.model3dPart));
 
 /**
@@ -15,8 +18,28 @@ const LABELLED: ReadonlySet<string> = new Set(Object.keys(en.features.visionInse
  */
 export function PartCoverageLine({ coverage }: { coverage: ReadonlyArray<PartCoverage> }) {
   const t = useTranslations('features.visionInsert');
-  // A concept without a label (a new SAM word not named in the messages yet) is left out: never a raw key.
-  const named = coverage.filter((c) => LABELLED.has(c.concept));
+  // A concept without a label (a free word of the kit) is never shown as a raw key: it is counted under
+  // « Other parts », so every part seen is on the line, built or not.
+  const labelled = coverage.filter((c) => LABELLED.has(partLabelKey(c.concept)));
+  const rest = coverage.filter((c) => !LABELLED.has(partLabelKey(c.concept)));
+  const named = [
+    ...labelled.map((c) => ({
+      key: c.concept,
+      name: t(`model3dPart.${partLabelKey(c.concept)}`),
+      seen: c.seen,
+      built: c.built,
+    })),
+    ...(rest.length
+      ? [
+          {
+            key: 'other',
+            name: t('model3dPartOther'),
+            seen: rest.reduce((n, c) => n + c.seen, 0),
+            built: rest.reduce((n, c) => n + c.built, 0),
+          },
+        ]
+      : []),
+  ];
   if (named.length === 0) return null;
   return (
     <p className="flex items-start gap-1.5 text-xs text-text-secondary">
@@ -26,11 +49,11 @@ export function PartCoverageLine({ coverage }: { coverage: ReadonlyArray<PartCov
         {named.map((c, i) => {
           const missing = c.seen - c.built;
           return (
-            <Fragment key={c.concept}>
+            <Fragment key={c.key}>
               {i > 0 && ' · '}
               <span className="whitespace-nowrap">
                 {t('model3dCoverageItem', {
-                  name: t(`model3dPart.${c.concept}`),
+                  name: c.name,
                   built: c.built,
                   seen: c.seen,
                 })}

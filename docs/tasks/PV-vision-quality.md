@@ -160,7 +160,7 @@ Meta API calls; all others run offline.
       phrasing found for thin assemblies.
       _Closed 2026-11-11:_ « done when » met: 12 of 13 real photos end with an outline against 6 of 13 at the PQ-T1
       baseline (the gain came from the head noun + full-label retry; the agreement itself added none).
-- [x] **PQ-T10 Colour of the lit surface.** `color-measure.ts`, `region-colors.ts`: read each region's colour
+- [ ] **PQ-T10 Colour of the lit surface.** `color-measure.ts`, `region-colors.ts`: read each region's colour
       on its brighter 60 % of pixels (median, as today), report the shadow share apart. First check what
       `measureKitColors` already does for `plaster`, and extend that logic instead of adding a second one.
       **Test:** `color-measure.test.ts`: a wall half in shadow reads the lit colour within ΔE 5 (before: the mix).
@@ -183,6 +183,15 @@ Meta API calls; all others run offline.
       against 12/39, none lost) and neutral on the unshadowed real set (ΔE 10.1 both). A white or grey wall in shadow
       stays uncorrected on purpose (it cannot be told from a grey object). Add a real shadowed photo to the set
       to prove the original wording.
+      _Real shadowed walls, 2026-11-11 (PR #12 review), **unticked again**:_ 8 photos of walls partly in shadow
+      (Wikimedia Commons, `__fixtures__/shape/shadow-walls.json`, fetched by `make shadow-photos`), wall colour
+      against a lit patch of the same wall (`make shadow-compare`, second table). On the 6 coloured walls the main
+      colour is **the same with and without `litSurface`** (mean ΔE 13.2 both; 40–62 % of shadow read apart on
+      brick, yellow and stone): the lit group already wins there, the brightest 60 % does the work. What changes is
+      the other roles: the wall's own shadow is handed out as secondary or accent 5 times without it, 2 with it
+      (brick: secondary = shadowed brick → window grey). Not gained: a wall mostly in deep shadow (red wall, ΔE 51
+      both) and the 2 grey walls (ΔE 54.5 both, by design). So « lower than at baseline » is not shown for the
+      wall colour on real photos; the measured gain is fewer shadow colours on the roof and accent parts.
 
 **Exit Q1:** fewer cascades from a missed outline; kit calls see the object large and alone.
 
@@ -220,6 +229,13 @@ Meta API calls; all others run offline.
       `modelDoubts` also reads plain words in `unsure` (« depth », « color », « wheels »); `partsPrompt` takes the
       version from `PartsSubject.promptVersion`. Listed parts go through `listedConcept` (PQ-T37): the Look card
       asks for « wheel, lower left », which matched nothing and reported built wheels as not built.
+      _Free-parts call measured, 2026-11-11:_ `runObjectShape({ promptVersion })` now reaches both calls, and
+      `make eval-parts PROMPT=1,2 IDS=pump,water-tank,fan,TV,tree,motorbike` (new) asks the free-parts call
+      alone on 6 real captures: **v1 builds 6/6, mean 9.5 parts, median 44.5 s; v2 (Base + Look + Free parts)
+      builds 6/6, mean 8.7 parts, median 68.8 s.** Same answers built, fewer parts, slower: the cards stay off for
+      this call too. No frozen truth exists for free parts, so this says nothing on likeness.
+      _Panel:_ every SAM word of the cards has a `model3dPart` label (en / fr / mg); any other word the kit lists
+      is counted under « Other parts » instead of being left to the log.
       **Then finish PQ-T37 (same PR):** pass `evidence.visibleParts` to `notBuilt` / `partCoverage`, so every
       listed part is built or shown « not built » in the panel and the report; then tick PQ-T37.
 - [ ] **PQ-T13 Archetype cards, one family at a time** _(API)_. Enable the cards in this order, each with its

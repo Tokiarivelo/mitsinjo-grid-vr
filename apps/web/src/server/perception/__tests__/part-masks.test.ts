@@ -168,6 +168,26 @@ describe('part concepts are named in the panel (PQ-T37, PR #10 review)', () => {
     const concepts = [...new Set(Object.values(PART_CONCEPTS).flat())];
     expect(concepts.filter((c) => !labels.includes(c))).toEqual([]);
   });
+
+  it('every SAM word of the Muse cards has a label, in the three languages', async () => {
+    const { CARD_TEXT } = await import('../skills/cards.generated');
+    const { listedConcept } = await import('../object-graph');
+    const { partLabelKey } = await import('@/lib/object-shape');
+    const words = new Set<string>();
+    for (const text of Object.values(CARD_TEXT)) {
+      const list = text.match(/^SAM words: (.+)\.$/m)?.[1];
+      for (const w of list?.split(/,\s*/) ?? []) words.add(partLabelKey(listedConcept(w)));
+    }
+    expect(words.size).toBeGreaterThan(40);
+    for (const locale of ['en', 'fr', 'mg'] as const) {
+      const messages = (await import(`@/messages/${locale}.json`)).default;
+      const labels = Object.keys(messages.features.visionInsert.model3dPart);
+      expect(
+        [...words].filter((w) => !labels.includes(w)),
+        locale
+      ).toEqual([]);
+    }
+  });
 });
 
 describe('part masks timing and retry (PQ-T9)', () => {

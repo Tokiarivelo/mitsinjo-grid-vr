@@ -177,6 +177,11 @@ export interface ObjectShapeOptions {
   onStageSeed?: (seed: ObjectRecipe, front: Elevation) => void;
   /** Stages that did not fit the first answer: the caller runs them in the background (PG-T18). */
   onStagesLeft?: (rest: StagesContinuation) => void;
+  /**
+   * Kit prompt version for the kit and the free-parts calls (default: `KIT_PROMPT_VERSION`). Routes leave
+   * it unset; evals pass 2 to run the whole pipeline on the Muse cards (PQ-T12).
+   */
+  promptVersion?: number;
 }
 
 /**
@@ -209,6 +214,7 @@ export async function runObjectShape(
     onStage,
     onStageSeed,
     onStagesLeft,
+    promptVersion,
   }: ObjectShapeOptions = {}
 ): Promise<ObjectShape> {
   /** Logs each ended stage (first answer and background). */
@@ -339,6 +345,7 @@ export async function runObjectShape(
         ...(aspect > 0 ? { aspect } : {}),
         ...(preConditions ? { facts: conditionsFacts(preConditions) } : {}),
         ...(target.facadeUrl ? { facadeUrl: target.facadeUrl } : {}),
+        ...(promptVersion ? { promptVersion } : {}),
       },
       signal ? AbortSignal.any([signal, timeout]) : timeout
     );
@@ -435,6 +442,7 @@ export async function runObjectShape(
             archetype: found.kit.archetype,
             ...(coverage ? { coverage } : {}),
             ...(target.facadeUrl ? { facadeUrl: target.facadeUrl } : {}),
+            ...(promptVersion ? { promptVersion } : {}),
           },
           signal ? AbortSignal.any([signal, timeout]) : timeout
         );
