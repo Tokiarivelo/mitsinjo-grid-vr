@@ -160,7 +160,7 @@ Meta API calls; all others run offline.
       phrasing found for thin assemblies.
       _Closed 2026-11-11:_ « done when » met: 12 of 13 real photos end with an outline against 6 of 13 at the PQ-T1
       baseline (the gain came from the head noun + full-label retry; the agreement itself added none).
-- [ ] **PQ-T10 Colour of the lit surface.** `color-measure.ts`, `region-colors.ts`: read each region's colour
+- [x] **PQ-T10 Colour of the lit surface.** `color-measure.ts`, `region-colors.ts`: read each region's colour
       on its brighter 60 % of pixels (median, as today), report the shadow share apart. First check what
       `measureKitColors` already does for `plaster`, and extend that logic instead of adding a second one.
       **Test:** `color-measure.test.ts`: a wall half in shadow reads the lit colour within ΔE 5 (before: the mix).
@@ -192,6 +192,11 @@ Meta API calls; all others run offline.
       (brick: secondary = shadowed brick → window grey). Not gained: a wall mostly in deep shadow (red wall, ΔE 51
       both) and the 2 grey walls (ΔE 54.5 both, by design). So « lower than at baseline » is not shown for the
       wall colour on real photos; the measured gain is fewer shadow colours on the roof and accent parts.
+      _Region colours, 2026-11-11 (Q3 pass, ticked on the owner's request):_ `region-colors.ts` was the part left: each
+      mask region and the rest pool now read the median of their brightest `LIT_SHARE` cells (`litMeasure`) and report
+      `shadow` apart (cells under `SHADOW_RATIO` of the lit luminance). Test: a region 40 % in shadow reads the lit
+      colour within ΔE 5. `make shape-report` replays captures, so the per-part colour column cannot move offline
+      (mean ΔE 10.1, same as baseline): « lower than at baseline » is still not shown on the real set.
 
 **Exit Q1:** fewer cascades from a missed outline; kit calls see the object large and alone.
 
@@ -367,6 +372,9 @@ _Ticked 2026-11-11 on the owner's request: the code and tests are in; every « d
       _Built 2026-11-11:_ `viewsRecipe` mirrors the front lights (tail-light colour) and the bumper onto the rear,
       status `inferred`, flush with the hull (side IoU kept), unless the side drawing already showed a rear part.
       No second-side generator exists, so « on request » is not built: nothing draws the back. Not checked live.
+
+- [x] **PQ-T10 Colour of the lit surface** (finished here, it was forgotten in Q1): the region colours of
+      `region-colors.ts` now read the lit surface too. Details under PQ-T10 in Q1.
 
 **Exit Q3:** the recognisable small parts exist in the model, on every path.
 

@@ -3,7 +3,7 @@ import 'server-only';
 import type { KitArchetype } from '@/lib/object-kit';
 import { frontPartIndex, type ObjectRecipe, type PartMask } from '@/lib/object-shape';
 import { pathToRings } from '@/lib/vision';
-import { insideRings, linearToHex, srgbToLinear } from './color-measure';
+import { insideRings, LIT_SHARE, linearToHex, srgbToLinear } from './color-measure';
 import { confidence, mixColor } from './fusion';
 import { isWheelPart, type MaskMapGeom } from './mask-geometry';
 import { vehicleShell } from './mask-panels';
@@ -24,11 +24,19 @@ export const MIN_REGION_PIXELS = 12;
 export const BOX_REGION_ERODE = 0.2;
 
 export interface RegionMeasure {
-  /** Median colour of the region's cells, in linear light (robust to trim and shadows). */
+  /**
+   * Median colour of the region's lit cells, in linear light: the brightest `LIT_SHARE` of them, so a part
+   * half in shadow reads its own colour, not the mix (PQ-T10).
+   */
   color: string;
   /** Cells inside the region (drives the fusion confidence). */
   pixels: number;
+  /** Share of the cells read as shadow (under `SHADOW_RATIO` of the lit luminance), 0–1; reported apart. */
+  shadow: number;
 }
+
+/** A cell is shadow when its luminance is under this share of the lit cells' median luminance. */
+export const SHADOW_RATIO = 0.6;
 
 export interface RegionColors {
   /** Per input mask (same order): null when too few cells fell inside. */
@@ -48,8 +56,29 @@ const median = (values: number[]): number => {
   return s.length % 2 === 1 ? s[mid]! : (s[mid - 1]! + s[mid]!) / 2;
 };
 
-const medianHex = (rs: number[], gs: number[], bs: number[]) =>
-  linearToHex(median(rs), median(gs), median(bs));
+/** Relative luminance of a linear-light colour (Rec. 709). */
+const luminance = (r: number, g: number, b: number) => 0.2126 * r + 0.7152 * g + 0.0722 * b;
+
+/**
+ * Colour of a region read on its lit surface (PQ-T10): the median of its brightest `LIT_SHARE` cells, and the
+ * share of cells that are shadow (clearly darker than that lit median). Pure.
+ */
+export function litMeasure(rs: number[], gs: number[], bs: number[]): RegionMeasure {
+  const n = rs.length;
+  const order = rs.map((_, i) => i).sort((a, b) => lum(b) - lum(a));
+  function lum(i: number) {
+    return luminance(rs[i]!, gs[i]!, bs[i]!);
+  }
+  const lit = order.slice(0, Math.max(1, Math.ceil(n * LIT_SHARE)));
+  const color = linearToHex(
+    median(lit.map((i) => rs[i]!)),
+    median(lit.map((i) => gs[i]!)),
+    median(lit.map((i) => bs[i]!))
+  );
+  const litLum = median(lit.map(lum));
+  const dark = order.filter((i) => lum(i) < litLum * SHADOW_RATIO).length;
+  return { color, pixels: n, shadow: n ? Math.round((dark / n) * 100) / 100 : 0 };
+}
 
 /**
  * Colours measured per mask region on a box grid (PR-2.8): each cell lands in the first mask
@@ -118,14 +147,9 @@ export function measureRegionColors(
   }
   return {
     regions: masks.map((_, k) =>
-      reds[k]!.length >= MIN_REGION_PIXELS
-        ? { color: medianHex(reds[k]!, greens[k]!, blues[k]!), pixels: reds[k]!.length }
-        : null
+      reds[k]!.length >= MIN_REGION_PIXELS ? litMeasure(reds[k]!, greens[k]!, blues[k]!) : null
     ),
-    rest:
-      restR.length >= MIN_REGION_PIXELS
-        ? { color: medianHex(restR, restG, restB), pixels: restR.length }
-        : null,
+    rest: restR.length >= MIN_REGION_PIXELS ? litMeasure(restR, restG, restB) : null,
   };
 }
 
