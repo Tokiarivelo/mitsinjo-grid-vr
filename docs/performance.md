@@ -5,21 +5,21 @@ React re-renders, chart redraws, 3D, or bundle size. Fix those before optimising
 
 ## 1. Budgets (checked in P8 with `/perf-audit`)
 
-| Metric                                                | Budget                                          |
-| ----------------------------------------------------- | ----------------------------------------------- |
-| First-load JS per route (gz, excluding lazy 3D chunk) | ≤ 180 KB                                        |
-| LCP /overview (desktop, prod build)                   | ≤ 2.0 s                                         |
-| INP while dragging a slider                           | ≤ 100 ms                                        |
-| `compare()` all strategies                            | ≤ 10 ms                                         |
-| `sweep()` 20 points across all strategies             | ≤ 50 ms                                         |
-| 3D `low` tier (integrated GPU)                        | ≥ 45 fps · draw calls < 150 · triangles ≤ 150 k |
-| 3D `high` tier (default, discrete GPU)                | ≥ 30 fps · draw calls < 400 · triangles ≤ 800 k |
-| Copilot first token visible                           | ≤ 2 s after send (activity shown at once)       |
-| Lighthouse performance (desktop)                      | ≥ 90                                            |
-| Shape math per object (`runObjectShape`, no API)      | ≤ 300 ms (`make test-shape`, strict)            |
-| Shape request (`/api/vision/shape`, with Meta)        | ≤ 45 s (60 s server timeout)                    |
-| Shape recipe                                          | ≤ 12 parts · ≤ 5 k triangles                    |
-| Shape score (`scoreRecipe`, critic/replay only)       | outside the math budget, ~100 ms                |
+| Metric                                                | Budget                                                                                         |
+| ----------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| First-load JS per route (gz, excluding lazy 3D chunk) | ≤ 180 KB                                                                                       |
+| LCP /overview (desktop, prod build)                   | ≤ 2.0 s                                                                                        |
+| INP while dragging a slider                           | ≤ 100 ms                                                                                       |
+| `compare()` all strategies                            | ≤ 10 ms                                                                                        |
+| `sweep()` 20 points across all strategies             | ≤ 50 ms                                                                                        |
+| 3D `low` tier (integrated GPU)                        | ≥ 45 fps · draw calls < 150 · triangles ≤ 150 k                                                |
+| 3D `high` tier (default, discrete GPU)                | ≥ 30 fps · draw calls < 400 · triangles ≤ 800 k                                                |
+| Copilot first token visible                           | ≤ 2 s after send (activity shown at once)                                                      |
+| Lighthouse performance (desktop)                      | ≥ 90                                                                                           |
+| Shape math per object (`runObjectShape`, no API)      | ≤ 300 ms (`make test-shape`, strict)                                                           |
+| Shape request (`/api/vision/shape`, with Meta)        | no code limit: awaits Meta; only the host limit slices background stages (`SHAPE_FUNCTION_MS`) |
+| Shape recipe                                          | ≤ 12 parts · ≤ 5 k triangles                                                                   |
+| Shape score (`scoreRecipe`, critic/replay only)       | outside the math budget, ~100 ms                                                               |
 
 ## 2. Fluid slider → result loop
 

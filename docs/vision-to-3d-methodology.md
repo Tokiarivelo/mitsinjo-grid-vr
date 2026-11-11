@@ -36,7 +36,9 @@ correct by targeted parameter changes instead of regenerating.
 ## 2. As built: the pipeline today
 
 One rule shapes everything: **the LLM says what the object is, pixels say how it looks, deterministic code builds
-the geometry, a render compared to the photo decides what is kept.** Muse never writes vertices or code.
+the geometry, a render compared to the photo decides what is kept.** Muse never writes vertices. Today it answers
+ShapeScript ops; decided 2026-11-11 (Target, not built): Muse Wonder also writes `build(api, params)` code, run only in
+a sandbox and refined by a write → run → render → compare loop (`vision-to-3d-universal-pipeline.md` §8bis).
 
 ```mermaid
 flowchart TD
@@ -48,7 +50,7 @@ flowchart TD
     F --> B["Body from the outline (profile / lathe),<br/>wheels, panels, chimney from masks"]
     B --> G["Object graph, constraints, hidden sides, swatches"]
     G --> S["Score: flat render vs photo"]
-    S -->|"score < 70 and ≥ 20 s left"| R["Critic: 1 round, kit patch kept only if the score rises"]
+    S -->|"score < 70"| R["Critic: 1 round, kit patch kept only if the score rises"]
     S --> V["3D viewer"]
     R --> V
     D -.->|"validated 2D drawing exists"| E["2D path: SAM on the drawing + guarded Muse Image side view"]
@@ -57,20 +59,20 @@ flowchart TD
     L --> V
 ```
 
-| Stage           | Model or code               | Files (`apps/web/src/`)                                                         | Numbers that matter                                                           |
-| --------------- | --------------------------- | ------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| Photo intake    | `sharp`                     | `server/perception/prepare-image.ts`                                            | Longest side ≤ 1280 px, JPEG quality 85                                       |
-| Detect / region | Spark 1.3, SAM 3.1          | `detect.ts`, `region.ts`, `region-prompt.ts`, `outline.ts`                      | One object per shape request                                                  |
-| Crop            | `sharp`                     | `shape-crop.ts`                                                                 | Context × 1.6, 640–768 px, outside the box white at 40 %                      |
-| Kit             | Spark 1.3                   | `shape.ts` (`SHAPE_SYSTEM_PROMPT`, `SHAPE_JSON_SCHEMA`), `meta.ts` `visionJson` | `reasoning_effort: 'high'`, JSON schema answer, no seed, 150 s call limit     |
-| Free parts      | Spark 1.3                   | `free-recipe.ts`                                                                | ≤ 12 plain solids, archetypes without a template                              |
-| Measurements    | Pure TypeScript + SAM masks | `color-measure`, `roofline`, `repetition`, `perspective`, `part-masks`          | Part masks: 5 s limit                                                         |
-| Fusion and fit  | Pure TypeScript             | `fusion.ts`, `silhouette-fit.ts`, `nelder-mead.ts`, `part-fit.ts`               | Shape maths ≤ 300 ms per object                                               |
-| Score           | Pure TypeScript             | `flat-render.ts`, `model-score.ts`, `score-shape.ts`                            | 0.40 silhouette IoU + 0.35 edge F1 + 0.25 colour ΔE                           |
-| Critic          | Spark 1.3                   | `spark-critic.ts`, `shape.ts` (`CRITIC_SYSTEM_PROMPT`)                          | 256 px sheet, only under 70 / 100, 1 round                                    |
-| 2D path         | SAM 3.1, Muse Image 1.0     | `facade-*.ts`, `object-views.ts`, `views-check.ts`                              | Side view kept only when it differs from the front and its depth is plausible |
-| Staged loop     | Spark 1.3, then Wonder 1.0  | `lib/shape-script.ts`, `shape-stages*.ts`, `shape-script-prompt.ts`             | ≤ 3 rounds per stage, ≤ 12 ops, each op tried alone, kept only on gain        |
-| Viewer          | React Three Fiber           | `features/vision-insert/utils/object-geometry.ts`, `surface-look.ts`            | ≤ 5 000 triangles, 12 parts (photo) or 32 components (2D path)                |
+| Stage           | Model or code               | Files (`apps/web/src/`)                                                         | Numbers that matter                                                              |
+| --------------- | --------------------------- | ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Photo intake    | `sharp`                     | `server/perception/prepare-image.ts`                                            | Longest side ≤ 1280 px, JPEG quality 85                                          |
+| Detect / region | Spark 1.3, SAM 3.1          | `detect.ts`, `region.ts`, `region-prompt.ts`, `outline.ts`                      | One object per shape request                                                     |
+| Crop            | `sharp`                     | `shape-crop.ts`                                                                 | Context × 1.6, 640–768 px, outside the box white at 40 %                         |
+| Kit             | Spark 1.3                   | `shape.ts` (`SHAPE_SYSTEM_PROMPT`, `SHAPE_JSON_SCHEMA`), `meta.ts` `visionJson` | `reasoning_effort: 'high'`, JSON schema answer, no seed, no call limit (awaited) |
+| Free parts      | Spark 1.3                   | `free-recipe.ts`                                                                | ≤ 12 plain solids, archetypes without a template                                 |
+| Measurements    | Pure TypeScript + SAM masks | `color-measure`, `roofline`, `repetition`, `perspective`, `part-masks`          | Part masks: awaited                                                              |
+| Fusion and fit  | Pure TypeScript             | `fusion.ts`, `silhouette-fit.ts`, `nelder-mead.ts`, `part-fit.ts`               | Shape maths ≤ 300 ms per object                                                  |
+| Score           | Pure TypeScript             | `flat-render.ts`, `model-score.ts`, `score-shape.ts`                            | 0.40 silhouette IoU + 0.35 edge F1 + 0.25 colour ΔE                              |
+| Critic          | Spark 1.3                   | `spark-critic.ts`, `shape.ts` (`CRITIC_SYSTEM_PROMPT`)                          | 256 px sheet, only under 70 / 100, 1 round                                       |
+| 2D path         | SAM 3.1, Muse Image 1.0     | `facade-*.ts`, `object-views.ts`, `views-check.ts`                              | Side view kept only when it differs from the front and its depth is plausible    |
+| Staged loop     | Spark 1.3, then Wonder 1.0  | `lib/shape-script.ts`, `shape-stages*.ts`, `shape-script-prompt.ts`             | ≤ 3 rounds per stage, ≤ 12 ops, each op tried alone, kept only on gain           |
+| Viewer          | React Three Fiber           | `features/vision-insert/utils/object-geometry.ts`, `surface-look.ts`            | ≤ 5 000 triangles, 12 parts (photo) or 32 components (2D path)                   |
 
 Vocabulary the geometry engine can build: `box, cylinder, sphere, cone, prism, extrude, lathe, hip, hull`, 15
 materials, 17 archetypes (`lib/object-kit.ts`, `lib/object-shape.ts`).
@@ -138,7 +140,7 @@ Each row names the evidence in the code and the task that fixes it (`tasks/PV-vi
 | 5   | No specialist knowledge per object family    | One prompt for 17 archetypes; only vehicles have an anatomy line                                             | Skill cards per archetype, loaded by the detection hint                                                                   | PQ-T11, T13   |
 | 6   | Critic is weak                               | `CRITIC_WIDTH = 256`, `CRITIC_SCORE_MAX = 70`, 1 round, photo vs flat front only                             | 2 × 2 sheet at ≥ 512 px per tile with a difference tile and a ¾ view; fires on the detail score                           | PQ-T14        |
 | 7   | Photo path has no step-by-step loop          | `facadeStageLoop` and `viewStageLoop` run only with a validated 2D drawing                                   | The same staged loop with the photo crop and its SAM masks as target, in the background                                   | PQ-T19        |
-| 8   | One missed outline ruins everything          | Toy-Mini investigation: SAM answers change with the pixels; no outline → no fit, no body, no measured colour | Several SAM phrasings on photo and crop, agreement decides; time limits follow the remaining budget                       | PQ-T9         |
+| 8   | One missed outline ruins everything          | Toy-Mini investigation: SAM answers change with the pixels; no outline → no fit, no body, no measured colour | Several SAM phrasings on photo and crop, agreement decides; unbounded by default, explicit budgets still bound            | PQ-T9         |
 | 9   | Hidden objects are guessed blind             | Prompt asks to « imagine »; nothing measures how much is hidden                                              | Hidden share measured and told to the model; operator may ask for a clean front drawing, then the 2D path                 | PQ-T7, PQ-T23 |
 | 10  | Details have no geometry                     | 12 parts on the photo path; no handle, seam, mirror, gutter, rim                                             | Detail assemblies expanded in the viewer and drawn in the flat render; 32 components when masks are measured              | PQ-T20, T21   |
 | 11  | Generated views are unreliable               | PR-4.1: 2 of 3 wrong; side prompt is one sentence                                                            | View card, two candidates, the most consistent one kept (height, top line, colours); back view by mirror, never generated | PQ-T16, T24   |
@@ -277,7 +279,7 @@ its Vitest test in `__tests__/` in the same commit.
 | `server/perception/object-views.ts`, `facade-views.ts`                          | View card, two candidates, consistency pick                                                 | PQ-T16              |
 | `server/perception/meta.ts`, `client.ts`, `mock.ts`, `backend.ts`               | Reasoning effort per call, second image, kit samples, `judgeShape`                          | PQ-T4, T8, T17, T18 |
 | `server/perception/shape-crop.ts`                                               | Tight object image next to the context crop                                                 | PQ-T8               |
-| `server/perception/outline.ts`, `part-masks.ts`                                 | Use `sam-consensus`; time limits from the remaining budget                                  | PQ-T9               |
+| `server/perception/outline.ts`, `part-masks.ts`                                 | Use `sam-consensus`; unbounded by default                                                   | PQ-T9               |
 | `server/perception/color-measure.ts`, `region-colors.ts`                        | Lit-share colour, shadow apart                                                              | PQ-T10              |
 | `server/perception/fusion.ts`                                                   | Confidences from photo conditions and from `evidence.unsure`                                | PQ-T7, PQ-T12       |
 | `server/perception/object-shape.ts`                                             | Wire conditions, consensus, photo stages, samples; new log lines                            | PQ-T7–T19           |
@@ -313,7 +315,7 @@ its Vitest test in `__tests__/` in the same commit.
 | Does the shape pipeline still work offline?    | `make test-shape`                                                                                                                | Golden set green                                           |
 | How good is every object, and which is worst?  | `make shape-report` → `test-results/shape-report/index.md` (synthetic + « Real » tables, real = local captures of `REAL_SHAPES`) | Stop criteria met on the real table (§9)                   |
 | What does the user really see?                 | `make shape-shots` (dev server running)                                                                                          | Viewer shots, dark and light, reviewed with `/designer-3d` |
-| Did a prompt change help the kit?              | `make eval-shape MODEL=…` (live, costs API calls)                                                                                | Agreement not lower, median ≤ 30 s                         |
+| Did a prompt change help the kit?              | `make eval-shape MODEL=…` (live, costs API calls)                                                                                | Agreement not lower; median latency reported, not gated    |
 | Did a prompt change help the staged loop?      | `make eval-stages` (offline replay)                                                                                              | Stage scores not lower                                     |
 | Does the 2D path work end to end on live Meta? | `make facade-e2e FRONT=… OUT=…` (costs API calls)                                                                                | Model built, stages logged                                 |
 | Add a real photo to the reference set          | `make shape-capture PHOTO=… ID=… [LABEL=…]` (costs API calls)                                                                    | Capture and crop written to `__fixtures__/shape/real/`     |
@@ -334,7 +336,7 @@ A model is good enough when, per object:
 - No graph constraint violated; every hidden part marked `inferred`.
 - Judge ≥ 4 / 5 on average with no criterion under 3 (only once the judge passed its calibration).
 - `/designer-3d` ≥ 4 / 5 on the viewer shots, dark and light.
-- ≤ 5 000 triangles, shape maths ≤ 300 ms, first answer ≤ 60 s; later rounds in the background.
+- ≤ 5 000 triangles, shape maths ≤ 300 ms, first answer awaited however long Meta takes; later rounds in the background.
 
 The pass is over when every real object meets them, or after three rounds on the same object without gain, which
 is reported with the sheet and the blocking cause (`/shape-loop`).

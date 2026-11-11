@@ -6,7 +6,7 @@
 under flat lights. Fidelity now needs better shapes, surfaces and light, measured by a loop.
 **Status:** ❌ planned. **Decisions (user, 2026-11-01):** Meta models only (Muse Spark / Wonder, Muse Image, SAM 3.1);
 never paste the photo on the model, **but small tileable swatches cut from it (≈ 64 px) are allowed** as textures.
-**Rules kept:** math pure, seeded, tested; ≤ 5 k triangles per object; whole request ≤ 60 s; shape math ≤ 300 ms.
+**Rules kept:** math pure, seeded, tested; ≤ 5 k triangles per object; no request time limit (host slices only); shape math ≤ 300 ms.
 **Skills:** `/shape-3d` (how to build: files, vocabulary, budgets) · `/shape-loop` (the quality loop below).
 
 ## Why the car looks like that (from the code)

@@ -7,8 +7,8 @@ score passes models that do not look right, so nothing after it could be judged.
 **Read first:** `docs/vision-to-3d-methodology.md` (what and why) · `docs/vision-to-3d-muse-skills.md` (card
 texts) · `.claude/skills/shape-3d/SKILL.md` · `.claude/skills/shape-loop/SKILL.md`. Per task: only the files it names.
 **Rules kept:** Meta models only · never paste the photo on the model (≈ 64 px tileable swatches allowed) · Muse
-never writes geometry or code · shape maths pure, seeded, tested, ≤ 300 ms · ≤ 5 000 triangles · first answer
-≤ 60 s · no energy value anywhere · mock provider keeps working offline.
+never writes vertices (it may write code, but only run in the sandbox of `vision-to-3d-universal-pipeline.md` §8bis) · shape maths pure, seeded, tested, ≤ 300 ms · ≤ 5 000 triangles · first answer
+awaited without a time limit · no energy value anywhere · mock provider keeps working offline.
 **How every task ends:** test added or updated → `make test-shape` → `make shape-report` → one row in the
 « Loop log » of `PV-shape-realism.md` → commit and push (`feat(perception): … (PQ-Tn)`).
 **Paths** are under `apps/web/src/` unless they start with `docs/`, `scripts/` or a root file.
@@ -473,7 +473,7 @@ _Ticked 2026-11-11 on the owner's request: the code and tests are in; every « d
       one scenario per visible change (photo hint, clean front, details on the fridge and the car, background
       rounds chip), then `make scenarios-publish`.
       **Done when:** `make check` and `make check-i18n` are green and no doc states a plan as a fact.
-- [ ] **PQ-T31 Budgets.** Check on the real set: first answer ≤ 60 s, shape maths ≤ 300 ms, ≤ 5 000 triangles,
+- [ ] **PQ-T31 Budgets.** Check on the real set: first answer with no time limit (latency reported), shape maths ≤ 300 ms, ≤ 5 000 triangles,
       API calls per object within the spend cap (count them per path and write the table in `docs/copilot.md`).
       **Done when:** every budget holds, or the task that broke one is reverted.
 

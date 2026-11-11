@@ -190,7 +190,7 @@ stage k accepted (score ≥ gate or no gain after N rounds) ──► locked ─
 
 Global IoU ≥ 0.9 · edge F1 ≥ 0.75 · every opening matched (count exact, centre error ≤ 3 % of width) · ΔE(roof,
 wall) ≥ 10 when the 2D names different materials · frame vs wall ΔE ≥ 15 · designer ≥ 4/5 · ≤ 5 k triangles ·
-first answer ≤ 60 s, background stages run until done or cancelled, in ≤ 300 s request slices (PG-T18).
+first answer with no time limit, background stages run until done or cancelled, in ≤ 300 s request slices (PG-T18).
 Thatched house acceptance: thatch roof with a rounded eave, clearly different from plastered walls. Two windows
 with a 2 × 4 pane grid and sills, a double door with a glazed top, a stone plinth and two brick chimneys.
 

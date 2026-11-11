@@ -1,38 +1,44 @@
 # HANDOFF — read first, overwrite at end of session (≤40 lines)
 
-**Updated:** 2026-11-11 · **By:** Claude Code · **Branch:** feat/pq-q3 (PR to `main`, one commit per task)
+**Updated:** 2026-11-11 · **By:** Claude Code · **Branch:** feat/vision-no-timeout (from local `main`; rebase onto `origin/main` before PR)
 
-## Current state
+## PRIORITY NEXT: implement `docs/vision-to-3d-universal-pipeline.md`
 
-- **PV-Q Q3 built, ticked on the owner's request** (live Meta checks still pending, like Q2). One commit per task:
-  T20 `RecipePart.details` (nothing sets them yet) · T21 `partCeiling` (32 measured, 12 imagined) · T22 `farSide` ·
-  T24 rear by mirror (« second side on request » NOT built) · T19 `photoStageLoop` (no checkpoint context) ·
-  T23 clean front · T10 region colours on the lit surface. Details per task in `docs/tasks/PV-vision-quality.md`.
-- Existing mask tests now use `source: 'free'` fixtures to keep covering the 12 budget.
-- **PR #14 reviewed** (fix commit): cabinet far side mirrors `frame` only (template handle / door line stayed on
-  the back); clean front keeps « Retry with details », stays clean on retry after a remount, `clean` follows the
-  request (mock too), house facade route marks drawn parts inferred; wheel arch never under the tyre.
-- `make test-shape` strict 300 ms budget fails on this machine on `main` too (302–342 ms): not from Q3.
+Decided 2026-11-11: **Muse Wonder writes build code per object (sandboxed), for ALL objects, never a fixed
+template as the final model.** Read that file first (§1.2, §7.4, §8bis, §12 order). Start with:
 
-## Next
+1. Stage durations in logs + SSE (E12) — the slowness is not yet located.
+2. Template fixes: car glass, roof overhang + fascia, houses with openings on all 4 faces, gable in wall material.
+3. **Sandbox (2ter): `api` + QuickJS WASM (one variant, ~<1 MB) + `build()` by Wonder** (`META_CODE_MODEL`), template =
+   instant draft replaced on score gain, patch loop, code stored with the capture. First case: the house.
+4. Then `anatomy` checklist, generators (`sweep/branch/scatter/drape/loft/inset`), SDF, real photo set.
+   Reuse `stage-slices.ts` / `stage-checkpoint.ts` (browser-carried checkpoint, add `code`): no Neon, no migration.
 
-1. Merge the Q3 PR once CI is green.
-2. With a Meta key: measure T19 (detail score rises, never lowers, on the real photo-path objects), T23 (hidden car
-   IoU on the visible region), T22 sheet, T10 on a real shadowed photo. `make shape-report` replays captures: per-part
-   colours cannot move offline.
-3. T19 left: replay of a recorded loop in `eval-stages`; resume across requests (add a `photo` checkpoint kind).
-4. T23 design gate: screenshots (both themes, 390 px) of the clean-front block; no Stitch mockup.
-5. `details` in the builders: template car checked on the flat render, mirror lands mid-door (62 % of a low
-   body) and arch is dark on dark: fix placement with a viewer pass before opting in.
+## Current state (committed this session)
 
-## Files touched
+- **No code-imposed generation timeouts** (SAM, Spark, vision, masks, views await Meta; explicit budgets kept for
+  evals; only the host `maxDuration` 300 s slices background stages). Docs aligned (performance, PV-*, methodology).
+- **Live 3D print:** server streams the seed (`shape_stage` first/running + recipe), hook `preview`, viewer wipes it
+  in bottom-up (`PrintWipe`, instant under reduced motion). V263 manual check pending.
+- **2D sticker reverted** earlier on user request.
+- **Docs:** `vision-to-3d-universal-pipeline.md` (merged spec: diagnosis, modeller method, code sandbox, generators,
+  houses §7.4) replaces the short-lived fidelity plan. The « Muse never writes code » rule is REMOVED (methodology §2,
+  PV-capture-lab, PV-vision-quality aligned); still forbidden: energy values from a model, photo pasted on the model.
 
-- `lib/object-shape.ts`, `lib/shape-script.ts`, `server/perception/{photo-stages,hidden-sides,mask-*,object-views,object-shape,
-shape-stages-spark,view-stages,region-colors,facade-specialist,silhouette-fit,shape-script-prompt}.ts`,
-  `features/vision-insert/{ui/clean-front-offer.tsx,ui/object-shape-panel.tsx,utils/view-assemblies.ts,hooks/*}`,
-  `app/api/vision/facade/route.ts`, `messages/*.json`, docs (`contracts`, `copilot`, `tasks/PV-vision-quality`).
+## Verify
+
+- `make check` green (typecheck 4/4, lint, 337 test files / 2555 tests, i18n parity). No code written for the new
+  pipeline yet: it is a spec.
+
+## Open (measure at implementation)
+
+- Wonder's code validity rate vs the template draft (task 13); QuickJS cold start + function memory on Vercel;
+  checkpoint size with code; an API model bigger than `muse-wonder-1.0` for `META_CODE_MODEL`.
+- Hosting: Vercel (slices) or OVHcloud (`limitMs = Infinity`), same code.
+- Known: `golden-shape/fridge` flakes under parallel load (5/5 alone); `make test-shape` strict 300 ms budget is
+  slow on this machine.
 
 ## Decisions
 
-- Inferred parts never displace measured ones: far-side set is atomic and added last.
-- Local scenarios V244–V252 (test-scenarios is gitignored). Hub dataset not republished: no bench / eval output changed.
+- Sandbox = QuickJS WASM (never `eval` / Node `vm`); limits on generated code only, never a clock on Meta.
+- `reason: 'timeout'`, explicit budgets, Vercel slice limits, copilot chat budgets kept.

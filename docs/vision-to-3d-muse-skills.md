@@ -44,7 +44,7 @@ user    = MEASURED FACTS line  (what the code measured on this photo)
 
 | Card kind              | Command                                    | Kept when                                                                   |
 | ---------------------- | ------------------------------------------ | --------------------------------------------------------------------------- |
-| Base, kit, archetype   | `make eval-shape MODEL=… PROMPT=<version>` | Field agreement on the real captures not lower; median ≤ 30 s               |
+| Base, kit, archetype   | `make eval-shape MODEL=… PROMPT=<version>` | Field agreement on the real captures not lower; median latency reported     |
 | Stage ops, final check | `make eval-stages`                         | Accepted ops per round not lower; no stage score lower                      |
 | Critic, views check    | `make shape-report` on the real set        | Mean score and detail score not lower; no object down by more than 2 points |
 | Judge                  | `make shape-judge`                         | Damaged models graded lower in ≥ 90 % of pairs (methodology §6.2)           |
