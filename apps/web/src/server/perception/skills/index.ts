@@ -67,3 +67,8 @@ export function skillFor(call: SkillCall, archetype?: KitArchetype): Skill {
 export function imageCard(name: 'side' | 'cleanFront'): string {
   return card(name);
 }
+
+/** Text of one call card alone (no Base card): appended to a prompt that already has its own base lines. */
+export function cardText(name: 'stages' | 'views' | 'final' | 'critic'): string {
+  return card(name);
+}

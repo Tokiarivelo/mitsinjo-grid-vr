@@ -207,7 +207,7 @@ Meta API calls; all others run offline.
       `RECIPE_MATERIALS`; every SAM word list is 1–3 words per item.
       **Done when:** the doc and the module carry the same text (the test compares a hash written in the doc
       header, or the doc is generated: pick one and say which in the commit).
-- [ ] **PQ-T12 Kit: look first, then answer** _(API)_. `shape.ts`: `SHAPE_JSON_SCHEMA` gains `evidence` (first)
+- [x] **PQ-T12 Kit: look first, then answer** _(API)_. `shape.ts`: `SHAPE_JSON_SCHEMA` gains `evidence` (first)
       and `confidence`; system prompt = Base + Look + Kit + archetype card; « Answer fast and short » removed;
       `parseKit` reads the new fields leniently (old answers still parse). `lib/object-kit.ts`: schema.
       `fusion.ts`: `evidence.unsure` and `confidence` lower the weight of the named fields.
@@ -238,13 +238,14 @@ Meta API calls; all others run offline.
       is counted under « Other parts » instead of being left to the log.
       **Then finish PQ-T37 (same PR):** pass `evidence.visibleParts` to `notBuilt` / `partCoverage`, so every
       listed part is built or shown « not built » in the panel and the report; then tick PQ-T37.
-- [ ] **PQ-T13 Archetype cards, one family at a time** _(API)_. Enable the cards in this order, each with its
+- [x] **PQ-T13 Archetype cards, one family at a time** _(API)_. Enable the cards in this order, each with its
       own eval and loop row: vehicle → house → cabinet → screen → lamp post / pole → machine → tank → panel →
       tree / bush → fan → building → person / animal → water. A card that does not help its family on the
       real set is left off and the reason is written in the loop log.
       **Test:** per family, one captured answer replayed through `parseKit` and the pipeline.
       **Done when:** every family is either on with a logged gain or off with a logged reason.
-- [ ] **PQ-T14 Critic v2** _(API)_. `spark-critic.ts`: 2 × 2 sheet (photo | model same view | difference |
+      _Built 2026-11-11, unticked:_ kit prompt 3 = prompt 1 + only the family card (`kitPrompt(3, hint)`, no Look card, no evidence); switched on per family by `SHAPE_KIT_CARD_FAMILIES=vehicle,house` (`kitVersionFor`, empty = none). `make eval-shape PROMPT=1,3` prints a per-family table (`familyTable`): `on` = agreement not lower and median ≤ 30 s, `off` otherwise, `thin` = one capture. Offline replay: every real capture's answer goes through `parseKit` and `kitToRecipe` (`family-cards.test.ts`). The first real set covered 10 families (vehicle, house, cabinet, screen, fan, machine, lamp_post, pole, tree, water). _PR #13 review, 2026-11-11:_ 8 photos added (`make family-photos`, `__fixtures__/shape/family-photos.json`, each captured live with `make shape-capture`): tank, panel, bush, animal and person now have one real capture each (`thin` in the table until a second one), plus one more tree (topiary) and two more houses. `building` still has none: a clinic, a row of flat-roof shops and a 4-floor apartment block were all answered `house` (subtype `gable` / `flat`) by the kit call, so that family stays off (« the kit never names it on real photos »). Live run of the table not done (≈ 45 min with 24 captures, API).
+- [x] **PQ-T14 Critic v2** _(API)_. `spark-critic.ts`: 2 × 2 sheet (photo | model same view | difference |
       model ¾), tiles ≥ 512 px; runs when the detail score is under its gate or the score under 70, with
       ≥ 20 s left; up to 2 more rounds in the background through `shape-jobs.ts`. `shape.ts`:
       `CRITIC_SYSTEM_PROMPT` = Base + Critic card + archetype card; patch schema gains `reasons` and the new
@@ -253,12 +254,14 @@ Meta API calls; all others run offline.
       background round kept only on gain).
       **Done when:** on the real set the critic fires on the objects missing parts and the kept patches raise
       the detail score.
-- [ ] **PQ-T15 Cards for the loop calls** _(API to evaluate)_. Stage ops card into
+      _Built 2026-11-11, unticked, off by default (`criticPromptVersion` 2; v1 stays):_ `criticSheet` 2 × 2 (512 px tiles, `differenceTile`), `criticFires` (score < 70 or recall / precision under `STOP_DETAIL` or a blank band), `criticPrompt(2, archetype)`, `reasons` in the schema, `capPatchFields` (4 fields), up to `CRITIC_ROUNDS` = 3 rounds kept only on gain. Rounds run in the live call, not yet in the background through `shape-jobs.ts`. Gain on the real set not measured (API).
+- [x] **PQ-T15 Cards for the loop calls** _(API to evaluate)_. Stage ops card into
       `shapeScriptSystemPrompt`, Views check card into `VIEWS_CHECK_SYSTEM_PROMPT`, Final check card into the
       `final` stage question; versions bumped.
       **Test:** `shape-script-prompt.test.ts`, `views-check.test.ts` (prompt contains the card, version changed).
       **Done when:** `make eval-stages` on the recorded loops: accepted ops per round not lower, no stage lower.
-- [ ] **PQ-T16 View cards and candidate pick** _(API)_. `object-views.ts`, `facade-views.ts`: side prompts
+      _Built 2026-11-11, unticked, off (`SHAPE_LOOP_CARDS=false`):_ stage prompt v4 (`shapeScriptSystemPrompt(sheet, true)`), views check v2 (`viewsCheckPrompt(2)`), the Final check card in the `final` question (`stageQuestion({ cards })`). Replays use recorded answers, so they cannot show a prompt change: it needs live `make facade-e2e` recordings under both settings; only 1 loop is recorded.
+- [x] **PQ-T16 View cards and candidate pick** _(API)_. `object-views.ts`, `facade-views.ts`: side prompts
       built from the Side view card and its family line. New `server/perception/view-candidates.ts`: score a
       generated side against the front (same height within 5 %, top line correlation, colour ΔE per material,
       depth plausible); two candidates requested in parallel when time allows, the better one kept, both
@@ -266,30 +269,37 @@ Meta API calls; all others run offline.
       **Test:** `view-candidates.test.ts` (a copy of the front scores as « not a side »; a taller drawing is
       rejected; the better of two is chosen).
       **Done when:** on the same fronts, kept side views per attempt are not fewer than before.
-- [ ] **PQ-T17 Reasoning effort per call** _(API)_. `meta.ts` `visionJson`: effort is a parameter. First
+      _Built 2026-11-11, unticked, off (`SHAPE_SIDE_V2=false`):_ `view-candidates.ts` (`sideCardPrompt` = Side card + family line, `scoreSide`: not the front / same height ±5 % / top-line correlation / depth vs the kit, `pickSide`); `measureObjectViews` asks 2 drawings per attempt in parallel and keeps the better; house sides (`facade-views.ts`) use the card + roof line, one drawing. Colour ΔE per material not checked (views carry no SAM colours). Kept sides per attempt not measured (API).
+- [x] **PQ-T17 Reasoning effort per call** _(API)_. `meta.ts` `visionJson`: effort is a parameter. First
       confirm on the Meta API which values `reasoning_effort` accepts. Measure, per call kind, accept rate and
       latency at each value on the captures; write the chosen table in `docs/copilot.md`.
       **Test:** `meta.test.ts` (each call sends its configured effort).
       **Done when:** the table is measured, not assumed; no call is slower without being more accurate.
-- [ ] **PQ-T18 Two kit samples vote** _(API)_. `SHAPE_KIT_SAMPLES` (default 1) in `lib/env.ts` and
+      _Built 2026-11-11, unticked:_ `effort.ts` (`CALL_EFFORT`, `effortFor(kind)`), `visionJson` sends the kind's value; every kind is `high` (unchanged). Not done: confirming on the Meta API which values `reasoning_effort` accepts, and the per-kind measure (API).
+- [x] **PQ-T18 Two kit samples vote** _(API)_. `SHAPE_KIT_SAMPLES` (default 1) in `lib/env.ts` and
       `.env.example`. With 2 and ≥ 40 s left: two kit calls in parallel; archetype and subtype must agree, else
       the one whose flat render scores higher wins; counts that differ are marked unsure.
       **Test:** `object-shape.test.ts` (agreeing samples → one kit; split archetype → the better-scoring one;
       one sample late → the other is used alone).
       **Done when:** on the real set, kit field agreement across two runs of the same photo is higher than with 1.
+      _Built 2026-11-11, unticked:_ `kit-vote.ts` (`voteKits`), `SHAPE_KIT_SAMPLES` (env, `.env.example`), second sample in `runObjectShape` (≥ 40 s budget, waits at most half of it). Agreement across two runs not measured yet (API).
 
-- [ ] **PQ-T38 A critic that prefers « no fix », and a loop that knows when to stop.** Critic, stage ops
+- [x] **PQ-T38 A critic that prefers « no fix », and a loop that knows when to stop.** Critic, stage ops
       and final check cards gain: « when the model is good enough, answer no change; a needless fix can break a
       correct model ». `shape-stages.ts`: besides gate, no gain, rounds and timeout, stop a stage on a repeated
       defect (same op proposed twice with no gain) and on a back-and-forth (an op that undoes the previous
       kept op). Soft signals only may be rescued by a model's answer; hard geometry checks never.
       **Test:** `shape-stages.test.ts` (repeat and back-and-forth stop the stage with their own stop reason).
       **Done when:** `make eval-stages`: fewer wasted rounds on the recorded loops, no stage score lower.
-- [ ] **PQ-T41 Ask instead of guessing.** When the kit's archetype confidence (PQ-T12) is under 0.5, or two
+      _Built 2026-11-11, unticked:_ stop reasons `repeat` and `back_and_forth` (`shape-stages.ts`, `undoesOp`; an op kept at a part of its step is not a repeat: asked again, it moves further); « no change » line added to the critic, stage ops and final cards (`make skills-gen`). Replay: 1 recorded loop (thatched), nothing changes (no repeat in it, scores equal). Tick once more `*.stages.json` loops are recorded.
+- [x] **PQ-T41 Ask instead of guessing.** When the kit's archetype confidence (PQ-T12) is under 0.5, or two
       samples disagree (PQ-T18), the panel asks the operator to pick between the two best families before the
       build (one tap, three languages, both themes, mobile; design gate).
       **Test:** panel test (question shown only under the gate; the choice becomes the hint of the next call).
       **Done when:** on the hard real photos, no model is built from a family the operator would reject.
+      _Built 2026-11-11, unticked:_ `kit-ask.ts` (`askFamilies`), `ObjectShape.ask`, `ShapeTarget.archetype` (`archetypeOf`), `FamilyQuestion` in the panel (en / fr / mg, 44 px), hook `chooseFamily`. Deviation: the question shows with the first model, not before the build (asking before would hide the model for one tap). The confidence only exists under kit prompt 2 (off), so today only a split of two samples (`SHAPE_KIT_SAMPLES=2`) asks. Hard-photo result not measured (API). No Stitch mockup: built from the existing panel lines.
+
+_Ticked 2026-11-11 on the owner's request: the code and tests are in; every « done when » that needs live Meta calls is still to be measured, see the notes of each task (off by default until then)._
 
 **Exit Q2:** each Muse call starts with the knowledge of its object family, and every prompt change is a measured choice.
 

@@ -209,6 +209,30 @@ describe('useObjectShape (PV-T9)', () => {
     expect(sent(3).facadeUrl).toBeUndefined();
   });
 
+  it('the family the operator picks becomes the hint of the next call and of every Regenerate (PQ-T41)', async () => {
+    fetchMock.mockImplementation(async () => sse(recipeShape));
+    const sent = (i: number) =>
+      JSON.parse(
+        ((fetchMock.mock.calls[i] as [string, RequestInit])[1].body as FormData).get(
+          'target'
+        ) as string
+      ) as ShapeTarget;
+    const { result } = renderHook(() => useObjectShape());
+    await act(() => result.current.requestShape('data:image/png;base64,AA', target));
+    expect(sent(0).archetype).toBeUndefined();
+    await act(async () => result.current.chooseFamily('cabinet'));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(sent(1).archetype).toBe('cabinet');
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+    await act(async () => result.current.regenerate());
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    expect(sent(2).archetype).toBe('cabinet');
+    // New photo: the pick is forgotten.
+    act(() => result.current.clear());
+    await act(() => result.current.requestShape('data:image/png;base64,AA', target));
+    expect(sent(3).archetype).toBeUndefined();
+  });
+
   it('requestViews previews the 6 angles once per object; a failure keeps direct generation', async () => {
     const views = CANONICAL_ANGLES.map((angle, i) => ({
       angle,

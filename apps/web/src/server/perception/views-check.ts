@@ -1,3 +1,4 @@
+import { cardText } from './skills';
 import { RECIPE_MATERIALS, type RecipeMaterial } from '@/lib/object-shape';
 
 /**
@@ -13,6 +14,8 @@ export const MAX_MISSING = 4;
 
 /** Version of the views-check prompt (PQ-T5), logged with every call. */
 export const VIEWS_CHECK_PROMPT_VERSION = 1;
+/** Version 2 (PQ-T15): version 1 + the Views check card. Opt-in (`SHAPE_LOOP_CARDS`). */
+export const VIEWS_CHECK_CARDS_VERSION = 2;
 
 export const VIEWS_CHECK_SYSTEM_PROMPT = [
   'You check a 3D model of ONE object against its drawings. The image is a 2 × 2 sheet: top row = the FRONT drawing (left) and our 3D model seen from the front (right); bottom row = the SIDE drawing (left) and our model seen from the same side (right). The model is flat-shaded, without texture.',
@@ -22,6 +25,12 @@ export const VIEWS_CHECK_SYSTEM_PROMPT = [
   'Set redrawSide true only when the SIDE drawing does not show the same object turned 90 degrees (another object, the front again, a perspective view).',
   'Ignore textures, shading and small decorations. Answer ONLY JSON; empty missing list when the model is complete. Never give coordinates, sizes in metres, watts or any energy value.',
 ].join(' ');
+
+/** The views-check system prompt of `version` (1 or 2). */
+export const viewsCheckPrompt = (version: number = VIEWS_CHECK_PROMPT_VERSION): string =>
+  version === VIEWS_CHECK_CARDS_VERSION
+    ? `${VIEWS_CHECK_SYSTEM_PROMPT}\n\n${cardText('views')}`
+    : VIEWS_CHECK_SYSTEM_PROMPT;
 
 const color = { type: 'string', pattern: '^#[0-9a-fA-F]{6}$' };
 

@@ -14,7 +14,7 @@ import {
   type ObjectKit,
 } from '@/lib/object-kit';
 import { RECIPE_MATERIALS, type ObjectRecipe, type RecipePart } from '@/lib/object-shape';
-import { skillFor } from './skills';
+import { archetypeCard, skillFor } from './skills';
 
 /**
  * Prompts and parsing for the Spark 3D « kit » of one object (PV-T9b). Spark only classifies and reads
@@ -55,13 +55,33 @@ export const KIT_PROMPTS: Readonly<Record<number, string>> = { 1: SHAPE_SYSTEM_P
  */
 export const KIT_PROMPT_CARDS_VERSION = 2;
 
+/**
+ * Version 3 (PQ-T13): version 1 + only the card of the hint's family (no Look card, no evidence): the
+ * short card prompt, switched on per family (`SHAPE_KIT_CARD_FAMILIES`) after its own eval.
+ */
+export const KIT_PROMPT_FAMILY_VERSION = 3;
+
+/** Kit prompt version of a call that named none: the family-card one when that family is switched on. */
+export function kitVersionFor(
+  hint: KitArchetype | undefined,
+  families: ReadonlyArray<string>
+): number {
+  return hint && families.includes(hint) && archetypeCard(hint)
+    ? KIT_PROMPT_FAMILY_VERSION
+    : KIT_PROMPT_VERSION;
+}
+
 /** The kit system prompt of `version` (default: current); throws on a version that was not kept. */
 export function kitPrompt(version: number = KIT_PROMPT_VERSION, hint?: KitArchetype): string {
   if (version === KIT_PROMPT_CARDS_VERSION) return skillFor('kit', hint).text;
+  if (version === KIT_PROMPT_FAMILY_VERSION) {
+    const card = archetypeCard(hint);
+    return card ? `${SHAPE_SYSTEM_PROMPT}\n\n${card}` : SHAPE_SYSTEM_PROMPT;
+  }
   const text = KIT_PROMPTS[version];
   if (!text)
     throw new Error(
-      `unknown kit prompt version ${version} (kept: ${[...Object.keys(KIT_PROMPTS), KIT_PROMPT_CARDS_VERSION].join(', ')})`
+      `unknown kit prompt version ${version} (kept: ${[...Object.keys(KIT_PROMPTS), KIT_PROMPT_CARDS_VERSION, KIT_PROMPT_FAMILY_VERSION].join(', ')})`
     );
   return text;
 }
@@ -260,6 +280,55 @@ export const CRITIC_SYSTEM_PROMPT = [
   'Empty patch ({}) when the model already matches.',
 ].join(' ');
 
+/** Version 2 (PQ-T14): Base + Critic card + the family's card, for the 2 × 2 sheet. Built per call. */
+export const CRITIC_PROMPT_CARDS_VERSION = 2;
+
+/** The critic system prompt of `version`; throws on an unknown one. */
+export function criticPrompt(
+  version: number = CRITIC_PROMPT_VERSION,
+  archetype?: KitArchetype
+): string {
+  if (version === CRITIC_PROMPT_CARDS_VERSION) return skillFor('critic', archetype).text;
+  if (version === CRITIC_PROMPT_VERSION) return CRITIC_SYSTEM_PROMPT;
+  throw new Error(`unknown critic prompt version ${version}`);
+}
+
+/** Fields of one patch at most (PQ-T14): the largest red / blue areas first, the model's list order. */
+export const CRITIC_MAX_FIELDS = 4;
+
+/** Order the fields are kept in when a patch names too many: family, volumes, counts, then paint. */
+const PATCH_PRIORITY = [
+  'archetype',
+  'subtype',
+  'proportions',
+  'details',
+  'colors',
+  'materials',
+] as const;
+
+/** A patch cut to `max` fields, by priority (PQ-T14: a long patch is a guess). */
+export function capPatchFields(
+  patch: Partial<ObjectKit>,
+  max: number = CRITIC_MAX_FIELDS
+): Partial<ObjectKit> {
+  const keys = PATCH_PRIORITY.filter((k) => patch[k] !== undefined).slice(0, max);
+  return Object.fromEntries(keys.map((k) => [k, patch[k]])) as Partial<ObjectKit>;
+}
+
+/** The `reasons` of a critic reply: one short line per changed field, at most 6 lines of 160 characters. */
+export function parseKitReasons(content: string): string[] {
+  try {
+    const r = (JSON.parse(content) as { reasons?: unknown }).reasons;
+    const lines = Array.isArray(r) ? r : r && typeof r === 'object' ? Object.values(r) : [];
+    return lines
+      .filter((l): l is string => typeof l === 'string' && l.trim().length > 0)
+      .slice(0, 6)
+      .map((l) => l.trim().slice(0, 160));
+  } catch {
+    return [];
+  }
+}
+
 /** Partial kit: every field optional, nothing required (patches only change what they name). */
 export const CRITIC_JSON_SCHEMA = {
   name: 'KitPatch',
@@ -298,11 +367,34 @@ export const CRITIC_JSON_SCHEMA = {
   },
 };
 
+/** The critic schema of version 2: the patch fields plus `reasons`. */
+export const criticJsonSchema = (version: number = CRITIC_PROMPT_VERSION) =>
+  version === CRITIC_PROMPT_CARDS_VERSION
+    ? {
+        name: CRITIC_JSON_SCHEMA.name,
+        schema: {
+          ...CRITIC_JSON_SCHEMA.schema,
+          properties: {
+            ...CRITIC_JSON_SCHEMA.schema.properties,
+            reasons: { type: 'array', items: { type: 'string' } },
+          },
+        },
+      }
+    : CRITIC_JSON_SCHEMA;
+
 /** User turn: current kit JSON + the score numbers the patch must raise. */
 export function criticQuestion(
   kit: ObjectKit,
-  score: { score: number; iou: number; edgeF1: number; deltaE: number }
+  score: { score: number; iou: number; edgeF1: number; deltaE: number },
+  version: number = CRITIC_PROMPT_VERSION
 ): string {
+  if (version === CRITIC_PROMPT_CARDS_VERSION) {
+    return (
+      `Current kit: ${JSON.stringify(kit)}. ` +
+      `Scores: ${score.score}/100 (silhouette IoU ${score.iou}, edge F1 ${score.edgeF1}, colour ΔE ${score.deltaE}). ` +
+      `Answer the JSON patch of the kit (at most ${CRITIC_MAX_FIELDS} fields) and "reasons".`
+    );
+  }
   return (
     `Left is the photo of the selected object, right is our 3D model seen from the same view. ` +
     `Current kit: ${JSON.stringify(kit)}. ` +

@@ -330,6 +330,6 @@ describe('kit evidence and confidence (PQ-T12)', () => {
     expect(p).toContain('VEHICLE');
     expect(p).not.toMatch(/answer fast/i);
     expect(kitPrompt(KIT_PROMPT_CARDS_VERSION, 'other')).not.toContain('VEHICLE');
-    expect(() => kitPrompt(99)).toThrow(/unknown kit prompt version 99 \(kept: 1, 2\)/);
+    expect(() => kitPrompt(99)).toThrow(/unknown kit prompt version 99 \(kept: 1, 2, 3\)/);
   });
 });

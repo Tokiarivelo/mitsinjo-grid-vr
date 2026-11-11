@@ -1,40 +1,40 @@
 # HANDOFF — read first, overwrite at end of session (≤40 lines)
 
-**Updated:** 2026-11-11 · **By:** Claude Code · **Branch:** feat/pq-q1-leftovers (PR open; PR #11 merged)
+**Updated:** 2026-11-11 · **By:** Claude Code · **Branch:** feat/pq-q2-muse-skills (PR #13, rebased on `main`, reviewed)
 
 ## Current state
 
-- **PV-Q Q1 leftovers** (real baseline unchanged: mean 53, synthetic 93; `make check`: 2431 tests pass):
-  - PQ-T9 ticked: 12/13 real photos with an outline against 6/13 at the PQ-T1 baseline (agreement itself is off).
-  - PQ-T10 **unticked again**: 8 real walls in shadow (`make shadow-photos`, then `make shadow-compare`): main
-    colour the same with and without `litSurface` (ΔE 13.2 both); gain only on the other roles (shadow handed out
-    as secondary / accent 5 → 2). Painted-shadow measure unchanged (ΔE 14.9 vs 20.2).
-  - PQ-T11 skill loader: `skills/` (`skillFor`), generated from the doc by `make skills-gen` (checked by `skills.test.ts`).
-  - PQ-T12 built but **unticked, prompt 2 off**: `make eval-shape PROMPT=1,2` on 16 real captures: v1 95/117 agree,
-    median 22.9 s; v2 (cards + evidence first) 83/121, median 47.3 s. `KIT_PROMPT_VERSION` stays 1.
-  - PQ-T37 ticked: `evidence.visibleParts` feeds `notBuilt` / panel coverage through `listedConcept` (prompt 2 only;
-    prompt 1 keeps its own JSON schema, `kitJsonSchema`). Panel: card SAM words labelled, the rest « Other parts ».
-  - Free-parts call on the cards (`make eval-parts`, 6 captures): v1 6/6, 9.5 parts, 44.5 s; v2 6/6, 8.7 parts, 68.8 s → off.
+- **PV-Q Q2 code built, one commit per task, ticked on the owner's request (live evals still pending)** (their « done when » needs live Meta calls; nothing
+  new is on by default, so the demo path and the real baseline are unchanged):
+  - PQ-T38 stage stops `repeat` / `back_and_forth` (always on) · PQ-T18 `SHAPE_KIT_SAMPLES=2` (`kit-vote.ts`).
+  - PQ-T14 critic v2 (`criticPromptVersion` 2): 2 × 2 sheet, 4-field patch, ≤ 3 live rounds (not via `shape-jobs`).
+  - PQ-T15 `SHAPE_LOOP_CARDS=true` (loop cards) · PQ-T16 `SHAPE_SIDE_V2=true` (side card, 2 candidates scored).
+  - PQ-T17 `effort.ts`: per call kind, all `high`; accepted `reasoning_effort` values NOT confirmed on Meta.
+  - PQ-T41 `ObjectShape.ask` + `FamilyQuestion` (asks on a kit split) · PQ-T13 `SHAPE_KIT_CARD_FAMILIES` (prompt 3).
+- **PR #13 review (2026-11-11):** `repeat` no longer stops an op kept at a part of its step (it was cutting a
+  stage that still gained); `family-cards.test.ts` no longer needs the gitignored real set (CI); tests added
+  (critic v2 rounds, vote → question, side v2 candidates, `archetypeOf`, stop labels).
+- **Real set: 24 captures** (was 16). `make family-photos` + `make shape-capture` added tank, panel, bush,
+  animal, person (1 each), a topiary tree, 2 houses. `building` has none: 3 real buildings were answered `house`.
 
 ## Next
 
-1. Merge the PR once CI is green.
-2. PQ-T12 follow-up: bring v2 under 30 s (shorter Look card, evidence reduced to `visibleParts`), re-measure with
-   `make eval-shape PROMPT=1,2` (≈ 30 min, alone). If dev says `Can't resolve 'three'` → `make install`.
-3. PQ-T13 onwards (archetype cards, one family at a time) only after T12's gain is shown.
+1. Merge PR #13 once CI is green (not merged by the review: every task is still unticked).
+2. `make eval-shape PROMPT=1,3` (≈ 45 min with 24 captures, alone) → set the families marked `on` in `.env`.
+   The 5 new families are `thin` (1 capture): add a second photo each to `family-photos.json` for a verdict.
+3. With a Meta key, measure each flag against its « done when » (one at a time): T18, T14, T15/T16 (record
+   `make facade-e2e` loops under both settings first: only 1 recorded), T17 (probe effort values), T41.
+4. PQ-T41 design gate-out (screenshots of the question, both themes, 390 px) needs a live kit split; no mockup.
+5. Why does the kit call answer `house` for a 4-floor block? (`apartment.capture.json`, hint was `building`.)
 
-## Files touched
+## Files touched (review)
 
-- New: `skills/{index,extract,cards.generated}.ts`, `__tests__/skills.test.ts`, `__fixtures__/shape/shadow-walls.json`,
-  `scripts/fetch-shadow-photos.sh`; Makefile `skills-gen`, `shadow-photos`, `eval-parts`.
-- Changed: `lib/object-kit.ts` (`evidence`, `confidence`), `shape.ts` (schema, `parseEvidence`, `kitPrompt(v, hint)`),
-  `free-recipe.ts` (`partsPrompt`), `fusion.ts` (`modelDoubts`, `ledByMeasurement`), `object-graph.ts`
-  (`listedConcept`), `object-shape.ts` (`promptVersion`), `meta.ts`, `eval-shape.ts` (`evalParts`), messages (part labels).
-- Docs: `contracts.md`, `copilot.md`, `design/screens/village.md`, `tasks/PV-vision-quality.md`, README.
+- `shape-stages.ts`, `object-shape.ts` (dead branch), tests beside; `scripts/fetch-fixture-photos.sh`
+  (was `fetch-shadow-photos.sh`, now takes the manifest name), `__fixtures__/shape/family-photos.json`, `Makefile`
+  (`family-photos`), `README.md`, `docs/copilot.md`, `docs/tasks/PV-vision-quality.md`.
 
 ## Decisions
 
-- The doc is the source of the cards; the module is generated (no hand copy). Versions = hash of the composed text.
-- Prompt 2 is not the default: its eval fails both « done when » (agreement lower, median > 30 s).
-- A field the kit lists as unsure (or confidence < ½) is led by the measurement, half-way to full trust.
-- Scenario V241 (local). `jiti` is missing (`make gen-evals` fails).
+- Every new Muse behaviour is opt-in (env or option) until its eval is shown, like prompt 2 of PQ-T12.
+- T41 shows the question beside the first model, not before the build (no hidden model for one tap).
+- Real photos stay local (gitignored); only their manifest is committed. Scenarios V242, V243 (local).

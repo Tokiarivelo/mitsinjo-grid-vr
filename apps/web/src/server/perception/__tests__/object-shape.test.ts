@@ -614,3 +614,101 @@ describe('free recipe (PV-T9c)', () => {
     expect(out).not.toHaveProperty('fit');
   });
 });
+
+describe('runObjectShape kit samples (PQ-T18)', () => {
+  const car = (n: number): ObjectKit => ({
+    archetype: 'vehicle',
+    subtype: 'sedan',
+    proportions: { w: 1, h: 0.5, d: 0.4 },
+    colors: { main: '#223344', secondary: '#223344', accent: '#445566' },
+    details: { wheels: n },
+  });
+  const answer = (n: number) => meta(kitToRecipe(car(n)), { kit: car(n) });
+
+  it('asks the kit once by default', async () => {
+    const p = client(answer(4));
+    await runObjectShape(p, await photo(), 'data:full', target);
+    expect(p.describeShape).toHaveBeenCalledTimes(1);
+  });
+
+  it('two samples need the budget: under 40 s still one call', async () => {
+    const p = client(answer(4));
+    await runObjectShape(p, await photo(), 'data:full', target, {
+      kitSamples: 2,
+      timeoutMs: 30_000,
+    });
+    expect(p.describeShape).toHaveBeenCalledTimes(1);
+  });
+
+  it('two samples: two calls, the answer still builds', async () => {
+    const p = client(answer(4));
+    p.describeShape.mockResolvedValueOnce(answer(4)).mockResolvedValueOnce(answer(6));
+    const out = await runObjectShape(p, await photo(), 'data:full', target, {
+      kitSamples: 2,
+      timeoutMs: 60_000,
+    });
+    expect(p.describeShape).toHaveBeenCalledTimes(2);
+    expect(out.mode).toBe('recipe');
+  });
+
+  it('a failing second sample leaves the first alone', async () => {
+    const p = client(answer(4));
+    p.describeShape.mockResolvedValueOnce(answer(4)).mockRejectedValueOnce(new Error('x'));
+    const out = await runObjectShape(p, await photo(), 'data:full', target, {
+      kitSamples: 2,
+      timeoutMs: 60_000,
+    });
+    expect(out.mode).toBe('recipe');
+  });
+});
+
+describe('runObjectShape asks about the family (PQ-T41)', () => {
+  const lowKit = (archetype: 'vehicle' | 'cabinet'): ObjectKit => ({
+    archetype,
+    proportions: { w: 1, h: 0.5, d: 0.4 },
+    colors: { main: '#223344', secondary: '#223344', accent: '#445566' },
+    confidence: { archetype: 0.3 },
+  });
+  const answer = (k: ObjectKit) => meta(kitToRecipe(k), { kit: k });
+
+  it('a doubtful family → ask with the kit family and the detection hint', async () => {
+    const p = client(answer(lowKit('vehicle')));
+    const out = await runObjectShape(p, await photo(), 'data:full', target);
+    // « Fridge » is a cabinet by the detection hint; Spark says vehicle with 0.3.
+    expect(out.ask).toEqual({ archetypes: ['vehicle', 'cabinet'] });
+  });
+
+  it("the operator's pick is the hint, the kit family, and ends the question", async () => {
+    const p = client(answer(lowKit('vehicle')));
+    const out = await runObjectShape(p, await photo(), 'data:full', {
+      ...target,
+      archetype: 'cabinet',
+    });
+    expect(p.describeShape.mock.calls[0]![1]).toMatchObject({ archetype: 'cabinet' });
+    expect(out.ask).toBeUndefined();
+    expect(out.kit?.archetype).toBe('cabinet');
+  });
+
+  it('two samples that name different families → the kept one first, the other as second choice (PR #13 review)', async () => {
+    const sure = (a: 'vehicle' | 'cabinet') => ({ ...lowKit(a), confidence: { archetype: 0.9 } });
+    const p = client(answer(sure('cabinet')));
+    p.describeShape
+      .mockResolvedValueOnce(answer(sure('cabinet')))
+      .mockResolvedValueOnce(answer(sure('vehicle')));
+    const out = await runObjectShape(p, await photo(), 'data:full', target, {
+      kitSamples: 2,
+      timeoutMs: 60_000,
+    });
+    expect(p.describeShape).toHaveBeenCalledTimes(2);
+    const kept = out.kit!.archetype;
+    expect(out.ask).toEqual({
+      archetypes: [kept, kept === 'cabinet' ? 'vehicle' : 'cabinet'],
+    });
+  });
+
+  it('a confident answer asks nothing', async () => {
+    const kit = { ...lowKit('cabinet'), confidence: { archetype: 0.9 } };
+    const out = await runObjectShape(client(answer(kit)), await photo(), 'data:full', target);
+    expect(out.ask).toBeUndefined();
+  });
+});

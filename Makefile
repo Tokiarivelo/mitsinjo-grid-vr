@@ -125,7 +125,10 @@ skills-gen: ## Regenerate the Muse skill cards module from docs/vision-to-3d-mus
 	$(PNPM) --filter $(WEB) exec prettier --write src/server/perception/skills/cards.generated.ts
 
 shadow-photos: ## Download the real photos of walls partly in shadow (Wikimedia Commons, PQ-T10) into the local fixtures
-	./scripts/fetch-shadow-photos.sh
+	./scripts/fetch-fixture-photos.sh shadow-walls
+
+family-photos: ## Download one real photo per family the real set lacked (tank, panel, bush, animal, person, building; Wikimedia Commons, PQ-T13); then `make shape-capture` each
+	./scripts/fetch-fixture-photos.sh family-photos
 
 shadow-compare: ## Colour under a shadow, litSurface on vs off: painted on the real photos + real shadowed walls (PQ-T10, no API call)
 	$(need_ws)
@@ -135,7 +138,7 @@ shape-judge: ## Rubric judge (META_JUDGE_MODEL) on the real captures, intact vs 
 	$(need_ws)
 	eval "$$(make -s env-export)" && SHAPE_JUDGE=1 $(if $(REPLAY),SHAPE_JUDGE_REPLAY=1) SHAPE_REAL_DIR="$(CURDIR)/apps/web/src/server/perception/__fixtures__/shape/real" $(PNPM) --filter $(WEB) exec vitest run src/server/perception/__tests__/rubric-judge.test.ts -t "make shape-judge"
 
-eval-shape: ## Kit eval on live Spark over the real captures (MODEL=…, PROMPT=1,2 kit prompt versions, PR-3.1, costs API calls)
+eval-shape: ## Kit eval on live Spark over the real captures (MODEL=…, PROMPT=1,2,3 kit prompt versions (3 = family card only, PQ-T13; prints a per-family on/off table), PR-3.1, costs API calls)
 	$(need_ws)
 	eval "$$(make -s env-export)" && EVAL_SHAPE=1 EVAL_SHAPE_DIR="$(CURDIR)/apps/web/src/server/perception/__fixtures__/shape/real" $(if $(MODEL),META_VISION_MODEL="$(MODEL)") $(if $(PROMPT),EVAL_SHAPE_PROMPTS="$(PROMPT)") $(PNPM) --filter $(WEB) exec vitest run src/server/perception/__tests__/eval-shape.test.ts -t "make eval-shape"
 	@$(MAKE) -s eval-stages
@@ -348,5 +351,5 @@ clean: ## Remove build/test output (keeps node_modules)
 clean-all: clean ## Also remove node_modules
 	rm -rf node_modules apps/*/node_modules packages/*/node_modules
 
-.PHONY: help install env setup-claude browsers dev port dev-mock build start test test-engine test-web test-shape shape-capture shape-judge sam-probe facade-e2e photo-audit eval-stages shape-report shape-shots improve-shot test-watch coverage e2e \
+.PHONY: help install env setup-claude browsers dev port dev-mock build start test test-engine test-web test-shape family-photos shape-capture shape-judge sam-probe facade-e2e photo-audit eval-stages shape-report shape-shots improve-shot test-watch coverage e2e \
         typecheck lint bridge bridge-sim test-bridge format format-check format-changed git-hooks check ci shots mockups scenarios-publish analyze scene-audit scene-audit-gpu lighthouse claude env-export mcp status todo deploy-link deploy clean clean-all video-tts-setup video-voice video-sfx video-capture video-canvas video-build video-thumbnail hf-dataset hf-publish

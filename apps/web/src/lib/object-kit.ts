@@ -226,6 +226,19 @@ export function flatWaterRecipe(recipe: ObjectRecipe): ObjectRecipe {
   };
 }
 
+/** The family asked of the model: the operator's pick when valid (PQ-T41), else the detection's. */
+export function archetypeOf(target: {
+  category: ApplianceCategory;
+  scenery?: SceneryType | undefined;
+  label?: string | undefined;
+  archetype?: string | undefined;
+}): KitArchetype {
+  const picked = (KIT_ARCHETYPES as readonly string[]).includes(target.archetype ?? '')
+    ? (target.archetype as KitArchetype)
+    : null;
+  return picked ?? defaultArchetype(target.category, target.scenery, target.label);
+}
+
 /** Archetype the detection already implies (mock mode, and the hint sent to Spark). */
 export function defaultArchetype(
   category: ApplianceCategory,

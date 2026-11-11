@@ -10,6 +10,8 @@ import {
   agreement,
   compareKits,
   evalCaptures,
+  familyTable,
+  FAMILY_MEDIAN_MAX_S,
   evalMarkdown,
   evalParts,
   partsEvalMarkdown,
@@ -185,4 +187,46 @@ describe.skipIf(process.env.EVAL_PARTS !== '1')('make eval-parts', () => {
     },
     1_200_000 * Math.max(1, parsePromptVersions(process.env.EVAL_SHAPE_PROMPTS).length)
   );
+});
+
+describe('familyTable (PQ-T13)', () => {
+  const row = (id: string, v: number, truth: ObjectKit, got: ObjectKit, seconds: number) => ({
+    id,
+    model: 'm',
+    promptVersion: v,
+    ...compareKits(truth, got),
+    seconds,
+  });
+  const van: ObjectKit = { ...kit, subtype: 'van' };
+
+  it('one version: no family table', () => {
+    expect(familyTable([row('a', 1, kit, kit, 10)], [1])).toBe('');
+  });
+
+  it('on when agreement is not lower and the median is fast; off when agreement drops or it is slow', () => {
+    const rows = [
+      row('a', 1, kit, van, 10),
+      row('b', 1, kit, van, 10),
+      row('a', 3, kit, kit, 12),
+      row('b', 3, kit, kit, 14),
+    ];
+    expect(familyTable(rows, [1, 3])).toMatch(/\| vehicle \| 2 \|.*\| on \|/);
+    const slow = rows.map((r) =>
+      r.promptVersion === 3 ? { ...r, seconds: FAMILY_MEDIAN_MAX_S + 5 } : r
+    );
+    expect(familyTable(slow, [1, 3])).toMatch(/\| off \|/);
+    const worse = [
+      row('a', 1, kit, kit, 10),
+      row('b', 1, kit, kit, 10),
+      row('a', 3, kit, van, 10),
+      row('b', 3, kit, van, 10),
+    ];
+    expect(familyTable(worse, [1, 3])).toMatch(/\| off \|/);
+  });
+
+  it('a family with one capture is thin, never on', () => {
+    expect(familyTable([row('a', 1, kit, kit, 5), row('a', 3, kit, kit, 5)], [1, 3])).toMatch(
+      /\| thin \|/
+    );
+  });
 });

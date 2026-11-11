@@ -79,6 +79,7 @@ export function VillageEditorPage() {
     requestShape,
     peek: peekShape,
     retry: retryShape,
+    chooseFamily,
     cancelImprove,
     reset: resetShape,
     clear: clearShapes,
@@ -584,6 +585,7 @@ export function VillageEditorPage() {
                         imageUrl={imageUrl}
                         onRetry={retryShape}
                         onRegenerate={regenerateShape}
+                        onChooseFamily={chooseFamily}
                         onCancelImprove={cancelImprove}
                         onGenerate={generateShape}
                         scope={VILLAGE_SCOPE}

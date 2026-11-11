@@ -407,3 +407,33 @@ describe('ObjectShapePanel staged improvement (PG-T18)', () => {
     expect(screen.queryByText('Improving: stage 1/4 — Massing')).toBeNull();
   });
 });
+
+describe('ObjectShapePanel family question (PQ-T41)', () => {
+  const asked = { ...shape('recipe'), ask: { archetypes: ['vehicle', 'cabinet'] } };
+
+  it('shown only when the server asks: two choices, the pick goes to onChooseFamily', () => {
+    const onChooseFamily = vi.fn();
+    renderPanel({ shape: asked, onChooseFamily });
+    expect(screen.getByText('Not sure what this is. Pick the closest:')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Choose Cabinet or appliance' }));
+    expect(onChooseFamily).toHaveBeenCalledWith('cabinet');
+    expect(screen.getByRole('button', { name: 'Choose Vehicle' })).toBeTruthy();
+  });
+
+  it('no question without ask, without a handler, or with an unnamed family', () => {
+    renderPanel({ shape: shape('recipe'), onChooseFamily: vi.fn() });
+    expect(screen.queryByText(/Not sure what this is/)).toBeNull();
+    renderPanel({ shape: asked });
+    expect(screen.queryByRole('button', { name: /^Choose / })).toBeNull();
+    renderPanel({
+      shape: { ...shape('recipe'), ask: { archetypes: ['vehicle', 'spaceship'] } },
+      onChooseFamily: vi.fn(),
+    });
+    expect(screen.queryByRole('button', { name: /^Choose / })).toBeNull();
+  });
+
+  it('choices are 44 px touch targets (min-h-11)', () => {
+    renderPanel({ shape: asked, onChooseFamily: vi.fn() });
+    expect(screen.getByRole('button', { name: 'Choose Vehicle' }).className).toContain('min-h-11');
+  });
+});

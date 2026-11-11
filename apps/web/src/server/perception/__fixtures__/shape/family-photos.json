@@ -1,0 +1,82 @@
+[
+  {
+    "id": "water-tank-roof",
+    "label": "water tank",
+    "family": "tank",
+    "file": "Water Tank Kerala House.JPG",
+    "licence": "CC BY-SA 3.0",
+    "author": "Ranjithsiji",
+    "source": "https://commons.wikimedia.org/wiki/File:Water_Tank_Kerala_House.JPG",
+    "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/36/Water_Tank_Kerala_House.JPG/960px-Water_Tank_Kerala_House.JPG"
+  },
+  {
+    "id": "solar-array",
+    "label": "solar panel",
+    "family": "panel",
+    "file": "Ground mounted solar panels.gk.jpg",
+    "licence": "CC BY-SA 4.0",
+    "author": "Grendelkhan",
+    "source": "https://commons.wikimedia.org/wiki/File:Ground_mounted_solar_panels.gk.jpg",
+    "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/9/95/Ground_mounted_solar_panels.gk.jpg/960px-Ground_mounted_solar_panels.gk.jpg"
+  },
+  {
+    "id": "shrub",
+    "label": "flowering bush",
+    "family": "bush",
+    "file": "Shrub in Emmetts Garden, Ide Hill, Sevenoaks - geograph.org.uk - 2463035.jpg",
+    "licence": "CC BY-SA 2.0",
+    "author": "pam fray",
+    "source": "https://commons.wikimedia.org/wiki/File:Shrub_in_Emmetts_Garden,_Ide_Hill,_Sevenoaks_-_geograph.org.uk_-_2463035.jpg",
+    "url": "https://upload.wikimedia.org/wikipedia/commons/b/b5/Shrub_in_Emmetts_Garden%2C_Ide_Hill%2C_Sevenoaks_-_geograph.org.uk_-_2463035.jpg"
+  },
+  {
+    "id": "bush",
+    "label": "topiary",
+    "family": "tree",
+    "file": "A topiary ornamental greenish shrub plant resembling many balls (or spherical balloons) - in Kakching Garden, Kangleipak 01.jpg",
+    "licence": "CC0",
+    "author": "Haoreima",
+    "source": "https://commons.wikimedia.org/wiki/File:A_topiary_ornamental_greenish_shrub_plant_resembling_many_balls_(or_spherical_balloons)_-_in_Kakching_Garden,_Kangleipak_01.jpg",
+    "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/8/86/A_topiary_ornamental_greenish_shrub_plant_resembling_many_balls_%28or_spherical_balloons%29_-_in_Kakching_Garden%2C_Kangleipak_01.jpg/960px-A_topiary_ornamental_greenish_shrub_plant_resembling_many_balls_%28or_spherical_balloons%29_-_in_Kakching_Garden%2C_Kangleipak_01.jpg"
+  },
+  {
+    "id": "cow",
+    "label": "zebu",
+    "family": "animal",
+    "file": "Cow standing on grass field in Dhaka, Bangladesh.jpg",
+    "licence": "Public domain",
+    "author": "Khaleq",
+    "source": "https://commons.wikimedia.org/wiki/File:Cow_standing_on_grass_field_in_Dhaka,_Bangladesh.jpg",
+    "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/32/Cow_standing_on_grass_field_in_Dhaka%2C_Bangladesh.jpg/960px-Cow_standing_on_grass_field_in_Dhaka%2C_Bangladesh.jpg"
+  },
+  {
+    "id": "person",
+    "label": "man on left",
+    "family": "person",
+    "file": "Private security guard Guatemala03.jpg",
+    "licence": "CC BY 2.0",
+    "author": "meckhert",
+    "source": "https://commons.wikimedia.org/wiki/File:Private_security_guard_Guatemala03.jpg",
+    "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/8/84/Private_security_guard_Guatemala03.jpg/960px-Private_security_guard_Guatemala03.jpg"
+  },
+  {
+    "id": "health-centre",
+    "label": "building",
+    "family": "house",
+    "file": "Centre de santé de madina.jpg",
+    "licence": "CC BY-SA 4.0",
+    "author": "Diane bora",
+    "source": "https://commons.wikimedia.org/wiki/File:Centre_de_sant%C3%A9_de_madina.jpg",
+    "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/a/a7/Centre_de_sant%C3%A9_de_madina.jpg/960px-Centre_de_sant%C3%A9_de_madina.jpg"
+  },
+  {
+    "id": "apartment",
+    "label": "apartment",
+    "family": "house",
+    "file": "Shalom Shalome Apartment (View from NE to SW).jpg",
+    "licence": "CC BY-SA 4.0",
+    "author": "The Chroniclers",
+    "source": "https://commons.wikimedia.org/wiki/File:Shalom_Shalome_Apartment_(View_from_NE_to_SW).jpg",
+    "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/d/df/Shalom_Shalome_Apartment_%28View_from_NE_to_SW%29.jpg/960px-Shalom_Shalome_Apartment_%28View_from_NE_to_SW%29.jpg"
+  }
+]

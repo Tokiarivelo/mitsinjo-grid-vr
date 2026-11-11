@@ -280,6 +280,8 @@ export const ShapeTargetSchema = z.object({
     .optional(),
   /** R2 / storage key of the validated 2D facade image. */
   facadeKey: z.string().optional(),
+  /** Family the operator picked when asked (PQ-T41): it becomes the kit hint and the kit's archetype. */
+  archetype: z.string().max(16).optional(),
 });
 export type ShapeTarget = z.infer<typeof ShapeTargetSchema>;
 
@@ -381,6 +383,8 @@ export const ObjectShapeSchema = z.object({
   coverage: z.array(PartCoverageSchema).optional(),
   /** Photo conditions of the object (PQ-T7): size, sharpness, exposure, hidden share, view. Computed, not AI. */
   conditions: PhotoConditionsSchema.optional(),
+  /** The model doubts the family (PQ-T41): the two to choose from, best first. Computed from the kit, not AI text. */
+  ask: z.object({ archetypes: z.array(z.string().max(16)).length(2) }).optional(),
 });
 export type ObjectShape = z.infer<typeof ObjectShapeSchema>;
 
@@ -443,6 +447,8 @@ export const SHAPE_STAGE_STOPS = [
   'timeout',
   'error',
   'skipped',
+  'repeat',
+  'back_and_forth',
 ] as const;
 export type ShapeStageStop = (typeof SHAPE_STAGE_STOPS)[number];
 

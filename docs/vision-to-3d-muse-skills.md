@@ -380,6 +380,7 @@ Answer a JSON patch of the kit with ONLY the fields to change, and "reasons": on
 changed field naming what you saw on the photo.
 Rules: fix the largest red and blue areas first · at most 4 fields per patch · an empty patch
 when the model matches · never change a field marked "Measured" unless you say why in reasons.
+When the model is good enough, answer no change: a needless fix can break a correct model.
 ```
 
 ---
@@ -399,6 +400,7 @@ How to choose ops for this stage
 - When the feedback says an op changed nothing, the field was not the cause: try another field
   or another component, not the same op again.
 - When every red and blue area is thinner than a window frame, answer an empty list.
+- When the model is good enough, answer no change: a needless op can break a correct model.
 ```
 
 ---
@@ -429,6 +431,7 @@ Change only what is clearly wrong: every op is tried alone and kept only if the 
 rises, so a doubtful op costs time and gains nothing.
 Prefer ops on parts earlier stages left at their starting values.
 An empty list is the right answer for a model that already matches.
+When the model is good enough, answer no change: a needless fix can break a correct model.
 ```
 
 ---

@@ -424,7 +424,7 @@ describe('withFinalStage (final check, Muse Wonder)', () => {
       budgetMs: 5_000,
       propose: finalOnly([{ op: 'set', id: 'wall', size: [0.2, 0.6, 0.6] }]),
     });
-    expect(res.stages.at(-1)).toMatchObject({ id: FINAL_STAGE, kept: 0, stop: 'no_gain' });
+    expect(res.stages.at(-1)).toMatchObject({ id: FINAL_STAGE, kept: 0, stop: 'repeat' });
     expect(find(res.recipe, 'wall').size[0]).toBeCloseTo(0.6, 9);
   });
 
@@ -439,5 +439,59 @@ describe('withFinalStage (final check, Muse Wonder)', () => {
     });
     expect(res.stages.at(-1)).toMatchObject({ id: FINAL_STAGE, stop: 'gate' });
     expect(propose).not.toHaveBeenCalled();
+  });
+});
+
+describe('stage stop reasons (PQ-T38)', () => {
+  it('stops on a repeated op that gained nothing', async () => {
+    const bad = [{ op: 'set', id: 'wall', size: [0.3, 0.6, 0.6] }];
+    const res = await runShapeStages({
+      seed,
+      stages: [STAGES[0]!],
+      score,
+      budgetMs: 5_000,
+      maxRounds: 5,
+      propose: scripted({ massing: [bad, bad, bad] }),
+    });
+    // Round 1 no gain, round 2 repeats it: own stop reason, round 3 never asked.
+    expect(res.stages[0]!.stop).toBe('repeat');
+    expect(res.stages[0]!.rounds).toBe(2);
+  });
+
+  it('an op kept at half its step may be asked again; it stops once it gains nothing (PR #13 review)', async () => {
+    // Target 0.8 from 0.6: the full step to 0.9 overshoots, a part of it gains (0.75, then 0.7875).
+    const far = [{ op: 'set', id: 'wall', size: [0.9, 0.6, 0.6] }];
+    const res = await runShapeStages({
+      seed,
+      stages: [STAGES[0]!],
+      score,
+      budgetMs: 5_000,
+      maxRounds: 6,
+      propose: scripted({ massing: [far, far, far, far, far] }),
+    });
+    expect(res.stages[0]!.kept).toBe(2);
+    expect(find(res.recipe, 'wall').size[0]).toBeCloseTo(0.7875, 9);
+    // Round 3 gains nothing, round 4 repeats it: stopped there.
+    expect(res.stages[0]!.stop).toBe('repeat');
+    expect(res.stages[0]!.rounds).toBe(4);
+  });
+
+  it('stops when an op undoes the previous kept op', async () => {
+    const res = await runShapeStages({
+      seed,
+      stages: [STAGES[0]!],
+      score,
+      budgetMs: 5_000,
+      maxRounds: 5,
+      propose: scripted({
+        massing: [
+          [{ op: 'set', id: 'wall', size: [0.7, 0.6, 0.6] }],
+          [{ op: 'set', id: 'wall', size: [0.6, 0.6, 0.6] }],
+        ],
+      }),
+    });
+    expect(res.stages[0]!.stop).toBe('back_and_forth');
+    expect(res.stages[0]!.kept).toBe(1);
+    expect(find(res.recipe, 'wall').size[0]).toBeCloseTo(0.7, 9);
   });
 });

@@ -16,7 +16,7 @@ import {
   type ShapeStep,
   type ShapeTarget,
 } from '@/lib/object-shape';
-import { defaultArchetype, kitToRecipe, type KitArchetype, type ObjectKit } from '@/lib/object-kit';
+import { archetypeOf, kitToRecipe, type KitArchetype, type ObjectKit } from '@/lib/object-kit';
 import { pathToRings } from '@/lib/vision';
 import type { PerceptionClient } from './client';
 import { measureKitColors, type ObjectPixels } from './color-measure';
@@ -69,6 +69,10 @@ import { withMaskPanels } from './mask-panels';
 import { withMaskWheels } from './mask-wheels';
 import { withProfileBody } from './profile-body';
 import { scoreRecipe } from './score-shape';
+import { voteKits } from './kit-vote';
+import { askFamilies, asFamily } from './kit-ask';
+import type { ShapeResult } from './schemas';
+import { env } from '@/lib/env';
 import { generateImaginedViews } from './views-generation';
 import {
   ROUND_VIEW_ARCHETYPES,
@@ -182,7 +186,14 @@ export interface ObjectShapeOptions {
    * it unset; evals pass 2 to run the whole pipeline on the Muse cards (PQ-T12).
    */
   promptVersion?: number;
+  /** Kit samples voting (PQ-T18, default `SHAPE_KIT_SAMPLES`): 2 asks the kit twice when ≥ 40 s are left. */
+  kitSamples?: number;
+  /** Critic prompt version of `shapeWithCritic` (PQ-T14): 2 = cards + 2 × 2 sheet + extra rounds; default 1. */
+  criticPromptVersion?: number;
 }
+
+/** The second kit sample is asked only with at least this budget (PQ-T18). */
+const SECOND_SAMPLE_MIN_MS = 40_000;
 
 /**
  * Selected object → its 3D shape (PV-T9), Meta models only. One Spark call on a crop around the object
@@ -215,6 +226,7 @@ export async function runObjectShape(
     onStageSeed,
     onStagesLeft,
     promptVersion,
+    kitSamples = env.SHAPE_KIT_SAMPLES,
   }: ObjectShapeOptions = {}
 ): Promise<ObjectShape> {
   /** Logs each ended stage (first answer and background). */
@@ -270,7 +282,8 @@ export async function runObjectShape(
     }
   };
 
-  const base = { detectionId: target.id };
+  /** `ask` is set once the kit shows doubt about the family (PQ-T41) and rides on every recipe answer. */
+  const base: { detectionId: string; ask?: ObjectShape['ask'] } = { detectionId: target.id };
   const silhouette = (
     reason: NonNullable<ObjectShape['reason']>,
     source: Pick<ObjectShape, 'source' | 'model' | 'fallback' | 'detail'>
@@ -336,30 +349,40 @@ export async function runObjectShape(
     onStep?.('model');
     const started = Date.now();
     const timeout = AbortSignal.timeout(Math.max(0, timeoutMs));
-    const shapeCall = perception.describeShape(
-      imageUrl,
-      {
-        label: target.label,
-        category: target.category,
-        ...(target.scenery ? { scenery: target.scenery } : {}),
-        ...(aspect > 0 ? { aspect } : {}),
-        ...(preConditions ? { facts: conditionsFacts(preConditions) } : {}),
-        ...(target.facadeUrl ? { facadeUrl: target.facadeUrl } : {}),
-        ...(promptVersion ? { promptVersion } : {}),
-      },
-      signal ? AbortSignal.any([signal, timeout]) : timeout
-    );
+    const askKit = () =>
+      perception.describeShape(
+        imageUrl,
+        {
+          label: target.label,
+          category: target.category,
+          ...(target.scenery ? { scenery: target.scenery } : {}),
+          ...(aspect > 0 ? { aspect } : {}),
+          ...(preConditions ? { facts: conditionsFacts(preConditions) } : {}),
+          ...(target.facadeUrl ? { facadeUrl: target.facadeUrl } : {}),
+          ...(target.archetype ? { archetype: target.archetype } : {}),
+          ...(promptVersion ? { promptVersion } : {}),
+        },
+        signal ? AbortSignal.any([signal, timeout]) : timeout
+      );
+    const shapeCall = askKit();
+    // PQ-T18: a second sample in parallel when asked and the budget allows it (≥ 40 s).
+    const secondCall: Promise<ShapeResult | null> | null =
+      kitSamples >= 2 && timeoutMs >= SECOND_SAMPLE_MIN_MS ? askKit().catch(() => null) : null;
     // 2D facade validated (user 2026-11-02): the house is rebuilt from its elevations — front
     // measured by SAM while Muse Image draws the side, then the side measured — in parallel
     // with Spark. Null for other archetypes, the mock, or a facade SAM cannot read.
-    const hint = defaultArchetype(target.category, target.scenery, target.label);
+    const hint = archetypeOf(target);
     const elevations =
       target.facadeUrl && perception.segmentImage && ELEVATION_ARCHETYPES.includes(hint)
         ? measureFacadeElevations(
             perception.segmentImage.bind(perception),
             target.facadeUrl,
             hint,
-            { ...(signal ? { signal } : {}), ...(onSideView ? { onSideView } : {}) }
+            {
+              ...(signal ? { signal } : {}),
+              ...(onSideView ? { onSideView } : {}),
+              ...(env.SHAPE_SIDE_V2 ? { sideCards: true } : {}),
+            }
           ).catch(() => null)
         : Promise.resolve(null);
     // PV-H: any other object with a validated 2D view → hull of that view and its drawn side.
@@ -371,7 +394,11 @@ export async function runObjectShape(
             hint,
             target.label,
             conceptOf(target),
-            { ...(signal ? { signal } : {}), ...(onSideView ? { onSideView } : {}) }
+            {
+              ...(signal ? { signal } : {}),
+              ...(onSideView ? { onSideView } : {}),
+              ...(env.SHAPE_SIDE_V2 ? { sideV2: { candidates: 2 } } : {}),
+            }
           ).catch(() => null)
         : Promise.resolve(null);
     const fetched = await fetchedOutline;
@@ -397,7 +424,47 @@ export async function runObjectShape(
       photo && !(shaped === target && preGrid)
         ? sampleObjectGray(photo, shaped.box, shaped.outline, EDGE_COLUMNS).catch(() => null)
         : Promise.resolve(preGrid);
-    const found = await shapeCall;
+    let found = await shapeCall;
+    let splitOther: KitArchetype | undefined;
+    if (secondCall && found.kit && found.source === 'meta') {
+      // A late second sample is not waited for: the first answer stands alone.
+      const left = Math.max(0, timeoutMs / 2 - (Date.now() - started));
+      const late = new Promise<null>((r) => setTimeout(() => r(null), left));
+      const second = await Promise.race([secondCall, late]);
+      const other = second?.kit && second.source === 'meta' ? second.kit : null;
+      const vote = await voteKits(found.kit, other, async (kit) => {
+        if (!photo || !shaped.outline) return null;
+        const r = await scoreRecipe(
+          photo,
+          { box: shaped.box, outline: shaped.outline },
+          kitToRecipe(kit)
+        );
+        return r ? r.score.score : null;
+      });
+      if (vote.kit !== found.kit) {
+        found = { ...found, kit: vote.kit, recipe: kitToRecipe(vote.kit) };
+      }
+      splitOther = vote.outcome === 'split' ? vote.other : undefined;
+      if (vote.outcome !== 'single') {
+        console.info(
+          `[vision] 3D kit vote for "${target.label}": ${vote.outcome}${vote.disagreed.length ? ` (${vote.disagreed.join(',')})` : ''}`
+        );
+      }
+    }
+    // PQ-T41: the operator's pick wins over the model; a doubtful family becomes a question.
+    const chosen = asFamily(target.archetype);
+    if (found.kit && chosen && found.kit.archetype !== chosen) {
+      const kit = { ...found.kit, archetype: chosen };
+      found = { ...found, kit, recipe: kitToRecipe(kit) };
+    }
+    const pair =
+      found.kit && found.source === 'meta'
+        ? askFamilies(found.kit, splitOther ?? hint, {
+            split: splitOther !== undefined,
+            chosen: chosen !== undefined,
+          })
+        : null;
+    if (pair) base.ask = { archetypes: pair };
     const finalGrid = await edges;
     // PQ-T7: the conditions ride on every recipe answer (facade house, views, photo pipeline alike),
     // otherwise the "photo too small / blurred" hint never shows for the objects that take those paths.
