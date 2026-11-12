@@ -154,3 +154,73 @@ describe('detail kinds (PQ-T20)', () => {
     expect(out).toHaveLength(2 + 4);
   });
 });
+
+describe('detail kinds (PQ-T48 §7.2)', () => {
+  const roof: RecipePart = { ...body, shape: 'prism', kind: 'roof' };
+
+  it('a hull with glass, grille, bumpers and door lines gets all seven, placed by face', () => {
+    const out = detailPartsOf({
+      ...car,
+      details: ['windscreen', 'rear_window', 'grille', 'bumper', 'door_line'],
+    });
+    expect(out).toHaveLength(1 + 1 + 1 + 2 + 2);
+    expect(out.every((q) => q.color === DETAIL_DARK)).toBe(true);
+    const [screen, rear, grille, bumpF, bumpB, lineL, lineR] = out;
+    expect(screen!.at[1]).toBeGreaterThan(0);
+    expect(screen!.at[2]).toBeGreaterThan(0.5);
+    expect(rear!.at[2]).toBeLessThan(-0.5);
+    expect(grille!.at[1]).toBeLessThan(0);
+    expect(Math.sign(bumpF!.at[2])).toBe(1);
+    expect(Math.sign(bumpB!.at[2])).toBe(-1);
+    expect(bumpF!.at[1]).toBeLessThan(0);
+    for (const line of [lineL!, lineR!]) {
+      expect(line.size[1]).toBeGreaterThan(line.size[0] * 10);
+      expect(line.at[2]).toBeGreaterThan(0.5);
+    }
+    expect(lineL!.at[0]).toBeLessThan(lineR!.at[0]);
+  });
+
+  it('a roof with fascia and ridge cap gets light eave boards and a dark cap on top', () => {
+    const out = detailPartsOf({ ...roof, details: ['fascia', 'ridge_cap'] });
+    expect(out).toHaveLength(3);
+    const [fore, aft, cap] = out;
+    expect(fore!.color).toBe(DETAIL_METAL);
+    expect(aft!.color).toBe(DETAIL_METAL);
+    expect(fore!.at[1]).toBeLessThan(0);
+    expect(Math.sign(fore!.at[2])).toBe(1);
+    expect(Math.sign(aft!.at[2])).toBe(-1);
+    expect(cap!.at[1]).toBeCloseTo(0.49, 9);
+    expect(cap!.at[1] + cap!.size[1] / 2).toBeGreaterThan(0.5);
+  });
+
+  it('a body with a reveal gets a shadow gap inside its front edges, a step a slab forward', () => {
+    const gap = detailPartsOf({ ...body, details: ['reveal'] });
+    expect(gap).toHaveLength(4);
+    expect(gap.every((q) => q.color === DETAIL_DARK)).toBe(true);
+    expect(gap.every((q) => q.at[2] > 0.25 && q.at[2] < 0.27)).toBe(true);
+    expect(gap.every((q) => Math.abs(q.at[0]) < 0.25 && Math.abs(q.at[1]) < 0.5)).toBe(true);
+    const [step] = detailPartsOf({ ...body, details: ['step'] });
+    expect(step!.color).toBe(DETAIL_METAL);
+    expect(step!.at[2]).toBeGreaterThan(0.25);
+    expect(step!.at[1]).toBeCloseTo(-0.5, 9);
+  });
+
+  it('wheel_arch is arch under its §7.2 name: same disc, same guard', () => {
+    const host = { ...wheel, rim: undefined };
+    expect(detailPartsOf({ ...host, details: ['wheel_arch'] })).toEqual(
+      detailPartsOf({ ...host, details: ['arch'] })
+    );
+    expect(detailPartsOf({ ...car, details: ['wheel_arch'] })).toHaveLength(0);
+  });
+
+  it('proud details count for the outline, flush glass and shut lines do not', () => {
+    expect(
+      outlineDetails([
+        { ...car, details: ['windscreen', 'rear_window', 'grille', 'door_line', 'reveal'] },
+      ])
+    ).toHaveLength(0);
+    expect(outlineDetails([{ ...car, details: ['bumper', 'step'] }])).toHaveLength(2 + 1);
+    expect(outlineDetails([{ ...roof, details: ['fascia', 'ridge_cap'] }])).toHaveLength(2 + 1);
+    expect(outlineDetails([{ ...wheel, rim: undefined, details: ['wheel_arch'] }])).toHaveLength(1);
+  });
+});

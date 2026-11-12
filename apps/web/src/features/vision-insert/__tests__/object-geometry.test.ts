@@ -1,6 +1,11 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { silhouetteRings, type ObjectRecipe, type RecipePart } from '@/lib/object-shape';
+import {
+  DETAIL_KINDS,
+  silhouetteRings,
+  type ObjectRecipe,
+  type RecipePart,
+} from '@/lib/object-shape';
 import {
   EDGE_BEVEL,
   edgeBevel,
@@ -86,7 +91,7 @@ describe('recipeMesh (PV-T10)', () => {
 
 describe('detail kinds (PQ-T20)', () => {
   it('every detail on a 12-part vehicle (4 wheels, 8 boxes) stays within the triangle budget', () => {
-    const all = ['handle', 'seam', 'mirror', 'arch', 'rim', 'gutter', 'vent', 'foot'] as const;
+    const all = [...DETAIL_KINDS];
     const heavy: ObjectRecipe = {
       ...fridge,
       parts: Array.from({ length: 12 }, (_, i) => ({
