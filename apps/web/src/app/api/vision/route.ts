@@ -20,8 +20,8 @@ export { MAX_VISION_BYTES } from '@/server/perception/vision-request';
  * Appliance detection on a photo (PV). Multipart: `image` (JPEG/PNG/WebP ≤ MAX_VISION_BYTES), `sessionId`,
  * `regions?` (JSON `VisionRegion[]`, PV-T8: identify only the drawn shapes),
  * `expected?` (JSON `ApplianceDetection[]`, VS-T14: labelled objects of the 360° test tour, used by mock answers).
- * → `text/event-stream`: `vision_detections` (boxes, then outlines on Meta) or, with regions,
- * `vision_regions` (same two phases) · `vision_error` · `done`.
+ * → `text/event-stream`: `vision_detections` (boxes, then outlines on Meta, each with its
+ * duration `ms`, PQ-T42) or, with regions, `vision_regions` (same two phases) · `vision_error` · `done`.
  * Meta + R2: the photo is kept under `vision/` and sent by link. Mock: not stored, sample-room fixture.
  */
 export async function POST(req: NextRequest) {

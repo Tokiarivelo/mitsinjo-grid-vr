@@ -4,6 +4,7 @@ import sharp from 'sharp';
 import { flatWaterRecipe, kitToRecipe, type ObjectKit } from '@/lib/object-kit';
 import {
   SHAPE_TIMEOUT_MS,
+  formatDuration,
   type ObjectRecipe,
   type ObjectShape,
   type ShapeTarget,
@@ -180,7 +181,28 @@ async function shapeWithCriticRound(
   // Version 1: one round. Version 2 (PQ-T14): up to `CRITIC_ROUNDS`, each kept only on gain.
   const rounds = (opts.criticPromptVersion ?? CRITIC_PROMPT_VERSION) >= 2 ? CRITIC_ROUNDS : 1;
   for (let r = 0; r < rounds; r++) {
-    const next = await criticRound(perception, photo, fullImageUrl, target, opts, shape, started);
+    const roundStart = Date.now();
+    let ran = false;
+    const next = await criticRound(
+      perception,
+      photo,
+      fullImageUrl,
+      target,
+      opts,
+      shape,
+      started,
+      () => {
+        ran = true;
+      }
+    );
+    // A skipped round costs nothing and reports nothing; a run one reports even when dropped.
+    if (ran) {
+      const ms = Date.now() - roundStart;
+      console.info(
+        `[vision] 3D critic for "${target.label}": round ${r + 1} ${formatDuration(ms)}`
+      );
+      opts.onTiming?.('critic', ms);
+    }
     if (next === shape) break;
     shape = next;
   }
@@ -201,7 +223,9 @@ async function criticRound(
   target: ShapeTarget,
   opts: ObjectShapeOptions,
   shape: ObjectShape,
-  started: number
+  started: number,
+  /** Called once the round passes its skip guards (PQ-T42: only run rounds are timed). */
+  onRan?: () => void
 ): Promise<ObjectShape> {
   const timeoutMs = opts.timeoutMs ?? SHAPE_TIMEOUT_MS;
   const version = opts.criticPromptVersion ?? CRITIC_PROMPT_VERSION;
@@ -222,6 +246,7 @@ async function criticRound(
     ) {
       return shape;
     }
+    onRan?.();
     const scored = await scoreRecipe(
       photo,
       { box: target.box, outline: shape.outline },

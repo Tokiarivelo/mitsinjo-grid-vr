@@ -19,7 +19,8 @@ import {
 /**
  * 3D shape of one detected object (PV-T9), Meta models only. Multipart: `image` (same photo as
  * `/api/vision`), `target` (JSON `ShapeTarget`: id, label, category, box), `sessionId?`.
- * → `text/event-stream`: `shape_step { step: crop|model|fit }` as the work goes, then
+ * → `text/event-stream`: `shape_step { step: crop|model|fit }` as the work goes,
+ * `shape_timing { phase, ms }` per finished phase (PQ-T42), then
  * `shape_result { shape: ObjectShape }` (`recipe` or `silhouette` + reason), `done`.
  * 400 (JSON) missing / invalid target. The crop is sent inline: nothing is stored.
  * One Spark critic round when the match scores below 70 with time left (PR-0.6).
@@ -48,6 +49,7 @@ export async function POST(req: NextRequest) {
     const shape = await shapeWithCritic(perception, size, fullUrl, target, {
       signal: req.signal,
       onStep: (step) => send('shape_step', { step }),
+      onTiming: (phase, ms) => send('shape_timing', { phase, ms }),
       onStage: (e) => send('shape_stage', { ...e, jobId }),
       onStagesLeft: (rest) => {
         left.rest = rest;

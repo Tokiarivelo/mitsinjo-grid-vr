@@ -429,6 +429,36 @@ export type ShapeStep = (typeof SHAPE_STEPS)[number];
 export const ShapeStepEventSchema = z.object({ step: z.enum(SHAPE_STEPS) });
 
 /**
+ * Timed phases of `/api/vision/shape` (PQ-T42, E12): one SSE `shape_timing { phase, ms }` per
+ * phase that ran, plus a `[vision] 3D <phase> …` log line. `crop` = cut the object · `sam` =
+ * on-demand outline (overlaps `kit`) · `kit` = Spark kit + vote · `views` = elevations / views
+ * measures and the AI check · `masks` = part + facade masks · `fit` = measures, silhouette fit,
+ * reshapes and graph · `stages` = staged loop of the first answer · `score` = final scoring ·
+ * `critic` = Spark critic round(s). Skipped phases emit nothing.
+ */
+export const SHAPE_TIMING_PHASES = [
+  'crop',
+  'kit',
+  'sam',
+  'masks',
+  'fit',
+  'views',
+  'stages',
+  'score',
+  'critic',
+] as const;
+export type ShapeTimingPhase = (typeof SHAPE_TIMING_PHASES)[number];
+export const ShapeTimingEventSchema = z.object({
+  phase: z.enum(SHAPE_TIMING_PHASES),
+  ms: z.number().nonnegative(),
+});
+
+/** `950` → `950 ms`, `3400` → `3.4 s`: the log form of a phase duration (PQ-T42). */
+export function formatDuration(ms: number): string {
+  return ms < 1000 ? `${Math.round(ms)} ms` : `${(Math.round(ms / 100) / 10).toFixed(1)} s`;
+}
+
+/**
  * Staged improvement of the model (PG-T17/T18): stage ids of the loop (house: massing → roof →
  * openings → accessories; objects from their 2D view, PG-T20: body, glass, wheels, doors, cells,
  * trunk, crown, head, details), then `final`: Muse Wonder checks the whole model and re-refines

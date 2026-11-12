@@ -110,6 +110,44 @@ describe('live critic round (PR-0.6)', () => {
     );
   }, 60_000);
 
+  it('times the critic phase, nothing when the round is skipped (PQ-T42)', async () => {
+    const photo = await fridgePhoto();
+    const timings: Array<{ phase: string; ms: number }> = [];
+    const onTiming = (phase: string, ms: number) => timings.push({ phase, ms });
+    // Score holds: no patch asked, but the scoring pass ran — the phase is timed.
+    const held = sparkFor(fridge.prior, { patch: { subtype: 'x' } });
+    await shapeWithCritic(held, photo, 'data:full', fridgeTarget(), { onTiming });
+    expect(held.criticizeShape).not.toHaveBeenCalled();
+    expect(timings.filter((t) => t.phase === 'critic')).toHaveLength(1);
+    // Wrong kit on purpose (lamp over a fridge, score 47): patch, retry and rescore timed.
+    timings.length = 0;
+    await shapeWithCritic(
+      sparkFor(lampPrior, { patch: { archetype: 'cabinet' } }),
+      photo,
+      'data:full',
+      fridgeTarget(),
+      {
+        onTiming,
+      }
+    );
+    const critic = timings.filter((t) => t.phase === 'critic');
+    expect(critic).toHaveLength(1);
+    expect(critic[0]!.ms).toBeGreaterThanOrEqual(0);
+    // Truly skipped (mock, no outline to score against): no `critic` timing.
+    timings.length = 0;
+    const mock = {
+      describeShape: vi.fn().mockResolvedValue({
+        recipe: kitToRecipe(fridge.prior),
+        source: 'mock',
+        model: 'mock-perception-v1',
+      }),
+      describeParts: vi.fn().mockResolvedValue({ recipe: null }),
+      criticizeShape: vi.fn(),
+    };
+    await shapeWithCritic(mock, null, 'data:full', fridgeTarget(), { onTiming });
+    expect(timings.map((t) => t.phase)).not.toContain('critic');
+  }, 120_000);
+
   it('version 2 (PQ-T14): a round that gains nothing ends the rounds, the original stands (PR #13 review)', async () => {
     const photo = await fridgePhoto();
     const spark = sparkFor(lampPrior, { patch: { subtype: 'x' } });

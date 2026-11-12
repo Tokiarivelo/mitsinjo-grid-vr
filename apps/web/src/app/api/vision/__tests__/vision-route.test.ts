@@ -42,6 +42,9 @@ describe('POST /api/vision (PV-T6)', () => {
     const { data } = events[0]!;
     expect(data.phase).toBe('boxes');
     expect(data.source).toBe('mock');
+    // PQ-T42: the phase carries its duration.
+    expect(data.ms).toEqual(expect.any(Number));
+    expect(data.ms).toBeGreaterThanOrEqual(0);
     expect(data.detections).toEqual(MOCK_DETECTIONS);
     // Labels and geometry only: no power value leaves the vision route.
     expect(JSON.stringify(data)).not.toMatch(/watt|kw/i);

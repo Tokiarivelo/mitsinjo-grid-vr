@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   clampParts,
   fitRecipe,
+  formatDuration,
   frontPartIndex,
   ObjectRecipeSchema,
   recipeIssue,
+  ShapeTimingEventSchema,
   silhouetteRings,
   type ObjectRecipe,
 } from '../object-shape';
@@ -278,5 +280,24 @@ describe('clampParts (last guard before shipping)', () => {
     expect(out.recipe.parts[1]!.size[1]).toBe(0.01);
     expect(out.recipe.parts[1]!.at[0]).toBe(0.6);
     expect(() => ObjectRecipeSchema.parse(out.recipe)).not.toThrow();
+  });
+});
+
+describe('formatDuration (PQ-T42)', () => {
+  it('reads milliseconds below a second, one decimal above', () => {
+    expect(formatDuration(0)).toBe('0 ms');
+    expect(formatDuration(47)).toBe('47 ms');
+    expect(formatDuration(999)).toBe('999 ms');
+    expect(formatDuration(1000)).toBe('1.0 s');
+    expect(formatDuration(3440)).toBe('3.4 s');
+    expect(formatDuration(15000)).toBe('15.0 s');
+  });
+});
+
+describe('ShapeTimingEventSchema (PQ-T42)', () => {
+  it('accepts a known phase with a non-negative duration', () => {
+    expect(ShapeTimingEventSchema.safeParse({ phase: 'kit', ms: 3200 }).success).toBe(true);
+    expect(ShapeTimingEventSchema.safeParse({ phase: 'nope', ms: 3 }).success).toBe(false);
+    expect(ShapeTimingEventSchema.safeParse({ phase: 'fit', ms: -1 }).success).toBe(false);
   });
 });

@@ -1,7 +1,12 @@
 // @vitest-environment node
 import sharp from 'sharp';
 import { describe, expect, it, vi } from 'vitest';
-import { ObjectShapeSchema, type ObjectRecipe, type ShapeTarget } from '@/lib/object-shape';
+import {
+  ObjectShapeSchema,
+  ShapeTimingEventSchema,
+  type ObjectRecipe,
+  type ShapeTarget,
+} from '@/lib/object-shape';
 vi.mock('server-only', () => ({}));
 import { srgbToLinear } from '../color-measure';
 import { runObjectShape, SHAPE_TIMEOUT_MS } from '../object-shape';
@@ -166,6 +171,25 @@ describe('runObjectShape (PV-T9)', () => {
       onStep: (s) => steps.push(s),
     });
     expect(steps).toEqual(['crop', 'model', 'fit']);
+  });
+
+  it('reports each run phase duration, skipped phases stay silent (PQ-T42)', async () => {
+    const timings: Array<{ phase: string; ms: number }> = [];
+    const onTiming = (phase: string, ms: number) => timings.push({ phase, ms });
+    await runObjectShape(client(meta(tall)), await photo(), 'data:full', target, { onTiming });
+    // No outline to fetch (no segmentImage), no kit details, no masks, no staged loop.
+    expect(timings.map((t) => t.phase)).toEqual(['crop', 'kit', 'fit']);
+    for (const t of timings) expect(ShapeTimingEventSchema.safeParse(t).success).toBe(true);
+    // Mock mode without pixels: the kit call alone.
+    timings.length = 0;
+    await runObjectShape(
+      client({ recipe: tall, source: 'mock', model: 'mock-perception-v1' }),
+      null,
+      'data:full',
+      target,
+      { onTiming }
+    );
+    expect(timings.map((t) => t.phase)).toEqual(['kit']);
   });
 
   it('a Meta timeout is reason « timeout », other Meta errors keep their cause', async () => {

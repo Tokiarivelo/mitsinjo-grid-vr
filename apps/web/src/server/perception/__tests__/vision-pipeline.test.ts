@@ -34,6 +34,11 @@ describe('runVisionPipeline (PV-T6)', () => {
       ['vision_detections', 'boxes'],
       ['vision_detections', 'outlines'],
     ]);
+    // PQ-T42: each phase carries its duration.
+    for (const c of emit.mock.calls) {
+      expect(typeof c[1].ms).toBe('number');
+      expect(c[1].ms).toBeGreaterThanOrEqual(0);
+    }
     const outlines = emit.mock.calls[1]![1];
     expect(outlines.refined).toBe(1);
     expect(outlines.detections[0].outline).toBe('M0.06 0.22L0.26 0.22L0.26 0.88Z');
@@ -67,7 +72,13 @@ describe('runVisionPipeline (PV-T6)', () => {
     expect(emit.mock.calls).toEqual([
       [
         'vision_detections',
-        { phase: 'boxes', detections: [], source: 'meta', model: 'muse-spark-1.3' },
+        {
+          phase: 'boxes',
+          detections: [],
+          ms: expect.any(Number),
+          source: 'meta',
+          model: 'muse-spark-1.3',
+        },
       ],
     ]);
     expect(segmentImage).not.toHaveBeenCalled();

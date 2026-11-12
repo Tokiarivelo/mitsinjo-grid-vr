@@ -1,4 +1,5 @@
 import type { ApplianceDetection } from '@/lib/vision';
+import { formatDuration } from '@/lib/object-shape';
 import type { VisionImage } from '@/server/storage/media';
 import type { PerceptionClient } from './client';
 import { refineDetections } from './outline';
@@ -24,6 +25,7 @@ export async function runVisionPipeline(
     typeof image === 'string' ? { url: image, inlineUrl: undefined } : image;
   try {
     let imageUrl = url;
+    const boxesStart = Date.now();
     let found = await perception.detectAppliances(imageUrl, signal);
     // Meta could not use the hosted link (e.g. media_url_origin_error): resend the photo inline once.
     if (found.fallback === 'provider_error' && inlineUrl && !signal?.aborted) {
@@ -31,19 +33,30 @@ export async function runVisionPipeline(
       imageUrl = inlineUrl;
       found = await perception.detectAppliances(imageUrl, signal);
     }
+    const boxesMs = Date.now() - boxesStart;
+    console.info(`[vision] detections (boxes): ${formatDuration(boxesMs)}`);
     const source = {
       source: found.source,
       model: found.model,
       ...(found.fallback ? { fallback: found.fallback } : {}),
     };
-    emit('vision_detections', { phase: 'boxes', detections: found.detections, ...source });
+    emit('vision_detections', {
+      phase: 'boxes',
+      detections: found.detections,
+      ms: boxesMs,
+      ...source,
+    });
 
     if (found.source !== 'meta' || found.detections.length === 0) return;
+    const outlinesStart = Date.now();
     const refined = await refineDetections(perception, imageUrl, found.detections);
+    const outlinesMs = Date.now() - outlinesStart;
+    console.info(`[vision] detections (outlines): ${formatDuration(outlinesMs)}`);
     emit('vision_detections', {
       phase: 'outlines',
       detections: refined.detections,
       refined: refined.refined,
+      ms: outlinesMs,
       ...source,
     });
   } catch (err) {
