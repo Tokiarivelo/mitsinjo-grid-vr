@@ -1,6 +1,6 @@
 # HANDOFF — read first, overwrite at end of session (≤40 lines)
 
-**Updated:** 2026-11-12 · **By:** Muse Code · **Branch:** feat/pq-t45-sandboxed-code (`26030f3` committed, unpushed — no network)
+**Updated:** 2026-11-12 · **By:** Muse Code · **Branch:** feat/pq-t45-sandboxed-code (pushed `bb89331` via HTTPS+proxy — SSH DNS dead, `gh` token works)
 
 ## PRIORITY NEXT: PQ-T46 `anatomy` in kit, cards and score (§12.3, §5, E5, E9)
 
@@ -17,7 +17,9 @@ routing, PQ-T48 detail kinds... Live §8bis measures still need a Meta key.
   via npm + hand-written lock entries + manual `.pnpm` layout. First online
   `pnpm install` normalizes and verifies the lock (entries follow v9 exactly).
 - **Q4 code** still on `feat/pq-q4` (PR #15, reviewed) — merge to land it.
-- Push blocked: HTTPS needs auth this session lacks; SSH has no route.
+- Push route: SSH DNS dead; HTTPS via proxy + `gh` token works
+  (`git -c credential.helper='!gh auth git-credential' push https://...`).
+  Still unpushed: `feat/docs-tick-q4`, `feat/pq-t43-template-fixes`.
 
 ## Verify (this session)
 
