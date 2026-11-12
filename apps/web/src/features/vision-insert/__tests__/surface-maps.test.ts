@@ -7,8 +7,10 @@ import {
   MAP_TILE,
   MAPPED_SURFACES,
   planarUvs,
+  seedForRecipe,
   surfaceHeight,
   surfaceMaps,
+  uvOffsetFor,
 } from '../utils/surface-maps';
 
 const N = 64;
@@ -126,5 +128,36 @@ describe('planarUvs (PR-1.4)', () => {
     const t = MAP_TILE;
     expect(Array.from(tri([0, 0, 1]).slice(0, 2))).toEqual([0.1 / t, 0.2 / t].map(Math.fround));
     expect(Array.from(tri([0, 1, 0]).slice(0, 2))).toEqual([0.3 / t, 0.1 / t].map(Math.fround));
+  });
+});
+
+describe('pattern seed + offsets (PQ-T44 remedy 4)', () => {
+  it('seedForRecipe is stable per recipe, distinct per colour', () => {
+    const r = { proportions: { w: 1, h: 1, d: 1 }, parts: [{ color: '#aaaaaa' }] };
+    expect(seedForRecipe(r)).toBe(seedForRecipe(r));
+    expect(seedForRecipe(r)).not.toBe(
+      seedForRecipe({ proportions: r.proportions, parts: [{ color: '#bbbbbb' }] })
+    );
+  });
+
+  it('uvOffsetFor stays in the tile and varies', () => {
+    const [u, v] = uvOffsetFor(123, 0);
+    expect(u).toBeGreaterThanOrEqual(0);
+    expect(u).toBeLessThan(1);
+    expect(v).toBeGreaterThanOrEqual(0);
+    expect(v).toBeLessThan(1);
+    expect(uvOffsetFor(123, 0)).toEqual(uvOffsetFor(123, 0));
+    expect(uvOffsetFor(123, 0)).not.toEqual(uvOffsetFor(123, 1));
+  });
+
+  it('planarUvs shifts by the offset exactly', () => {
+    const pos = [0.1, 0.2, 0.3, 0.1, 0.2, 0.3, 0.1, 0.2, 0.3];
+    const n: [number, number, number] = [0, 0, 1];
+    const plain = planarUvs(pos, [...n, ...n, ...n]);
+    const shifted = planarUvs(pos, [...n, ...n, ...n], false, [0.25, 0.5]);
+    for (let i = 0; i < 6; i += 2) {
+      expect(shifted[i]).toBeCloseTo(plain[i]! + 0.25, 5);
+      expect(shifted[i + 1]).toBeCloseTo(plain[i + 1]! + 0.5, 5);
+    }
   });
 });

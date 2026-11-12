@@ -1,3 +1,4 @@
+import { fnv1a32 } from '@/lib/hash';
 import type { Surface } from './surface-look';
 
 /**
@@ -199,16 +200,35 @@ export function surfaceMaps(surface: Surface, size = MAP_SIZE): SurfaceMaps | nu
 export const SLOPE_RANGE = [0.1, 0.98] as const;
 
 /**
+ * Stable per-object pattern seed (PQ-T44 remedy 4): from the recipe's proportions and part
+ * colours, so two houses never share a brick phase while replays stay put.
+ */
+export function seedForRecipe(recipe: {
+  proportions: unknown;
+  parts: Array<{ color: string }>;
+}): number {
+  return fnv1a32(JSON.stringify([recipe.proportions, recipe.parts.map((p) => p.color)]));
+}
+
+/** UV offset in tile units for one part: object seed × part index, deterministic. */
+export function uvOffsetFor(seed: number, index: number): [number, number] {
+  const unit = (salt: number) => ((fnv1a32(`${seed}:${index}:${salt}`) >>> 8) % 1000) / 1000;
+  return [unit(1), unit(2)];
+}
+
+/**
  * Planar UVs in object units (box projection per triangle): each triangle is projected on the plane its
  * normal faces most, scaled by `MAP_TILE`, so a pattern keeps its size whatever the part's size.
  * With `slopes` (roof parts, PG-T7): a sloped face is mapped in its own plane instead — u along the
  * eave, v up the fall line — so thatch strands and slate rows run downhill, not stretched across.
- * `position` and `normal` are non-indexed xyz triplets; returns uv pairs.
+ * `position` and `normal` are non-indexed xyz triplets; `offset` shifts the pattern in tile units
+ * (per object and part, so no two houses show the same brick); returns uv pairs.
  */
 export function planarUvs(
   position: ArrayLike<number>,
   normal: ArrayLike<number>,
-  slopes = false
+  slopes = false,
+  offset: readonly [number, number] = [0, 0]
 ): Float32Array {
   const count = position.length / 3;
   const uv = new Float32Array(count * 2);
@@ -240,8 +260,8 @@ export function planarUvs(
           : az >= ay
             ? [x, y]
             : [z, x];
-      uv[k * 2] = u / MAP_TILE;
-      uv[k * 2 + 1] = v / MAP_TILE;
+      uv[k * 2] = u / MAP_TILE + offset[0];
+      uv[k * 2 + 1] = v / MAP_TILE + offset[1];
     }
   }
   return uv;

@@ -258,22 +258,32 @@ export async function measureFacadeElevations(
     : sideViewPrompt(front);
   for (let attempt = 1; attempt <= SIDE_VIEW_ATTEMPTS; attempt++) {
     if (signal?.aborted) break;
-    const png = await imagineSideView(frontUrl, prompt, signal);
-    if (!png) break;
-    onSideView?.(png);
-    const side = (
-      await measureElevationImage(
-        segment,
-        `data:image/png;base64,${png.toString('base64')}`,
-        concept,
-        {
-          withDoors: false,
-        }
+    // PQ-T44 (E10): two candidates per attempt with the v2 cards, first consistent kept.
+    const tries = sideCards ? 2 : 1;
+    const pngs = (
+      await Promise.all(
+        Array.from({ length: tries }, () => imagineSideView(frontUrl, prompt, signal))
       )
-    )?.elevation;
-    if (side && sideConsistent(front, side)) return { front, side };
+    ).filter((p): p is Buffer => p !== null);
+    if (!pngs.length) break;
+    let seen: Elevation | null = null;
+    for (const png of pngs) {
+      onSideView?.(png);
+      const side = (
+        await measureElevationImage(
+          segment,
+          `data:image/png;base64,${png.toString('base64')}`,
+          concept,
+          {
+            withDoors: false,
+          }
+        )
+      )?.elevation;
+      if (side) seen = side;
+      if (side && sideConsistent(front, side)) return { front, side };
+    }
     console.info(
-      `[vision] 3D side view ${attempt}/${SIDE_VIEW_ATTEMPTS} ${side ? 'inconsistent with the front' : 'unreadable'}${attempt < SIDE_VIEW_ATTEMPTS ? ', drawing it again' : ', dropped'}`
+      `[vision] 3D side view ${attempt}/${SIDE_VIEW_ATTEMPTS} ${seen ? 'inconsistent with the front' : 'unreadable'}${attempt < SIDE_VIEW_ATTEMPTS ? ', drawing it again' : ', dropped'}`
     );
   }
   return { front, side: null };

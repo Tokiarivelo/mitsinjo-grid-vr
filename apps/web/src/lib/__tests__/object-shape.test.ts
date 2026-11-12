@@ -9,6 +9,7 @@ import {
   recipeIssue,
   ShapeTimingEventSchema,
   silhouetteRings,
+  wallTintFor,
   type ObjectRecipe,
 } from '../object-shape';
 import { pathToRings } from '../vision';
@@ -331,5 +332,38 @@ describe('boundForRoof (PQ-T43)', () => {
         parts: [{ ...roof, overhang: 0.5 }],
       }).success
     ).toBe(false);
+  });
+});
+
+describe('wallTintFor (PQ-T44)', () => {
+  const wall = { shape: 'box', kind: 'wall' } as const;
+  const tints = { front: '#ff0000', left: '#00ff00', right: '#0000ff' };
+
+  it('front and rear read front, sides read their side, tops keep base', () => {
+    expect(wallTintFor(wall, tints, [0, 0, 1])).toBe('#ff0000');
+    expect(wallTintFor(wall, tints, [0, 0, -1])).toBe('#ff0000');
+    expect(wallTintFor(wall, tints, [-1, 0, 0])).toBe('#00ff00');
+    expect(wallTintFor(wall, tints, [1, 0, 0])).toBe('#0000ff');
+    expect(wallTintFor(wall, tints, [0, 1, 0])).toBeNull();
+    expect(wallTintFor(wall, tints, [0, -1, 0])).toBeNull();
+  });
+
+  it('absent tints, non-walls and missing faces keep the part colour', () => {
+    expect(wallTintFor(wall, undefined, [0, 0, 1])).toBeNull();
+    expect(wallTintFor(wall, {}, [0, 0, 1])).toBeNull();
+    expect(wallTintFor({ shape: 'prism', kind: 'roof' }, tints, [0, 0, 1])).toBeNull();
+    expect(wallTintFor({ shape: 'box' }, tints, [0, 0, 1])).toBeNull();
+    expect(wallTintFor({ shape: 'box', front: true }, tints, [-1, 0, 0])).toBe('#00ff00');
+  });
+
+  it('wallTints schema takes per-face hex, rejects the rest', () => {
+    const wall = { shape: 'box', at: [0, 0, 0], size: [1, 1, 1], color: '#aaaaaa' };
+    const base = { proportions: { w: 1, h: 1, d: 1 }, parts: [wall] };
+    expect(ObjectRecipeSchema.safeParse({ ...base, wallTints: { front: '#ff0000' } }).success).toBe(
+      true
+    );
+    expect(ObjectRecipeSchema.safeParse({ ...base, wallTints: { front: 'red' } }).success).toBe(
+      false
+    );
   });
 });

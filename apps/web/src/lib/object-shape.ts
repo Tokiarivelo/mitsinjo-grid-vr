@@ -289,6 +289,28 @@ export const ObjectRecipeSchema = z.object({
   yaw: z.number().min(-MAX_YAW).max(MAX_YAW).optional(),
   /** One tileable 64 px photo swatch per material (PR-1.5), base64 data URL (≤ 8 kB each). */
   swatches: z.record(RecipeMaterialSchema, z.string()).optional(),
+  /**
+   * Measured wall tints per face (PQ-T44 remedy 4): medians on the photo's wall regions,
+   * yawed views only (straight views keep the role colour). Absent faces fall back to the
+   * part colour; the rear mirrors the front. The 3D view and the flat render tint by face
+   * normal; the village and VR ignore it.
+   */
+  wallTints: z
+    .object({
+      front: z
+        .string()
+        .regex(/^#[0-9a-f]{6}$/i)
+        .optional(),
+      left: z
+        .string()
+        .regex(/^#[0-9a-f]{6}$/i)
+        .optional(),
+      right: z
+        .string()
+        .regex(/^#[0-9a-f]{6}$/i)
+        .optional(),
+    })
+    .optional(),
   /** How the key dims were determined (PR-2.15); eave on houses only, absent on older shapes. */
   dimStatus: z
     .object({
@@ -641,6 +663,25 @@ export function recipeIssue(recipe: ObjectRecipe): 'no_body' | null {
  * ±RECIPE_BOUND, so a fitting step that squeezes a part flat never breaks the schema. Returns the
  * same recipe when nothing moved, and the indices of the parts it changed (for the log).
  */
+/**
+ * Wall tint for a vertex normal (PQ-T44 remedy 4): ±z faces read front (the rear mirrors
+ * it), ±x faces their side, tops and base keep the part colour. Shared by the 3D view and
+ * the flat render so the judge grades what the viewer shows. Null = keep the part colour.
+ */
+export function wallTintFor(
+  part: Pick<RecipePart, 'shape' | 'kind' | 'front'>,
+  tints: NonNullable<ObjectRecipe['wallTints']> | undefined,
+  normal: readonly [number, number, number]
+): string | null {
+  if (!tints) return null;
+  if (part.shape !== 'box' || (part.kind !== 'wall' && !part.front)) return null;
+  const [nx, ny, nz] = normal;
+  const [ax, ay, az] = [Math.abs(nx), Math.abs(ny), Math.abs(nz)];
+  if (az >= ax && az >= ay) return tints.front ?? null;
+  if (ax >= ay) return (nx > 0 ? tints.right : tints.left) ?? null;
+  return null;
+}
+
 export function clampParts(recipe: ObjectRecipe): { recipe: ObjectRecipe; clamped: number[] } {
   const clamped: number[] = [];
   const parts = recipe.parts.map((p, i) => {

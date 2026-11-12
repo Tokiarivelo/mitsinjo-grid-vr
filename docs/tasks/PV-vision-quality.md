@@ -499,8 +499,13 @@ One task = one commit, with its Vitest test, its `contracts.md` update and its m
       known non-thatch material); hip eave (bevel kept sharp per R9); houses rear-mirror + sides
       whole-or-nothing (starved stay front-only for hidden-sides), wall gable ends (single house +
       1 gable); photo outline-vs-wall deferred to PQ-T45; V265.
-- [ ] **PQ-T44 Houses through the 2D path by default** (§12.2bis, §7.4 remedies 1, 3, 4). Clean facade
+- [x] **PQ-T44 Houses through the 2D path by default** (§12.2bis, §7.4 remedies 1, 3, 4). Clean facade
       drawing when none exists, real opening measures, per-face measured materials.
+      _Built 2026-11-12:_ default facade route (`routeHouseFacade`: clean-facade draw + measure +
+      gate, parallel with Spark, template fallback; 2-candidate sides); oblique photo masks placed
+      on side faces (17–60°, overlays, replace guessed sides; ends skip covered faces); wall tints
+      per face (yawed + roofline, split measured, both renders) + object-seed UV offsets; per-face
+      pattern groups deferred to PQ-T45; V266.
 - [ ] **PQ-T45 Sandboxed code, the main path for every object** (§12.2ter, §8bis). Build `api` +
       QuickJS WASM + limits + Wonder-written `build()`, template draft replaced on gain, patch loop,
       code stored with the capture. First case: the house.

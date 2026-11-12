@@ -8,7 +8,7 @@ import { kitToRecipe, type ObjectKit } from '@/lib/object-kit';
 import { ObjectRecipeSchema, type PartMask, type ShapeTarget } from '@/lib/object-shape';
 import { boxPath, pathToRings, polygonPath } from '@/lib/vision';
 import { GOLDEN_SHAPES, goldenBox, goldenOutline, goldenSvg, PHOTO } from '../__fixtures__/shape';
-import { deltaE2000, hexToLab, hexToRgb } from '../color-measure';
+import { deltaE2000, hexToLab, hexToRgb, linearToHex, srgbToLinear } from '../color-measure';
 import { confidence, mixColor } from '../fusion';
 import type { MaskMapGeom } from '../mask-geometry';
 import { withMaskPanels } from '../mask-panels';
@@ -17,7 +17,12 @@ import type { RgbGrid } from '../model-score';
 import { runObjectShape } from '../object-shape';
 import { cropRectForShape } from '../shape-crop';
 import { sampleObjectRgb } from '../shape-colors';
-import { litMeasure, measureRegionColors, withRegionColors } from '../region-colors';
+import {
+  litMeasure,
+  measureRegionColors,
+  measureWallTints,
+  withRegionColors,
+} from '../region-colors';
 
 const rgbHex = ([r, g, b]: [number, number, number]) =>
   `#${[r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('')}`;
@@ -365,5 +370,39 @@ describe('withRegionColors (PR-2.8)', () => {
       `[test] car colours: glass ${shell.color} → ${glassPanels[0]!.color}, body ${main.color} → ${expectedBody}, iou ${plain.fit!.iou} → ${measured.fit!.iou}`
     );
     expect(Math.abs(measured.fit!.iou - plain.fit!.iou)).toBeLessThanOrEqual(0.03);
+  });
+});
+
+describe('measureWallTints (PQ-T44 remedy 4)', () => {
+  const RED: [number, number, number] = [200, 40, 40];
+  const TAN: [number, number, number] = [200, 180, 140];
+  const BLUE: [number, number, number] = [40, 80, 200];
+  const geom = geomA();
+  const rings = pathToRings(boxPath(geom.box));
+  const win = { concept: 'window', box: { x: 0.45, y: 0.5, w: 0.08, h: 0.12 } } as const;
+
+  it('splits wall cells into front and visible-side tints, openings excluded', () => {
+    const g = grid(24, 24, (i) => ((i + 0.5) / 24 < 1 / 3 ? RED : TAN));
+    const out = measureWallTints(g, rings, [win], geom, photoA, geom.box, 0.5, 0.3)!;
+    expect(out.front).toBe(linearToHex(...srgbToLinear(...TAN)));
+    expect(out.left).toBe(linearToHex(...srgbToLinear(...RED)));
+    expect(out.right).toBeUndefined();
+  });
+
+  it('mirrored yaw tints the right face', () => {
+    const g = grid(24, 24, (i) => ((i + 0.5) / 24 > 2 / 3 ? BLUE : TAN));
+    const out = measureWallTints(g, rings, [win], geom, photoA, geom.box, -0.5, 0.3)!;
+    expect(out.right).toBe(linearToHex(...srgbToLinear(...BLUE)));
+    expect(out.front).toBe(linearToHex(...srgbToLinear(...TAN)));
+    expect(out.left).toBeUndefined();
+  });
+
+  it('needs yaw, an eave, an outline and enough cells', () => {
+    const g = grid(24, 24, () => TAN);
+    expect(measureWallTints(g, rings, [win], geom, photoA, geom.box, 0, 0.3)).toBeNull();
+    expect(measureWallTints(g, rings, [win], geom, photoA, geom.box, 0.5, null)).toBeNull();
+    expect(measureWallTints(g, [], [win], geom, photoA, geom.box, 0.5, 0.3)).toBeNull();
+    const tiny = pathToRings(boxPath({ x: 0.4, y: 0.4, w: 0.05, h: 0.05 }));
+    expect(measureWallTints(g, tiny, [win], geom, photoA, geom.box, 0.5, 0.3)).toBeNull();
   });
 });

@@ -176,6 +176,16 @@ describe('measureFacadeElevations', () => {
     expect(out?.side).not.toBeNull();
   });
 
+  it('v2 cards: two candidates per attempt, first consistent kept (PQ-T44)', async () => {
+    const seg = segmenter(frontConcepts('peak'), [sideConcepts('copy'), sideConcepts('end')]);
+    const out = await measureFacadeElevations(seg, 'https://r2/f.png', 'house', {
+      sideCards: true,
+    });
+    expect(museImage).toHaveBeenCalledTimes(2);
+    expect(museImage.mock.calls[0]![0]).toContain('quarter turn');
+    expect(out?.side?.wallLeft).toBeCloseTo(0.32, 2);
+  });
+
   it('Muse Image failing keeps the front alone', async () => {
     museImage.mockRejectedValue(new Error('http_500'));
     const seg = segmenter(frontConcepts('hip'), []);

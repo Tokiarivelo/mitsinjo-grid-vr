@@ -3,9 +3,16 @@ import 'server-only';
 import type { KitArchetype } from '@/lib/object-kit';
 import { frontPartIndex, type ObjectRecipe, type PartMask } from '@/lib/object-shape';
 import { pathToRings } from '@/lib/vision';
-import { insideRings, LIT_SHARE, linearToHex, srgbToLinear } from './color-measure';
+import {
+  insideRings,
+  kmeansLab,
+  linearToHex,
+  linearToLab,
+  LIT_SHARE,
+  srgbToLinear,
+} from './color-measure';
 import { confidence, mixColor } from './fusion';
-import { isWheelPart, type MaskMapGeom } from './mask-geometry';
+import { isWheelPart, MASK_YAW_MAX, type MaskMapGeom } from './mask-geometry';
 import { vehicleShell } from './mask-panels';
 import type { RgbGrid } from './model-score';
 import { pixelBox } from './shape-colors';
@@ -48,6 +55,26 @@ export interface RegionColors {
 interface PreparedMask {
   box: { x0: number; y0: number; x1: number; y1: number };
   rings: Array<Array<readonly [number, number]>>;
+}
+
+/** Bottom strip skipped for wall tints (plinth, ground contact), in box fractions. */
+const WALL_FOOT_CUT = 0.92;
+
+function prepareMasks(masks: ReadonlyArray<PartMask>): PreparedMask[] {
+  return masks.map((m) => {
+    const erode = m.outline ? 0 : BOX_REGION_ERODE;
+    const ix = m.box.w * erode;
+    const iy = m.box.h * erode;
+    return {
+      box: {
+        x0: m.box.x + ix,
+        y0: m.box.y + iy,
+        x1: m.box.x + m.box.w - ix,
+        y1: m.box.y + m.box.h - iy,
+      },
+      rings: m.outline ? pathToRings(m.outline).filter((r) => r.length >= 3) : [],
+    };
+  });
 }
 
 const median = (values: number[]): number => {
@@ -93,20 +120,7 @@ export function measureRegionColors(
   photo: Pick<PhotoForRegions, 'width' | 'height'>,
   box: MaskMapGeom['box']
 ): RegionColors {
-  const prepared: PreparedMask[] = masks.map((m) => {
-    const erode = m.outline ? 0 : BOX_REGION_ERODE;
-    const ix = m.box.w * erode;
-    const iy = m.box.h * erode;
-    return {
-      box: {
-        x0: m.box.x + ix,
-        y0: m.box.y + iy,
-        x1: m.box.x + m.box.w - ix,
-        y1: m.box.y + m.box.h - iy,
-      },
-      rings: m.outline ? pathToRings(m.outline).filter((r) => r.length >= 3) : [],
-    };
-  });
+  const prepared = prepareMasks(masks);
   const reds = masks.map((): number[] => []);
   const greens = masks.map((): number[] => []);
   const blues = masks.map((): number[] => []);
@@ -151,6 +165,72 @@ export function measureRegionColors(
     ),
     rest: restR.length >= MIN_REGION_PIXELS ? litMeasure(restR, restG, restB) : null,
   };
+}
+
+/**
+ * Wall tints per face (PQ-T44 remedy 4): wall-zone cells (outline interior below the eave,
+ * above the plinth strip, outside every opening mask) split in two by colour; the outer
+ * cluster (by yaw sign) tints the visible side, the other the front. Null without an
+ * outline, an eave, enough yaw to see a side, or enough cells. Pure.
+ */
+export function measureWallTints(
+  grid: RgbGrid,
+  outline: ReadonlyArray<ReadonlyArray<readonly [number, number]>>,
+  masks: ReadonlyArray<PartMask>,
+  geom: MaskMapGeom,
+  photo: Pick<PhotoForRegions, 'width' | 'height'>,
+  box: MaskMapGeom['box'],
+  yaw: number,
+  eaveY: number | null
+): { front?: string; left?: string; right?: string } | null {
+  if (outline.length === 0 || eaveY === null || Math.abs(yaw) < MASK_YAW_MAX) return null;
+  const prepared = prepareMasks(masks);
+  const { left, top, width, height } = pixelBox(photo, box);
+  const { cols, rows, rgb } = grid;
+  const cells: Array<{ u: number; lab: [number, number, number]; rgb: [number, number, number] }> =
+    [];
+  for (let j = 0; j < rows; j++) {
+    const photoY = top + ((j + 0.5) / rows) * height;
+    const v = photoY / photo.height;
+    const yBox = (v - box.y) / box.h;
+    if (yBox < eaveY || yBox > WALL_FOOT_CUT) continue;
+    for (let i = 0; i < cols; i++) {
+      const photoX = left + ((i + 0.5) / cols) * width;
+      const u = photoX / photo.width;
+      if (!insideRings(u, v, outline)) continue;
+      const cu = (photoX - geom.crop.left) / geom.crop.width;
+      const cv = (photoY - geom.crop.top) / geom.crop.height;
+      let inMask = false;
+      for (const pm of prepared) {
+        if (cu < pm.box.x0 || cu > pm.box.x1 || cv < pm.box.y0 || cv > pm.box.y1) continue;
+        if (pm.rings.length > 0 && !insideRings(cu, cv, pm.rings)) continue;
+        inMask = true;
+        break;
+      }
+      if (inMask) continue;
+      const o = (j * cols + i) * 3;
+      const lin = srgbToLinear(rgb[o]!, rgb[o + 1]!, rgb[o + 2]!);
+      cells.push({ u, lab: linearToLab(...lin), rgb: lin });
+    }
+  }
+  if (cells.length < MIN_REGION_PIXELS * 2) return null;
+  const labels = kmeansLab(Float32Array.from(cells.flatMap((c) => c.lab)), 2);
+  const groups = [0, 1].map((g) => cells.filter((_, i) => labels[i] === g));
+  const meanU = (grp: typeof cells) => grp.reduce((s, c) => s + c.u, 0) / grp.length;
+  const firstIsSide =
+    yaw > 0 ? meanU(groups[0]!) < meanU(groups[1]!) : meanU(groups[0]!) > meanU(groups[1]!);
+  const side = firstIsSide ? groups[0]! : groups[1]!;
+  const front = firstIsSide ? groups[1]! : groups[0]!;
+  const lit = (grp: typeof cells) =>
+    litMeasure(
+      grp.map((c) => c.rgb[0]),
+      grp.map((c) => c.rgb[1]),
+      grp.map((c) => c.rgb[2])
+    ).color;
+  const out: { front?: string; left?: string; right?: string } = {};
+  if (front.length >= MIN_REGION_PIXELS) out.front = lit(front);
+  if (side.length >= MIN_REGION_PIXELS) out[yaw > 0 ? 'left' : 'right'] = lit(side);
+  return out.front === undefined && out.left === undefined && out.right === undefined ? null : out;
 }
 
 /** Mask box (crop fractions) → object-fraction rect, for part overlap. */

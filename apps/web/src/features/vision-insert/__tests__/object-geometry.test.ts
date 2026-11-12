@@ -752,3 +752,45 @@ describe('prism soft edges (PT-1c)', () => {
     expect(PRISM_BEVEL_MAX).toBeLessThan(0.3);
   });
 });
+
+describe('wall tints + pattern seed (PQ-T44 remedy 4)', () => {
+  const wallRecipe = (tints?: ObjectRecipe['wallTints']): ObjectRecipe => ({
+    proportions: { w: 1, h: 1, d: 1 },
+    parts: [{ shape: 'box', at: [0, 0, 0], size: [1, 1, 1], color: '#aaaaaa', kind: 'wall' }],
+    ...(tints ? { wallTints: tints } : {}),
+  });
+
+  it('tints wall faces by normal, rear mirrors front', () => {
+    const g = recipeMesh({
+      ...wallRecipe(),
+      wallTints: { front: '#ff0000', left: '#00ff00' },
+    });
+    const nrm = g.getAttribute('normal');
+    const col = g.getAttribute('color');
+    let front = -1;
+    let left = -1;
+    for (let i = 0; i < nrm.count; i++) {
+      if (nrm.getZ(i) > 0.9) front = i;
+      if (nrm.getX(i) < -0.9) left = i;
+    }
+    expect(front).toBeGreaterThanOrEqual(0);
+    expect(left).toBeGreaterThanOrEqual(0);
+    expect(col.getX(front)).toBeGreaterThan(col.getY(front));
+    expect(col.getX(front)).toBeGreaterThan(col.getZ(front));
+    expect(col.getY(left)).toBeGreaterThan(col.getX(left));
+    expect(col.getY(left)).toBeGreaterThan(col.getZ(left));
+  });
+
+  it('pattern seed: same recipe replays, different colours vary', () => {
+    const a = recipeMesh(wallRecipe());
+    const b = recipeMesh(wallRecipe());
+    expect(Array.from(a.getAttribute('uv').array)).toEqual(Array.from(b.getAttribute('uv').array));
+    const c = recipeMesh({
+      ...wallRecipe(),
+      parts: [{ ...wallRecipe().parts[0]!, color: '#bbbbbb' }],
+    });
+    expect(Array.from(c.getAttribute('uv').array)).not.toEqual(
+      Array.from(a.getAttribute('uv').array)
+    );
+  });
+});
