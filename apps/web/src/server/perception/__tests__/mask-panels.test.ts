@@ -27,7 +27,8 @@ const vehicleKit = (): ObjectKit => ({
   archetype: 'vehicle',
   proportions: { w: 1, h: 0.4, d: 0.45 },
   colors: { main: '#a33327', secondary: '#cfd6dd', accent: '#1c1c1e' },
-  materials: { main: 'metal', secondary: 'glass', accent: 'rubber' },
+  // PQ-T43: accent = glass, secondary = trim metal (was glass/rubber).
+  materials: { main: 'metal', secondary: 'metal', accent: 'glass' },
 });
 
 const houseKit = (): ObjectKit => ({
@@ -166,7 +167,7 @@ describe('withMaskPanels (PR-2.7)', () => {
     // Window 1: photo x 60..100 → obj −0.25..0; y 16..32 → obj 0.225..0.425.
     const panels = out.parts.filter((p) => p.shape === 'box' && p.size[2] === 0.02);
     expect(panels).toHaveLength(4);
-    expect(panels.every((p) => p.color === '#cfd6dd' && p.material === 'glass')).toBe(true);
+    expect(panels.every((p) => p.color === '#1c1c1e' && p.material === 'glass')).toBe(true);
     const near = panels.filter((p) => p.at[2] > 0);
     const far = panels.filter((p) => p.at[2] < 0);
     expect(near).toHaveLength(2);

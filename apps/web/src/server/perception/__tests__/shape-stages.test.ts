@@ -363,7 +363,16 @@ describe('houseStageScorer + HOUSE_STAGES on the thatched drawing', () => {
     const g = THATCHED_FRONT;
     const front = measureElevation(g.masks)!;
     const built = fitRecipe(
-      { ...facadeHouseRecipe({ front, side: null, colors: g.colors }), source: 'facade' },
+      {
+        ...facadeHouseRecipe({
+          front,
+          side: null,
+          colors: g.colors,
+          // PQ-T43: the roof is thatched, so it says so (else trim cannot tell it from tile).
+          materials: { secondary: 'thatch' },
+        }),
+        source: 'facade',
+      },
       0
     );
     const scorer = houseStageScorer(front, g.masks.roof?.rings);
@@ -378,7 +387,9 @@ describe('houseStageScorer + HOUSE_STAGES on the thatched drawing', () => {
       budgetMs: 5_000,
       propose: async () => [{ op: 'set', id: 'roof', ridge: 0 }],
     });
-    expect(res.stages[0]!.stop).toMatch(/no_gain|gate/);
+    // Rolls stabilize the roof score, so the bad op gains nothing twice: the loop names the
+    // repeated defect (repeat) instead of running out of misses (no_gain). Either way refused.
+    expect(res.stages[0]!.stop).toMatch(/no_gain|gate|repeat/);
     expect(res.recipe).toEqual(built);
   });
 });

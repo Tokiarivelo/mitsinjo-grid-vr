@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import {
+  DEFAULT_ROOF_OVERHANG,
   HIP_CLIP_MAX,
   MAX_TRIANGLES,
   type ObjectRecipe,
@@ -12,6 +13,7 @@ import { HULL_LEVELS, HULL_SLICES, hullLoops } from '@/lib/hull';
 import { SURFACE_LOOK, SURFACES, surfaceIndex } from './surface-look';
 import { holedBox } from './holed-wall';
 import { expandAssemblies } from './assembly-parts';
+import { trimReach } from './roof-trim';
 import type { AssemblyDetail } from './openings';
 import { planarUvs } from './surface-maps';
 import { type ApplianceDetection, type NormBox, type SceneryType } from '@/lib/vision';
@@ -64,10 +66,10 @@ export const ROUND_SEGMENTS = 24;
 /** Sphere segments (PR-1.3): 396 triangles, smooth normals; 12 spheres stay under 5 k. */
 export const SPHERE_SEGMENTS = [18, 12] as const;
 /**
- * Roof overhang (PR-1.3), object units: each gable prism reaches past the walls on every side — eaves on
- * the slopes, verge over the front and back — so the roof reads as a roof, not a wedge on a box.
+ * Legacy roof eave (PR-1.3), object units: what every gable prism added before PQ-T43. New parts
+ * carry their own `overhang` (drafts limited by `boundForRoof`); parts without one keep this.
  */
-export const ROOF_OVERHANG = 0.03;
+export const ROOF_OVERHANG = DEFAULT_ROOF_OVERHANG;
 /** Largest unit bevel of a prism: well under its triangle's inner radius (≈ 0.3), so the cap never flips. */
 export const PRISM_BEVEL_MAX = 0.1;
 /**
@@ -444,6 +446,7 @@ function unitPart(
     case 'prism':
       return unitPrism(apex, bevel);
     case 'hip':
+      // No bevel (methodology R9, kept by PQ-T43: ink carries the hip edges); only the reach is new.
       return unitHip(ridge, clip);
     case 'extrude':
       return unitExtrude(points ?? []);
@@ -509,7 +512,9 @@ function buildMesh(recipe: ObjectRecipe, detail: AssemblyDetail): THREE.BufferGe
       const b = edgeBevel(sx, sy, sz, SURFACE_LOOK[SURFACES[surface]!].radius);
       // Hull bodies have no axis; round parts (wheels, poles) map the bevel to their turned axes.
       const round = p.shape === 'cylinder' || p.shape === 'cone';
-      const eave = p.shape === 'prism' ? 2 * ROOF_OVERHANG : 0;
+      // Roof eave (PQ-T43): the part's own overhang when set, else the legacy eave on
+      // prisms; hips had none, so option-less hips stay flush. Shared with the trim expansion.
+      const eave = 2 * trimReach(p, ROOF_OVERHANG);
       const bevel =
         b > 0 && (round || !p.axis) ? unitBevel(b, [sx + eave, sy, sz + eave], p.axis) : undefined;
       g = unitPart(

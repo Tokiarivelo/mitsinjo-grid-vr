@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  boundForRoof,
   clampParts,
   fitRecipe,
   formatDuration,
@@ -299,5 +300,36 @@ describe('ShapeTimingEventSchema (PQ-T42)', () => {
     expect(ShapeTimingEventSchema.safeParse({ phase: 'kit', ms: 3200 }).success).toBe(true);
     expect(ShapeTimingEventSchema.safeParse({ phase: 'nope', ms: 3 }).success).toBe(false);
     expect(ShapeTimingEventSchema.safeParse({ phase: 'fit', ms: -1 }).success).toBe(false);
+  });
+});
+
+describe('boundForRoof (PQ-T43)', () => {
+  it('thatch deepest, tile and slate pitched, concrete shallowest, default legacy', () => {
+    expect(boundForRoof('thatch')).toBe(0.07);
+    expect(boundForRoof('tile')).toBe(0.04);
+    expect(boundForRoof('slate')).toBe(0.04);
+    expect(boundForRoof('concrete')).toBe(0.02);
+    expect(boundForRoof('glass')).toBe(0.03);
+    expect(boundForRoof(undefined)).toBe(0.03);
+  });
+
+  it('the schema takes an overhang option within its max', () => {
+    const roof = {
+      shape: 'prism',
+      at: [0, 0.25, 0],
+      size: [1, 0.5, 1],
+      color: '#6e6a62',
+      kind: 'roof',
+      overhang: 0.05,
+    } as const;
+    expect(
+      ObjectRecipeSchema.safeParse({ proportions: { w: 1, h: 1, d: 1 }, parts: [roof] }).success
+    ).toBe(true);
+    expect(
+      ObjectRecipeSchema.safeParse({
+        proportions: { w: 1, h: 1, d: 1 },
+        parts: [{ ...roof, overhang: 0.5 }],
+      }).success
+    ).toBe(false);
   });
 });
