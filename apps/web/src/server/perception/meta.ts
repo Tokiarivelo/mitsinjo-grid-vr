@@ -551,16 +551,17 @@ export class MetaPerceptionBackend implements PerceptionBackend {
   async writeBuildCode(
     imageUrl: string,
     question: string,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    version: number = CODE_PROMPT_VERSION
   ): Promise<PerceptionCall<CodeResult>> {
     const { content, model, usage } = await this.visionJson(
-      codePrompt(),
+      codePrompt(version),
       question,
       imageUrl,
       CODE_JSON_SCHEMA,
       signal,
       false,
-      { kind: 'writeBuildCode', params: { promptVersion: CODE_PROMPT_VERSION } },
+      { kind: 'writeBuildCode', params: { promptVersion: version } },
       [],
       codeModel()
     );

@@ -191,10 +191,15 @@ export class PerceptionClient {
   }
 
   /** Route-B construction code (PQ-T45); a backend without it answers null (no route B). */
-  writeBuildCode(imageUrl: string, question: string, signal?: AbortSignal): Promise<CodeResult> {
+  writeBuildCode(
+    imageUrl: string,
+    question: string,
+    signal?: AbortSignal,
+    version?: number
+  ): Promise<CodeResult> {
     return this.run('writeBuildCode', (b) =>
       b.writeBuildCode
-        ? b.writeBuildCode(imageUrl, question, signal)
+        ? b.writeBuildCode(imageUrl, question, signal, version)
         : Promise.resolve({ model: b.name, usage: {}, result: { code: null } })
     );
   }

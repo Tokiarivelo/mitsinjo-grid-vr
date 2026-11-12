@@ -628,8 +628,27 @@ One task = one commit, with its Vitest test, its `contracts.md` update and its m
       still 1–2) → judge stays developer-note-only. Report frozen (synth 92, real 53,
       ΔE 10.1, every row identical). §9.1 complete: anatomy recall (PQ-T46), real set,
       turntable, calibration, prompt-version eval (PQ-T5) all landed. Contracts + V276.
-- [ ] **PQ-T55 Scored evaluation of B vs draft A** (§12.13: willow, car, house, one appliance) and tour
+- [x] **PQ-T55 Scored evaluation of B vs draft A** (§12.13: willow, car, house, one appliance) and tour
       duration on Vercel and OVHcloud.
+      _Built 2026-11-12:_ `eval-code.ts` (`EVAL_CODE_IDS`, one photo yardstick for both finals —
+      the replay's maskless number never meets the masked draft, regression-tested; verdict =
+      higher gain per dollar, `tie` when neither gains; `<id>.code-eval.json` stores rounds,
+      durations, costs, winning body) + `make eval-code [IDS=…]` + writer prompt v2
+      (`CODE_PROMPT_GENERIC_VERSION`, opt-in, live default stays v1: kind sections +
+      grown `generator`/`blobs` options) + `version?` on `writeBuildCode` + tour
+      durations on `CodeRound` (`ms`/`writeMs`/`execMs`/`scoreMs`, `model?`/`costUsd?`,
+      seconds in the round log) + capture budget 150 s → 600 s (test 300 s → 900 s) so
+      house loops reach their stop. Live (Meta key, ~35 min, A $0.17 + B $2.11, all to
+      natural stop): willow tie 51 (B valid 0/3 — diagnosed: `params.seed` 3185484963
+      over the genSeed 2147483647 bound, all 13 probe parts fail on `generator.seed`
+      only; killed-run B once valid 2/5 → +4, seed luck; follow-up: clamp guest seeds
+      in the sandbox, re-run `IDS=willow`), car-side A 52→55 (+3, $0.07; B valid 1.00
+      but +0), house-front B 48→54 (+6, $0.85, 5 rounds), refrigerator tie at ceiling
+      92 (A no-patch at once, $0.01). Mean gain A +0.8 vs B +1.5; mean tour 68.4 s
+      (writer ≈ 100 %). Tour on Vercel/OVHcloud not run from here (deploy refuses
+      branches, prod is old main; no OVH infra in repo): after merge, main
+      auto-deploys and a house shape request shows the `code` phase in SSE
+      `shape_timing` (~$1/house to re-measure). Contracts + V277.
 
 **Exit Q6:** no object is finished by fixed code; every phase is timed and the slowness is located.
 

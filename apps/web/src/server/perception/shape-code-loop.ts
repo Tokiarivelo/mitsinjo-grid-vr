@@ -1,6 +1,7 @@
 import 'server-only';
 
 import type { ObjectRecipe } from '@/lib/object-shape';
+import { estimateCostUsd, type UsageSample } from '@/server/spend';
 import { buildCodeQuestion, CODE_PROMPT_VERSION } from './shape-code';
 import { runSandboxedCode, type CodeParams } from './code-sandbox';
 
@@ -26,6 +27,21 @@ export interface CodeRound {
   kept: boolean;
   dropped: number;
   reason?: string;
+  /** Tour duration (PQ-T55 §8bis): whole round, ms. */
+  ms: number;
+  /** Writer call (Meta), sandbox execution, yardstick scoring, ms. */
+  writeMs: number;
+  execMs: number;
+  scoreMs: number;
+  /** Model that wrote the round, when the writer reports it. */
+  model?: string;
+  /** Estimated Meta cost of the round, when the writer reports model + usage. */
+  costUsd?: number;
+}
+
+/** A round whose body executed (valid code ran, whether or not it gained). */
+export function codeRoundValid(r: Pick<CodeRound, 'bytes' | 'score' | 'reason'>): boolean {
+  return r.bytes > 0 && (r.score !== null || r.reason === 'unscorable');
 }
 
 export interface CodeLoopResult {
@@ -39,6 +55,8 @@ export interface CodeLoopResult {
 
 export interface CodeLoopInput {
   label: string;
+  /** Kit archetype, shown beside the label so the v2 kind section applies (PQ-T55). */
+  archetype?: string;
   /** Route-A draft: the floor, shown before any round lands. */
   draft: ObjectRecipe;
   /** Draft's yardstick (0–1). */
@@ -56,7 +74,7 @@ export interface CodeLoopInput {
     imageUrl: string,
     question: string,
     signal?: AbortSignal
-  ) => Promise<{ code: string | null } | null>;
+  ) => Promise<{ code: string | null; model?: string; usage?: UsageSample } | null>;
   /** Yardstick of one candidate (0–1), null when unscorable. */
   score: (recipe: ObjectRecipe) => Promise<number | null>;
   /** Sandbox execution (default: the §8bis QuickJS runner; tests inject fakes). */
@@ -81,6 +99,7 @@ const trunc = (s: string, n: number) => (s.length > n ? `${s.slice(0, n)}…` : 
 export async function refineWithCode(input: CodeLoopInput): Promise<CodeLoopResult> {
   const {
     label,
+    archetype,
     draft,
     baseScore,
     params,
@@ -114,6 +133,7 @@ export async function refineWithCode(input: CodeLoopInput): Promise<CodeLoopResu
     }
     const question = buildCodeQuestion({
       label,
+      ...(archetype ? { archetype } : {}),
       draft: best,
       scoreText: bestScore.toFixed(3),
       ...(detailText ? { detailText } : {}),
@@ -121,18 +141,37 @@ export async function refineWithCode(input: CodeLoopInput): Promise<CodeLoopResu
       ...(code ? { currentCode: code } : {}),
       ...(droppedText ? { droppedText } : {}),
     });
+    const roundStart = Date.now();
     const answered = await writeCode(image, question, signal).catch(() => null);
+    const writeMs = Date.now() - roundStart;
+    const model = answered?.model;
+    const costUsd = model && answered?.usage ? estimateCostUsd(model, answered.usage) : undefined;
     const body = answered?.code ?? null;
     if (!body) {
-      rounds.push({ round, bytes: 0, score: null, kept: false, dropped: 0, reason: 'no code' });
+      rounds.push({
+        round,
+        bytes: 0,
+        score: null,
+        kept: false,
+        dropped: 0,
+        reason: 'no code',
+        ms: Date.now() - roundStart,
+        writeMs,
+        execMs: 0,
+        scoreMs: 0,
+        ...(model ? { model } : {}),
+        ...(costUsd !== undefined ? { costUsd } : {}),
+      });
       stalls += 1;
       if (stalls >= CODE_STALLS_MAX) break;
       continue;
     }
+    const execStart = Date.now();
     const exec = await execute(body, params).catch((err: unknown) => ({
       ok: false as const,
       reason: err instanceof Error ? err.message : String(err),
     }));
+    const execMs = Date.now() - execStart;
     if (!exec.ok) {
       rounds.push({
         round,
@@ -141,6 +180,12 @@ export async function refineWithCode(input: CodeLoopInput): Promise<CodeLoopResu
         kept: false,
         dropped: 0,
         reason: trunc(exec.reason, 120),
+        ms: Date.now() - roundStart,
+        writeMs,
+        execMs,
+        scoreMs: 0,
+        ...(model ? { model } : {}),
+        ...(costUsd !== undefined ? { costUsd } : {}),
       });
       console.info(
         `[vision] 3D code round ${round} for "${label}": failed (${trunc(exec.reason, 120)})`
@@ -152,7 +197,9 @@ export async function refineWithCode(input: CodeLoopInput): Promise<CodeLoopResu
     droppedText = exec.issues.length
       ? exec.issues.map((i) => `${i.index}: ${i.reason}`).join('; ')
       : undefined;
+    const scoreStart = Date.now();
     const s = await score(exec.recipe).catch(() => null);
+    const scoreMs = Date.now() - scoreStart;
     const kept = s !== null && s - bestScore >= minGain;
     rounds.push({
       round,
@@ -161,10 +208,17 @@ export async function refineWithCode(input: CodeLoopInput): Promise<CodeLoopResu
       kept,
       dropped: exec.issues.length,
       ...(s === null ? { reason: 'unscorable' } : {}),
+      ms: Date.now() - roundStart,
+      writeMs,
+      execMs,
+      scoreMs,
+      ...(model ? { model } : {}),
+      ...(costUsd !== undefined ? { costUsd } : {}),
     });
+    const secs = ((Date.now() - roundStart) / 1000).toFixed(1);
     if (kept && s !== null) {
       console.info(
-        `[vision] 3D code round ${round} for "${label}": ${bestScore.toFixed(3)}→${s.toFixed(3)} kept (${exec.recipe.parts.length} parts${exec.issues.length ? `, ${exec.issues.length} dropped` : ''})`
+        `[vision] 3D code round ${round} for "${label}": ${bestScore.toFixed(3)}→${s.toFixed(3)} kept (${exec.recipe.parts.length} parts${exec.issues.length ? `, ${exec.issues.length} dropped` : ''}) in ${secs} s`
       );
       best = exec.recipe;
       bestScore = s;
@@ -172,7 +226,7 @@ export async function refineWithCode(input: CodeLoopInput): Promise<CodeLoopResu
       stalls = 0;
     } else {
       console.info(
-        `[vision] 3D code round ${round} for "${label}": ${s === null ? 'unscorable' : `${bestScore.toFixed(3)}→${s.toFixed(3)}`} dropped`
+        `[vision] 3D code round ${round} for "${label}": ${s === null ? 'unscorable' : `${bestScore.toFixed(3)}→${s.toFixed(3)}`} dropped in ${secs} s`
       );
       stalls += 1;
       if (stalls >= CODE_STALLS_MAX) break;
