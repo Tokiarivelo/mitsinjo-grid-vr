@@ -12,10 +12,17 @@ import {
   RecipePartSchema,
   DetailKindSchema,
   DETAIL_KINDS,
+  BranchParamsSchema,
+  DrapeParamsSchema,
+  PartKindSchema,
+  ScatterParamsSchema,
+  SweepParamsSchema,
+  type GeneratorParams,
   type ObjectRecipe,
   type PartKind,
   type RecipePart,
 } from './object-shape';
+import { growPart } from './object-generators';
 
 /**
  * ShapeScript (PG-T13): a model written as a list of typed ops on named components, never code.
@@ -71,6 +78,24 @@ const options = {
   details: z.array(DetailKindSchema).max(DETAIL_KINDS.length).optional(),
 };
 
+/**
+ * A grown component (PQ-T50 §7.3): the op carries generator params plus the host's look; compile
+ * grows once and bounds the host box by what grew. One colour slot: the op's `color` paints host
+ * and growth (sweep / branch / drape params keep their own optional override for direct
+ * `generator` fields; scatter always uses its palette).
+ */
+const grownOp = (params: z.ZodRawShape, op: 'sweep' | 'branch' | 'scatter' | 'drape') =>
+  z.object({
+    op: z.literal(op),
+    ...params,
+    id: ComponentIdSchema,
+    parent: ComponentIdSchema.optional(),
+    kind: PartKindSchema.optional(),
+    // Required here (the params' own colour stays optional): the host box never guesses.
+    color: z.string().regex(/^#[0-9a-f]{6}$/i),
+    material: RecipeMaterialSchema.optional(),
+  });
+
 export const ShapeOpSchema = z.discriminatedUnion('op', [
   /** New component: a full recipe part (server seeds may carry rings; Spark sends boxes). */
   z.object({
@@ -79,6 +104,10 @@ export const ShapeOpSchema = z.discriminatedUnion('op', [
     part: RecipePartSchema,
     parent: ComponentIdSchema.optional(),
   }),
+  grownOp(SweepParamsSchema.omit({ op: true }).shape, 'sweep'),
+  grownOp(BranchParamsSchema.omit({ op: true }).shape, 'branch'),
+  grownOp(ScatterParamsSchema.omit({ op: true }).shape, 'scatter'),
+  grownOp(DrapeParamsSchema.omit({ op: true }).shape, 'drape'),
   /** Change fields of an existing component. */
   z.object({
     op: z.literal('set'),
@@ -327,6 +356,48 @@ export function compileScript(script: ShapeScript, opts: CompileOptions = {}): C
         } as RecipePart);
         if (!part) return drop(index, 'out_of_bounds', op.id);
         comps.set(op.id, { id: op.id, part, parent: op.wall });
+        return;
+      }
+      case 'sweep':
+      case 'branch':
+      case 'scatter':
+      case 'drape': {
+        if (cur) return drop(index, 'duplicate_id', op.id);
+        if (comps.size >= MAX_COMPONENTS) return drop(index, 'budget', op.id);
+        if (op.parent && !comps.has(op.parent)) return drop(index, 'unknown_parent', op.id);
+        const { op: opName, id: _id, parent: _parent, kind, color, material, ...rest } = op;
+        const params = { op: opName, ...rest } as GeneratorParams;
+        // Grow once against a dummy host: the host box is measured, never proposed, so a
+        // lying box is not expressible; growth past the recipe frame fails the schema below.
+        const grown = growPart({
+          shape: 'box',
+          at: [0, 0, 0],
+          size: [RECIPE_BOUND * 2, RECIPE_BOUND * 2, RECIPE_BOUND * 2],
+          color,
+          generator: params,
+        });
+        if (!grown.length) return drop(index, 'invalid', op.id);
+        const lo: [number, number, number] = [Infinity, Infinity, Infinity];
+        const hi: [number, number, number] = [-Infinity, -Infinity, -Infinity];
+        for (const q of grown) {
+          for (const a of [0, 1, 2] as const) {
+            lo[a] = Math.min(lo[a], q.at[a] - q.size[a] / 2);
+            hi[a] = Math.max(hi[a], q.at[a] + q.size[a] / 2);
+          }
+        }
+        const part = checked(
+          defined({
+            shape: 'box',
+            at: [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2],
+            size: [hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]],
+            color,
+            material,
+            kind,
+            generator: params,
+          }) as RecipePart
+        );
+        if (!part) return drop(index, 'out_of_bounds', op.id);
+        comps.set(op.id, { id: op.id, part, ...(op.parent ? { parent: op.parent } : {}) });
         return;
       }
       case 'repeat': {
