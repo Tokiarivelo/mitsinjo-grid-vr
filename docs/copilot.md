@@ -88,12 +88,12 @@ features/copilot/          # ChatPanel, ChatMessage, ToolActivity, ConfirmPropos
   only**. Only live Meta answers count and are stored (`liveJudgement`: a mock or fallback grade 3 never does);
   captures under three parts are skipped (`damage` removes nothing).
   **Kit prompt 2 (PQ-T11/T12):** `kitPrompt(2, hint)` = the Muse cards of `docs/vision-to-3d-muse-skills.md` (`skills/`: Base + Look + Kit + the card of the hint's family; the free-parts call: Base + Look + Free parts, `partsPrompt()`), JSON schema with `evidence` first and `confidence` (`kitJsonSchema(2)`; prompt 1 keeps the schema without them, so its answers are not longer). `runObjectShape({ promptVersion })` runs the kit and the free-parts calls on a chosen version (routes leave it unset); `make eval-parts PROMPT=1,2` measures the free-parts call alone. The cards are generated from the doc (`make skills-gen`; `skills.test.ts` fails when the module is behind). `KIT_PROMPT_VERSION` stays on the version its eval kept.
-  **Prompt versions (PQ-T5):** `KIT_PROMPT_VERSION`, `CRITIC_PROMPT_VERSION` (`shape.ts`),
+  **Prompt versions (PQ-T5):** `KIT_PROMPT_VERSION` = 4 (PQ-T46: prompt 1 + the closed anatomy inventory of the hint's family, answered first), `CRITIC_PROMPT_VERSION` (`shape.ts`),
   `VIEWS_CHECK_PROMPT_VERSION` (`views-check.ts`), `SIDE_VIEW_PROMPT_VERSION` (`facade-views.ts`), all 1, beside
   `SHAPE_SCRIPT_PROMPT_VERSION`. Each call logs its `promptVersion` in the `[vision] 3D … → params` line; captures
   store the kit version (`ShapeCapture.promptVersion`, absent on older ones). Old kit prompts stay in
-  `KIT_PROMPTS`; `make eval-shape PROMPT=1,2` asks each listed version on the same captures, one table section per
-  version (total agreement, median seconds). Bump the version with every prompt change.
+  `KIT_PROMPTS`; `make eval-shape PROMPT=1,4` asks each listed version on the same captures, one table section per
+  version (total agreement, median seconds). Bump the version with every prompt change. Live 2026-11-12 (4 captures): v1 29/30 @ 14.2 s, v4 27/31 @ 17.1 s — v4 answers more (windows counts, subtypes) where v1 stays silent, and every v4 answer carries the complete inventory (13/10/6/6 entries).
 - `server/spend/`: `SpendGuard` estimates cost from catalogue prices (API `usage` when given, else ≈ 4 chars/token) per session
   (`sessionId`, else `global`). Over `META_SPEND_CAP_USD` → mock + `PROVIDER_FALLBACK` `reason: 'spend_cap'`. In memory: resets on restart.
 - Measured 2026-10-30 (real calls): vision ≈ 10 s (≈ 1 200 reasoning tokens), SAM ≈ 5 s, image ≈ 12–23 s, voice ≈ 3 s.

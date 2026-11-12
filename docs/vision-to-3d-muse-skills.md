@@ -99,6 +99,9 @@ appear in the counts, except its mirror on a hidden side (list that field in "un
 
 ```
 Fields
+- anatomy: one entry per part of the family card's Anatomy line, answered before the rest:
+  present (you see it), hidden (it exists but you cannot see it) or absent (this object has
+  none), with where. A part with no entry is a part you forgot: answer all of them.
 - archetype: the closest family. Decide by function, not by look: a hedge clipped like a car
   is a bush; a car-shaped toy on a shelf is still a vehicle; a painted sign of a house is a screen.
 - subtype: only when you can name the visible feature that proves it.
@@ -131,9 +134,12 @@ ship with PQ-T39 (methodology §12.3). Until then a painted surface is sent as `
 
 ## 5. ARCHETYPE cards
 
-Each card has the same five lines: what the family always has, what to check, usual proportions (used only for
-what the photo does not show), colour roles, and traps seen in this project. « SAM words » are the part names the
-segmentation model is asked for next; use them in `evidence.visibleParts`.
+Each card has the same six lines: what the family always has, what to check, usual proportions (used only for
+what the photo does not show), colour roles, traps seen in this project, and the closed part inventory.
+« SAM words » are the part names the segmentation model is asked for next; use them in `evidence.visibleParts`.
+« Anatomy » is the closed inventory (PQ-T46, universal pipeline §5): the answer holds one `present | hidden |
+absent` entry per listed part, before the kit decision. The lists are copied in `ANATOMY`
+(`apps/web/src/lib/object-kit.ts`, checked by `skills.test.ts`); shared cards hold one line per archetype.
 
 ### 5.1 `vehicle`
 
@@ -157,6 +163,7 @@ Traps: tyres are rubber and near black, rims are metal: do not give the tyre col
 count wheels of this side only, then double · a dark window is glass, not a black panel ·
 a car behind a hedge is still a full car: list the hedge under hiddenBy.
 SAM words: wheel, window, windshield, door, headlight, tail light, bumper, grille, side mirror.
+Anatomy: windshield, rear window, side windows, wheels, wheel arches, headlights, tail lights, side mirrors, bumpers, grille, door lines, roof, plate.
 ```
 
 ### 5.2 `house`
@@ -180,6 +187,7 @@ Traps: the roof line is measured on the outline, do not describe its angle · a 
 the same colour as the lit wall · dormers and porches are parts, not extra houses ·
 panes: count the glass rectangles of ONE window as [across, down].
 SAM words: roof, wall, window, door, chimney, window pane, doorstep, stone foundation, timber beam.
+Anatomy: walls, roof, roof overhang, ridge, door, windows, chimney, plinth, gutter, steps.
 ```
 
 ### 5.3 `building`
@@ -195,6 +203,7 @@ Colours: main = wall · secondary = roof edge, canopy or sheet roof · accent = 
 Traps: corrugated metal roof seen from below is a thin edge, not a tall roof · an open shop
 front is an opening, not a dark wall.
 SAM words: wall, window, door, roof, awning, sign, stairs.
+Anatomy: walls, roof edge, entrance, windows, stairs, sign.
 ```
 
 ### 5.4 `cabinet`
@@ -212,6 +221,7 @@ Traps: a white appliance on a white wall still has edges: the door gap is a thin
 list it as "door seam" · the handle is small but it is the part people recognise: always look
 for it · do not count the door gap as a second cabinet.
 SAM words: door, handle, display, control panel, foot.
+Anatomy: door, handle, vents, feet, display, cable.
 ```
 
 ### 5.5 `screen`
@@ -228,6 +238,7 @@ Colours: main = frame and back · secondary = stand · accent = the screen face 
 Traps: the picture shown on the screen is not the object's colour: accent is dark glass ·
 a reflection on the screen is not a window.
 SAM words: screen, display, stand, table.
+Anatomy: display, frame, stand.
 ```
 
 ### 5.6 `fan`
@@ -241,6 +252,7 @@ Usual proportions, width : height : depth — standing 0.35 : 1 : 0.3 · table 0
 Colours: main = cage and body · secondary = pole and base · accent = blades or centre cap.
 Traps: the cage is see-through: the colour behind it is the wall, not the fan.
 SAM words: fan blades, fan guard, pole, base.
+Anatomy: blades, guard, pole, base.
 ```
 
 ### 5.7 `machine`
@@ -256,6 +268,7 @@ Colours: main = body paint · secondary = frame, motor or tank · accent = pipe,
 Traps: a lying cylinder is one part with a horizontal axis, not a box ·
 hoses and cables are not parts.
 SAM words: motor, pipe, tank, wheel, handle, control panel.
+Anatomy: body, motor, pipe, frame, controls.
 ```
 
 ### 5.8 `lamp_post` and `pole`
@@ -271,6 +284,8 @@ Colours: main = shaft · secondary = head, arm or crossarm · accent = lamp glas
 Traps: the object is thin: do not widen it to fill the rectangle · wires are not parts ·
 a lamp head is a small flat or bowl shape, not a drum as wide as it is tall.
 SAM words: lamp, pole, arm, solar panel, crossarm.
+Anatomy (lamp_post): shaft, lamp head, arm, solar panel, base.
+Anatomy (pole): shaft, crossarm, base.
 ```
 
 ### 5.9 `tank`
@@ -286,6 +301,7 @@ Colours: main = tank body · secondary = stand or tower · accent = lid, pipe or
 Traps: depth equals width for a round body · the tower is part of the object when it is inside
 the rectangle.
 SAM words: tank, lid, pipe, stand, leg.
+Anatomy: body, lid, stand, pipe.
 ```
 
 ### 5.10 `panel`
@@ -301,6 +317,7 @@ Colours: main = cells (dark blue or black) · secondary = frame and legs · acce
 Traps: the sky reflected on the glass is not the panel colour · a panel seen edge-on is a thin
 line: keep the board thin, do not thicken it into a box.
 SAM words: solar panel, solar cells, frame, leg.
+Anatomy: board, cells, frame, legs.
 ```
 
 ### 5.11 `tree` and `bush`
@@ -316,7 +333,10 @@ round tree, 0.7 for a palm. Depth equals width.
 Colours: main = leaves in daylight (not the shadowed underside) · secondary = trunk · accent =
 flowers or fruit when they show, else a lighter leaf green.
 Traps: sky seen through the leaves is not part of the crown · a hedge is a bush even when long.
+Crown: dense or thin (sky shows through) · branches weeping or upright.
 SAM words: tree trunk, foliage.
+Anatomy (tree): trunk, root flare, branches, low branches, crown, palm fan.
+Anatomy (bush): stems, foliage mass.
 ```
 
 ### 5.12 `person` and `animal`
@@ -331,6 +351,8 @@ Colours: person: main = upper clothes · secondary = lower clothes · accent = s
 Animal: main = coat · secondary = second coat colour · accent = horns or beak.
 Traps: never describe who the person is: clothes and pose only.
 SAM words: person, head, leg, tail, horn.
+Anatomy (person): head, torso, arms, legs.
+Anatomy (animal): head, body, legs, tail.
 ```
 
 ### 5.13 `water`

@@ -96,10 +96,81 @@ export const KitConfidenceSchema = z.object({
 });
 export type KitConfidence = z.infer<typeof KitConfidenceSchema>;
 
+/** State of one closed-list part (PQ-T46, universal pipeline §5): seen, existing but unseen, or none. */
+export const ANATOMY_STATES = ['present', 'hidden', 'absent'] as const;
+export type AnatomyState = (typeof ANATOMY_STATES)[number];
+
+/** Most closed-list parts the model may answer (PQ-T46: the longest list holds 13). */
+export const MAX_ANATOMY_PARTS = 16;
+
+export const KitAnatomyPartSchema = z.object({
+  part: z.string().max(32),
+  state: z.enum(ANATOMY_STATES),
+  /** Where the part is in plain words (« lower left », « rear »); like `visibleParts`. */
+  where: z.string().max(80).optional(),
+});
+export type KitAnatomyPart = z.infer<typeof KitAnatomyPartSchema>;
+export const KitAnatomySchema = z.array(KitAnatomyPartSchema).max(MAX_ANATOMY_PARTS);
+export type KitAnatomy = z.infer<typeof KitAnatomySchema>;
+
+/**
+ * Closed part inventory of each family (PQ-T46, universal pipeline §5): the parts the archetype always
+ * has, which the model answers one by one (`present` | `hidden` | `absent`). The archetype skill cards
+ * carry the same lists (`docs/vision-to-3d-muse-skills.md` §5, checked by `skills.test.ts`); the kit
+ * prompt names them so the inventory is closed on every prompt version. `water` and `other` have none.
+ * Tree droop and foliage density (§5 table) stay prose in the card: traits do not fit `present | absent`.
+ */
+export const ANATOMY: Record<KitArchetype, readonly string[]> = {
+  vehicle: [
+    'windshield',
+    'rear window',
+    'side windows',
+    'wheels',
+    'wheel arches',
+    'headlights',
+    'tail lights',
+    'side mirrors',
+    'bumpers',
+    'grille',
+    'door lines',
+    'roof',
+    'plate',
+  ],
+  house: [
+    'walls',
+    'roof',
+    'roof overhang',
+    'ridge',
+    'door',
+    'windows',
+    'chimney',
+    'plinth',
+    'gutter',
+    'steps',
+  ],
+  building: ['walls', 'roof edge', 'entrance', 'windows', 'stairs', 'sign'],
+  cabinet: ['door', 'handle', 'vents', 'feet', 'display', 'cable'],
+  screen: ['display', 'frame', 'stand'],
+  fan: ['blades', 'guard', 'pole', 'base'],
+  machine: ['body', 'motor', 'pipe', 'frame', 'controls'],
+  lamp_post: ['shaft', 'lamp head', 'arm', 'solar panel', 'base'],
+  pole: ['shaft', 'crossarm', 'base'],
+  tank: ['body', 'lid', 'stand', 'pipe'],
+  panel: ['board', 'cells', 'frame', 'legs'],
+  tree: ['trunk', 'root flare', 'branches', 'low branches', 'crown', 'palm fan'],
+  bush: ['stems', 'foliage mass'],
+  person: ['head', 'torso', 'arms', 'legs'],
+  animal: ['head', 'body', 'legs', 'tail'],
+  water: [],
+  other: [],
+};
+
 export const ObjectKitSchema = z.object({
   /** Written before the answer (PQ-T12); absent on answers of the first prompt. */
   evidence: KitEvidenceSchema.optional(),
   confidence: KitConfidenceSchema.optional(),
+  /** Closed inventory (PQ-T46): one state per part of `ANATOMY`, answered before the decision. */
+  anatomy: KitAnatomySchema.optional(),
   archetype: z.enum(KIT_ARCHETYPES),
   /** Optional subtype (vehicle: sedan, hatchback, vintage, van, truck; house: cottage, gable; tree: round, conifer). */
   subtype: z.string().max(32).optional(),
@@ -373,9 +444,10 @@ function facade(
   const winY = bottom + (0.44 / 0.6) * wall;
   const winH = Math.min(0.14, 0.24 * wall);
   const units = unitsOf(d);
-  const window = (x: number, w: number) => part('box', [x, winY, 0.505], [w, winH, 0.02], c.accent);
+  const window = (x: number, w: number) =>
+    part('box', [x, winY, 0.505], [w, winH, 0.02], c.accent, { kind: 'window' });
   const door = (x: number, w: number) =>
-    part('box', [x, bottom + doorH / 2, 0.505], [w, doorH, 0.02], c.secondary);
+    part('box', [x, bottom + doorH / 2, 0.505], [w, doorH, 0.02], c.secondary, { kind: 'door' });
   let front: RecipePart[];
   if (units === 1) {
     const windows = Math.min(8, d?.windows ?? 3);
@@ -413,7 +485,10 @@ function facade(
   const sideW = front.find((p) => p.color === c.accent)?.size[0] ?? 0.11;
   const sides = spread(2, 0.5).flatMap((z) =>
     ([1, -1] as const).map((s) =>
-      part('box', [s * 0.51, winY, z], [0.02, winH, sideW], c.accent, { status: 'inferred' })
+      part('box', [s * 0.51, winY, z], [0.02, winH, sideW], c.accent, {
+        status: 'inferred',
+        kind: 'window',
+      })
     )
   );
   if (front.length + rear.length + sides.length > room) return front;
@@ -438,11 +513,13 @@ export function uniformRoof(units: number): KitRoof | null {
 /** House without a measured roof: walls + three slabs that read as a pitched roof. */
 const steppedHouse: Template = ({ colors: c, details: d }) => {
   const structure = [
-    part('box', [0, -0.2, 0], [1, 0.6, 1], c.main, { front: true }),
-    part('box', [0, 0.16, 0], [1, 0.12, 1], c.secondary),
-    part('box', [0, 0.28, 0], [0.72, 0.12, 0.74], c.secondary),
-    part('box', [0, 0.4, 0], [0.42, 0.12, 0.48], c.secondary),
-    ...(d?.chimney ? [part('box', [0.3, 0.38, 0], [0.08, 0.24, 0.1], c.main)] : []),
+    part('box', [0, -0.2, 0], [1, 0.6, 1], c.main, { front: true, kind: 'wall' }),
+    part('box', [0, 0.16, 0], [1, 0.12, 1], c.secondary, { kind: 'roof' }),
+    part('box', [0, 0.28, 0], [0.72, 0.12, 0.74], c.secondary, { kind: 'roof' }),
+    part('box', [0, 0.4, 0], [0.42, 0.12, 0.48], c.secondary, { kind: 'roof' }),
+    ...(d?.chimney
+      ? [part('box', [0.3, 0.38, 0], [0.08, 0.24, 0.1], c.main, { kind: 'chimney' })]
+      : []),
   ];
   return [...structure, ...facade(c, d, -0.5, 0.1, MAX_PARTS - structure.length)];
 };
@@ -487,11 +564,18 @@ function measuredHouse(
     : [];
   const chimneyTop = eave + 0.85 * (highest - eave) + 0.06;
   const structure = [
-    part('box', [0, (eave - 0.5) / 2, 0], [1, eave + 0.5, 1], c.main, { front: true }),
+    part('box', [0, (eave - 0.5) / 2, 0], [1, eave + 0.5, 1], c.main, {
+      front: true,
+      kind: 'wall',
+    }),
     ...gables,
     ...ends,
     ...(d?.chimney
-      ? [part('box', [0.3, (eave + chimneyTop) / 2, 0], [0.08, chimneyTop - eave, 0.1], c.main)]
+      ? [
+          part('box', [0.3, (eave + chimneyTop) / 2, 0], [0.08, chimneyTop - eave, 0.1], c.main, {
+            kind: 'chimney',
+          }),
+        ]
       : []),
   ];
   return [...structure, ...facade(c, d, -0.5, eave, MAX_PARTS - structure.length)];
@@ -630,16 +714,22 @@ export const TEMPLATES: Record<KitArchetype, Template> = {
         part('cylinder', [0.34, -0.32, 0], [0.32, 0.32, 0.08], WHEEL_COLOR, {
           axis: 'z',
           material: 'rubber',
+          kind: 'wheel',
         }),
         part('cylinder', [-0.34, -0.32, 0], [0.32, 0.32, 0.08], WHEEL_COLOR, {
           axis: 'z',
           material: 'rubber',
+          kind: 'wheel',
         }),
         part('cylinder', [0.22, 0.16, 0], [0.08, 0.52, 0.08], c.secondary),
         part('sphere', [0.06, 0.14, 0], [0.28, 0.2, 0.22], c.main),
         part('box', [-0.14, 0.12, 0], [0.24, 0.08, 0.18], c.secondary),
-        part('cylinder', [0.32, 0.26, 0], [0.08, 0.08, 0.08], c.accent, { axis: 'x' }),
+        part('cylinder', [0.32, 0.26, 0], [0.08, 0.08, 0.08], c.accent, {
+          axis: 'x',
+          kind: 'light',
+        }),
         // Flyscreen above the headlamp (PQ-T43): the bike has room, unlike the 12-part cars.
+        // Kindless on purpose (PQ-T46): tagging it `window` would invite precision judgments.
         part('box', [0.37, 0.35, 0], [0.02, 0.16, 0.2], c.accent),
       ];
     }
@@ -648,56 +738,86 @@ export const TEMPLATES: Record<KitArchetype, Template> = {
     if (sub === 'van' || sub === 'bus' || sub === 'minivan') {
       const perSide = Math.ceil(wheels / 2);
       return [
-        part('box', [0, -0.08, 0], [1.0, 0.44, 0.9], c.main, { front: true }),
-        part('box', [-0.04, 0.28, 0], [0.84, 0.36, 0.84], c.secondary),
-        part('prism', [0.44, 0.28, 0], [0.12, 0.36, 0.84], c.accent, { apex: 0 }),
+        part('box', [0, -0.08, 0], [1.0, 0.44, 0.9], c.main, { front: true, kind: 'body' }),
+        part('box', [-0.04, 0.28, 0], [0.84, 0.36, 0.84], c.secondary, { kind: 'body' }),
+        part('prism', [0.44, 0.28, 0], [0.12, 0.36, 0.84], c.accent, { apex: 0, kind: 'window' }),
         // Rear bumper only: the front one funded the red lenses (PR-2.11). Trim colour, not glass.
-        part('box', [-0.5, -0.18, 0], [0.04, 0.14, 0.88], c.secondary),
-        part('cylinder', [0.49, 0.02, 0.3], [0.03, 0.09, 0.09], c.accent, { axis: 'x' }),
-        part('cylinder', [0.49, 0.02, -0.3], [0.03, 0.09, 0.09], c.accent, { axis: 'x' }),
+        part('box', [-0.5, -0.18, 0], [0.04, 0.14, 0.88], c.secondary, { kind: 'bumper' }),
+        part('cylinder', [0.49, 0.02, 0.3], [0.03, 0.09, 0.09], c.accent, {
+          axis: 'x',
+          kind: 'light',
+        }),
+        part('cylinder', [0.49, 0.02, -0.3], [0.03, 0.09, 0.09], c.accent, {
+          axis: 'x',
+          kind: 'light',
+        }),
         ...spread(perSide, 0.6).flatMap((x) => [
           part('cylinder', [x, -0.38, 0.44], [0.22, 0.22, 0.14], WHEEL_COLOR, {
             axis: 'z',
             material: 'rubber',
+            kind: 'wheel',
           }),
           part('cylinder', [x, -0.38, -0.44], [0.22, 0.22, 0.14], WHEEL_COLOR, {
             axis: 'z',
             material: 'rubber',
+            kind: 'wheel',
           }),
         ]),
         // Red rear lenses last: the 12-part slice drops them before a wheel (PR-2.11).
-        part('cylinder', [-0.49, 0.02, 0.3], [0.03, 0.09, 0.09], TAIL_LIGHT_COLOR, { axis: 'x' }),
-        part('cylinder', [-0.49, 0.02, -0.3], [0.03, 0.09, 0.09], TAIL_LIGHT_COLOR, { axis: 'x' }),
+        part('cylinder', [-0.49, 0.02, 0.3], [0.03, 0.09, 0.09], TAIL_LIGHT_COLOR, {
+          axis: 'x',
+          kind: 'light',
+        }),
+        part('cylinder', [-0.49, 0.02, -0.3], [0.03, 0.09, 0.09], TAIL_LIGHT_COLOR, {
+          axis: 'x',
+          kind: 'light',
+        }),
       ].slice(0, 12);
     }
 
     // Pickup / truck: open bed at the back, red lenses at its rear corners (PR-2.11).
     if (sub === 'pickup' || sub === 'truck') {
       return [
-        part('box', [0, -0.1, 0], [1.0, 0.4, 0.9], c.main, { front: true }),
-        part('box', [0.14, 0.28, 0], [0.44, 0.36, 0.84], c.secondary),
-        part('prism', [0.42, 0.28, 0], [0.14, 0.36, 0.84], c.accent, { apex: 0 }),
-        part('box', [-0.25, 0.14, 0], [0.46, 0.08, 0.86], c.secondary),
+        part('box', [0, -0.1, 0], [1.0, 0.4, 0.9], c.main, { front: true, kind: 'body' }),
+        part('box', [0.14, 0.28, 0], [0.44, 0.36, 0.84], c.secondary, { kind: 'body' }),
+        part('prism', [0.42, 0.28, 0], [0.14, 0.36, 0.84], c.accent, { apex: 0, kind: 'window' }),
+        part('box', [-0.25, 0.14, 0], [0.46, 0.08, 0.86], c.secondary, { kind: 'body' }),
         part('cylinder', [0.32, -0.38, 0.44], [0.24, 0.24, 0.14], WHEEL_COLOR, {
           axis: 'z',
           material: 'rubber',
+          kind: 'wheel',
         }),
         part('cylinder', [0.32, -0.38, -0.44], [0.24, 0.24, 0.14], WHEEL_COLOR, {
           axis: 'z',
           material: 'rubber',
+          kind: 'wheel',
         }),
         part('cylinder', [-0.3, -0.38, 0.44], [0.24, 0.24, 0.14], WHEEL_COLOR, {
           axis: 'z',
           material: 'rubber',
+          kind: 'wheel',
         }),
         part('cylinder', [-0.3, -0.38, -0.44], [0.24, 0.24, 0.14], WHEEL_COLOR, {
           axis: 'z',
           material: 'rubber',
+          kind: 'wheel',
         }),
-        part('cylinder', [0.49, 0.02, 0.3], [0.03, 0.09, 0.09], c.accent, { axis: 'x' }),
-        part('cylinder', [0.49, 0.02, -0.3], [0.03, 0.09, 0.09], c.accent, { axis: 'x' }),
-        part('cylinder', [-0.49, 0.02, 0.3], [0.03, 0.09, 0.09], TAIL_LIGHT_COLOR, { axis: 'x' }),
-        part('cylinder', [-0.49, 0.02, -0.3], [0.03, 0.09, 0.09], TAIL_LIGHT_COLOR, { axis: 'x' }),
+        part('cylinder', [0.49, 0.02, 0.3], [0.03, 0.09, 0.09], c.accent, {
+          axis: 'x',
+          kind: 'light',
+        }),
+        part('cylinder', [0.49, 0.02, -0.3], [0.03, 0.09, 0.09], c.accent, {
+          axis: 'x',
+          kind: 'light',
+        }),
+        part('cylinder', [-0.49, 0.02, 0.3], [0.03, 0.09, 0.09], TAIL_LIGHT_COLOR, {
+          axis: 'x',
+          kind: 'light',
+        }),
+        part('cylinder', [-0.49, 0.02, -0.3], [0.03, 0.09, 0.09], TAIL_LIGHT_COLOR, {
+          axis: 'x',
+          kind: 'light',
+        }),
       ];
     }
 
@@ -708,30 +828,48 @@ export const TEMPLATES: Record<KitArchetype, Template> = {
     // in its own colour (invisible): the rear reads through the trunk slope and the red lenses
     // instead (PR-2.11).
     return [
-      part('box', [0, -0.06, 0], [1.0, 0.48, 0.9], c.main, { front: true }),
+      part('box', [0, -0.06, 0], [1.0, 0.48, 0.9], c.main, { front: true, kind: 'body' }),
+      // Kindless on purpose (PQ-T46): a `window` box would expand into a framed opening
+      // (`layoutOpenings`), but the glasshouse band is glazing, not a punched window.
       part('box', [-0.03, 0.32, 0], [0.52, 0.36, 0.82], c.accent),
-      part('prism', [0.26, 0.32, 0], [0.14, 0.36, 0.82], c.accent, { apex: 0 }),
-      part('prism', [-0.33, 0.32, 0], [0.14, 0.36, 0.82], c.accent, { apex: 1 }),
+      part('prism', [0.26, 0.32, 0], [0.14, 0.36, 0.82], c.accent, { apex: 0, kind: 'window' }),
+      part('prism', [-0.33, 0.32, 0], [0.14, 0.36, 0.82], c.accent, { apex: 1, kind: 'window' }),
       part('cylinder', [0.25, -0.38, 0.44], [0.24, 0.24, 0.14], WHEEL_COLOR, {
         axis: 'z',
         material: 'rubber',
+        kind: 'wheel',
       }),
       part('cylinder', [0.25, -0.38, -0.44], [0.24, 0.24, 0.14], WHEEL_COLOR, {
         axis: 'z',
         material: 'rubber',
+        kind: 'wheel',
       }),
       part('cylinder', [-0.25, -0.38, 0.44], [0.24, 0.24, 0.14], WHEEL_COLOR, {
         axis: 'z',
         material: 'rubber',
+        kind: 'wheel',
       }),
       part('cylinder', [-0.25, -0.38, -0.44], [0.24, 0.24, 0.14], WHEEL_COLOR, {
         axis: 'z',
         material: 'rubber',
+        kind: 'wheel',
       }),
-      part('cylinder', [0.49, 0.04, 0.28], [0.02, 0.08, 0.08], c.secondary, { axis: 'x' }),
-      part('cylinder', [0.49, 0.04, -0.28], [0.02, 0.08, 0.08], c.secondary, { axis: 'x' }),
-      part('cylinder', [-0.49, 0.04, 0.28], [0.02, 0.08, 0.08], TAIL_LIGHT_COLOR, { axis: 'x' }),
-      part('cylinder', [-0.49, 0.04, -0.28], [0.02, 0.08, 0.08], TAIL_LIGHT_COLOR, { axis: 'x' }),
+      part('cylinder', [0.49, 0.04, 0.28], [0.02, 0.08, 0.08], c.secondary, {
+        axis: 'x',
+        kind: 'light',
+      }),
+      part('cylinder', [0.49, 0.04, -0.28], [0.02, 0.08, 0.08], c.secondary, {
+        axis: 'x',
+        kind: 'light',
+      }),
+      part('cylinder', [-0.49, 0.04, 0.28], [0.02, 0.08, 0.08], TAIL_LIGHT_COLOR, {
+        axis: 'x',
+        kind: 'light',
+      }),
+      part('cylinder', [-0.49, 0.04, -0.28], [0.02, 0.08, 0.08], TAIL_LIGHT_COLOR, {
+        axis: 'x',
+        kind: 'light',
+      }),
     ];
   },
   person: ({ colors: c }) => [

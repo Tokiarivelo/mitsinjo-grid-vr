@@ -34,6 +34,7 @@ import {
   mixRecipe,
   modelDoubts,
   pickCount,
+  presentAnatomy,
 } from './fusion';
 import { coverageForBox, needsFreeParts } from './free-recipe';
 import { conditionsFacts, conditionsTrust, measurePhotoConditions } from './photo-conditions';
@@ -1231,7 +1232,8 @@ export async function runObjectShape(
         // PQ-T37: the parts the kit listed under evidence.visibleParts join the SAM masks.
         const listed = finalKit.evidence?.visibleParts ?? [];
         objectMasks = onObject;
-        const missing = notBuilt(recipe, onObject, listed);
+        // PQ-T46: the closed-list parts answered `present` refuse a model that lacks them.
+        const missing = notBuilt(recipe, onObject, listed, presentAnatomy(finalKit));
         if (onObject.length || listed.length) coverage = partCoverage(recipe, onObject, listed);
         if (missing.length)
           console.info(`[vision] 3D seen, not built for "${target.label}": ${missing.join(', ')}`);

@@ -13,6 +13,7 @@ import {
 } from '@/lib/object-shape';
 import type { PerceptionClient } from './client';
 import { CODE_MAX_BYTES } from './code-sandbox';
+import { presentAnatomy } from './fusion';
 import { pathToRings } from './mask-outline';
 import { runObjectShape } from './object-shape';
 import { boxUnionCoverage } from './parse-sam';
@@ -179,16 +180,26 @@ export async function rescoreCapture(dir: string, id: string): Promise<RecipeSco
   if (!recipe) return null;
   // Captured mask boxes are fractions of the saved crop, i.e. of the whole replayed image (PQ-T1).
   const masks = captureMasks(capture);
-  if (!masks.length) return scoreRecipe(cropPhoto, capture.cropTarget, recipe);
+  const anatomy = presentAnatomy(capture.kit);
+  const answered = anatomy.length ? anatomy : undefined;
+  if (!masks.length)
+    return scoreRecipe(cropPhoto, capture.cropTarget, recipe, undefined, undefined, answered);
   const { width, height } = cropPhoto;
-  return scoreRecipe(cropPhoto, capture.cropTarget, recipe, masks, {
-    left: 0,
-    top: 0,
-    width,
-    height,
-    outWidth: width,
-    outHeight: height,
-  });
+  return scoreRecipe(
+    cropPhoto,
+    capture.cropTarget,
+    recipe,
+    masks,
+    {
+      left: 0,
+      top: 0,
+      width,
+      height,
+      outWidth: width,
+      outHeight: height,
+    },
+    answered
+  );
 }
 
 export interface CriticReplayRound {

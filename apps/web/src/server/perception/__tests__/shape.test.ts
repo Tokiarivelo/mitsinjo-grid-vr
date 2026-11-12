@@ -4,15 +4,19 @@ import { describe, expect, it } from 'vitest';
 import { ObjectRecipeSchema, recipeIssue } from '@/lib/object-shape';
 import {
   criticQuestion,
+  KIT_PROMPT_ANATOMY_VERSION,
   KIT_PROMPT_CARDS_VERSION,
+  KIT_PROMPT_FAMILY_VERSION,
   kitJsonSchema,
   kitPrompt,
+  parseAnatomy,
   parseEvidence,
   mergeKitPatch,
   mockRecipe,
   parseKit,
   parseKitPatch,
   SHAPE_JSON_SCHEMA,
+  SHAPE_JSON_SCHEMA_ANATOMY,
   SHAPE_SYSTEM_PROMPT,
   shapeQuestion,
 } from '../shape';
@@ -317,10 +321,11 @@ describe('kit evidence and confidence (PQ-T12)', () => {
   it('regression (PR #12 review): prompt 1 is not offered evidence or confidence', () => {
     // Before: one schema for both prompts, so the default call could answer the extra fields too
     // (longer answers, and parts and doubts that were said to be off under prompt 1).
-    const keys = Object.keys(kitJsonSchema().schema.properties);
-    expect(kitJsonSchema()).toBe(SHAPE_JSON_SCHEMA);
+    const keys = Object.keys(kitJsonSchema(1).schema.properties);
+    expect(kitJsonSchema(1)).toBe(SHAPE_JSON_SCHEMA);
     expect(keys).not.toContain('evidence');
     expect(keys).not.toContain('confidence');
+    expect(keys).not.toContain('anatomy');
     expect(keys[0]).toBe('archetype');
   });
 
@@ -330,6 +335,60 @@ describe('kit evidence and confidence (PQ-T12)', () => {
     expect(p).toContain('VEHICLE');
     expect(p).not.toMatch(/answer fast/i);
     expect(kitPrompt(KIT_PROMPT_CARDS_VERSION, 'other')).not.toContain('VEHICLE');
-    expect(() => kitPrompt(99)).toThrow(/unknown kit prompt version 99 \(kept: 1, 2, 3\)/);
+    expect(() => kitPrompt(99)).toThrow(/unknown kit prompt version 99 \(kept: 1, 2, 3, 4\)/);
+  });
+});
+
+describe('kit anatomy (PQ-T46)', () => {
+  const base = {
+    archetype: 'vehicle',
+    proportions: { w: 1, h: 0.4, d: 0.5 },
+    colors: { main: '#aa2222', secondary: '#222222', accent: '#88aacc' },
+  };
+
+  it('reads one state per closed-list part, repeats keep the first answer', () => {
+    const k = parseKit(
+      reply({
+        anatomy: [
+          { part: 'Rear Window', state: 'present', where: 'Back slope' },
+          { part: 'rear window', state: 'absent' },
+          { part: 'plate', state: 'hidden' },
+          { part: 'mirror', state: 'maybe' },
+          { part: '  ', state: 'present' },
+          'windshield',
+        ],
+        ...base,
+      })
+    );
+    expect(k!.anatomy).toEqual([
+      { part: 'rear window', state: 'present', where: 'Back slope' },
+      { part: 'plate', state: 'hidden' },
+    ]);
+  });
+
+  it('cuts the list at 16 and keeps answers without anatomy valid', () => {
+    const many = Array.from({ length: 20 }, (_, i) => ({ part: `part ${i}`, state: 'absent' }));
+    expect(parseAnatomy(many)).toHaveLength(16);
+    expect(parseAnatomy('nope')).toBeUndefined();
+    expect(parseAnatomy([{ part: 'wheel' }])).toBeUndefined();
+    const k = parseKit(reply(base));
+    expect(k).not.toBeNull();
+    expect(k!.anatomy).toBeUndefined();
+  });
+
+  it('prompt 4 is the base prompt plus the closed list of the hint family, anatomy answered first', () => {
+    const p = kitPrompt(KIT_PROMPT_ANATOMY_VERSION, 'vehicle');
+    expect(p.startsWith(SHAPE_SYSTEM_PROMPT)).toBe(true);
+    expect(p).toContain('rear window');
+    expect(p).toContain('present');
+    const keys = Object.keys(kitJsonSchema(KIT_PROMPT_ANATOMY_VERSION).schema.properties);
+    expect(kitJsonSchema()).toBe(SHAPE_JSON_SCHEMA_ANATOMY);
+    expect(keys[0]).toBe('anatomy');
+    expect(keys).not.toContain('evidence');
+    // Prompt 3 shares the anatomy schema: its family card carries the Anatomy line.
+    expect(kitJsonSchema(KIT_PROMPT_FAMILY_VERSION)).toBe(SHAPE_JSON_SCHEMA_ANATOMY);
+    // Prompt 2 answers evidence, then anatomy, then the kit (E5 order).
+    const cards = Object.keys(kitJsonSchema(KIT_PROMPT_CARDS_VERSION).schema.properties);
+    expect(cards.slice(0, 3)).toEqual(['evidence', 'anatomy', 'archetype']);
   });
 });

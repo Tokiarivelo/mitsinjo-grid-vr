@@ -3,7 +3,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 vi.mock('server-only', () => ({}));
-import { KIT_ARCHETYPES } from '@/lib/object-kit';
+import { ANATOMY, KIT_ARCHETYPES } from '@/lib/object-kit';
 import { RECIPE_MATERIALS } from '@/lib/object-shape';
 import { CARD_TEXT } from '../skills/cards.generated';
 import { extractCards } from '../skills/extract';
@@ -113,6 +113,20 @@ describe('skill cards (PQ-T11)', () => {
       }
     }
     expect(lists).toBeGreaterThanOrEqual(KIT_ARCHETYPES.length - 2);
+  });
+
+  it('every archetype card carries its ANATOMY closed list (PQ-T46)', () => {
+    for (const a of KIT_ARCHETYPES) {
+      const card = CARD_TEXT[`archetype:${a}`];
+      const want = ANATOMY[a];
+      // A flat family (water) and the plain box (other) have no closed inventory.
+      if (!want.length) {
+        expect(card ?? '', a).not.toMatch(/^Anatomy/m);
+        continue;
+      }
+      const line = card!.match(new RegExp(`^Anatomy(?: \\(${a}\\))?: (.+)\\.$`, 'm'));
+      expect(line?.[1], a).toBe(want.join(', '));
+    }
   });
 
   it('serves the image cards and fails loudly on a missing one', () => {

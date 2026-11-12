@@ -517,7 +517,19 @@ One task = one commit, with its Vitest test, its `contracts.md` update and its m
       kit-replay); contracts + V267. Deferred: checkpoint resume of code rounds, block patches (full
       body re-sent), richer writer sheet (photo crop only, v1). Live measure pending (no key): valid-code
       rate, gain vs route A, tour duration (Vercel/OVHcloud).
-- [ ] **PQ-T46 `anatomy` in kit, cards and score** (§12.3, §5, E5, E9).
+- [x] **PQ-T46 `anatomy` in kit, cards and score** (§12.3, §5, E5, E9).
+      _Built 2026-11-12:_ `ANATOMY` closed lists + `KitAnatomySchema` + `anatomy?` on the kit,
+      `parseAnatomy`, kit prompt v4 = v1 + one inventory line (new default; v1 baseline kept,
+      v2/v3 schemas offer anatomy too), `Anatomy:` lines in the §5 cards (`make skills-gen`, sync
+      test), `anatomyState`/`presentAnatomy` in fusion, `ANATOMY_KINDS` + `anatomyRecall`/
+      `anatomyMissing` in the score (report `Ana` column, no gate yet), `present` parts refuse
+      into `notBuilt` by exact name, vehicle glass slopes/wheels/lights + house walls/roof/
+      openings/chimney tagged (glasshouse band kindless: glazing, not a framed opening).
+      Live (Meta key): eval-shape v1 29/30 @14.2 s vs v4 27/31 @17.1 s on 4 captures (v4 answers
+      more where v1 stays silent; full inventories 13/10/6/6); car-side re-captured 53 (frozen
+      52), ana 0.45, rear window hidden on the side view and built; house route-B round 1 twice
+      (0.800→0.780, 0.860→0.850, both dropped; valid code 2/2; to-stall loop left to PQ-T55).
+      Contracts + V272.
 - [x] **PQ-T47 Image type, representation family, routing** (§12.4, §4), with motivated refusal and the
       operator question under 0.82.
       _Built 2026-11-12:_ `routing.ts` (`routeImage`: image type + family + pipeline/ask/refuse;

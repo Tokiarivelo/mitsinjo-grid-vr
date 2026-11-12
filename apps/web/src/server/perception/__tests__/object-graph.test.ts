@@ -303,6 +303,14 @@ describe('repairGraph + notBuilt (PQ-T37)', () => {
     expect(notBuilt(r)).toEqual([]);
   });
 
+  it('closed-list parts answered present refuse a model that lacks them (PQ-T46)', () => {
+    const r = car([body, wheel(-0.3), wheel(0.3)]);
+    expect(notBuilt(r, [], [], ['wheels', 'rear window'])).toEqual(['rear window']);
+    expect(notBuilt(r, [], ['mirror'], ['grille'])).toEqual(['mirror', 'grille']);
+    // A built part is never reported, whatever else is missing.
+    expect(notBuilt(r, [], [], ['wheels'])).toEqual([]);
+  });
+
   it("the kit's listed parts (evidence.visibleParts) are read in the plural and join the part list (PQ-T37)", () => {
     const r = car([body, wheel(-0.3), wheel(0.3)]);
     expect(notBuilt(r, [], ['Wheels', 'side mirrors'])).toEqual(['side mirror']);

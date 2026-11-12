@@ -140,7 +140,9 @@ export async function scoreRecipe(
   recipe: ObjectRecipe,
   masks?: ReadonlyArray<PartMask>,
   /** Rect the mask fractions refer to; default = the shape crop of `photo` (live). Replays pass the whole crop. */
-  maskCrop?: CropRect
+  maskCrop?: CropRect,
+  /** Closed-list parts answered `present` (PQ-T46); the anatomy recall needs them. */
+  anatomy?: ReadonlyArray<string>
 ): Promise<RecipeScore | null> {
   const rings = target.outline ? pathToRings(target.outline).filter((r) => r.length >= 3) : [];
   const { box } = target;
@@ -169,6 +171,7 @@ export async function scoreRecipe(
     outline,
     parts: detailParts(recipe),
     samParts: onObject.length ? gridParts(onObject, geom!, cols, rows) : [],
+    ...(anatomy?.length ? { anatomy } : {}),
   });
   return {
     score: weightDetail({ ...scoreModel(render, crop, outline, landmarks), detail }),
