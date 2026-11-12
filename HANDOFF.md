@@ -1,38 +1,41 @@
 # HANDOFF — read first, overwrite at end of session (≤40 lines)
 
-**Updated:** 2026-11-11 · **By:** Claude Code · **Branch:** feat/pq-q3 (PR to `main`, one commit per task)
+**Updated:** 2026-11-11 · **By:** Muse Code · **Branch:** feat/vision-no-timeout (PQ-T42 built, uncommitted; rebase onto `origin/main` before PR)
 
-## Current state
+## PRIORITY NEXT: `docs/vision-to-3d-universal-pipeline.md` §12 — PQ-T43 next
 
-- **PV-Q Q3 built, ticked on the owner's request** (live Meta checks still pending, like Q2). One commit per task:
-  T20 `RecipePart.details` (nothing sets them yet) · T21 `partCeiling` (32 measured, 12 imagined) · T22 `farSide` ·
-  T24 rear by mirror (« second side on request » NOT built) · T19 `photoStageLoop` (no checkpoint context) ·
-  T23 clean front · T10 region colours on the lit surface. Details per task in `docs/tasks/PV-vision-quality.md`.
-- Existing mask tests now use `source: 'free'` fixtures to keep covering the 12 budget.
-- **PR #14 reviewed** (fix commit): cabinet far side mirrors `frame` only (template handle / door line stayed on
-  the back); clean front keeps « Retry with details », stays clean on retry after a remount, `clean` follows the
-  request (mock too), house facade route marks drawn parts inferred; wheel arch never under the tyre.
-- `make test-shape` strict 300 ms budget fails on this machine on `main` too (302–342 ms): not from Q3.
+PQ-T42 landed (this session, §12.1). Next in order (§12, registered as PQ-T43…PQ-T55 in
+`docs/tasks/PV-vision-quality.md` Q6):
 
-## Next
+1. **PQ-T43 Template fixes:** car glass, roof overhang + fascia, houses with openings on all 4 faces,
+   gable in wall material (§7.1, §7.4 remedy 2).
+2. PQ-T44 houses via 2D path by default; **PQ-T45 sandbox** (2ter): `api` + QuickJS WASM + Wonder
+   `build()` (`META_CODE_MODEL`), template = instant draft replaced on score gain, house first.
+3. Then PQ-T46 `anatomy`, PQ-T47 routing, PQ-T48 details, PQ-T49 parallel/cache, PQ-T50/51 generators,
+   PQ-T52 critic, PQ-T53 SDF, PQ-T54 real set, PQ-T55 eval B vs A.
 
-1. Merge the Q3 PR once CI is green.
-2. With a Meta key: measure T19 (detail score rises, never lowers, on the real photo-path objects), T23 (hidden car
-   IoU on the visible region), T22 sheet, T10 on a real shadowed photo. `make shape-report` replays captures: per-part
-   colours cannot move offline.
-3. T19 left: replay of a recorded loop in `eval-stages`; resume across requests (add a `photo` checkpoint kind).
-4. T23 design gate: screenshots (both themes, 390 px) of the clean-front block; no Stitch mockup.
-5. `details` in the builders: template car checked on the flat render, mirror lands mid-door (62 % of a low
-   body) and arch is dark on dark: fix placement with a viewer pass before opting in.
+## Current state (uncommitted this session)
 
-## Files touched
+- **PQ-T42 stage durations (E12):** every run phase logs `[vision] 3D <phase> …` and emits SSE
+  `shape_timing { phase, ms }` (`SHAPE_TIMING_PHASES`: crop/kit/sam/masks/fit/views/stages/score/
+  critic); `vision_detections` carries `ms`. Skipped phases stay silent. `onTiming` on
+  `ObjectShapeOptions`, `formatDuration`, route wiring, contracts.md, V264 scenario.
+- **Also:** Q6 series PQ-T43…PQ-T55 registered in PV-vision-quality.md; stale Non-goals line narrowed
+  to code outside the §8bis sandbox. Earlier (committed): no generation timeouts; live 3D print; spec.
 
-- `lib/object-shape.ts`, `lib/shape-script.ts`, `server/perception/{photo-stages,hidden-sides,mask-*,object-views,object-shape,
-shape-stages-spark,view-stages,region-colors,facade-specialist,silhouette-fit,shape-script-prompt}.ts`,
-  `features/vision-insert/{ui/clean-front-offer.tsx,ui/object-shape-panel.tsx,utils/view-assemblies.ts,hooks/*}`,
-  `app/api/vision/facade/route.ts`, `messages/*.json`, docs (`contracts`, `copilot`, `tasks/PV-vision-quality`).
+## Verify
+
+- `make typecheck` 4/4 · `make lint` 0 errors · web suite green on rerun (337 files / 2559 tests;
+  first run: 2 load flakes) · `make test-shape` budget flakes environmentally (cottage row 301 vs
+  300 ms; untouched tree fails 2/5 — slow machine, not a regression).
+
+## Open (measure at implementation)
+
+- Wonder's code validity rate vs template draft; QuickJS cold start + function memory on Vercel;
+  checkpoint size with code; a model bigger than `muse-wonder-1.0` for `META_CODE_MODEL`.
+- V264 manual check pending (needs a Meta key). `fetch origin main` fails here (no remote access).
 
 ## Decisions
 
-- Inferred parts never displace measured ones: far-side set is atomic and added last.
-- Local scenarios V244–V252 (test-scenarios is gitignored). Hub dataset not republished: no bench / eval output changed.
+- Critic timing covers the scoring pass too (a held score still reports `critic`).
+- Sandbox = QuickJS WASM (never `eval` / Node `vm`); limits on generated code only, never a clock on Meta; kept: `reason: 'timeout'`, explicit budgets, Vercel slices (OVH: `limitMs = Infinity`).

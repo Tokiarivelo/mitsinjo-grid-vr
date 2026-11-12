@@ -27,16 +27,23 @@ export const PART_CONCEPTS: Record<KitArchetype, ReadonlyArray<string>> = {
   other: [],
 };
 
-/** The whole batch (all concepts in parallel) resolves inside this, stragglers dropped. */
-export const PART_MASKS_TIMEOUT_MS = 5000;
+/**
+ * Default wait for the whole batch (all concepts in parallel): none — every concept is awaited.
+ * Callers may pass an explicit `timeoutMs`; stragglers past it are dropped.
+ */
+export const PART_MASKS_TIMEOUT_MS: number | null = null;
 
 /** Share of the time left that part masks may use (PQ-T9), bounded below and above. */
 export const PART_MASKS_TIME_SHARE = 0.25;
 export const PART_MASKS_MIN_MS = 3000;
 export const PART_MASKS_MAX_MS = 8000;
 
-/** Deadline of the part-mask batch from the time left in the request (never the old fixed 5 s on a short budget). */
-export function partMasksTimeout(timeLeftMs: number): number {
+/**
+ * Deadline of the part-mask batch from the time left in the request (a share of it, bounded);
+ * null when the request itself is unbounded, so the batch waits for every concept.
+ */
+export function partMasksTimeout(timeLeftMs: number | null): number | null {
+  if (timeLeftMs === null || !Number.isFinite(timeLeftMs)) return null;
   const share = Math.round(Math.max(0, timeLeftMs) * PART_MASKS_TIME_SHARE);
   return Math.min(PART_MASKS_MAX_MS, Math.max(PART_MASKS_MIN_MS, share));
 }
@@ -55,8 +62,9 @@ export const PART_MASKS_PER_CONCEPT = 8;
 
 /**
  * Segments the archetype's part concepts on the crop, in parallel (PR-2.5). Best effort:
- * a failed concept contributes nothing, a hanging one is dropped at the shared deadline, and
- * only real SAM answers count (the mock's boxes belong to another image). Never throws.
+ * a failed concept contributes nothing, a hanging one is dropped at the shared deadline when an
+ * explicit `timeoutMs` bounds it (by default every concept is awaited), and only real SAM
+ * answers count (the mock's boxes belong to another image). Never throws.
  */
 export async function fetchPartMasks(
   segmentImage: PerceptionClient['segmentImage'],
@@ -66,22 +74,24 @@ export async function fetchPartMasks(
     timeoutMs = PART_MASKS_TIMEOUT_MS,
     concepts = PART_CONCEPTS[archetype] ?? [],
   }: {
-    timeoutMs?: number;
+    /** Explicit bound; null/undefined (default) awaits every concept. */
+    timeoutMs?: number | null;
     /** Concepts to segment instead of the archetype's (the facade asks windows and doors only). */
     concepts?: ReadonlyArray<string>;
   } = {}
 ): Promise<PartMask[]> {
   if (concepts.length === 0) return [];
-  const deadline = Date.now() + timeoutMs;
+  const ms =
+    typeof timeoutMs === 'number' && Number.isFinite(timeoutMs) ? Math.max(0, timeoutMs) : null;
+  const deadline = ms === null ? Infinity : Date.now() + ms;
   const controller = new AbortController();
-  const abortTimer = setTimeout(() => controller.abort(), timeoutMs);
+  const abortTimer = ms === null ? undefined : setTimeout(() => controller.abort(), ms);
   // Per-concept miss cause, for the one warn when every concept misses (else the caller logs
   // the hits and the misses stay invisible — the green Mini lost its wheels silently).
   const missed = new Map<string, string>();
   try {
     const perConcept = await Promise.all(
       concepts.map(async (concept): Promise<PartMask[]> => {
-        const remaining = Math.max(0, deadline - Date.now());
         type Settled =
           | { status: 'answer'; seg: Awaited<ReturnType<typeof segmentImage>> }
           | { status: 'error' }
@@ -90,10 +100,13 @@ export async function fetchPartMasks(
           (seg) => ({ status: 'answer', seg }) as const,
           () => ({ status: 'error' }) as const
         );
-        const late: Promise<Settled> = new Promise((resolve) =>
-          setTimeout(() => resolve({ status: 'late' }), remaining)
-        );
-        let settled = await Promise.race([call, late]);
+        const late: Promise<Settled> | null =
+          deadline === Infinity
+            ? null
+            : new Promise((resolve) =>
+                setTimeout(() => resolve({ status: 'late' }), Math.max(0, deadline - Date.now()))
+              );
+        let settled = late ? await Promise.race([call, late]) : await call;
         // First answer empty (a real SAM answer with no instance): one more phrasing, inside the same deadline.
         const retry = PART_RETRY[concept];
         if (
@@ -108,7 +121,7 @@ export async function fetchPartMasks(
             (seg) => ({ status: 'answer', seg }) as const,
             () => ({ status: 'error' }) as const
           );
-          const second = await Promise.race([again, late]);
+          const second = late ? await Promise.race([again, late]) : await again;
           if (second.status === 'answer' && second.seg.instances.length > 0) settled = second;
         }
         if (settled.status !== 'answer') {

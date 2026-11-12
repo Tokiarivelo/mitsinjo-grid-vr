@@ -29,7 +29,7 @@ import type {
 } from './schemas';
 
 /**
- * Short cause of a failed Meta call: `timeout` (our time limit), `aborted` (the browser left),
+ * Short cause of a failed Meta call: `timeout` (an explicit time limit), `aborted` (the browser left),
  * `http_<status>` (Meta answered with an error), else `network`.
  */
 export function failureOf(err: unknown): string {

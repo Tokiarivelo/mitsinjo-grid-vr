@@ -1,7 +1,12 @@
 // @vitest-environment node
 import sharp from 'sharp';
 import { describe, expect, it, vi } from 'vitest';
-import { ObjectShapeSchema, type ObjectRecipe, type ShapeTarget } from '@/lib/object-shape';
+import {
+  ObjectShapeSchema,
+  ShapeTimingEventSchema,
+  type ObjectRecipe,
+  type ShapeTarget,
+} from '@/lib/object-shape';
 vi.mock('server-only', () => ({}));
 import { srgbToLinear } from '../color-measure';
 import { runObjectShape, SHAPE_TIMEOUT_MS } from '../object-shape';
@@ -64,7 +69,8 @@ describe('runObjectShape (PV-T9)', () => {
       // PQ-T7: facts measured by code, sent as the « Measured: » line.
       facts: ['object 40 × 60 px', 'sharpness low'],
     });
-    expect(signal).toBeInstanceOf(AbortSignal);
+    // No default budget: no signal unless the caller passes one (or an explicit timeoutMs).
+    expect(signal).toBeUndefined();
   });
 
   it('recipe with wrong proportions is fitted to the photo box, not rejected', async () => {
@@ -151,20 +157,39 @@ describe('runObjectShape (PV-T9)', () => {
 
   it('an expired budget (timeoutMs ≤ 0) still builds the recipe — the signal just starts aborted', async () => {
     // Before: AbortSignal.timeout(-146) threw RangeError ("shape failed"), e.g. the critic retry
-    // firing 146 ms past the 60 s budget; the clamp turns it into an instantly-aborted signal.
+    // firing 146 ms past an explicit budget; the clamp turns it into an instantly-aborted signal.
     const p = client(meta(tall));
     const out = await runObjectShape(p, await photo(), 'data:full', target, { timeoutMs: -146 });
     expect(out).toMatchObject({ mode: 'recipe', source: 'meta' });
     expect(p.describeShape.mock.calls[0]![2]).toBeInstanceOf(AbortSignal);
   });
 
-  it('gives Spark 60 s (it needs 15–40 s) and reports each step', async () => {
-    expect(SHAPE_TIMEOUT_MS).toBe(60_000);
+  it('waits for Spark with no default limit (it needs 15–40 s) and reports each step', async () => {
+    expect(SHAPE_TIMEOUT_MS).toBeNull();
     const steps: string[] = [];
     await runObjectShape(client(meta(tall)), await photo(), 'data:full', target, {
       onStep: (s) => steps.push(s),
     });
     expect(steps).toEqual(['crop', 'model', 'fit']);
+  });
+
+  it('reports each run phase duration, skipped phases stay silent (PQ-T42)', async () => {
+    const timings: Array<{ phase: string; ms: number }> = [];
+    const onTiming = (phase: string, ms: number) => timings.push({ phase, ms });
+    await runObjectShape(client(meta(tall)), await photo(), 'data:full', target, { onTiming });
+    // No outline to fetch (no segmentImage), no kit details, no masks, no staged loop.
+    expect(timings.map((t) => t.phase)).toEqual(['crop', 'kit', 'fit']);
+    for (const t of timings) expect(ShapeTimingEventSchema.safeParse(t).success).toBe(true);
+    // Mock mode without pixels: the kit call alone.
+    timings.length = 0;
+    await runObjectShape(
+      client({ recipe: tall, source: 'mock', model: 'mock-perception-v1' }),
+      null,
+      'data:full',
+      target,
+      { onTiming }
+    );
+    expect(timings.map((t) => t.phase)).toEqual(['kit']);
   });
 
   it('a Meta timeout is reason « timeout », other Meta errors keep their cause', async () => {
@@ -554,7 +579,8 @@ describe('free recipe (PV-T9c)', () => {
     const [url, subject, signal] = p.describeParts.mock.calls[0]!;
     expect(url).toMatch(/^data:image\/jpeg;base64,/);
     expect(subject).toEqual({ label: 'Guard', archetype: 'person' });
-    expect(signal).toBeInstanceOf(AbortSignal);
+    // No default budget: no signal unless the caller passes one (or an explicit timeoutMs).
+    expect(signal).toBeUndefined();
     expect(ObjectShapeSchema.safeParse(out).success).toBe(true);
   });
 

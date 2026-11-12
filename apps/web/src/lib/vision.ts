@@ -69,6 +69,8 @@ export const VisionDetectionsEventSchema = z.object({
   source: z.enum(['meta', 'mock']),
   model: z.string(),
   fallback: z.enum(['provider_error', 'spend_cap', 'not_configured']).optional(),
+  /** Phase duration in ms (PQ-T42, E12): the boxes call, then the outlines refinement. */
+  ms: z.number().nonnegative().optional(),
 });
 export type VisionDetectionsEvent = z.infer<typeof VisionDetectionsEventSchema>;
 

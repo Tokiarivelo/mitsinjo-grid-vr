@@ -21,7 +21,6 @@ import { fmtPct } from '@/lib/format';
 import { useTranslations } from '@/lib/i18n';
 import {
   SHAPE_STEPS,
-  SHAPE_TIMEOUT_MS,
   type DimStatus,
   type ObjectRecipe,
   type ObjectShape,
@@ -165,11 +164,7 @@ function ShapeSteps({ step, seconds }: { step: ShapeStep; seconds: number }) {
           );
         })}
       </ol>
-      {step === 'model' && (
-        <p className="text-[11px] text-text-muted">
-          {t('model3dWaitHint', { max: SHAPE_TIMEOUT_MS / 1000 })}
-        </p>
-      )}
+      {step === 'model' && <p className="text-[11px] text-text-muted">{t('model3dWaitHint')}</p>}
     </div>
   );
 }
@@ -208,6 +203,7 @@ export function ObjectShapePanel({
   shape,
   step,
   startedAt,
+  preview,
   improve,
   detection,
   label,
@@ -226,6 +222,10 @@ export function ObjectShapePanel({
   const ready = status === 'ready' && shape?.detectionId === detection.id;
   const materials = ready && shape?.recipe ? recipeMaterials(shape.recipe) : [];
   const loading = status === 'loading';
+  // Live print: while loading, the viewer paints the streamed preview (or the free local
+  // silhouette) instead of a skeleton, so the model builds up like a 3D print.
+  const liveViewer =
+    ready || (loading && (preview !== undefined || detection.outline !== undefined));
   const seconds = useElapsedSeconds(startedAt, status === 'loading');
   const showTabs = ready && Boolean(facade.facade);
   // Tab choice is per object: a new detection restarts on the model tab.
@@ -337,9 +337,10 @@ export function ObjectShapePanel({
                 aria-label={t('model3dCanvas', { label })}
                 className="viewer-studio h-60 w-full overflow-hidden rounded-control border border-border sm:h-72"
               >
-                {ready ? (
+                {liveViewer ? (
                   <LazyObjectEditor3d
-                    shape={shape}
+                    {...(ready && shape ? { shape } : {})}
+                    {...(!ready && preview ? { preview } : {})}
                     detection={detection}
                     imageUrl={imageUrl}
                     scale={shown.scale}
@@ -350,11 +351,12 @@ export function ObjectShapePanel({
                   <ViewerSkeleton />
                 )}
               </div>
-              {/* Staged improvement (PG-T18): the model keeps getting better after it shows. */}
-              {ready && (
+              {/* Staged build (PG-T18): live progress while it prints, then it keeps improving.
+                  No Cancel while loading: it would abort the whole generation, not just the rest. */}
+              {(ready || loading) && improve && (
                 <ImproveChip
                   improve={improve}
-                  {...(onCancelImprove ? { onCancel: onCancelImprove } : {})}
+                  {...(ready && onCancelImprove ? { onCancel: onCancelImprove } : {})}
                 />
               )}
             </div>
@@ -377,7 +379,7 @@ export function ObjectShapePanel({
           {shape.mode === 'silhouette' && (
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="min-w-0 flex-1 text-xs text-text-muted">
-                {t(NOTE_KEY[shape.reason ?? 'malformed'], { max: SHAPE_TIMEOUT_MS / 1000 })}
+                {t(NOTE_KEY[shape.reason ?? 'malformed'])}
                 {shape.detail && (
                   <span className="block font-mono text-[11px] text-text-secondary">
                     {t('model3dCause', { cause: causeText(shape.detail) })}

@@ -289,6 +289,17 @@ export async function stagedLoop<S extends ShapeStageId>(
   const now = input.stages.filter((st) => st.id !== FINAL_STAGE);
   const final = input.stages.filter((st) => st.id === FINAL_STAGE);
   if (input.firstBudgetMs >= STAGE_MIN_MS && now.length) {
+    // Live preview: the seed streams at once, so the viewer paints the rough model while the
+    // first stage still asks Spark (same `shape_stage` event, `running` + recipe — no protocol change).
+    input.onProgress?.({
+      phase: 'first',
+      index: position(now[0]!.id),
+      total,
+      stage: now[0]!.id,
+      state: 'running',
+      kinds: [...now[0]!.kinds],
+      recipe: keep(input.recipe),
+    });
     const first = await runShapeStages({
       ...common,
       seed: recipeToScript(recipe),

@@ -4,7 +4,7 @@ import type { NextRequest } from 'next/server';
 
 vi.mock('server-only', () => ({}));
 
-import { ObjectShapeSchema } from '@/lib/object-shape';
+import { ObjectShapeSchema, ShapeTimingEventSchema } from '@/lib/object-shape';
 import { parseSseChunk } from '@/lib/sse';
 import { mockRecipe } from '@/server/perception';
 import { POST } from '../route';
@@ -41,12 +41,23 @@ describe('POST /api/vision/shape (PV-T9)', () => {
     expect(list.map((e) => e.event)).toEqual([
       'shape_step',
       'shape_step',
+      'shape_timing',
       'shape_step',
       'shape_result',
       'done',
     ]);
-    expect(list.slice(0, 3).map((e) => e.data.step)).toEqual(['crop', 'model', 'fit']);
-    const body = ObjectShapeSchema.parse(list[3]!.data.shape);
+    expect(list.filter((e) => e.event === 'shape_step').map((e) => e.data.step)).toEqual([
+      'crop',
+      'model',
+      'fit',
+    ]);
+    // PQ-T42: mock mode without pixels times the kit call alone.
+    const timing = list.find((e) => e.event === 'shape_timing')!;
+    expect(ShapeTimingEventSchema.parse(timing.data)).toEqual({
+      phase: 'kit',
+      ms: expect.any(Number),
+    });
+    const body = ObjectShapeSchema.parse(list[4]!.data.shape);
     expect(body).toMatchObject({ detectionId: 'det-1', mode: 'recipe', source: 'mock' });
     expect(body.recipe).toEqual(mockRecipe('fridge'));
     expect(body.imaginedViews).toHaveLength(6);

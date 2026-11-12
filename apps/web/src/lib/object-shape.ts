@@ -313,7 +313,7 @@ export const SHAPE_FALLBACK_REASONS = [
   'spend_cap',
   'malformed',
   'no_body',
-  /** Spark took longer than the time limit (`SHAPE_TIMEOUT_MS`). */
+  /** Spark exceeded an explicit caller budget (routes set none: they wait for the answer). */
   'timeout',
   /** The browser could not reach the app server (offline, server down, bad reply). */
   'network',
@@ -417,15 +417,46 @@ export type ObjectShape = z.infer<typeof ObjectShapeSchema>;
  * them to the photo box. The browser adds its own `build` step (geometry) once the answer is in.
  */
 /**
- * Spark budget for one recipe; past it the silhouette is used (reason `timeout`). Measured: Muse needs
- * ≈ 15 s (base) to ≈ 25 s (contributor) on a photo, more for a 12-part recipe; the old 20 s cut most answers.
+ * Default Spark budget for one recipe: none — the answer is awaited until it arrives (measured:
+ * Muse needs ≈ 15 s base to ≈ 25 s contributor, more for a 12-part recipe). Callers may still pass
+ * an explicit `timeoutMs`; past it the silhouette is used (reason `timeout`).
  */
-export const SHAPE_TIMEOUT_MS = 60_000;
+export const SHAPE_TIMEOUT_MS: number | null = null;
 
 /** `check` = the AI checks the views model against the drawings and fixes it (PV-H). */
 export const SHAPE_STEPS = ['crop', 'model', 'fit', 'check'] as const;
 export type ShapeStep = (typeof SHAPE_STEPS)[number];
 export const ShapeStepEventSchema = z.object({ step: z.enum(SHAPE_STEPS) });
+
+/**
+ * Timed phases of `/api/vision/shape` (PQ-T42, E12): one SSE `shape_timing { phase, ms }` per
+ * phase that ran, plus a `[vision] 3D <phase> …` log line. `crop` = cut the object · `sam` =
+ * on-demand outline (overlaps `kit`) · `kit` = Spark kit + vote · `views` = elevations / views
+ * measures and the AI check · `masks` = part + facade masks · `fit` = measures, silhouette fit,
+ * reshapes and graph · `stages` = staged loop of the first answer · `score` = final scoring ·
+ * `critic` = Spark critic round(s). Skipped phases emit nothing.
+ */
+export const SHAPE_TIMING_PHASES = [
+  'crop',
+  'kit',
+  'sam',
+  'masks',
+  'fit',
+  'views',
+  'stages',
+  'score',
+  'critic',
+] as const;
+export type ShapeTimingPhase = (typeof SHAPE_TIMING_PHASES)[number];
+export const ShapeTimingEventSchema = z.object({
+  phase: z.enum(SHAPE_TIMING_PHASES),
+  ms: z.number().nonnegative(),
+});
+
+/** `950` → `950 ms`, `3400` → `3.4 s`: the log form of a phase duration (PQ-T42). */
+export function formatDuration(ms: number): string {
+  return ms < 1000 ? `${Math.round(ms)} ms` : `${(Math.round(ms / 100) / 10).toFixed(1)} s`;
+}
 
 /**
  * Staged improvement of the model (PG-T17/T18): stage ids of the loop (house: massing → roof →

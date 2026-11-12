@@ -11,6 +11,7 @@ import {
   ShapeStagesResumedSchema,
   ShapeStepEventSchema,
   type ImaginedAngleView,
+  type ObjectRecipe,
   type ObjectShape,
   type PartKind,
   type ShapeStageId,
@@ -33,6 +34,12 @@ export interface ObjectShapeState {
   /** 6-angle 2D preview: imagined before the 3D, validated to build it. */
   viewsStatus: 'idle' | 'loading' | 'ready';
   views?: ImaginedAngleView[];
+  /**
+   * Live model while `loading`: the seed then each kept first-answer stage, streamed by the
+   * server (real partial data, not a shape: source/model are only known at `shape_result`).
+   * Cleared when the final shape lands. The viewer paints it like a 3D print in progress.
+   */
+  preview?: ObjectRecipe;
   /** Staged improvement of the model (PG-T17/T18), absent when the object has none. */
   improve?: ShapeImprove;
 }
@@ -245,7 +252,13 @@ export function useObjectShape(scope?: string) {
       const key = shapeRequestKey(target);
       const cached = force ? undefined : cacheRef.current.get(key);
       if (cached) {
-        setState((s) => ({ ...s, status: 'ready', shape: cached, improve: undefined }));
+        setState((s) => ({
+          ...s,
+          status: 'ready',
+          shape: cached,
+          preview: undefined,
+          improve: undefined,
+        }));
         return;
       }
       cancelJob();
@@ -256,6 +269,7 @@ export function useObjectShape(scope?: string) {
         status: 'loading',
         step: 'crop',
         startedAt: Date.now(),
+        preview: undefined,
         improve: undefined,
       }));
       const job: { id?: string; seq: number; done: boolean } = { seq: -1, done: false };
@@ -274,6 +288,7 @@ export function useObjectShape(scope?: string) {
           ...s,
           status: 'ready',
           shape,
+          preview: undefined,
           // First-answer stages only: the model is final now.
           ...(s.improve && !job.id ? { improve: { ...s.improve, status: 'done' as const } } : {}),
         }));
@@ -314,6 +329,10 @@ export function useObjectShape(scope?: string) {
               cacheRef.current.set(key, shape);
               cacheRef.current.set(objectKey, shape);
               return { ...s, shape, improve };
+            }
+            // A first-answer stage (seed, then each kept patch): live preview while loading.
+            if (st.phase === 'first' && st.recipe && !finalized) {
+              return { ...s, preview: st.recipe, improve };
             }
             return { ...s, improve };
           });

@@ -7,8 +7,8 @@ score passes models that do not look right, so nothing after it could be judged.
 **Read first:** `docs/vision-to-3d-methodology.md` (what and why) · `docs/vision-to-3d-muse-skills.md` (card
 texts) · `.claude/skills/shape-3d/SKILL.md` · `.claude/skills/shape-loop/SKILL.md`. Per task: only the files it names.
 **Rules kept:** Meta models only · never paste the photo on the model (≈ 64 px tileable swatches allowed) · Muse
-never writes geometry or code · shape maths pure, seeded, tested, ≤ 300 ms · ≤ 5 000 triangles · first answer
-≤ 60 s · no energy value anywhere · mock provider keeps working offline.
+never writes vertices (it may write code, but only run in the sandbox of `vision-to-3d-universal-pipeline.md` §8bis) · shape maths pure, seeded, tested, ≤ 300 ms · ≤ 5 000 triangles · first answer
+awaited without a time limit · no energy value anywhere · mock provider keeps working offline.
 **How every task ends:** test added or updated → `make test-shape` → `make shape-report` → one row in the
 « Loop log » of `PV-shape-realism.md` → commit and push (`feat(perception): … (PQ-Tn)`).
 **Paths** are under `apps/web/src/` unless they start with `docs/`, `scripts/` or a root file.
@@ -473,9 +473,44 @@ _Ticked 2026-11-11 on the owner's request: the code and tests are in; every « d
       one scenario per visible change (photo hint, clean front, details on the fridge and the car, background
       rounds chip), then `make scenarios-publish`.
       **Done when:** `make check` and `make check-i18n` are green and no doc states a plan as a fact.
-- [ ] **PQ-T31 Budgets.** Check on the real set: first answer ≤ 60 s, shape maths ≤ 300 ms, ≤ 5 000 triangles,
+- [ ] **PQ-T31 Budgets.** Check on the real set: first answer with no time limit (latency reported), shape maths ≤ 300 ms, ≤ 5 000 triangles,
       API calls per object within the spend cap (count them per path and write the table in `docs/copilot.md`).
       **Done when:** every budget holds, or the task that broke one is reverted.
+
+---
+
+## Q6 — Universal pipeline (`docs/vision-to-3d-universal-pipeline.md` §12, decided 2026-11-11)
+
+One task = one commit, with its Vitest test, its `contracts.md` update and its manual scenario.
+
+- [x] **PQ-T42 Stage durations in logs and SSE** (§12.1, E12). Every phase that runs reports its duration:
+      `[vision] 3D <phase> …` log line plus SSE `shape_timing { phase, ms }` (`SHAPE_TIMING_PHASES`:
+      crop, kit, sam, masks, fit, views, stages, score, critic); `vision_detections` carries `ms` per phase.
+      **Test:** `object-shape.test.ts` (phases reported, skipped silent), `spark-critic.test.ts` (critic),
+      `vision-pipeline.test.ts` + route tests (`ms` on the events).
+      **Done when:** a slow run shows where the time went without guessing.
+      _Built 2026-11-11:_ `onTiming` on `ObjectShapeOptions`, `formatDuration`, route wiring; V264.
+- [ ] **PQ-T43 Template fixes** (§12.2, §7.1, §7.4 remedy 2). Vehicle glazing, roof overhang + fascia,
+      hip-roof bevel; fallback template with openings on all four faces.
+- [ ] **PQ-T44 Houses through the 2D path by default** (§12.2bis, §7.4 remedies 1, 3, 4). Clean facade
+      drawing when none exists, real opening measures, per-face measured materials.
+- [ ] **PQ-T45 Sandboxed code, the main path for every object** (§12.2ter, §8bis). Build `api` +
+      QuickJS WASM + limits + Wonder-written `build()`, template draft replaced on gain, patch loop,
+      code stored with the capture. First case: the house.
+- [ ] **PQ-T46 `anatomy` in kit, cards and score** (§12.3, §5, E5, E9).
+- [ ] **PQ-T47 Image type, representation family, routing** (§12.4, §4), with motivated refusal and the
+      operator question under 0.82.
+- [ ] **PQ-T48 New detail kinds + assemblies** (§12.5, §7.2), identical in the viewer and the judge render.
+- [ ] **PQ-T49 Parallelism, draft / refine, cache** (§12.6, E12).
+- [ ] **PQ-T50 Organic generators + `plant` family** (§12.7, §7.3: `sweep, branch, scatter, drape`).
+- [ ] **PQ-T51 `loft` for vehicles, `inset` for openings** (§12.8, §7.3).
+- [ ] **PQ-T52 Short question per part, anatomy critic, three-view sheet** (§12.9, E9–E11).
+- [ ] **PQ-T53 SDF for smooth shapes** (§12.10, §8), after measuring the triangle budget.
+- [ ] **PQ-T54 Real set ≥ 12 photos, judge calibration, turntable sheet** (§12.11, §9.1).
+- [ ] **PQ-T55 Scored evaluation of B vs draft A** (§12.13: willow, car, house, one appliance) and tour
+      duration on Vercel and OVHcloud.
+
+**Exit Q6:** no object is finished by fixed code; every phase is timed and the slowness is located.
 
 ## Exit criteria
 
@@ -484,5 +519,6 @@ loop log and the docs agree · mock mode and the offline tests need no API key.
 
 ## Non-goals
 
-Non-Meta image-to-3D models · Muse-written code run on the server · dense meshes or GLB export · projecting the
-photo on the model · generated top-down or back views · tuning a threshold so that one object passes.
+Non-Meta image-to-3D models · Muse-written code run outside the §8bis sandbox (`eval`, Node `vm` and networked
+workers stay forbidden) · dense meshes or GLB export · projecting the photo on the model · generated top-down
+or back views · tuning a threshold so that one object passes.

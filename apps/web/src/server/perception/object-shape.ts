@@ -7,6 +7,7 @@ import {
   clampParts,
   SHAPE_TIMEOUT_MS,
   fitRecipe,
+  formatDuration,
   frontPartIndex,
   recipeIssue,
   type DimStatus,
@@ -15,6 +16,7 @@ import {
   type PartCoverage,
   type ShapeStep,
   type ShapeTarget,
+  type ShapeTimingPhase,
 } from '@/lib/object-shape';
 import { archetypeOf, kitToRecipe, type KitArchetype, type ObjectKit } from '@/lib/object-kit';
 import { pathToRings } from '@/lib/vision';
@@ -71,6 +73,7 @@ import { withMaskPanels } from './mask-panels';
 import { withMaskWheels } from './mask-wheels';
 import { withProfileBody } from './profile-body';
 import { scoreRecipe } from './score-shape';
+import { timeoutSignal } from './abort';
 import { voteKits } from './kit-vote';
 import { askFamilies, asFamily } from './kit-ask';
 import type { ShapeResult } from './schemas';
@@ -167,9 +170,12 @@ export function measuredYaw(
 
 export interface ObjectShapeOptions {
   signal?: AbortSignal;
-  timeoutMs?: number;
+  /** Explicit Spark budget (default: none — the answer is awaited). Evals pass one. */
+  timeoutMs?: number | null;
   /** Live progress (SSE `shape_step`). */
   onStep?: (step: ShapeStep) => void;
+  /** Phase durations, one call per phase that ran (PQ-T42, SSE `shape_timing`). */
+  onTiming?: (phase: ShapeTimingPhase, ms: number) => void;
   /** Whether to render the 6 canonical 2D imagined views (defaults to false so core math stays in budget). */
   withViews?: boolean;
   /** Observes Spark's kit answer when present (PR-0.4 capture; routes leave this unset). */
@@ -198,6 +204,13 @@ export interface ObjectShapeOptions {
 /** The second kit sample is asked only with at least this budget (PQ-T18). */
 const SECOND_SAMPLE_MIN_MS = 40_000;
 
+/** End of a budget started at `from` (Infinity when unbounded: every stage runs, all masks wait). */
+function budgetEnd(from: number, budgetMs: number | null | undefined): number {
+  return budgetMs === null || budgetMs === undefined || !Number.isFinite(budgetMs)
+    ? Infinity
+    : from + budgetMs;
+}
+
 /**
  * Selected object → its 3D shape (PV-T9), Meta models only. One Spark call on a crop around the object
  * returns a kit → parts recipe, fitted to the photo box (`fitRecipe`); archetypes without a real kit
@@ -207,8 +220,9 @@ const SECOND_SAMPLE_MIN_MS = 40_000;
  * read on that outline (PF-T3) and the houses / windows counted by edge repetition (PF-T4); straight-edged objects are turned by the yaw read on
  * their vanishing points (PF-T5); with an outline, the template parameters are then fitted to it
  * (PF-T6, `fit.iou`). Fallbacks → `silhouette` mode, built in
- * the browser from the SAM outline (no extra call), with a precise `reason`: `timeout` (past
- * `SHAPE_TIMEOUT_MS`), `provider_error` + `detail` (`http_429`…), `spend_cap`, `malformed`, `no_body`.
+ * the browser from the SAM outline (no extra call), with a precise `reason`: `timeout` (an
+ * explicit `timeoutMs` ran out; routes set none and wait), `provider_error` + `detail` (`http_429`…),
+ * `spend_cap`, `malformed`, `no_body`.
  * Mock mode: fixed recipe per category, not checked. Never throws.
  */
 export async function runObjectShape(
@@ -221,6 +235,7 @@ export async function runObjectShape(
     signal,
     timeoutMs = SHAPE_TIMEOUT_MS,
     onStep,
+    onTiming,
     withViews,
     onKit,
     onSideView,
@@ -244,6 +259,12 @@ export async function runObjectShape(
     logStage(e);
     onStage?.(e);
   };
+  /** Ends a timed phase (PQ-T42): one log line and one `shape_timing` event. */
+  const timed = (phase: ShapeTimingPhase, t0: number) => {
+    const ms = Date.now() - t0;
+    console.info(`[vision] 3D ${phase} for "${target.label}": ${formatDuration(ms)}`);
+    onTiming?.(phase, ms);
+  };
   /**
    * PQ-T23: a model built from a clean front (drawn where the photo shows nothing) has its drawn parts
    * `inferred`: applied once the 2D path is done (the views check and the staged loop stamp `measured`
@@ -260,6 +281,7 @@ export async function runObjectShape(
     /** What the loop is built from: lets a later request resume it (Vercel limit). */
     context?: StageLoopContext
   ): Promise<ObjectRecipe> => {
+    const stagesStart = Date.now();
     try {
       const loop = await start();
       if (!loop) return seed;
@@ -281,12 +303,14 @@ export async function runObjectShape(
             }),
         });
       }
+      timed('stages', stagesStart);
       return loop.recipe;
     } catch (err) {
       console.warn(
         '[vision] 3D stages failed, keeping the seed:',
         err instanceof Error ? err.message : err
       );
+      timed('stages', stagesStart);
       return seed;
     }
   };
@@ -307,6 +331,7 @@ export async function runObjectShape(
     // succeeded, else the rect would remap the whole photo into nonsense.
     let outlineCrop: OutlineCrop | undefined;
     if (photo) {
+      const cropStart = Date.now();
       try {
         imageUrl = await cropForShape(photo, target.box);
         outlineCrop = {
@@ -318,26 +343,28 @@ export async function runObjectShape(
       } catch (err) {
         console.warn('[vision] shape crop failed, sending the whole photo:', err);
       }
+      timed('crop', cropStart);
     }
     // PR-2.20: without an outline every box pixel counts (hedge outvotes the car): segment the
-    // photo for this object while Spark thinks. Best effort, usually free (SAM's 8 s deadline
+    // photo for this object while Spark thinks. Best effort, usually free (SAM's call
     // resolves long before Spark answers); the box is always kept, only the outline is adopted.
-    const fetchedOutline: Promise<string | undefined> =
-      !target.outline && photo && perception.segmentImage
-        ? fetchOutlineForBox(
-            perception.segmentImage.bind(perception),
-            fullImageUrl,
-            conceptOf(target),
-            target.box,
-            {
-              ...(outlineCrop ? { crop: outlineCrop } : {}),
-              retries: samRetries(target),
-            }
-          ).then(
-            (hit) => hit ?? undefined,
-            () => undefined
-          )
-        : Promise.resolve(target.outline);
+    const fetchSam = !target.outline && photo && perception.segmentImage;
+    const samStart = fetchSam ? Date.now() : null;
+    const fetchedOutline: Promise<string | undefined> = fetchSam
+      ? fetchOutlineForBox(
+          perception.segmentImage!.bind(perception),
+          fullImageUrl,
+          conceptOf(target),
+          target.box,
+          {
+            ...(outlineCrop ? { crop: outlineCrop } : {}),
+            retries: samRetries(target),
+          }
+        ).then(
+          (hit) => hit ?? undefined,
+          () => undefined
+        )
+      : Promise.resolve(target.outline);
     // PQ-T7: size, sharpness and exposure of the box, measured before the call so Spark is told them.
     const preGrid: GrayGrid | null = photo
       ? await sampleObjectGray(photo, target.box, target.outline, EDGE_COLUMNS).catch(() => null)
@@ -357,7 +384,8 @@ export async function runObjectShape(
       : null;
     onStep?.('model');
     const started = Date.now();
-    const timeout = AbortSignal.timeout(Math.max(0, timeoutMs));
+    // No default budget: the caller's signal only (an explicit `timeoutMs` still bounds it).
+    const kitSignal = timeoutSignal(timeoutMs, signal);
     const askKit = () =>
       perception.describeShape(
         imageUrl,
@@ -371,16 +399,30 @@ export async function runObjectShape(
           ...(target.archetype ? { archetype: target.archetype } : {}),
           ...(promptVersion ? { promptVersion } : {}),
         },
-        signal ? AbortSignal.any([signal, timeout]) : timeout
+        kitSignal
       );
+    const kitStart = Date.now();
     const shapeCall = askKit();
-    // PQ-T18: a second sample in parallel when asked and the budget allows it (≥ 40 s).
+    // PQ-T18: a second sample in parallel when asked and the budget allows it (≥ 40 s, or unbounded).
     const secondCall: Promise<ShapeResult | null> | null =
-      kitSamples >= 2 && timeoutMs >= SECOND_SAMPLE_MIN_MS ? askKit().catch(() => null) : null;
+      kitSamples >= 2 &&
+      (timeoutMs === null ||
+        timeoutMs === undefined ||
+        !Number.isFinite(timeoutMs) ||
+        timeoutMs >= SECOND_SAMPLE_MIN_MS)
+        ? askKit().catch(() => null)
+        : null;
     // 2D facade validated (user 2026-11-02): the house is rebuilt from its elevations — front
     // measured by SAM while Muse Image draws the side, then the side measured — in parallel
     // with Spark. Null for other archetypes, the mock, or a facade SAM cannot read.
     const hint = archetypeOf(target);
+    // PQ-T42: the honest start of the measures (they run while Spark thinks; the awaits below
+    // only see the remainder).
+    const measureViews =
+      !!target.facadeUrl &&
+      !!perception.segmentImage &&
+      (ELEVATION_ARCHETYPES.includes(hint) || VIEW_ARCHETYPES.includes(hint));
+    const viewsStart = measureViews ? Date.now() : null;
     const elevations =
       target.facadeUrl && perception.segmentImage && ELEVATION_ARCHETYPES.includes(hint)
         ? measureFacadeElevations(
@@ -411,6 +453,7 @@ export async function runObjectShape(
           ).catch(() => null)
         : Promise.resolve(null);
     const fetched = await fetchedOutline;
+    if (samStart !== null) timed('sam', samStart);
     const shaped = fetched && !target.outline ? { ...target, outline: fetched } : target;
     if (shaped !== target) {
       console.info(`[vision] 3D outline for "${target.label}" segmented on demand`);
@@ -436,10 +479,16 @@ export async function runObjectShape(
     let found = await shapeCall;
     let splitOther: KitArchetype | undefined;
     if (secondCall && found.kit && found.source === 'meta') {
-      // A late second sample is not waited for: the first answer stands alone.
-      const left = Math.max(0, timeoutMs / 2 - (Date.now() - started));
-      const late = new Promise<null>((r) => setTimeout(() => r(null), left));
-      const second = await Promise.race([secondCall, late]);
+      // An explicit budget never waits for a late second sample: the first answer stands alone.
+      const second =
+        timeoutMs === null || timeoutMs === undefined || !Number.isFinite(timeoutMs)
+          ? await secondCall
+          : await Promise.race([
+              secondCall,
+              new Promise<null>((r) =>
+                setTimeout(r, Math.max(0, timeoutMs / 2 - (Date.now() - started)))
+              ),
+            ]);
       const other = second?.kit && second.source === 'meta' ? second.kit : null;
       const vote = await voteKits(found.kit, other, async (kit) => {
         if (!photo || !shaped.outline) return null;
@@ -474,6 +523,7 @@ export async function runObjectShape(
           })
         : null;
     if (pair) base.ask = { archetypes: pair };
+    timed('kit', kitStart);
     const finalGrid = await edges;
     // PQ-T7: the conditions ride on every recipe answer (facade house, views, photo pipeline alike),
     // otherwise the "photo too small / blurred" hint never shows for the objects that take those paths.
@@ -520,7 +570,7 @@ export async function runObjectShape(
             ...(target.facadeUrl ? { facadeUrl: target.facadeUrl } : {}),
             ...(promptVersion ? { promptVersion } : {}),
           },
-          signal ? AbortSignal.any([signal, timeout]) : timeout
+          kitSignal
         );
         freeRecipe = parts.recipe;
         console.info(
@@ -541,8 +591,9 @@ export async function runObjectShape(
       let built = freeRecipe ?? found.recipe;
       let finalKit = found.kit;
       const px = found.kit ? await pixels : null;
-      const elev =
-        found.kit && ELEVATION_ARCHETYPES.includes(found.kit.archetype) ? await elevations : null;
+      const wantElev = !!found.kit && ELEVATION_ARCHETYPES.includes(found.kit.archetype);
+      const elev = wantElev ? await elevations : null;
+      if (wantElev && viewsStart !== null) timed('views', viewsStart);
       // PG-T22: half-timbered walls take their plaster colour, not plaster + beams averaged.
       let shadowShare = 0;
       const plaster = !!elev && !!wallTimber(elev.front, found.kit?.details);
@@ -641,7 +692,7 @@ export async function runObjectShape(
                 }),
                 drawing: () =>
                   target.facadeUrl ? imageBytes(target.facadeUrl, signal) : Promise.resolve(null),
-                firstBudgetMs: started + timeoutMs - STAGE_SAFETY_MS - Date.now(),
+                firstBudgetMs: budgetEnd(started, timeoutMs) - STAGE_SAFETY_MS - Date.now(),
                 ...(signal ? { signal } : {}),
                 onProgress: stageProgress,
               }),
@@ -658,9 +709,11 @@ export async function runObjectShape(
         }
         recipe = drawn(recipe);
         // PG-T2: the model against the drawing it was built from (the staged loop's yardstick).
+        const scoreStart = Date.now();
         const elevScore = scoreElevation(recipe, front, {
           ...(front.roofRings ? { roofRings: front.roofRings } : {}),
         });
+        timed('score', scoreStart);
         onElevation?.(front, elevScore);
         console.info(`[vision] 3D ${formatElevationScore(elevScore)} for "${target.label}"`);
         const roofPart = recipe.parts.find((p) => p.shape === 'hip' || p.shape === 'prism');
@@ -678,8 +731,9 @@ export async function runObjectShape(
           ...source,
         };
       }
-      const measured =
-        found.kit && VIEW_ARCHETYPES.includes(found.kit.archetype) ? await views : null;
+      const wantViews = !!found.kit && VIEW_ARCHETYPES.includes(found.kit.archetype);
+      const measured = wantViews ? await views : null;
+      if (wantViews && viewsStart !== null) timed('views', viewsStart);
       const seen =
         measured && found.kit ? keepPlausibleSide(measured, found.kit, target.label) : null;
       if (found.kit && seen) {
@@ -690,6 +744,7 @@ export async function runObjectShape(
         // After the build, the AI checks every side against the drawings and the model is fixed.
         if (!round && perception.checkViews && perception.segmentImage) {
           onStep?.('check');
+          const checkStart = Date.now();
           const checked = await checkViewsModel(
             {
               checkViews: perception.checkViews.bind(perception),
@@ -700,8 +755,9 @@ export async function runObjectShape(
             kit,
             target.label,
             conceptOf(target),
-            { ...(signal ? { signal } : {}), deadline: started + VIEWS_TOTAL_MS }
+            { ...(signal ? { signal } : {}), deadline: budgetEnd(started, VIEWS_TOTAL_MS) }
           );
+          timed('views', checkStart);
           recipe = checked.recipe;
           seen.front = checked.views.front;
           // The check can redraw the side: the same depth guard applies.
@@ -727,7 +783,7 @@ export async function runObjectShape(
                 proposeShapeOps: async (img, q, sig, sheet, opts) => ({
                   result: await proposeShapeOps(img, q, sig, sheet, opts),
                 }),
-                firstBudgetMs: started + VIEWS_TOTAL_MS - STAGE_SAFETY_MS - Date.now(),
+                firstBudgetMs: budgetEnd(started, VIEWS_TOTAL_MS) - STAGE_SAFETY_MS - Date.now(),
                 ...(signal ? { signal } : {}),
                 onProgress: stageProgress,
               }),
@@ -771,6 +827,7 @@ export async function runObjectShape(
         }
         console.info(`[vision] 3D views recipe rejected (${issue}), photo pipeline`);
       }
+      let fitStart = Date.now();
       let roofMeasured = false;
       if (found.kit) {
         const { kit, measure } = withMeasuredRoof(
@@ -804,9 +861,12 @@ export async function runObjectShape(
       // segmented while the photo masks run: they place the house's panels when present.
       let facadeMasks: FacadeMasks | null = null;
       if (finalKit && photo && segmentImage) {
+        // The fit pauses while SAM segments: two `fit` entries, no nested phase.
+        timed('fit', fitStart);
+        const masksStart = Date.now();
         [partMasks, facadeMasks] = await Promise.all([
           fetchPartMasks(segmentImage, imageUrl, finalKit.archetype, {
-            timeoutMs: partMasksTimeout(started + timeoutMs - Date.now()),
+            timeoutMs: partMasksTimeout(budgetEnd(started, timeoutMs) - Date.now()),
           }),
           target.facadeUrl
             ? fetchFacadeMasks(
@@ -817,6 +877,8 @@ export async function runObjectShape(
               )
             : Promise.resolve(null),
         ]);
+        timed('masks', masksStart);
+        fitStart = Date.now();
         if (facadeMasks) {
           const counts = new Map<string, number>();
           for (const m of facadeMasks.masks)
@@ -1014,6 +1076,7 @@ export async function runObjectShape(
       }
       const issue = recipeIssue(recipe);
       if (issue) {
+        timed('fit', fitStart);
         console.info(`[vision] 3D recipe for "${target.label}" rejected (${issue}), silhouette`);
         return silhouette(issue, source);
       }
@@ -1116,6 +1179,7 @@ export async function runObjectShape(
         );
         recipe = safe.recipe;
       }
+      timed('fit', fitStart);
       // PQ-T19: the staged loop on the photo — stages scored on the outline and the part masks,
       // parts the photo cannot see locked. First stages now, the rest in the background; the seed
       // wins when no stage kept a change (the kinds the loop tags are not worth a different model).
@@ -1155,7 +1219,7 @@ export async function runObjectShape(
                 proposeShapeOps: async (img, q, sig, sheet, opts) => ({
                   result: await proposeShapeOps(img, q, sig, sheet, opts),
                 }),
-                firstBudgetMs: started + timeoutMs - STAGE_SAFETY_MS - Date.now(),
+                firstBudgetMs: budgetEnd(started, timeoutMs) - STAGE_SAFETY_MS - Date.now(),
                 ...(signal ? { signal } : {}),
                 onProgress: stageProgress,
               }),

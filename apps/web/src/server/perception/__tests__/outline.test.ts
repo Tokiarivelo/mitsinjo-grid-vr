@@ -258,6 +258,20 @@ describe('fetchOutlineForBox miss causes (FIX 1)', () => {
     }
   });
 
+  it('no default bound: a slow answer past the old 8 s budget is still adopted', async () => {
+    vi.useFakeTimers();
+    try {
+      let resolveIt!: (v: SegmentResult) => void;
+      const gate = new Promise<SegmentResult>((r) => (resolveIt = r));
+      const pending = fetchOutlineForBox(() => gate, 'data:x', 'car', car);
+      await vi.advanceTimersByTimeAsync(30_000);
+      resolveIt(outlined());
+      expect(await pending).toBe(OUTLINE);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('empty answer and no-match warn with the best IoU', async () => {
     const warn = silenced();
     try {

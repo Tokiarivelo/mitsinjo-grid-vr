@@ -19,8 +19,8 @@
 **Relation to PV-Q** (`PV-vision-quality.md`): PV-Q makes the generated model right; PV-C makes getting it and
 editing it feel good. They are independent, except that the Lab's detail tools use the detail kinds of PQ-T20 and
 the `painted` material of PQ-T39.
-**Rules kept:** Meta models only · Muse never writes geometry or code: it answers ShapeScript ops, the compiler
-checks them · every AI edit needs Apply / Reject and can be undone · no energy value · zero static text (EN, FR, MG)
+**Rules kept:** Meta models only · Muse never writes vertices: it answers ShapeScript ops, the compiler checks
+them, and may write sandboxed build code once `universal-pipeline` §8bis exists (code runs only in the sandbox) · every AI edit needs Apply / Reject and can be undone · no energy value · zero static text (EN, FR, MG)
 · dark and light · mobile from 320 px · design gate for every screen · no allocation per frame · XR: no post pass.
 **Paths** are under `apps/web/src/` unless they start with `docs/`, `scripts/` or a root file.
 

@@ -4,6 +4,7 @@ import sharp from 'sharp';
 import { flatWaterRecipe, kitToRecipe, type ObjectKit } from '@/lib/object-kit';
 import {
   SHAPE_TIMEOUT_MS,
+  formatDuration,
   type ObjectRecipe,
   type ObjectShape,
   type ShapeTarget,
@@ -22,8 +23,8 @@ import { CRITIC_PROMPT_VERSION, criticQuestion, mergeKitPatch } from './shape';
 /**
  * Spark visual critic, shared half (PR-0.6): the side-by-side image (photo crop | flat render)
  * and one patch request. Meta models do not render 3D; we render, Spark judges. The live round
- * lives in `runObjectShape` (1 round, score < 70, ≥ 20 s left), the offline rounds in
- * `criticReplay` (captures, ≤ 3); both keep the patch only when the score rises.
+ * lives in `runObjectShape` (1 round, score < 70; ≥ 20 s left only with an explicit budget), the
+ * offline rounds in `criticReplay` (captures, ≤ 3); both keep the patch only when the score rises.
  */
 
 /** Critic image width (px); the skill asks for a 256-wide flat render. */
@@ -156,7 +157,8 @@ export async function criticSheet(
  * Live shape with one critic round (PR-0.6): run, score against the used outline, and when the
  * score is below 70 with ≥ 20 s left, patch → re-fit → keep only when the score rises. The
  * scoring sits outside `runObjectShape`, so the 300 ms shape-math budget is untouched. Mock and
- * outline-less runs never round (no kit, or nothing to score against). Never throws.
+ * outline-less runs never round (no kit, or nothing to score against). With an explicit budget the
+ * round needs ≥ 20 s left; unbounded runs always round. Never throws.
  */
 export async function shapeWithCritic(
   ...args: Parameters<typeof shapeWithCriticRound>
@@ -179,7 +181,28 @@ async function shapeWithCriticRound(
   // Version 1: one round. Version 2 (PQ-T14): up to `CRITIC_ROUNDS`, each kept only on gain.
   const rounds = (opts.criticPromptVersion ?? CRITIC_PROMPT_VERSION) >= 2 ? CRITIC_ROUNDS : 1;
   for (let r = 0; r < rounds; r++) {
-    const next = await criticRound(perception, photo, fullImageUrl, target, opts, shape, started);
+    const roundStart = Date.now();
+    let ran = false;
+    const next = await criticRound(
+      perception,
+      photo,
+      fullImageUrl,
+      target,
+      opts,
+      shape,
+      started,
+      () => {
+        ran = true;
+      }
+    );
+    // A skipped round costs nothing and reports nothing; a run one reports even when dropped.
+    if (ran) {
+      const ms = Date.now() - roundStart;
+      console.info(
+        `[vision] 3D critic for "${target.label}": round ${r + 1} ${formatDuration(ms)}`
+      );
+      opts.onTiming?.('critic', ms);
+    }
     if (next === shape) break;
     shape = next;
   }
@@ -200,7 +223,9 @@ async function criticRound(
   target: ShapeTarget,
   opts: ObjectShapeOptions,
   shape: ObjectShape,
-  started: number
+  started: number,
+  /** Called once the round passes its skip guards (PQ-T42: only run rounds are timed). */
+  onRan?: () => void
 ): Promise<ObjectShape> {
   const timeoutMs = opts.timeoutMs ?? SHAPE_TIMEOUT_MS;
   const version = opts.criticPromptVersion ?? CRITIC_PROMPT_VERSION;
@@ -217,10 +242,11 @@ async function criticRound(
       // Facade / views recipes are measured on the drawn views, not on the photo: nothing to patch.
       shape.recipe.source === 'facade' ||
       shape.recipe.source === 'views' ||
-      timeoutMs - (Date.now() - started) < CRITIC_TIME_MIN_MS
+      (timeoutMs ?? Infinity) - (Date.now() - started) < CRITIC_TIME_MIN_MS
     ) {
       return shape;
     }
+    onRan?.();
     const scored = await scoreRecipe(
       photo,
       { box: target.box, outline: shape.outline },
@@ -253,7 +279,8 @@ async function criticRound(
     // even when the patch arrived past the budget (live: 146 ms over). The expired budget used
     // to crash the retry (AbortSignal.timeout of a negative "delay", "shape failed") and the
     // fix died with it; the clamp in runObjectShape keeps the signal construction safe instead.
-    const remainingMs = timeoutMs - (Date.now() - started);
+    const remainingMs =
+      timeoutMs === null || !Number.isFinite(timeoutMs) ? null : timeoutMs - (Date.now() - started);
     const patched = mergeKitPatch(shape.kit, patch);
     const retry = await runObjectShape(
       {

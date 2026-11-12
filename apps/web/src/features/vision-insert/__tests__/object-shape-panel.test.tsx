@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '@/lib/i18n';
-import type { ObjectShape } from '@/lib/object-shape';
+import type { ObjectRecipe, ObjectShape } from '@/lib/object-shape';
 import type { ApplianceDetection } from '@/lib/vision';
 
 const webgl = vi.hoisted(() => ({ on: true }));
@@ -46,14 +46,20 @@ vi.mock('../hooks/use-facade-2d', async (importOriginal) => {
 vi.mock('../ui/object-editor-3d', () => ({
   ObjectEditor3d: ({
     shape,
+    preview,
     scale,
     tint,
   }: {
-    shape: ObjectShape;
+    shape?: ObjectShape;
+    preview?: ObjectRecipe | null;
     scale?: number;
     tint?: string | null;
   }) => (
-    <div data-mode={shape.mode} data-scale={scale ?? 1} data-tint={tint ?? ''}>
+    <div
+      data-mode={shape?.mode ?? (preview ? 'preview' : 'silhouette')}
+      data-scale={scale ?? 1}
+      data-tint={tint ?? ''}
+    >
       viewer
     </div>
   ),
@@ -164,9 +170,51 @@ describe('ObjectShapePanel (PV-T10)', () => {
     expect(items[2]!.getAttribute('aria-current')).toBeNull();
     expect(
       screen.getByText(
-        /usually needs 15 to 40 s \(limit 60 s\); a house or any object rebuilt from its 2D view, checked by the AI, up to 90 s/
+        /usually needs 15 to 40 s, several minutes for a house or an object rebuilt from its 2D view/
       )
     ).toBeTruthy();
+  });
+
+  it('live print: loading with a streamed preview shows the viewer, not the skeleton', async () => {
+    renderPanel({
+      status: 'loading',
+      shape: undefined,
+      step: 'model',
+      startedAt: Date.now(),
+      preview: {
+        proportions: { w: 1, h: 1, d: 1 },
+        parts: [{ shape: 'box', at: [0, 0, 0], size: [1, 1, 1], color: '#eeeeee' }],
+      },
+    });
+    expect((await screen.findByText('viewer')).getAttribute('data-mode')).toBe('preview');
+  });
+
+  it('live print: loading with an outline shows the silhouette viewer while Spark thinks', async () => {
+    renderPanel({
+      status: 'loading',
+      shape: undefined,
+      step: 'model',
+      startedAt: Date.now(),
+      detection: { ...fridge, outline: 'M0.1 0.1L0.3 0.1L0.3 0.7Z' },
+    });
+    expect((await screen.findByText('viewer')).getAttribute('data-mode')).toBe('silhouette');
+  });
+
+  it('live print: the stage chip shows during loading but without Cancel (it would kill the request)', async () => {
+    renderPanel({
+      status: 'loading',
+      shape: undefined,
+      step: 'fit',
+      startedAt: Date.now(),
+      preview: {
+        proportions: { w: 1, h: 1, d: 1 },
+        parts: [{ shape: 'box', at: [0, 0, 0], size: [1, 1, 1], color: '#eeeeee' }],
+      },
+      improve: { status: 'running', index: 1, total: 4, stage: 'massing' },
+      onCancelImprove: () => {},
+    });
+    expect(await screen.findByText(/Improving: stage 1\/4/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Cancel the model improvement' })).toBeNull();
   });
 
   it('the AI check joins the steps when it starts (views path)', () => {
@@ -264,7 +312,7 @@ describe('ObjectShapePanel (PV-T10)', () => {
   it('each fallback says its own cause; recipe mode has no retry', () => {
     const cases: Array<[NonNullable<ObjectShape['reason']>, RegExp]> = [
       ['provider_error', /The Meta model did not answer/],
-      ['timeout', /Muse Spark took more than 60 s/],
+      ['timeout', /Muse Spark did not answer in time/],
       ['spend_cap', /spend cap is reached/],
       ['network', /app server could not be reached/],
     ];
@@ -422,17 +470,18 @@ describe('ObjectShapePanel (PV-T10)', () => {
 });
 
 describe('ObjectShapePanel staged improvement (PG-T18)', () => {
-  it('shows the chip over the ready model, outside the image role, and never while loading', () => {
+  it('shows the chip over the model, outside the image role — also while it prints', () => {
     renderPanel({ improve: { status: 'running', index: 2, total: 4, stage: 'roof' } });
     const text = screen.getByText('Improving: stage 2/4 — Roof');
     expect(screen.getByRole('img').contains(text)).toBe(false);
+    // Live print: first-answer stages show their progress while loading too.
     renderPanel({
       status: 'loading',
       shape: undefined,
       step: 'model',
       improve: { status: 'running', index: 1, total: 4, stage: 'massing' },
     });
-    expect(screen.queryByText('Improving: stage 1/4 — Massing')).toBeNull();
+    expect(screen.getByText('Improving: stage 1/4 — Massing')).toBeTruthy();
   });
 });
 

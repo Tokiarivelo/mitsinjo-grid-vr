@@ -11,6 +11,7 @@ import { defaultArchetype, kitToRecipe, type ObjectKit } from '@/lib/object-kit'
 import {
   fitRecipe,
   silhouetteRings,
+  type ObjectRecipe,
   type ObjectShape,
   type RecipeMaterial,
 } from '@/lib/object-shape';
@@ -27,11 +28,15 @@ import { recipeMesh, silhouetteDepth, silhouetteMesh } from '../utils/object-geo
 import { surfaceMaterial, SURFACES } from '../utils/surface-look';
 import { buildStudioScene, STUDIO_SIGMA } from '../utils/studio-env';
 import { BuildFocus } from './build-focus-3d';
+import { PrintWipe } from './print-wipe-3d';
 import { SWATCH_GAIN } from '../utils/surface-maps';
 import { surfaceTextures, swatchTexture } from '../utils/surface-textures';
 
 export interface ObjectEditor3dProps {
-  shape: ObjectShape;
+  /** Final shape (ready). Absent while loading — the viewer then shows `preview` or the silhouette. */
+  shape?: ObjectShape;
+  /** Live model streamed while loading (seed, then each kept stage): painted like a 3D print. */
+  preview?: ObjectRecipe | null;
   detection: Pick<ApplianceDetection, 'box' | 'outline' | 'category' | 'scenery'> & {
     label?: string;
   };
@@ -82,6 +87,7 @@ const CAMERA_DISTANCE = Math.hypot(...CAMERA_POSITION);
 
 function ObjectModel({
   shape,
+  preview,
   detection,
   imageUrl,
   scale = 1,
@@ -93,8 +99,12 @@ function ObjectModel({
   const image = useLoader(THREE.ImageLoader, imageUrl);
   const photoAspect = image.width && image.height ? image.width / image.height : 1;
 
+  const shapeRecipe = shape?.mode === 'recipe' ? (shape.recipe ?? null) : null;
+  /** A streamed preview actually on screen (the final recipe always wins over it). */
+  const livePreview = shapeRecipe === null ? (preview ?? null) : null;
+
   const fallbackRecipe = useMemo(() => {
-    if (shape.mode === 'recipe' && shape.recipe) return null;
+    if (shapeRecipe ?? preview) return null;
     if (detection.outline) return null;
     const archetype = defaultArchetype(detection.category, detection.scenery, detection.label);
     const fallbackKit: ObjectKit = {
@@ -104,9 +114,9 @@ function ObjectModel({
       materials: { main: 'metal', secondary: 'glass', accent: 'rubber' },
     };
     return fitRecipe(kitToRecipe(fallbackKit), photoAspect);
-  }, [shape, detection, photoAspect]);
+  }, [shapeRecipe, preview, detection, photoAspect]);
 
-  const activeRecipe = shape.mode === 'recipe' && shape.recipe ? shape.recipe : fallbackRecipe;
+  const activeRecipe = shapeRecipe ?? livePreview ?? fallbackRecipe;
 
   const mesh = useMemo(
     () =>
@@ -144,6 +154,24 @@ function ObjectModel({
     });
   }, [mesh, vertexColors, swatches, tint, invalidate]);
   useEffect(() => () => surfaces.forEach((m) => m.dispose()), [surfaces]);
+  // Plain silhouette material, memo'd like the surfaces (so the print wipe can clip it too).
+  const silhouetteMaterial = useMemo(
+    () =>
+      new THREE.MeshStandardMaterial({
+        color: tint ?? TOKEN_HEX.idle,
+        roughness: 0.6,
+        metalness: 0.05,
+      }),
+    [tint]
+  );
+  useEffect(() => () => silhouetteMaterial.dispose(), [silhouetteMaterial]);
+  /** Every material of the model, clipped together while it prints (stable identity). */
+  const modelMaterials = useMemo<ReadonlyArray<THREE.Material>>(
+    () => (vertexColors ? surfaces : [silhouetteMaterial]),
+    [vertexColors, surfaces, silhouetteMaterial]
+  );
+  /** The model is still being streamed: fresh geometry wipes in like print layers. */
+  const building = livePreview !== null || improve?.status === 'running';
   // Ground under the object (shadow sits on it), from the real geometry.
   const floorY = useMemo(() => {
     mesh.computeBoundingBox();
@@ -168,13 +196,18 @@ function ObjectModel({
         {vertexColors ? (
           <mesh geometry={mesh} material={surfaces} />
         ) : (
-          <mesh geometry={mesh}>
-            <meshStandardMaterial color={tint ?? TOKEN_HEX.idle} roughness={0.6} metalness={0.05} />
-          </mesh>
+          <mesh geometry={mesh} material={silhouetteMaterial} />
         )}
       </group>
+      <PrintWipe
+        mesh={mesh}
+        materials={modelMaterials}
+        scale={scale}
+        building={building}
+        reducedMotion={reducedMotion}
+      />
       <BuildFocus
-        recipe={shape.mode === 'recipe' && shape.recipe ? shape.recipe : null}
+        recipe={activeRecipe}
         {...(improve ? { improve } : {})}
         scale={scale}
         homeDistance={CAMERA_DISTANCE}

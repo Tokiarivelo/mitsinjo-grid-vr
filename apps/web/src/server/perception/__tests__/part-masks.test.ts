@@ -191,12 +191,14 @@ describe('part concepts are named in the panel (PQ-T37, PR #10 review)', () => {
 });
 
 describe('part masks timing and retry (PQ-T9)', () => {
-  it('the deadline is a share of the time left, bounded', async () => {
+  it('the deadline is a share of the time left, bounded — null when unbounded', async () => {
     const { partMasksTimeout } = await import('../part-masks');
     expect(partMasksTimeout(60_000)).toBe(8000);
     expect(partMasksTimeout(20_000)).toBe(5000);
     expect(partMasksTimeout(2_000)).toBe(3000);
     expect(partMasksTimeout(-5)).toBe(3000);
+    expect(partMasksTimeout(null)).toBeNull();
+    expect(partMasksTimeout(Infinity)).toBeNull();
   });
 
   it('an empty first answer is asked again with another phrasing', async () => {
