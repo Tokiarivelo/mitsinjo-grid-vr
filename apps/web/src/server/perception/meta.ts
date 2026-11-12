@@ -31,6 +31,14 @@ import { maskToOutline } from './mask-outline';
 import { timeoutSignal } from './abort';
 import { inlineImageUrl } from './inline-image';
 import {
+  getCachedKit,
+  getCachedSam,
+  kitCacheKey,
+  samCacheKey,
+  setCachedKit,
+  setCachedSam,
+} from './shape-cache';
+import {
   JUDGE_CRITERIA,
   JUDGE_JSON_SCHEMA,
   JUDGE_PROMPT_VERSION,
@@ -382,6 +390,25 @@ export class MetaPerceptionBackend implements PerceptionBackend {
     const hint = archetypeOf(target);
     // Standard id, not the contributor one: the operator waits on this answer (≈ 15 s vs ≈ 25 s measured).
     const promptVersion = target.promptVersion ?? kitVersionFor(hint, env.SHAPE_KIT_CARD_FAMILIES);
+    // PQ-T49: a repeated crop is answered from memory (no Meta call, $0 of spend).
+    // A `fresh` sample bypasses both ways: it must be independent and leave no trace.
+    const cacheKey =
+      env.SHAPE_CACHE && !target.fresh
+        ? kitCacheKey(imageUrl, {
+            promptVersion,
+            label: target.label,
+            category: target.category,
+            ...(target.archetype ? { archetype: target.archetype } : {}),
+            ...(target.facadeUrl ? { facadeUrl: target.facadeUrl } : {}),
+          })
+        : null;
+    const remembered = cacheKey ? getCachedKit(cacheKey) : undefined;
+    if (remembered) {
+      console.info(
+        `[vision] 3D kit cache hit (${remembered.result.kit?.archetype ?? '?'}, prompt v${promptVersion})`
+      );
+      return { model: remembered.model, usage: {}, result: remembered.result };
+    }
     const { content, model, usage } = await this.visionJson(
       kitPrompt(promptVersion, hint),
       shapeQuestion(target.label, target.aspect, hint, Boolean(target.facadeUrl), target.facts),
@@ -395,11 +422,12 @@ export class MetaPerceptionBackend implements PerceptionBackend {
     const kit = parseKit(content, hint);
     if (!kit) console.info(`[vision] ${model} gave no usable 3D kit: ${content.slice(0, 300)}`);
     else console.info(`[vision] 3D kit from ${model}: ${kit.archetype}`);
-    return {
-      model,
-      usage,
-      result: { recipe: kit ? kitToRecipe(kit) : null, ...(kit ? { kit } : {}) },
+    const result = {
+      recipe: kit ? kitToRecipe(kit) : null,
+      ...(kit ? { kit } : {}),
     };
+    if (cacheKey && kit) setCachedKit(cacheKey, model, result);
+    return { model, usage, result };
   }
 
   async describeParts(
@@ -586,6 +614,13 @@ export class MetaPerceptionBackend implements PerceptionBackend {
     signal?: AbortSignal
   ): Promise<PerceptionCall<SegmentResult>> {
     const model = env.META_SEGMENT_MODEL;
+    // PQ-T49: a repeated (crop, concept) is answered from memory (no SAM call, $0 of spend).
+    const cacheKey = env.SHAPE_CACHE ? samCacheKey(imageUrl, concept) : null;
+    const remembered = cacheKey ? getCachedSam(cacheKey) : undefined;
+    if (remembered) {
+      console.info(`[vision] segment cache hit (${concept})`);
+      return { model: remembered.model, usage: {}, result: remembered.result };
+    }
     const image = await inlineImageUrl(imageUrl);
     const body = {
       model,
@@ -621,21 +656,19 @@ export class MetaPerceptionBackend implements PerceptionBackend {
       return outline ? { ...inst, outline } : inst;
     });
 
-    return {
-      model,
-      usage: { images: 1 },
-      result: {
-        concept,
+    const result = {
+      concept,
+      imageWidth,
+      imageHeight,
+      instances,
+      count: instances.length,
+      boxCoverage: boxUnionCoverage(
+        instances.map((i) => i.box),
         imageWidth,
-        imageHeight,
-        instances,
-        count: instances.length,
-        boxCoverage: boxUnionCoverage(
-          instances.map((i) => i.box),
-          imageWidth,
-          imageHeight
-        ),
-      },
+        imageHeight
+      ),
     };
+    if (cacheKey) setCachedSam(cacheKey, model, result);
+    return { model, usage: { images: 1 }, result };
   }
 }

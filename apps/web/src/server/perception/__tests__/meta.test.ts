@@ -3,6 +3,7 @@ import { CALL_EFFORT, DEFAULT_EFFORT, effortFor } from '../effort';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { kitToRecipe, type ObjectKit } from '@/lib/object-kit';
 import { MetaPerceptionBackend } from '../meta';
+import { resetShapeCache } from '../shape-cache';
 
 // Hosted images are inlined before Meta sees them (inline-image.test.ts); here a link stays a link
 // tagged `inlined:` so request shapes stay readable and the fetch mock only sees API calls.
@@ -32,6 +33,8 @@ const backend = new MetaPerceptionBackend({ apiKey: 'k', baseUrl: BASE, preferCo
 
 afterEach(() => {
   global.fetch = originalFetch;
+  // PQ-T49: a remembered answer must never leak from one mocked call into the next.
+  resetShapeCache();
 });
 
 describe('MetaPerceptionBackend (shapes recorded from real calls, 2026-10-30)', () => {
@@ -218,7 +221,8 @@ describe('MetaPerceptionBackend (shapes recorded from real calls, 2026-10-30)', 
     expect(out.usage).toEqual({ inputTokens: 900, outputTokens: 80 });
 
     respond({ choices: [{ message: { content: 'A white fridge.' } }] });
-    const prose = await backend.describeShape('data:image/jpeg;base64,AA', {
+    // Another crop: the first answer above is cached under its own (PQ-T49).
+    const prose = await backend.describeShape('data:image/jpeg;base64,AB', {
       label: 'Fridge',
       category: 'fridge',
     });
@@ -404,6 +408,72 @@ describe('MetaPerceptionBackend (shapes recorded from real calls, 2026-10-30)', 
     if (!(noKey as unknown as { apiKey: string }).apiKey) {
       await expect(noKey.segmentImage('https://x', 'roof')).rejects.toThrow(/META_API_KEY/);
     }
+  });
+});
+
+describe('Meta answer cache (PQ-T49 E12)', () => {
+  const kit = {
+    archetype: 'cabinet',
+    proportions: { w: 1, h: 1, d: 0.5 },
+    colors: { main: '#eeeeee', secondary: '#dddddd', accent: '#333333' },
+  };
+  const subject = { label: 'Fridge', category: 'fridge' } as const;
+
+  it('a repeated kit call is answered from memory: one fetch, $0 of spend', async () => {
+    const fetchMock = respond({ choices: [{ message: { content: JSON.stringify(kit) } }] });
+    const first = await backend.describeShape('data:image/jpeg;base64,AA', { ...subject });
+    const second = await backend.describeShape('data:image/jpeg;base64,AA', { ...subject });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(second.result).toEqual(first.result);
+    expect(second.usage).toEqual({});
+    expect(second.model).toBe(first.model);
+  });
+
+  it('a new prompt version asks again; an unusable kit is never remembered', async () => {
+    const fetchMock = respond({ choices: [{ message: { content: JSON.stringify(kit) } }] });
+    await backend.describeShape('data:image/jpeg;base64,AA', { ...subject });
+    await backend.describeShape('data:image/jpeg;base64,AA', { ...subject, promptVersion: 2 });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    const fetchMock2 = respond({ choices: [{ message: { content: 'A white fridge.' } }] });
+    const miss = await backend.describeShape('data:image/jpeg;base64,BB', { ...subject });
+    expect(miss.result.recipe).toBeNull();
+    // Asked again: no usable kit was stored, so Meta is asked again.
+    await backend.describeShape('data:image/jpeg;base64,BB', { ...subject });
+    expect(fetchMock2).toHaveBeenCalledTimes(2);
+  });
+
+  it('a fresh sample bypasses the cache both ways', async () => {
+    const fetchMock = respond({ choices: [{ message: { content: JSON.stringify(kit) } }] });
+    await backend.describeShape('data:image/jpeg;base64,AA', { ...subject });
+    await backend.describeShape('data:image/jpeg;base64,AA', { ...subject, fresh: true });
+    // The fresh call asked again (2 fetches) and left no trace: a third call hits the first answer.
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    await backend.describeShape('data:image/jpeg;base64,AA', { ...subject });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('a repeated (crop, concept) is answered from memory', async () => {
+    const fetchMock = respond({
+      output: [
+        {
+          type: 'message',
+          content: [
+            {
+              type: 'output_text',
+              text: '<0f>0<|box;x1=0;y1=0;x2=9;y2=4;w=10;h=10;c=0.9|><|mask;x=0;y=0;data=1,1,!|>',
+            },
+          ],
+        },
+      ],
+    });
+    const first = await backend.segmentImage('https://x/cache.png', 'solar panel');
+    const second = await backend.segmentImage('https://x/cache.png', 'solar panel');
+    const other = await backend.segmentImage('https://x/cache.png', 'roof');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(second.result).toEqual(first.result);
+    expect(second.usage).toEqual({});
+    expect(other.result.concept).toBe('roof');
   });
 });
 

@@ -620,6 +620,15 @@ DetectionResult { detections: { id /*det-n*/; label /*1–40*/; category: Applia
   imageType?: 'photo'|'drawing' /*E2 image type, PQ-T47*/ }
 ```
 
+Meta answer cache (PQ-T49, E12.5, `server/perception/shape-cache.ts`, per server process, `SHAPE_CACHE`
+default on): `(image fingerprint, prompt version, label, category, hint?, facade?) → { kit, recipe }`
+(100 max, usable kits only) and `(crop fingerprint, concept) → SegmentResult` (300 max, empty too).
+Hits return `usage: {}` ($0 recorded, the spend cap still gates) and log `cache hit`. `ShapeSubject.fresh`
+bypasses both ways (the second kit sample of a vote stays independent); `make eval-shape` forces
+`SHAPE_CACHE=false` (a remembered answer is not an independent sample). Parallel first answer
+(kit + outline + measures, E12.2), staged draft/refine (`onStagesLeft`, E12.3) and critic skip rules
+(score/detail gates, no round for free/facade/views/code recipes, E12.4) already held.
+
 ## Visuals (`server/media/generate-image.ts`, M5-T1)
 
 `buildVisualPrompt(kind, input, result, locale?)` → `{kind, prompt, overlay, caption}`. Pure, no LLM:
