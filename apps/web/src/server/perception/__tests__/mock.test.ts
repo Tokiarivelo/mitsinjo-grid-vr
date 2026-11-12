@@ -74,7 +74,7 @@ describe('MockPerceptionBackend', () => {
 
   it('never patches: the critic round is a no-op without Meta', async () => {
     const out = await mock.criticizeShape('data:img', 'Patch?');
-    expect(out.result).toEqual({ patch: null });
+    expect(out.result).toEqual({ patch: null, missingParts: [] });
   });
 
   it('never imagines parts: the orchestrator keeps the kit recipe', async () => {

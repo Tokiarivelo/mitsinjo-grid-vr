@@ -284,7 +284,8 @@ export async function criticReplay(
   const roundsRun: CriticReplayRound[] = [];
   for (let r = 0; r < Math.max(0, rounds); r++) {
     const image = await criticImage(scored.crop, recipe, aspect);
-    const patch = await requestPatch(perception, image, kit, scored.score, signal);
+    // Patch-only replay (PQ-T52): the missing-parts fix (short questions, SAM chase) runs live.
+    const patch = (await requestPatch(perception, image, kit, scored.score, signal))?.patch;
     if (!patch) break;
     const patched = mergeKitPatch(kit, patch);
     const retry = await runObjectShape(

@@ -922,14 +922,32 @@ export async function imageBytes(url: string, signal?: AbortSignal): Promise<Buf
   }
 }
 
+/** The rear camera of the three-view sheet (PQ-T52): straight on the back, like the front one. */
+export const BACK_CAMERA: FlatView = { yaw: Math.PI, pitch: 0 };
+
+/**
+ * An image mirrored left-right (PQ-T52, E10): the back drawing is the front drawing flopped,
+ * never drawn (Muse Image back views came out wrong, PR-4.1). Null when the bytes do not decode.
+ * Never throws.
+ */
+export async function flopPng(bytes: Buffer): Promise<Buffer | null> {
+  try {
+    return await sharp(bytes).flop().png().toBuffer();
+  } catch (err) {
+    console.warn('[vision] 3D mirror failed:', err instanceof Error ? err.message : err);
+    return null;
+  }
+}
+
 /** The model seen from one side, flat-shaded on white, framed on its bounds. */
 async function modelTile(
   recipe: ObjectRecipe,
-  side: 'front' | 'side',
+  side: 'front' | 'side' | 'back',
   cols: number
 ): Promise<Buffer> {
   const rows = SHEET_ROWS;
-  const r = renderFlat({ ...recipe, yaw: 0 }, 1, cols, rows, VIEW_CAMERAS[side], (b) => {
+  const camera = side === 'back' ? BACK_CAMERA : VIEW_CAMERAS[side];
+  const r = renderFlat({ ...recipe, yaw: 0 }, 1, cols, rows, camera, (b) => {
     const unit = Math.max((b.x1 - b.x0) / cols, (b.y1 - b.y0) / rows) * 1.1;
     return { cx: (b.x0 + b.x1) / 2, cy: (b.y0 + b.y1) / 2, fw: unit * cols, fh: unit * rows };
   });
@@ -958,9 +976,19 @@ async function drawingTile(bytes: Buffer, box: NormBox, cols: number): Promise<B
     .toBuffer();
 }
 
+/** One blank tile (no side drawing, or a mirror that failed to decode). */
+async function blankTile(cols: number): Promise<Buffer> {
+  return sharp({
+    create: { width: cols, height: SHEET_ROWS, channels: 3, background: '#ffffff' },
+  })
+    .png()
+    .toBuffer();
+}
+
 /**
- * The AI check's 2 × 2 sheet: front drawing | model front, side drawing | model side (JPEG data
- * URL), or null when the front drawing cannot be read. Never throws.
+ * The AI check's three-view sheet (PQ-T52, E10): front drawing | model front, side drawing |
+ * model side, back drawing (the front flopped) | model back (JPEG data URL), or null when the
+ * front drawing cannot be read. Never throws.
  */
 export async function viewsSheet(
   recipe: ObjectRecipe,
@@ -971,18 +999,21 @@ export async function viewsSheet(
     const front = await imageBytes(views.frontUrl, signal);
     if (!front) return null;
     const cols = Math.round(SHEET_ROWS * Math.min(2.5, Math.max(1, views.side?.aspect ?? 1.5)));
-    const tiles = await Promise.all([
+    const [frontTile, modelFront, sideTile, modelSide] = await Promise.all([
       drawingTile(front, views.front.box, cols),
       modelTile(recipe, 'front', cols),
       views.side && views.sidePng
         ? drawingTile(views.sidePng, views.side.box, cols)
-        : sharp({ create: { width: cols, height: SHEET_ROWS, channels: 3, background: '#ffffff' } })
-            .png()
-            .toBuffer(),
+        : blankTile(cols),
       modelTile(recipe, 'side', cols),
     ]);
+    const [backTile, modelBack] = await Promise.all([
+      flopPng(frontTile!).then((t) => t ?? blankTile(cols)),
+      modelTile(recipe, 'back', cols),
+    ]);
+    const tiles = [frontTile!, modelFront, sideTile, modelSide, backTile, modelBack];
     const jpg = await sharp({
-      create: { width: cols * 2, height: SHEET_ROWS * 2, channels: 3, background: '#ffffff' },
+      create: { width: cols * 2, height: SHEET_ROWS * 3, channels: 3, background: '#ffffff' },
     })
       .composite(
         tiles.map((input, i) => ({
@@ -1014,7 +1045,8 @@ const meanIou = (recipe: ObjectRecipe, v: ObjectViews) => {
 
 /**
  * One AI check round's fixes on the views: each missing part SAM finds on its view joins that
- * view's parts (with the colour the AI read); `redrawSide` draws and measures the side again.
+ * view's parts (with the colour the AI read); a part named on the back is verified on the
+ * front flopped and joins the front parts; `redrawSide` draws and measures the side again.
  * Returns the new views, or null when nothing could be applied. Never throws.
  */
 export async function applyViewsCheck(
@@ -1040,23 +1072,35 @@ export async function applyViewsCheck(
       }
     }
     // Known parts already measured on that view are placed by rule: asking SAM again adds nothing.
+    // The back is verified on the front drawing flopped (the back row of the sheet).
     const asks = check.missing.slice(0, MAX_MISSING).filter((m) => {
-      const view = m.view === 'front' ? next.front : next.side;
+      const view = m.view === 'side' ? next.side : next.front;
       const known = knownConcept(m.part);
       return view && !(known && view.parts.some((p) => p.concept === known));
     });
     const found = await Promise.all(
       asks.map(async (m) => {
-        const view = m.view === 'front' ? next.front : next.side!;
-        const url =
-          m.view === 'front'
-            ? await compactDataUrl(next.frontUrl)
-            : `data:image/png;base64,${next.sidePng!.toString('base64')}`;
+        const back = m.view === 'back';
+        const view = m.view === 'side' ? next.side! : next.front;
+        let url =
+          m.view === 'side'
+            ? `data:image/png;base64,${next.sidePng!.toString('base64')}`
+            : await compactDataUrl(next.frontUrl);
+        if (back) {
+          const bytes = await imageBytes(url, signal);
+          const flopped = bytes ? await flopPng(bytes) : null;
+          if (!flopped) return { m, parts: [] as ViewMeasure['parts'] };
+          url = `data:image/png;base64,${flopped.toString('base64')}`;
+        }
         const masks = await fetchPartMasks(segment, url, 'other', {
           concepts: [knownConcept(m.part) ?? m.part],
           timeoutMs: VIEW_SAM_TIMEOUT_MS,
         });
-        const parts = toObjectBox(masks, view.box)
+        // Mirror-image fractions back to front fractions (the flop preserves the size).
+        const placed = back
+          ? masks.map((mask) => ({ ...mask, box: { ...mask.box, x: 1 - mask.box.x - mask.box.w } }))
+          : masks;
+        const parts = toObjectBox(placed, view.box)
           .sort((a, b) => b.box.w * b.box.h - a.box.w * a.box.h)
           .slice(0, 2)
           .map((p) =>
@@ -1076,7 +1120,9 @@ export async function applyViewsCheck(
     );
     for (const { m, parts } of found) {
       if (!parts.length) continue;
-      const key = m.view === 'front' ? 'front' : 'side';
+      // Back-verified parts join the front (same image): the rear gains through the existing
+      // front-to-rear mirror for lights and bumpers; other rear-face placement stays open.
+      const key = m.view === 'side' ? 'side' : 'front';
       const view = next[key]!;
       next = { ...next, [key]: { ...view, parts: [...view.parts, ...parts] } };
       applied.push(`${m.part} (${m.view})`);

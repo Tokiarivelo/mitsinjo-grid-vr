@@ -31,7 +31,7 @@ const SHEET_LINES: Record<StageSheet, ReadonlyArray<string>> = {
   ],
   views: [
     'You improve a 3D model of ONE object, one build stage at a time, so it matches its validated 2D drawings.',
-    'The image is a 2 × 2 sheet: top-left = the front drawing (target), top-right = our model seen from the front; bottom-left = the side drawing (blank when none), bottom-right = our model seen from the side (its front on the left). Each tile is framed on the object.',
+    'The image is a sheet of three rows: front drawing (target) and our model seen from the front; side drawing (blank when none) and our model seen from the side (its front on the left); back drawing (the front drawing mirrored) and our model seen from the back. Each tile is framed on the object.',
   ],
   photo: [
     'You improve a 3D model of ONE object, one build stage at a time, so it matches the PHOTO of that object.',

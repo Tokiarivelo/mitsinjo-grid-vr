@@ -40,9 +40,10 @@ describe('stage prompt (PG-T15)', () => {
     expect(SHAPE_SCRIPT_JSON_SCHEMA.schema.properties.ops.maxItems).toBe(MAX_STAGE_OPS);
   });
 
-  it('has a views variant (PG-T20): the 2 × 2 sheet, same ops and rules', () => {
+  it('has a views variant (PG-T20): the three-row sheet, same ops and rules', () => {
     const views = shapeScriptSystemPrompt('views');
-    expect(views).toContain('2 × 2 sheet');
+    expect(views).toContain('three rows');
+    expect(views).toContain('back drawing (the front drawing mirrored)');
     expect(views).not.toContain('three tiles');
     expect(shapeScriptSystemPrompt()).toBe(SHAPE_SCRIPT_SYSTEM_PROMPT);
     expect(views).toMatch(/Never give metres, watts/);

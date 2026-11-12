@@ -585,7 +585,20 @@ One task = one commit, with its Vitest test, its `contracts.md` update and its m
       Live (Meta key): car-side re-captured with the lofted template 54
       (frozen 52, box-body live 53 in PQ-T46): the taper gains on real data
       too. Contracts + V273.
-- [ ] **PQ-T52 Short question per part, anatomy critic, three-view sheet** (§12.9, E9–E11).
+- [x] **PQ-T52 Short question per part, anatomy critic, three-view sheet** (§12.9, E9–E11).
+      _Built 2026-11-12:_ `part-question.ts` (prompt + `PartAnswer` schema + lenient parser +
+      `zoneRect` words→zone + `zoneCropUrl` ≤ 512 px + parallel `askPartQuestions`), `askPart?`
+      backend + client + Meta impl at `low` effort (first measured `low`, `make part-probe`),
+      critic v3 = v1 + anatomy line (new `missingParts`, v2 schema offers it too, §7 card line +
+      `skills-gen`), fix path (verify vs build → ask → denied flips inventory to `absent` →
+      confirmed chased only when placed + unmeasured → retry carries patch and/or
+      `extraPartMasks`, kept only on gain), three-view `viewsSheet` (back = flopped front +
+      `BACK_CAMERA`) + `back` in the views check (verified on the flop, joins front parts).
+      v1 stays default, v3 opt-in (`criticPromptVersion: 3`): live A/B car-side 55 v1 vs
+      54 v3, both patches dropped (kit variance, not the critic) — parity, no gain yet.
+      Effective chase coverage today: none (every placed concept is already measured; vehicles
+      skip doors, PR-2.7); zone-crop chase needs a PQ-T8-style eval. Contracts + copilot +
+      V274 scenario.
 - [ ] **PQ-T53 SDF for smooth shapes** (§12.10, §8), after measuring the triangle budget.
 - [ ] **PQ-T54 Real set ≥ 12 photos, judge calibration, turntable sheet** (§12.11, §9.1).
 - [ ] **PQ-T55 Scored evaluation of B vs draft A** (§12.13: willow, car, house, one appliance) and tour

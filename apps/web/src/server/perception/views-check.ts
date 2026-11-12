@@ -18,8 +18,8 @@ export const VIEWS_CHECK_PROMPT_VERSION = 1;
 export const VIEWS_CHECK_CARDS_VERSION = 2;
 
 export const VIEWS_CHECK_SYSTEM_PROMPT = [
-  'You check a 3D model of ONE object against its drawings. The image is a 2 × 2 sheet: top row = the FRONT drawing (left) and our 3D model seen from the front (right); bottom row = the SIDE drawing (left) and our model seen from the same side (right). The model is flat-shaded, without texture.',
-  'Compare each model view with its drawing and list the visible parts the model is missing or shows wrong (e.g. a wheel, a mirror, a rear bumper, a door window, a handle, a leg, a lamp), the view where the part shows best, and its colour and material as drawn.',
+  'You check a 3D model of ONE object against its drawings. The image is a sheet of three rows: FRONT drawing (left) and our 3D model seen from the front (right); SIDE drawing (left) and our model seen from the same side (right); BACK drawing (left) and our model seen from the back (right). The back drawing is the front drawing mirrored, never drawn. The model is flat-shaded, without texture.',
+  'Compare each model view with its drawing and list the visible parts the model is missing or shows wrong (e.g. a wheel, a mirror, a rear bumper, a door window, a handle, a leg, a lamp), the view where the part shows best, and its colour and material as drawn. Name rear parts (tail lights, rear bumper, rear window) on the back view.',
   'Name each part with 1 to 3 plain English words a segmentation model knows ("rear bumper", "side mirror", "wheel").',
   `material = one of: ${RECIPE_MATERIALS.join(', ')}.`,
   'Set redrawSide true only when the SIDE drawing does not show the same object turned 90 degrees (another object, the front again, a perspective view).',
@@ -45,7 +45,7 @@ export const VIEWS_CHECK_JSON_SCHEMA = {
           type: 'object',
           properties: {
             part: { type: 'string' },
-            view: { type: 'string', enum: ['front', 'side'] },
+            view: { type: 'string', enum: ['front', 'side', 'back'] },
             color,
             material: { type: 'string', enum: [...RECIPE_MATERIALS] },
           },
@@ -60,7 +60,7 @@ export const VIEWS_CHECK_JSON_SCHEMA = {
 
 export interface MissingPart {
   part: string;
-  view: 'front' | 'side';
+  view: 'front' | 'side' | 'back';
   color?: string;
   material?: RecipeMaterial;
 }
@@ -106,7 +106,7 @@ export function parseViewsCheck(content: string): ViewsCheck | null {
             .slice(0, 3)
             .join(' ')
         : '';
-    const view = r.view === 'front' || r.view === 'side' ? r.view : null;
+    const view = r.view === 'front' || r.view === 'side' || r.view === 'back' ? r.view : null;
     if (!part || !view || seen.has(`${view}:${part}`)) continue;
     seen.add(`${view}:${part}`);
     missing.push({

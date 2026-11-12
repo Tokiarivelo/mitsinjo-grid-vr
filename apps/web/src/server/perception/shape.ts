@@ -372,6 +372,19 @@ export const CRITIC_SYSTEM_PROMPT = [
 
 /** Version 2 (PQ-T14): Base + Critic card + the family's card, for the 2 × 2 sheet. Built per call. */
 export const CRITIC_PROMPT_CARDS_VERSION = 2;
+/** Version 3 (PQ-T52, E11): version 1 + the closed anatomy list; the critic names missing parts. */
+export const CRITIC_ANATOMY_VERSION = 3;
+
+/**
+ * One closed-inventory line for the critic (PQ-T52): the §5 ids it may name in `missingParts`.
+ * Generic without a family (the parser then keeps nothing: ids are verified per family).
+ */
+export function criticAnatomyLine(archetype?: KitArchetype): string {
+  const ids = archetype ? ANATOMY[archetype] : [];
+  return ids.length
+    ? `Also list, in "missingParts", the parts of this closed list that show on the photo but are missing or wrong in the model, using exactly these ids: ${ids.join(', ')}.`
+    : 'Also list, in "missingParts", the closed-list parts that show on the photo but are missing or wrong in the model.';
+}
 
 /** The critic system prompt of `version`; throws on an unknown one. */
 export function criticPrompt(
@@ -379,6 +392,8 @@ export function criticPrompt(
   archetype?: KitArchetype
 ): string {
   if (version === CRITIC_PROMPT_CARDS_VERSION) return skillFor('critic', archetype).text;
+  if (version === CRITIC_ANATOMY_VERSION)
+    return `${CRITIC_SYSTEM_PROMPT} ${criticAnatomyLine(archetype)}`;
   if (version === CRITIC_PROMPT_VERSION) return CRITIC_SYSTEM_PROMPT;
   throw new Error(`unknown critic prompt version ${version}`);
 }
@@ -457,7 +472,7 @@ export const CRITIC_JSON_SCHEMA = {
   },
 };
 
-/** The critic schema of version 2: the patch fields plus `reasons`. */
+/** The critic schema of version 2: the patch fields plus `reasons` and `missingParts` (PQ-T52). */
 export const criticJsonSchema = (version: number = CRITIC_PROMPT_VERSION) =>
   version === CRITIC_PROMPT_CARDS_VERSION
     ? {
@@ -467,10 +482,22 @@ export const criticJsonSchema = (version: number = CRITIC_PROMPT_VERSION) =>
           properties: {
             ...CRITIC_JSON_SCHEMA.schema.properties,
             reasons: { type: 'array', items: { type: 'string' } },
+            missingParts: { type: 'array', items: { type: 'string' } },
           },
         },
       }
-    : CRITIC_JSON_SCHEMA;
+    : version === CRITIC_ANATOMY_VERSION
+      ? {
+          name: CRITIC_JSON_SCHEMA.name,
+          schema: {
+            ...CRITIC_JSON_SCHEMA.schema,
+            properties: {
+              ...CRITIC_JSON_SCHEMA.schema.properties,
+              missingParts: { type: 'array', items: { type: 'string' } },
+            },
+          },
+        }
+      : CRITIC_JSON_SCHEMA;
 
 /** User turn: current kit JSON + the score numbers the patch must raise. */
 export function criticQuestion(
@@ -485,12 +512,43 @@ export function criticQuestion(
       `Answer the JSON patch of the kit (at most ${CRITIC_MAX_FIELDS} fields) and "reasons".`
     );
   }
+  // Version 3 asks the version-1 question: the closed ids ride in the system prompt, like cards do.
   return (
     `Left is the photo of the selected object, right is our 3D model seen from the same view. ` +
     `Current kit: ${JSON.stringify(kit)}. ` +
     `Scores: ${score.score}/100 (silhouette IoU ${score.iou}, edge F1 ${score.edgeF1}, colour ΔE ${score.deltaE}). ` +
     `What differs (shape, sub-type, counts, proportions, colours of each part)? Answer only the JSON patch of the kit.`
   );
+}
+
+/** Most anatomy ids kept per critic answer (like the views check's `MAX_MISSING`). */
+export const MAX_CRITIC_MISSING = 4;
+
+/**
+ * The critic's `missingParts` (PQ-T52, version 3): kept only when the id is on the family's
+ * closed list (`ANATOMY`), lowercased and deduplicated; anything else is the critic guessing
+ * outside the inventory and is dropped. Empty without a family. Never throws.
+ */
+export function parseMissingParts(content: string, archetype?: KitArchetype): string[] {
+  try {
+    if (!archetype) return [];
+    const raw = (JSON.parse(content) as { missingParts?: unknown }).missingParts;
+    if (!Array.isArray(raw)) return [];
+    const ids = new Set(ANATOMY[archetype].map((s) => s.toLowerCase()));
+    const out: string[] = [];
+    const seen = new Set<string>();
+    for (const m of raw) {
+      if (typeof m !== 'string') continue;
+      const name = m.trim().toLowerCase().replace(/\s+/g, ' ');
+      if (!name || !ids.has(name) || seen.has(name)) continue;
+      seen.add(name);
+      out.push(name);
+      if (out.length >= MAX_CRITIC_MISSING) break;
+    }
+    return out;
+  } catch {
+    return [];
+  }
 }
 
 /**

@@ -256,7 +256,7 @@ export class MockPerceptionBackend implements PerceptionBackend {
     _opts?: CriticOptions
   ): Promise<PerceptionCall<CriticResult>> {
     // The mock never patches: the critic round is a no-op without Meta.
-    return { model: MOCK_PERCEPTION_MODEL, usage: {}, result: { patch: null } };
+    return { model: MOCK_PERCEPTION_MODEL, usage: {}, result: { patch: null, missingParts: [] } };
   }
 
   /** Fixed grade 3 on every criterion: the judge is a developer tool, never live in mock. */

@@ -107,13 +107,28 @@ export type ShapeResult = z.infer<typeof ShapeResultSchema>;
 /**
  * The critic's kit patch (PR-0.6): the fields to change, or null when the model already matches
  * (mock: always null — the mock never patches). Validated field by field in `parseKitPatch`;
- * the schema only carries the record across the backend boundary.
+ * the schema only carries the record across the backend boundary. Version 3 (PQ-T52) also names
+ * `missingParts`: closed anatomy ids (verified per family, empty when none).
  */
 export const CriticResultSchema = PerceptionSourceSchema.extend({
   patch: z.record(z.string(), z.unknown()).nullable(),
+  missingParts: z.array(z.string()).optional(),
 });
 export type CriticResult = Omit<z.infer<typeof CriticResultSchema>, 'patch'> & {
   patch: Partial<ObjectKit> | null;
+  missingParts: string[];
+};
+
+/**
+ * One short per-part answer (PQ-T52, E9/E11): whether the part shows, where, its colour — or
+ * null when unusable (mock: always null). Parsed in `parsePartAnswer`; the schema only carries
+ * the record across the backend boundary.
+ */
+export const PartAskResultSchema = PerceptionSourceSchema.extend({
+  answer: z.record(z.string(), z.unknown()).nullable(),
+});
+export type PartAskResult = Omit<z.infer<typeof PartAskResultSchema>, 'answer'> & {
+  answer: import('./part-question').PartAnswer | null;
 };
 
 /** Rubric judge (PQ-T4): six 1–5 grades and notes; null when unusable. Parsed in `parseJudge`. */

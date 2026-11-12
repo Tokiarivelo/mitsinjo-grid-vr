@@ -211,6 +211,11 @@ export interface ObjectShapeOptions {
   kitSamples?: number;
   /** Critic prompt version of `shapeWithCritic` (PQ-T14): 2 = cards + 2 × 2 sheet + extra rounds; default 1. */
   criticPromptVersion?: number;
+  /**
+   * Extra SAM part masks (PQ-T52): the critic's confirmed missing parts, chased on the crop.
+   * Appended to the fetched masks before the builders; builders ignore what they do not consume.
+   */
+  extraPartMasks?: import('@/lib/object-shape').PartMask[];
 }
 
 /** The second kit sample is asked only with at least this budget (PQ-T18). */
@@ -260,6 +265,7 @@ export async function runObjectShape(
     onStagesLeft,
     promptVersion,
     kitSamples = env.SHAPE_KIT_SAMPLES,
+    extraPartMasks,
   }: ObjectShapeOptions = {}
 ): Promise<ObjectShape> {
   /** Logs each ended stage (first answer and background). */
@@ -954,6 +960,13 @@ export async function runObjectShape(
         ]);
         timed('masks', masksStart);
         fitStart = Date.now();
+        // PQ-T52: the critic's confirmed missing parts join the fetched masks before the builders.
+        if (extraPartMasks?.length) {
+          partMasks = [...partMasks, ...extraPartMasks];
+          console.info(
+            `[vision] 3D masks for "${target.label}": +${extraPartMasks.length} critic-chased (${extraPartMasks.map((m) => m.concept).join(', ')})`
+          );
+        }
         if (facadeMasks) {
           const counts = new Map<string, number>();
           for (const m of facadeMasks.masks)

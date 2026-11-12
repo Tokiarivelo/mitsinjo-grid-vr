@@ -400,6 +400,8 @@ Go in this order and stop at the first level that is wrong:
 5. Colours and materials of each big surface.
 Answer a JSON patch of the kit with ONLY the fields to change, and "reasons": one short line per
 changed field naming what you saw on the photo.
+Also list, in "missingParts", the closed-list parts (the Anatomy line of your family card)
+that show on the photo but are missing or wrong in the model, using exactly those ids.
 Rules: fix the largest red and blue areas first · at most 4 fields per patch · an empty patch
 when the model matches · never change a field marked "Measured" unless you say why in reasons.
 When the model is good enough, answer no change: a needless fix can break a correct model.

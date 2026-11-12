@@ -3,6 +3,12 @@ import { SCENERY_TYPES } from '@/lib/vision';
 import { describe, expect, it } from 'vitest';
 import { ObjectRecipeSchema, recipeIssue } from '@/lib/object-shape';
 import {
+  CRITIC_ANATOMY_VERSION,
+  CRITIC_PROMPT_CARDS_VERSION,
+  CRITIC_PROMPT_VERSION,
+  CRITIC_SYSTEM_PROMPT,
+  criticJsonSchema,
+  criticPrompt,
   criticQuestion,
   KIT_PROMPT_ANATOMY_VERSION,
   KIT_PROMPT_CARDS_VERSION,
@@ -11,6 +17,7 @@ import {
   kitPrompt,
   parseAnatomy,
   parseEvidence,
+  parseMissingParts,
   mergeKitPatch,
   mockRecipe,
   parseKit,
@@ -390,5 +397,59 @@ describe('kit anatomy (PQ-T46)', () => {
     // Prompt 2 answers evidence, then anatomy, then the kit (E5 order).
     const cards = Object.keys(kitJsonSchema(KIT_PROMPT_CARDS_VERSION).schema.properties);
     expect(cards.slice(0, 3)).toEqual(['evidence', 'anatomy', 'archetype']);
+  });
+});
+
+describe('critic anatomy (PQ-T52)', () => {
+  it('prompt 3 is the version-1 prompt plus the closed list of the family', () => {
+    expect(CRITIC_ANATOMY_VERSION).toBe(3);
+    const p = criticPrompt(CRITIC_ANATOMY_VERSION, 'vehicle');
+    expect(p.startsWith(CRITIC_SYSTEM_PROMPT)).toBe(true);
+    expect(p).toContain('missingParts');
+    expect(p).toContain('rear window');
+    expect(p).toContain('door lines');
+    // Generic without a family; version 1 keeps its bare text.
+    expect(criticPrompt(CRITIC_ANATOMY_VERSION)).toContain('missingParts');
+    expect(criticPrompt(CRITIC_ANATOMY_VERSION)).not.toContain('rear window');
+    expect(criticPrompt(CRITIC_PROMPT_VERSION)).toBe(CRITIC_SYSTEM_PROMPT);
+    expect(() => criticPrompt(9)).toThrow();
+  });
+
+  it('schema 3 is the patch fields plus missingParts; the question is the version-1 one', () => {
+    const keys = Object.keys(criticJsonSchema(CRITIC_ANATOMY_VERSION).schema.properties);
+    expect(keys).toContain('missingParts');
+    expect(keys).toContain('details');
+    expect(keys).not.toContain('reasons');
+    // Version 2 (cards) offers it too, beside reasons; its card names the Anatomy line.
+    const cards = Object.keys(criticJsonSchema(CRITIC_PROMPT_CARDS_VERSION).schema.properties);
+    expect(cards).toContain('missingParts');
+    expect(cards).toContain('reasons');
+    expect(criticPrompt(CRITIC_PROMPT_CARDS_VERSION, 'vehicle')).toContain('missingParts');
+    expect(criticPrompt(CRITIC_PROMPT_CARDS_VERSION, 'vehicle')).toContain('Anatomy line');
+    const kit = { archetype: 'vehicle' } as never;
+    const score = { score: 50, iou: 0.5, edgeF1: 0.5, deltaE: 10 };
+    expect(criticQuestion(kit, score, CRITIC_ANATOMY_VERSION)).toBe(
+      criticQuestion(kit, score, CRITIC_PROMPT_VERSION)
+    );
+  });
+
+  it('keeps only closed-list ids, lowercased and capped', () => {
+    expect(
+      parseMissingParts(
+        reply({ missingParts: ['Rear Window', 'grille', 'rear window', 'spoiler', 7] }),
+        'vehicle'
+      )
+    ).toEqual(['rear window', 'grille']);
+    expect(
+      parseMissingParts(
+        reply({ missingParts: ['wheels', 'grille', 'roof', 'plate', 'door lines', 'bumpers'] }),
+        'vehicle'
+      )
+    ).toEqual(['wheels', 'grille', 'roof', 'plate']);
+    // Another family's ids, no family, bad JSON: nothing kept.
+    expect(parseMissingParts(reply({ missingParts: ['chimney'] }), 'vehicle')).toEqual([]);
+    expect(parseMissingParts(reply({ missingParts: ['wheels'] }))).toEqual([]);
+    expect(parseMissingParts('nope', 'vehicle')).toEqual([]);
+    expect(parseMissingParts(reply({ patch: {} }), 'vehicle')).toEqual([]);
   });
 });
