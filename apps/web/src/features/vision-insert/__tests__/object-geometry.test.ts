@@ -25,7 +25,9 @@ import {
   unitHip,
   unitHull,
   unitPrism,
+  unitSdf,
 } from '../utils/object-geometry';
+import { SDF_BALL, SDF_PERSON, SDF_SLABS, sdfPart, sdfRecipe } from '@/test/sdf-blobs';
 import { SURFACE_LOOK } from '../utils/surface-look';
 
 const box = { x: 0.2, y: 0.1, w: 0.4, h: 0.5 };
@@ -841,5 +843,55 @@ describe('loft and inset growth (PQ-T51 §7.3)', () => {
     const mesh = recipeMesh(recipe);
     expect(triangleCount(mesh)).toBeLessThanOrEqual(5_000);
     expect(mesh.getAttribute('position').count).toBeGreaterThan(0);
+  });
+});
+
+describe('unitSdf (PQ-T53 §8)', () => {
+  it('a ball meshes the pinned count, bounded by its radius', () => {
+    const g = unitSdf(SDF_BALL);
+    expect(triangleCount(g)).toBe(2648);
+    const b = bounds(g);
+    expect(b.min.x).toBeCloseTo(-0.35, 1);
+    expect(b.max.x).toBeCloseTo(0.35, 1);
+    expect(Object.keys(g.attributes).sort()).toEqual(['normal', 'position', 'uv']);
+  });
+
+  it('normals point out (radially, on the ball)', () => {
+    const g = unitSdf(SDF_BALL);
+    const pos = g.getAttribute('position');
+    const nor = g.getAttribute('normal');
+    let minDot = Infinity;
+    for (let i = 0; i < pos.count; i++)
+      minDot = Math.min(
+        minDot,
+        pos.getX(i) * nor.getX(i) + pos.getY(i) * nor.getY(i) + pos.getZ(i) * nor.getZ(i)
+      );
+    expect(minDot).toBeGreaterThan(0);
+  });
+
+  it('an sdf recipe builds scaled to the proportions, vertex-coloured', () => {
+    const mesh = recipeMesh(sdfRecipe(SDF_PERSON, { w: 0.6, h: 1, d: 0.5 }));
+    const b = bounds(mesh);
+    expect(b.max.y - b.min.y).toBeLessThanOrEqual(1);
+    expect(b.max.y - b.min.y).toBeGreaterThan(0.8);
+    expect(b.max.x - b.min.x).toBeLessThanOrEqual(0.6);
+    const colors = mesh.getAttribute('color');
+    expect(colors.count).toBe(mesh.getAttribute('position').count);
+  });
+
+  it('budget: a smooth body with trim, and the adversarial slabs, stay within 5 k', () => {
+    const trim = (at: [number, number, number]): RecipePart => ({
+      shape: 'box',
+      at,
+      size: [0.1, 0.1, 0.1],
+      color: '#222222',
+    });
+    const person = recipeMesh({
+      proportions: { w: 1, h: 1, d: 1 },
+      parts: [sdfPart(SDF_PERSON), trim([0.4, 0.4, 0]), trim([-0.4, 0.4, 0])],
+    });
+    expect(triangleCount(person)).toBeLessThanOrEqual(5_000);
+    const slabs = recipeMesh(sdfRecipe(SDF_SLABS));
+    expect(triangleCount(slabs)).toBe(1800);
   });
 });

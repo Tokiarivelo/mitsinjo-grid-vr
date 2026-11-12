@@ -7,6 +7,7 @@
  */
 import { hullSamplePoints } from '@/lib/hull';
 import { expandGenerators } from '@/lib/object-generators';
+import { sdfOutlinePoints } from '@/lib/sdf-field';
 import { outlineDetails } from '@/features/vision-insert/utils/view-assemblies';
 import { kitToRecipe, uniformRoof, type ObjectKit } from '@/lib/object-kit';
 import {
@@ -133,6 +134,10 @@ function unitPoints(p: RecipePart): Array<[number, number, number]> {
     }
     case 'hull': {
       const pts = hullSamplePoints(p.points ?? [], p.section ?? []);
+      return pts.length ? pts : unitPoints({ ...p, shape: 'box' });
+    }
+    case 'sdf': {
+      const pts = sdfOutlinePoints(p.blobs ?? []);
       return pts.length ? pts : unitPoints({ ...p, shape: 'box' });
     }
     case 'lathe': {

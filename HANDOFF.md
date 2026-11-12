@@ -1,46 +1,46 @@
 # HANDOFF — read first, overwrite at end of session (≤40 lines)
 
-**Updated:** 2026-11-12 · **By:** Muse Code · **Branch:** feat/pq-t45-sandboxed-code (pushed `bb89331` via HTTPS+proxy — SSH DNS dead, `gh` token works)
+**Updated:** 2026-11-12 · **By:** Muse Code · **Branch:** `feat/pq-t53-sdf`
+(stacked on T52 `0f51308`)
 
-## PRIORITY NEXT: PQ-T46 `anatomy` in kit, cards and score (§12.3, §5, E5, E9)
+## PRIORITY NEXT: PQ-T54 (§12.11, §9.1)
 
-PQ-T45 landed (this session): QuickJS sandbox + Wonder writer + patch loop,
-facade-house wiring, capture `code`. Next (§12, Q6): PQ-T46 anatomy, PQ-T47
-routing, PQ-T48 detail kinds... Live §8bis measures still need a Meta key.
+Real set already ≥ 12 (15 + solar-panel unscorable);
+remaining: judge re-calibration + turntable sheet.
+After it: PQ-T55 B-vs-A eval.
 
-## Current state (T45 uncommitted; T44/T43/Q4 still local, nothing pushed)
+## Current state (PQ-T53 done, commit `feat/pq-t53-sdf`)
 
-- **PQ-T45** here: `code-sandbox.ts` (api+limits), `shape-code.ts` (prompt v1,
-  `META_CODE_MODEL`), `shape-code-loop.ts` (gain ≥0.005, 3 stalls, ≤5 rounds),
-  facade wiring (`code` timing), capture `code`, `code` source, contracts, V267.
-- **Install note:** `pnpm add` fails in sandbox (native lock, EROFS) → tarballs
-  via npm + hand-written lock entries + manual `.pnpm` layout. First online
-  `pnpm install` normalizes and verifies the lock (entries follow v9 exactly).
-- **Q4 code** still on `feat/pq-q4` (PR #15, reviewed) — merge to land it.
-- Push route: SSH DNS dead; HTTPS via proxy + `gh` token works
-  (`git -c credential.helper='!gh auth git-credential' push https://...`).
-  Still unpushed: `feat/docs-tick-q4`, `feat/pq-t43-template-fixes`.
+- `sdf` shape + 4 blob kinds (1–12, r ≥ 0.04, outer+k ⊆
+  ±0.5) + `sdf-field` (smooth-min union) + `sdf-mesh`
+  (marching cubes, three.js tables bit-equal vs addon;
+  24³ + 16/12/8 ladder past 3000 tris/part) + twins
+  (viewer `unitSdf`, judge `marchSdf`, fit samples) +
+  `api.sdf` at the cap (writer v2 deferred).
+- Gate §12.10: 32³ blows 5 k (6528); 24³ keeps smooth
+  bodies (2648/1520/1192, ≤ 40 ms). No builder emits
+  blobs yet (no person/animal rows).
 
 ## Verify (this session)
 
-- New: 27 tests pass (sandbox 13 real-WASM, writer 3, loop 7, pipeline 4).
-- `tsc` clean · `make lint` 0 errors · i18n 3/3 · prettier clean · goldens 5/5
-  (one 5/5 budget fail = load flake, base failed identically) · shape-report
-  identical to T44 (synth 93, car 93, cottage 86; real 53, ΔE 10.1) ·
-  vision-insert 417/417 · full perception suite: only parallel-load flakes,
-  every failing file green focused.
+- 1552 pass (+33 SDF); tsc + lint + i18n green; report
+  frozen (synth 92, real 53, ΔE 10.1); goldens 5/5
+  non-strict, sheet unchanged.
+- Pre-existing, base-proven: strict-golden timing +
+  `view-stages` round-tags (both fail on HEAD too);
+  object-views deadline flake (passes alone).
+- Push: HTTPS + `gh` token (SSH DNS dead, no rebase
+  without user OK). Unsigned (gpg broken).
 
 ## Open
 
-- V267 manual check needs a Meta key (live-only: build-code logs, `code`
-  timing, code-built house). Valid-code rate / gain vs A / tour time unmeasured.
-- Deferred (in T45 note): checkpoint resume of code rounds, block patches
-  (full body re-sent), richer writer sheet (photo crop only in v1).
+- v3 default needs a measured denied-flip or chase gain;
+  chase coverage ∅; zone-crop chase needs PQ-T8 eval.
+- Scratch in /tmp: `sdf-*` (budget proto, previews,
+  oracle) + T52 `zz-critic-ab` driver/logs.
 
 ## Decisions
 
-- Deadline (2 s), not op counter: a poll costs ≈1.3 ms round-trip (measured).
-- `Eval` intrinsic stays (host needs it); guest `eval`/`Function` stripped.
-- Stack-overflow disposal aborts QuickJS → drop poisoned module, re-instantiate.
-- Mock returns null code (route B skips offline); `code` source skips critic
-  and kit-patch replay; full-body patches for v1 (token-cheap at house size).
+- v1 stays the critic default (unchanged).
+- Fixed 24³ + ladder (not pure fixed res): fixed 24³
+  provably blows the budget (15 k on 12 slabs).

@@ -11,6 +11,7 @@ import {
 } from 'quickjs-emscripten';
 import { newQuickJSWASMModule, RELEASE_SYNC } from 'quickjs-emscripten/variants';
 import { mulberry32 } from '@/lib/seeded-random';
+import { SDF_PART_TRIANGLES_MAX } from '@/lib/sdf-mesh';
 import {
   MAX_COMPONENTS,
   MAX_TRIANGLES,
@@ -30,9 +31,10 @@ import {
  *
  * Guest contract: the stored code is the *body* of `build(api, params)` and returns an array of
  * recipe parts (plain data). `api` exposes the current primitives first (`box, cylinder, sphere,
- * cone, prism, extrude, lathe, hip, hull`; §8bis's shorter list omits the roof shapes the
- * house-first case needs), `material` (echoes a valid material name) and `rng` (seeded). The
- * §7.3 generators (`sweep, branch, ...`) and `sdf` arrive with PQ-T50/51/53.
+ * cone, prism, extrude, lathe, hip, hull, sdf`; §8bis's shorter list omits the roof shapes the
+ * house-first case needs), `material` (echoes a valid material name) and `rng` (seeded). `sdf`
+ * parts estimate at their per-part cap (PQ-T53); the writer prompt does not list them yet
+ * (prompt v2 + eval, like the §7.3 generator fns).
  *
  * Hard limits (§8bis), counted on the generated code's execution only: guest memory, guest stack,
  * a wall-clock deadline, ≤ 64 api calls, ≤ 800 built instances, ≤ 32 parts, ≤ 5 000 triangles.
@@ -167,6 +169,9 @@ export function estimateTriangles(part: RecipePart): number {
       return (part.points?.length ?? 3) * 4 + 12;
     case 'lathe':
       return (part.profile?.length ?? 2) * 24 * 2;
+    case 'sdf':
+      // Exact worst case: the mesher's ladder caps every part here (PQ-T53).
+      return SDF_PART_TRIANGLES_MAX;
   }
 }
 

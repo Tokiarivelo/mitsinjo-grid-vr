@@ -7,10 +7,12 @@ import {
   frontPartIndex,
   ObjectRecipeSchema,
   recipeIssue,
+  sdfBlobOuter,
   ShapeTimingEventSchema,
   silhouetteRings,
   wallTintFor,
   type ObjectRecipe,
+  type SdfBlob,
 } from '../object-shape';
 import { pathToRings } from '../vision';
 
@@ -365,5 +367,79 @@ describe('wallTintFor (PQ-T44)', () => {
     expect(ObjectRecipeSchema.safeParse({ ...base, wallTints: { front: 'red' } }).success).toBe(
       false
     );
+  });
+});
+
+describe('sdf blobs (PQ-T53 §8)', () => {
+  const ball: SdfBlob = { kind: 'sphere', c: [0, 0, 0], r: 0.3 };
+  const part = (over: Record<string, unknown>) => ({
+    shape: 'sdf',
+    at: [0, 0, 0],
+    size: [1, 1, 1],
+    color: '#eeeeee',
+    ...over,
+  });
+  const parse = (parts: unknown[]) =>
+    ObjectRecipeSchema.safeParse({ proportions: { w: 1, h: 1, d: 1 }, parts }).success;
+
+  it('sdf takes 1–12 blobs, and only sdf takes them', () => {
+    expect(parse([part({ blobs: [ball] })])).toBe(true);
+    expect(parse([part({ blobs: Array.from({ length: 12 }, () => ball) })])).toBe(true);
+    expect(parse([part({})])).toBe(false);
+    expect(parse([{ ...part({ blobs: [ball] }), shape: 'box' }])).toBe(false);
+    expect(parse([part({ blobs: [] })])).toBe(false);
+    expect(parse([part({ blobs: Array.from({ length: 13 }, () => ball) })])).toBe(false);
+  });
+
+  it('each kind parses: capsule, ellipsoid, rounded box', () => {
+    const blobs: SdfBlob[] = [
+      { kind: 'capsule', c: [0, 0, 0], axis: 'y', halfLen: 0.2, r: 0.1 },
+      { kind: 'ellipsoid', c: [0, 0, 0], radii: [0.1, 0.2, 0.15] },
+      { kind: 'box', c: [0, 0, 0], size: [0.4, 0.2, 0.3], r: 0.02 },
+    ];
+    expect(parse([part({ blobs })])).toBe(true);
+  });
+
+  it('dropout guard: radii under one cell, thin boxes and wide blends are refused', () => {
+    expect(parse([part({ blobs: [{ ...ball, r: 0.03 }] })])).toBe(false);
+    expect(
+      parse([
+        part({
+          blobs: [{ kind: 'box', c: [0, 0, 0], size: [0.4, 0.07, 0.3], r: 0 } as SdfBlob],
+        }),
+      ])
+    ).toBe(false);
+    expect(parse([part({ blobs: [{ ...ball, k: 0.2 }] })])).toBe(false);
+    expect(
+      parse([
+        part({
+          blobs: [{ kind: 'box', c: [0, 0, 0], size: [0.4, 0.2, 0.3], r: 0.2 } as SdfBlob],
+        }),
+      ])
+    ).toBe(false);
+  });
+
+  it('extent rule: outer box plus blend margin stays in unit space', () => {
+    expect(parse([part({ blobs: [{ ...ball, c: [0.25, 0, 0] }] })])).toBe(false);
+    expect(parse([part({ blobs: [{ ...ball, c: [0.2, 0, 0] }] })])).toBe(true);
+    expect(parse([part({ blobs: [{ ...ball, c: [0.15, 0, 0], k: 0.1 }] })])).toBe(false);
+    expect(parse([part({ blobs: [{ ...ball, c: [0.1, 0, 0], k: 0.1 }] })])).toBe(true);
+  });
+
+  it('sdfBlobOuter: half-extents per kind, capsule along its axis', () => {
+    expect(sdfBlobOuter(ball)).toEqual({ half: [0.3, 0.3, 0.3], k: 0 });
+    const cap: SdfBlob = {
+      kind: 'capsule',
+      c: [0, 0, 0],
+      axis: 'x',
+      halfLen: 0.2,
+      r: 0.1,
+      k: 0.05,
+    };
+    const outer = sdfBlobOuter(cap);
+    expect(outer.k).toBe(0.05);
+    expect(outer.half[0]).toBeCloseTo(0.3, 12);
+    expect(outer.half[1]).toBe(0.1);
+    expect(outer.half[2]).toBe(0.1);
   });
 });

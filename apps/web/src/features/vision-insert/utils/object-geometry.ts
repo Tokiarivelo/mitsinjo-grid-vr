@@ -11,6 +11,7 @@ import {
   type RecipePart,
 } from '@/lib/object-shape';
 import { HULL_LEVELS, HULL_SLICES, hullLoops } from '@/lib/hull';
+import { meshSdf } from '@/lib/sdf-mesh';
 import { SURFACE_LOOK, SURFACES, surfaceIndex } from './surface-look';
 import { holedBox } from './holed-wall';
 import { expandAssemblies } from './assembly-parts';
@@ -426,6 +427,21 @@ export function unitHull(
 const SKIN_SLICES = 8;
 const SKIN_LEVELS = 6;
 
+/**
+ * Unit smooth union (PQ-T53 §8): marching-cubes mesh of the blobs at fixed resolution,
+ * smooth normals from the field gradient (flat shading would facet the organic surface).
+ * Non-indexed with empty UVs like the other primitives so parts merge; ≤ 3 000 triangles
+ * by construction (the mesher's ladder). Empty without blobs (the schema asks for ≥ 1).
+ */
+export function unitSdf(blobs: RecipePart['blobs']): THREE.BufferGeometry {
+  const { positions, normals } = meshSdf(blobs ?? []);
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  g.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
+  g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array((positions.length / 3) * 2), 2));
+  return g;
+}
+
 /** Unit primitive (1 × 1 × 1 bounds) along y, non-indexed so parts merge. */
 function unitPart(
   shape: RecipePart['shape'],
@@ -436,9 +452,13 @@ function unitPart(
   section?: RecipePart['section'],
   body = true,
   clip?: number,
-  bevel?: readonly [number, number, number]
+  bevel?: readonly [number, number, number],
+  blobs?: RecipePart['blobs']
 ): THREE.BufferGeometry {
   switch (shape) {
+    case 'sdf':
+      // No bevel: the meshed field is already smooth (the bevelled look is for hard edges).
+      return unitSdf(blobs);
     case 'hull':
       // Skin patches (glass, grille on a hull body) are small: a coarse skin, sharp edges.
       return body
@@ -528,7 +548,8 @@ function buildMesh(recipe: ObjectRecipe, detail: AssemblyDetail): THREE.BufferGe
         p.section,
         !!p.front,
         p.clip,
-        bevel
+        bevel,
+        p.blobs
       );
       // Round parts turn to their axis before taking the part's own x / y / z extent.
       if (p.axis === 'x') g.rotateZ(Math.PI / 2);

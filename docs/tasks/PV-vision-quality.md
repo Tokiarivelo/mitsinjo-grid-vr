@@ -599,7 +599,23 @@ One task = one commit, with its Vitest test, its `contracts.md` update and its m
       Effective chase coverage today: none (every placed concept is already measured; vehicles
       skip doors, PR-2.7); zone-crop chase needs a PQ-T8-style eval. Contracts + copilot +
       V274 scenario.
-- [ ] **PQ-T53 SDF for smooth shapes** (§12.10, §8), after measuring the triangle budget.
+- [x] **PQ-T53 SDF for smooth shapes** (§12.10, §8), after measuring the triangle budget.
+      _Built 2026-11-12:_ `sdf` shape + `SdfBlob` × 4 kinds (schema: 1–12 blobs, radii ≥
+      0.04 dropout guard, box r ≤ half side, outer + k ⊆ ±0.5 extent rule for a closed
+      mesh) + `sdf-field.ts` (smooth-min union, shared) + `sdf-mesh.ts` (marching cubes,
+      tables vendored from three.js and verified bit-equal vs the addon on identical
+      fields; fixed 24³ + 16/12/8 ladder past `SDF_PART_TRIANGLES_MAX` 3000, 8³ provably
+      fits; normals once for the kept mesh) + twins (viewer `unitSdf` with smooth
+      gradient normals, judge `marchSdf` sphere tracing on the same field, fit
+      k-padded analytic samples) + `estimateTriangles` = the cap + `api.sdf`
+      (writer prompt v2 + eval deferred, like loft/inset). Budget gate first (§12.10):
+      32³ blows the 5 k budget on one part (6528 measured), 12³ too coarse (fused
+      legs, pointy caps); 24³ keeps smooth bodies (ball 2648, bottle 1520,
+      person-like 1192, ≤ 40 ms). Report frozen (synth 92, real 53, ΔE 10.1, every
+      row identical; goldens 5/5 non-strict, strict timing fails on base too).
+      No builder emits blobs yet (no person/animal rows to measure them; calage,
+      region colours, Muse-written blobs, person/animal template migration next).
+      Contracts + V275 scenario.
 - [ ] **PQ-T54 Real set ≥ 12 photos, judge calibration, turntable sheet** (§12.11, §9.1).
 - [ ] **PQ-T55 Scored evaluation of B vs draft A** (§12.13: willow, car, house, one appliance) and tour
       duration on Vercel and OVHcloud.
