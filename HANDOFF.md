@@ -1,6 +1,6 @@
 # HANDOFF — read first, overwrite at end of session (≤40 lines)
 
-**Updated:** 2026-11-12 · **By:** Muse Code · **Branch:** feat/pq-t45-sandboxed-code (UNCOMMITTED — review then commit; no push, no network)
+**Updated:** 2026-11-12 · **By:** Muse Code · **Branch:** feat/pq-t45-sandboxed-code (`26030f3` committed, unpushed — no network)
 
 ## PRIORITY NEXT: PQ-T46 `anatomy` in kit, cards and score (§12.3, §5, E5, E9)
 
