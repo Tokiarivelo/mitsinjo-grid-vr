@@ -635,6 +635,13 @@ bypasses both ways (the second kit sample of a vote stays independent); `make ev
 (kit + outline + measures, E12.2), staged draft/refine (`onStagesLeft`, E12.3) and critic skip rules
 (score/detail gates, no round for free/facade/views/code recipes, E12.4) already held.
 
+**Turntable sheet and fingerprinted judge replay (PQ-T54, §9.1/§12.11):** `make shape-report` also writes
+`turntable-sheet.png` (one row per real capture: photo | model 0° | 90° | 180° | 270°, straight on so
+faces read flat; `TURNTABLE_YAWS`, `turntableSheet` in `shape-report.ts`). `make shape-judge` stores the
+fingerprint of the graded recipe in `<id>.judge.json` (`recipeFingerprint`, sha256 of the recipe JSON)
+and replays a stored answer only when prompt version, model and fingerprint all match
+(`judgeReplayUsable`); older or re-captured answers are judged again live, never trusted blindly.
+
 ## Visuals (`server/media/generate-image.ts`, M5-T1)
 
 `buildVisualPrompt(kind, input, result, locale?)` → `{kind, prompt, overlay, caption}`. Pure, no LLM:

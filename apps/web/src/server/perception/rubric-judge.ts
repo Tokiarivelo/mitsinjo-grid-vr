@@ -5,6 +5,7 @@ import { frontPartIndex, type ObjectRecipe } from '@/lib/object-shape';
 import { renderFlat, THREE_QUARTER, type FlatRender } from './flat-render';
 import type { RgbGrid } from './model-score';
 import type { JudgeResult } from './schemas';
+import { fingerprint } from './shape-cache';
 
 /**
  * Rubric judge (PQ-T4, methodology §6.2, Judge card §11 of the skills file): Muse Wonder grades six
@@ -127,6 +128,36 @@ export function damage(recipe: ObjectRecipe): ObjectRecipe {
   if (others.length < 2) return recipe;
   const drop = new Set(others.sort((a, b) => volume(b) - volume(a) || a - b).slice(0, 2));
   return { ...recipe, parts: recipe.parts.filter((_, i) => !drop.has(i)) };
+}
+
+/**
+ * Fingerprint of the recipe a stored judgement graded (PQ-T54): a re-captured model must be judged
+ * again, never graded by an answer to its older shape. Stable: same recipe, same print.
+ */
+export const recipeFingerprint = (recipe: ObjectRecipe): string =>
+  fingerprint(JSON.stringify(recipe));
+
+/**
+ * A stored `<id>.judge.json` is replayed only when it graded this exact recipe with this prompt and
+ * model; anything else (older answer, re-capture, other model) is judged again live.
+ */
+export function judgeReplayUsable(
+  stored: {
+    promptVersion?: unknown;
+    model?: unknown;
+    recipe?: unknown;
+    intact?: Judgement;
+    damaged?: Judgement;
+  } | null,
+  recipe: ObjectRecipe,
+  model: string
+): stored is { intact: Judgement; damaged: Judgement } {
+  return (
+    !!stored &&
+    stored.promptVersion === JUDGE_PROMPT_VERSION &&
+    stored.model === model &&
+    stored.recipe === recipeFingerprint(recipe)
+  );
 }
 
 /** Share of pairs where the damaged model grades lower than the intact one, and the trust verdict. */

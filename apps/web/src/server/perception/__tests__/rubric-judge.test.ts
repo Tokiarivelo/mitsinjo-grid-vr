@@ -14,10 +14,12 @@ import {
   judgeMean,
   liveJudgement,
   judgeQuestion,
+  judgeReplayUsable,
   judgeSheet,
   JUDGE_CRITERIA,
   JUDGE_PROMPT_VERSION,
   parseJudge,
+  recipeFingerprint,
   type Judgement,
 } from '../rubric-judge';
 import { readCapture, rescoreCapture } from '../shape-capture';
@@ -110,6 +112,33 @@ describe('rubric judge (PQ-T4)', () => {
     expect(calibration([]).trusted).toBe(false);
   });
 
+  it('fingerprints the graded recipe: same recipe replays, any change re-judges (PQ-T54)', () => {
+    const r: ObjectRecipe = {
+      proportions: { w: 1, h: 1, d: 1 },
+      parts: [part([1, 1, 1]), part([0.5, 0.5, 0.5])],
+    };
+    const model = 'muse-wonder-1.0';
+    const stored = (over: Record<string, unknown>) => ({
+      promptVersion: JUDGE_PROMPT_VERSION,
+      model,
+      recipe: recipeFingerprint(r),
+      intact: all(4),
+      damaged: all(2),
+      ...over,
+    });
+    expect(recipeFingerprint(structuredClone(r))).toBe(recipeFingerprint(r));
+    expect(judgeReplayUsable(stored({}), r, model)).toBe(true);
+    // The PQ-T4 answers carry no fingerprint: judged again, never trusted blindly.
+    expect(judgeReplayUsable(stored({ recipe: undefined }), r, model)).toBe(false);
+    expect(judgeReplayUsable(stored({ promptVersion: 0 }), r, model)).toBe(false);
+    expect(judgeReplayUsable(stored({ model: 'other' }), r, model)).toBe(false);
+    const moved = structuredClone(r);
+    moved.parts[0]!.at = [0.1, 0, 0];
+    expect(recipeFingerprint(moved)).not.toBe(recipeFingerprint(r));
+    expect(judgeReplayUsable(stored({}), moved, model)).toBe(false);
+    expect(judgeReplayUsable(null, r, model)).toBe(false);
+  });
+
   it('draws the photo | front | ¾ sheet as one PNG', async () => {
     const crop = { cols: 4, rows: 4, rgb: new Uint8Array(48).fill(200) };
     const url = await judgeSheet(
@@ -127,7 +156,7 @@ describe('rubric judge (PQ-T4)', () => {
 /**
  * `make shape-judge` (SHAPE_JUDGE=1, costs API calls): every real capture judged intact and damaged on
  * `META_JUDGE_MODEL`; answers stored beside the captures (`<id>.judge.json`) and replayed offline when
- * the model and prompt version match (`SHAPE_JUDGE_REPLAY=1` refuses any live call).
+ * the model, prompt version and recipe fingerprint match (`SHAPE_JUDGE_REPLAY=1` refuses any live call).
  */
 describe('liveJudgement (PQ-T4)', () => {
   const j: Judgement = {
@@ -162,6 +191,7 @@ describe.runIf(process.env.SHAPE_JUDGE)('make shape-judge', () => {
     const pairs: Array<{ id: string; intact: Judgement; damaged: Judgement }> = [];
     const skipped: string[] = [];
     const undamageable: string[] = [];
+    const stale: string[] = [];
     for (const c of REAL_SHAPES) {
       if (!existsSync(join(dir, `${c.id}.capture.json`))) continue;
       const { capture } = await readCapture(dir, c.id);
@@ -172,10 +202,11 @@ describe.runIf(process.env.SHAPE_JUDGE)('make shape-judge', () => {
       }
       const file = join(dir, `${c.id}.judge.json`);
       const stored = existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : null;
-      if (stored?.promptVersion === JUDGE_PROMPT_VERSION && stored.model === env.META_JUDGE_MODEL) {
+      if (judgeReplayUsable(stored, capture.recipe, env.META_JUDGE_MODEL)) {
         pairs.push({ id: c.id, intact: stored.intact, damaged: stored.damaged });
         continue;
       }
+      if (stored) stale.push(c.id);
       if (replayOnly) continue;
       const s = await rescoreCapture(dir, c.id);
       if (!s) continue;
@@ -197,7 +228,13 @@ describe.runIf(process.env.SHAPE_JUDGE)('make shape-judge', () => {
       writeFileSync(
         file,
         JSON.stringify(
-          { promptVersion: JUDGE_PROMPT_VERSION, model: env.META_JUDGE_MODEL, intact, damaged },
+          {
+            promptVersion: JUDGE_PROMPT_VERSION,
+            model: env.META_JUDGE_MODEL,
+            recipe: recipeFingerprint(capture.recipe),
+            intact,
+            damaged,
+          },
           null,
           2
         )
@@ -210,7 +247,7 @@ describe.runIf(process.env.SHAPE_JUDGE)('make shape-judge', () => {
         `| ${p.id} | ${judgeMean(p.intact).toFixed(2)} | ${judgeMean(p.damaged).toFixed(2)} | ${judgeMean(p.damaged) < judgeMean(p.intact) ? '✓' : '✗'} |`
     );
     console.info(
-      `\n## Judge calibration (${env.META_JUDGE_MODEL}, prompt v${JUDGE_PROMPT_VERSION})\n\n| Capture | Intact | Damaged | Lower |\n| --- | --- | --- | --- |\n${lines.join('\n')}\n\nDamaged lower in ${Math.round(cal.share * 100)} % of ${pairs.length} pairs → ${cal.trusted ? 'trusted by the loop' : 'developer note only'}.${skipped.length ? `\n\nNo live answer (not counted, rerun): ${skipped.join(', ')}.` : ''}${undamageable.length ? `\n\nToo few parts to damage (not counted): ${undamageable.join(', ')}.` : ''}`
+      `\n## Judge calibration (${env.META_JUDGE_MODEL}, prompt v${JUDGE_PROMPT_VERSION})\n\n| Capture | Intact | Damaged | Lower |\n| --- | --- | --- | --- |\n${lines.join('\n')}\n\nDamaged lower in ${Math.round(cal.share * 100)} % of ${pairs.length} pairs → ${cal.trusted ? 'trusted by the loop' : 'developer note only'}.${stale.length ? `\n\nRe-judged live (stored answer predates this recipe): ${stale.join(', ')}.` : ''}${skipped.length ? `\n\nNo live answer (not counted, rerun): ${skipped.join(', ')}.` : ''}${undamageable.length ? `\n\nToo few parts to damage (not counted): ${undamageable.join(', ')}.` : ''}`
     );
     expect(pairs.length).toBeGreaterThan(0);
   }, 900_000);

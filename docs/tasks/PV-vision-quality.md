@@ -616,7 +616,18 @@ One task = one commit, with its Vitest test, its `contracts.md` update and its m
       No builder emits blobs yet (no person/animal rows to measure them; calage,
       region colours, Muse-written blobs, person/animal template migration next).
       Contracts + V275 scenario.
-- [ ] **PQ-T54 Real set ≥ 12 photos, judge calibration, turntable sheet** (§12.11, §9.1).
+- [x] **PQ-T54 Real set ≥ 12 photos, judge calibration, turntable sheet** (§12.11, §9.1).
+      _Built 2026-11-12:_ real set verified (15 scored + solar-panel unscorable, ≥ 12 holds);
+      stored judge answers carry the graded recipe's fingerprint (`recipeFingerprint`,
+      `judgeReplayUsable`: prompt + model + fingerprint must match, older answers re-judged
+      live); turntable sheet (`TURNTABLE_YAWS`, `turntableSheet`, `turntable-sheet.png` in
+      `make shape-report`: photo + model 0°/90°/180°/270° straight on per real row).
+      Live (Meta key): fresh re-judge of all 13 pairs (26 Wonder calls, pre-fingerprint
+      answers all stale): damaged lower in 69 % (was 77 %; car-hidden 1.83→2.00 and pump
+      1.50→1.67 graded higher damaged, house-row and water-tank tied; most intact grades
+      still 1–2) → judge stays developer-note-only. Report frozen (synth 92, real 53,
+      ΔE 10.1, every row identical). §9.1 complete: anatomy recall (PQ-T46), real set,
+      turntable, calibration, prompt-version eval (PQ-T5) all landed. Contracts + V276.
 - [ ] **PQ-T55 Scored evaluation of B vs draft A** (§12.13: willow, car, house, one appliance) and tour
       duration on Vercel and OVHcloud.
 
