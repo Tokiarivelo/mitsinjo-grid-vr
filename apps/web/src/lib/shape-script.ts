@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import {
+  AXIS,
   MAX_COMPONENTS,
   MAX_DOOR_GLAZED,
   MAX_DOOR_PANELS,
@@ -14,15 +15,22 @@ import {
   DETAIL_KINDS,
   BranchParamsSchema,
   DrapeParamsSchema,
+  FACES,
+  facePoint,
+  GeneratorParamsSchema,
   PartKindSchema,
   ScatterParamsSchema,
   SweepParamsSchema,
+  WALL_FACES,
   type GeneratorParams,
   type ObjectRecipe,
   type PartKind,
   type RecipePart,
 } from './object-shape';
 import { growPart } from './object-generators';
+// Faces live in `object-shape.ts` (shared with the `inset` growth); re-exported for callers.
+export { FACES, WALL_FACES } from './object-shape';
+export type { Face } from './object-shape';
 
 /**
  * ShapeScript (PG-T13): a model written as a list of typed ops on named components, never code.
@@ -36,10 +44,6 @@ import { growPart } from './object-generators';
 /** Component name: lower-case, digits, `_ . -`, ≤ 32 characters (`wall`, `window.2`). */
 export const ComponentIdSchema = z.string().regex(/^[a-z][a-z0-9_.-]{0,31}$/);
 export type ComponentId = z.infer<typeof ComponentIdSchema>;
-
-export const FACES = ['front', 'back', 'left', 'right', 'top'] as const;
-export type Face = (typeof FACES)[number];
-export const WALL_FACES = ['front', 'back', 'left', 'right'] as const;
 
 /** Most copies one `repeat` makes (the original included). */
 export const MAX_REPEAT = 8;
@@ -76,6 +80,13 @@ const options = {
   clip: z.number().min(0).max(HIP_CLIP_MAX).optional(),
   apex: share.optional(),
   details: z.array(DetailKindSchema).max(DETAIL_KINDS.length).optional(),
+  /**
+   * Growth on an existing component (PQ-T51 §7.3): `set {id, generator}` grows a `loft` /
+   * `inset` (or any generator) against the component's own box. The host-relative pair has no
+   * dedicated op: measuring the box from the growth would lie about a loft's span and shrink an
+   * inset's rect on every regrow, so the box stays the input (`add` for a new grown host).
+   */
+  generator: GeneratorParamsSchema.optional(),
 };
 
 /**
@@ -206,38 +217,8 @@ export interface CompileOptions {
   lockedFrom?: number;
 }
 
-const AXIS = { x: 0, y: 1, z: 2 } as const;
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 const EPS = 1e-6;
-
-/** Face geometry of a box: normal axis, its sign, and the two in-face axes (u, v). */
-function faceAxes(face: Face): { n: 0 | 1 | 2; sign: 1 | -1; u: 0 | 2; uSign: 1 | -1 } {
-  switch (face) {
-    case 'front':
-      return { n: 2, sign: 1, u: 0, uSign: 1 };
-    case 'back':
-      return { n: 2, sign: -1, u: 0, uSign: -1 };
-    case 'right':
-      return { n: 0, sign: 1, u: 2, uSign: -1 };
-    case 'left':
-      return { n: 0, sign: -1, u: 2, uSign: 1 };
-    case 'top':
-      return { n: 1, sign: 1, u: 0, uSign: 1 };
-  }
-}
-
-/** Centre (recipe units) of the point (u, v) on a face of `parent`, plus the normal axis. */
-function facePoint(parent: RecipePart, face: Face, u: number, v: number) {
-  const ax = faceAxes(face);
-  const at = [...parent.at] as [number, number, number];
-  at[ax.n] = parent.at[ax.n] + (ax.sign * parent.size[ax.n]) / 2;
-  at[ax.u] = parent.at[ax.u] + ax.uSign * (u - 0.5) * parent.size[ax.u];
-  // v runs up a wall face, front → back across the top face.
-  const vAxis = face === 'top' ? 2 : 1;
-  const vSign = face === 'top' ? -1 : 1;
-  at[vAxis] = parent.at[vAxis] + vSign * (v - 0.5) * parent.size[vAxis];
-  return { at, ax };
-}
 
 const isOpening = (p: RecipePart) => p.kind === 'window' || p.kind === 'door';
 const isWall = (p: RecipePart) => p.shape === 'box' && (p.kind === 'wall' || !!p.front);

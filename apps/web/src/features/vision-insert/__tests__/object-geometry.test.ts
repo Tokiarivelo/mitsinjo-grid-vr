@@ -815,3 +815,31 @@ describe('grown plant templates (PQ-T50 §7.3)', () => {
     }
   });
 });
+
+describe('loft and inset growth (PQ-T51 §7.3)', () => {
+  it('a six-station lofted body builds within the triangle budget', async () => {
+    const { kitToRecipe } = await import('@/lib/object-kit');
+    const recipe = kitToRecipe({
+      archetype: 'vehicle',
+      proportions: { w: 1, h: 0.6, d: 0.9 },
+      colors: { main: '#b03a2e', secondary: '#2b3440', accent: '#cfd8dc' },
+    });
+    const body = recipe.parts[0]!;
+    body.generator = {
+      op: 'loft',
+      seed: 3,
+      axis: 'x',
+      stations: [
+        { width: 0.7, height: 0.3, radius: 0 },
+        { width: 0.9, height: 0.48, radius: 0 },
+        { width: 0.9, height: 0.48, radius: 0 },
+        { width: 0.8, height: 0.4, radius: 0 },
+        { width: 0.5, height: 0.3, radius: 0.15 },
+        { width: 0.3, height: 0.2, radius: 0.1 },
+      ],
+    };
+    const mesh = recipeMesh(recipe);
+    expect(triangleCount(mesh)).toBeLessThanOrEqual(5_000);
+    expect(mesh.getAttribute('position').count).toBeGreaterThan(0);
+  });
+});

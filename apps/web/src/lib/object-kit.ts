@@ -828,7 +828,22 @@ export const TEMPLATES: Record<KitArchetype, Template> = {
     // in its own colour (invisible): the rear reads through the trunk slope and the red lenses
     // instead (PR-2.11).
     return [
-      part('box', [0, -0.06, 0], [1.0, 0.48, 0.9], c.main, { front: true, kind: 'body' }),
+      // PQ-T51: the body is a 4-station loft (tapered nose and tail), not a slab.
+      part('box', [0, -0.06, 0], [1.0, 0.48, 0.9], c.main, {
+        front: true,
+        kind: 'body',
+        generator: {
+          op: 'loft',
+          seed: 3,
+          axis: 'x',
+          stations: [
+            { width: 0.84, height: 0.42, radius: 0 },
+            { width: 0.9, height: 0.48, radius: 0 },
+            { width: 0.9, height: 0.48, radius: 0 },
+            { width: 0.76, height: 0.34, radius: 0 },
+          ],
+        },
+      }),
       // Kindless on purpose (PQ-T46): a `window` box would expand into a framed opening
       // (`layoutOpenings`), but the glasshouse band is glazing, not a punched window.
       part('box', [-0.03, 0.32, 0], [0.52, 0.36, 0.82], c.accent),

@@ -123,6 +123,16 @@ export const MAX_TIMBER = 12;
 /** Most glass panes across or down one window (PG-T8). */
 export const MAX_PANES = 6;
 export type PartKind = z.infer<typeof PartKindSchema>;
+/**
+ * Faces of a box part, shared by the `attach` / `cut` ShapeScript ops and the §7.3 `inset`
+ * generator (PQ-T51): u runs left → right seen from outside, v runs ground → top (front → back
+ * on the top face). Moved here from `shape-script.ts` so the growth code uses the same mapping.
+ */
+export const FACES = ['front', 'back', 'left', 'right', 'top'] as const;
+export type Face = (typeof FACES)[number];
+export const WALL_FACES = ['front', 'back', 'left', 'right'] as const;
+/** Axis name → tuple index, shared by `repeat` and the `loft` growth. */
+export const AXIS = { x: 0, y: 1, z: 2 } as const;
 /** A part may stick out of the object box by this much (handles, feet) before the recipe counts as poor. */
 export const RECIPE_BOUND = 0.6;
 /**
@@ -200,9 +210,12 @@ export const DimStatusSchema = z.enum(['measured', 'estimated', 'inferred', 'unk
 export type DimStatus = z.infer<typeof DimStatusSchema>;
 
 /**
- * Organic generator params (PQ-T50 §7.3): seeded, bounded; same input, same parts. A part that
- * carries one expands through `expandGenerators`, identically in the viewer and the judge render;
- * its own box bounds the growth (fit + outline read it). Positions are absolute recipe units.
+ * Generator params (§7.3, PQ-T50/51): seeded, bounded; same input, same parts. A part that
+ * carries one expands through `expandGenerators`, identically in the viewer and the judge render.
+ * `sweep` / `branch` / `scatter` / `drape` place their growth in absolute recipe units and the
+ * host only bounds it; `loft` spans the host's extent and `inset` sits on a host face, so their
+ * params are host-relative. `inset` adds its slab to the host (a wall keeps rendering); every
+ * other generator replaces the host with its growth.
  */
 const genCoord = z.number().min(-RECIPE_BOUND).max(RECIPE_BOUND);
 const genVec = z.tuple([genCoord, genCoord, genCoord]);
@@ -282,17 +295,61 @@ export const DrapeParamsSchema = z.object({
   color: genColor,
   material: RecipeMaterialSchema.optional(),
 });
+/**
+ * One `loft` cross section (PQ-T51 §7.3): width and height in recipe units, corner roundness in
+ * recipe units (0 = box; ≥ 0.4 of the smaller side = elliptical cylinder between the stations).
+ */
+export const LoftStationSchema = z.object({
+  width: extent,
+  height: extent,
+  radius: z.number().min(0).max(0.5),
+});
+/** Stations of one `loft`: 3–6, the spec table's count. */
+export const LOFT_STATIONS_MIN = 3;
+export const LOFT_STATIONS_MAX = 6;
+export const LoftParamsSchema = z.object({
+  op: z.literal('loft'),
+  seed: genSeed,
+  /** Loft axis; the stations spread evenly along the host's extent on it (first = low end). */
+  axis: z.enum(['x', 'y', 'z']),
+  /** 3–6 cross sections; each pair grows one box or cylinder segment between them. */
+  stations: z.array(LoftStationSchema).min(LOFT_STATIONS_MIN).max(LOFT_STATIONS_MAX),
+  color: genColor,
+  material: RecipeMaterialSchema.optional(),
+});
+export const InsetParamsSchema = z.object({
+  op: z.literal('inset'),
+  seed: genSeed,
+  /** Host face carrying the pocket. */
+  face: z.enum(FACES),
+  /** Centre of the rect, shares of the face (clamped to fit). */
+  u: z.number().min(0).max(1),
+  v: z.number().min(0).max(1),
+  /** Size of the rect, shares of the face (under 2 % is noise in the judge render). */
+  w: z.number().min(0.02).max(1),
+  h: z.number().min(0.02).max(1),
+  /** Object units out of the face: < 0 hollow (dark recess), 0 flush skin, > 0 relief. */
+  depth: z.number().min(-0.3).max(0.05),
+  color: genColor,
+  material: RecipeMaterialSchema.optional(),
+  /** What the pocket is (a grille on a body): stamped on the slab, the host keeps its kind. */
+  kind: PartKindSchema.optional(),
+});
 export const GeneratorParamsSchema = z.discriminatedUnion('op', [
   SweepParamsSchema,
   BranchParamsSchema,
   ScatterParamsSchema,
   DrapeParamsSchema,
+  LoftParamsSchema,
+  InsetParamsSchema,
 ]);
 export type GeneratorParams = z.infer<typeof GeneratorParamsSchema>;
 export type SweepParams = z.infer<typeof SweepParamsSchema>;
 export type BranchParams = z.infer<typeof BranchParamsSchema>;
 export type ScatterParams = z.infer<typeof ScatterParamsSchema>;
 export type DrapeParams = z.infer<typeof DrapeParamsSchema>;
+export type LoftParams = z.infer<typeof LoftParamsSchema>;
+export type InsetParams = z.infer<typeof InsetParamsSchema>;
 
 export const RecipePartSchema = z
   .object({
@@ -363,9 +420,9 @@ export const RecipePartSchema = z
     /** Detail kinds this part carries (PQ-T20); `rim` here equals `rim: true` on a wheel. */
     details: z.array(DetailKindSchema).max(DETAIL_KINDS.length).optional(),
     /**
-     * Organic generator (PQ-T50 §7.3): grown detail (trunk, limbs, leaves, strands) expanded by
-     * `expandGenerators`, identically in the viewer and the judge render. The part's own box
-     * bounds the growth; expansion stays inside it, clamped.
+     * Generator (§7.3, PQ-T50/51): grown detail expanded by `expandGenerators`, identically in
+     * the viewer and the judge render. The part's own box bounds the growth; expansion stays
+     * inside it, clamped. `inset` keeps its host (wall + pocket); the rest replace it.
      */
     generator: GeneratorParamsSchema.optional(),
   })
@@ -386,6 +443,38 @@ export const RecipePartSchema = z
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'profile y must not fall' });
   });
 export type RecipePart = z.infer<typeof RecipePartSchema>;
+
+/** Face geometry of a box: normal axis, its sign, and the in-face u axis. */
+export function faceAxes(face: Face): { n: 0 | 1 | 2; sign: 1 | -1; u: 0 | 2; uSign: 1 | -1 } {
+  switch (face) {
+    case 'front':
+      return { n: 2, sign: 1, u: 0, uSign: 1 };
+    case 'back':
+      return { n: 2, sign: -1, u: 0, uSign: -1 };
+    case 'right':
+      return { n: 0, sign: 1, u: 2, uSign: -1 };
+    case 'left':
+      return { n: 0, sign: -1, u: 2, uSign: 1 };
+    case 'top':
+      return { n: 1, sign: 1, u: 0, uSign: 1 };
+  }
+}
+
+/**
+ * Centre (recipe units) of the point (u, v) on a face of `parent`, plus the normal axis and the
+ * v axis (up a wall face, front → back across the top face).
+ */
+export function facePoint(parent: RecipePart, face: Face, u: number, v: number) {
+  const ax = faceAxes(face);
+  const at = [...parent.at] as [number, number, number];
+  at[ax.n] = parent.at[ax.n] + (ax.sign * parent.size[ax.n]) / 2;
+  at[ax.u] = parent.at[ax.u] + ax.uSign * (u - 0.5) * parent.size[ax.u];
+  // v runs up a wall face, front → back across the top face.
+  const vAxis = face === 'top' ? 2 : 1;
+  const vSign = face === 'top' ? -1 : 1;
+  at[vAxis] = parent.at[vAxis] + vSign * (v - 0.5) * parent.size[vAxis];
+  return { at, ax, vAxis: vAxis as 1 | 2, vSign: vSign as 1 | -1 };
+}
 
 export const ObjectRecipeSchema = z.object({
   /** Real proportions of the object, largest side = 1. */

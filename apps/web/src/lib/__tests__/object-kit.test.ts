@@ -551,3 +551,33 @@ describe('template part kinds (PQ-T46)', () => {
     expect(kinds.filter((k) => k === 'door').length).toBeGreaterThanOrEqual(1);
   });
 });
+
+describe('lofted vehicle template (PQ-T51 §7.3)', () => {
+  it('the classic car body is a 4-station loft, tapered at nose and tail', () => {
+    const recipe = kitToRecipe(kit('vehicle'));
+    expect(recipe.parts).toHaveLength(12);
+    const body = recipe.parts[0]!;
+    expect(body.generator?.op).toBe('loft');
+    if (body.generator?.op === 'loft') {
+      expect(body.generator.axis).toBe('x');
+      expect(body.generator.stations).toHaveLength(4);
+      const mid = body.generator.stations[1]!;
+      const nose = body.generator.stations[3]!;
+      expect(mid.width).toBeGreaterThan(nose.width);
+      expect(mid.height).toBeGreaterThan(nose.height);
+    }
+    expect(recipe.parts.slice(1).every((p) => !p.generator)).toBe(true);
+    expect(ObjectRecipeSchema.safeParse(recipe).success).toBe(true);
+  });
+
+  it('van, pickup and two-wheel branches stay plain (unmeasured, no golden)', () => {
+    for (const details of [
+      { subtype: 'van' },
+      { subtype: 'pickup' },
+      { subtype: 'motorbike', wheels: 2 },
+    ] as const) {
+      const recipe = kitToRecipe(kit('vehicle', details));
+      expect(recipe.parts.every((p) => !p.generator)).toBe(true);
+    }
+  });
+});

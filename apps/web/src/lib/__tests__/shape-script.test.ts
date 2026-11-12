@@ -469,3 +469,79 @@ describe('generator ops (PQ-T50 §7.3)', () => {
     expect(dupe.dropped).toEqual([{ index: 1, reason: 'duplicate_id', id: 'trunk' }]);
   });
 });
+
+describe('set with a generator (PQ-T51 §7.3)', () => {
+  const body: RecipePart = {
+    shape: 'box',
+    at: [0, -0.06, 0],
+    size: [1, 0.48, 0.9],
+    color: '#b03a2e',
+    kind: 'body',
+    front: true,
+  };
+
+  it('grows a loft against the component box, which the expansion replaces', () => {
+    const r = compileScript(
+      script(
+        { op: 'add', id: 'body', part: body },
+        {
+          op: 'set',
+          id: 'body',
+          generator: {
+            op: 'loft',
+            seed: 3,
+            axis: 'x',
+            stations: [
+              { width: 0.7, height: 0.3, radius: 0 },
+              { width: 0.9, height: 0.48, radius: 0 },
+              { width: 0.8, height: 0.4, radius: 0 },
+            ],
+          },
+        }
+      )
+    );
+    expect(r.dropped).toEqual([]);
+    const grown = partOf(r, 'body')!;
+    expect(grown.generator?.op).toBe('loft');
+    expect(grown.at).toEqual(body.at);
+    expect(ObjectRecipeSchema.safeParse(r.recipe).success).toBe(true);
+  });
+
+  it('grows an inset against the wall, kept beside it at expansion', async () => {
+    const { expandGenerators } = await import('../object-generators');
+    const r = compileScript(
+      script(
+        { op: 'add', id: 'wall', part: wall },
+        {
+          op: 'set',
+          id: 'wall',
+          generator: {
+            op: 'inset',
+            seed: 11,
+            face: 'front',
+            u: 0.5,
+            v: 0.5,
+            w: 0.3,
+            h: 0.4,
+            depth: -0.04,
+          },
+        }
+      )
+    );
+    expect(r.dropped).toEqual([]);
+    const { parts } = expandGenerators(r.recipe!.parts);
+    expect(parts).toHaveLength(2);
+    expect(parts[1]!.color).not.toBe(wall.color);
+  });
+
+  it('bad generator params drop the set at the op gate', () => {
+    const r = compileScript(
+      script(
+        { op: 'add', id: 'body', part: body },
+        { op: 'set', id: 'body', generator: { op: 'loft', seed: 3, axis: 'x', stations: [] } }
+      )
+    );
+    expect(r.dropped).toEqual([{ index: 1, reason: 'invalid', id: 'body' }]);
+    expect(partOf(r, 'body')).toEqual(body);
+  });
+});

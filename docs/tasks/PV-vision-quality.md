@@ -566,7 +566,25 @@ One task = one commit, with its Vitest test, its `contracts.md` update and its m
       volumes, measured trunks, Muse branch params, the plant card, prompt ops and
       palm/conifer/willow need live proof. Scatter ≤ 60 boxes (2-tri cards need `plane`).
       Contracts + V271.
-- [ ] **PQ-T51 `loft` for vehicles, `inset` for openings** (§12.8, §7.3).
+- [x] **PQ-T51 `loft` for vehicles, `inset` for openings** (§12.8, §7.3).
+      _Built 2026-11-12:_ `LoftParams` (axis + 3–6 stations w/h/radius) +
+      `InsetParams` (face/u/v/w/h/depth + colour/material/kind) in the generator
+      union, `loftBody` (segments average each station pair, round → elliptical
+      cylinder, 6 % fuse overlap) + `insetPocket` (one slab, hollows darken the
+      host 0.55, reliefs stand proud, rect clamped; additive: host renders too),
+      `FACES`/`facePoint`/`AXIS` moved to `object-shape.ts` (shared with
+      `attach`/`cut`, re-exported), `set {…, generator}` (no dedicated ops: a
+      measured-from-growth box would lie about a loft's span and shrink an
+      inset's rect on every regrow; Spark untold, JSON schema unchanged),
+      classic-car body lofted live (tapered nose/tail). Synth car 93→92 (-1 in
+      tolerance, IntF1 0.81→0.84), synth mean 93→92, real 53 + ΔE 10.1 frozen
+      identical. Grille inset tried and reverted (neutral 93, edge-on to the
+      side golden: needs live ¾ proof); van/pickup/bike branches, house
+      reveals (need wall splits), Muse-chosen stations and route-B
+      `api.loft/api.inset` (writer prompt v2 + eval) next.
+      Live (Meta key): car-side re-captured with the lofted template 54
+      (frozen 52, box-body live 53 in PQ-T46): the taper gains on real data
+      too. Contracts + V273.
 - [ ] **PQ-T52 Short question per part, anatomy critic, three-view sheet** (§12.9, E9–E11).
 - [ ] **PQ-T53 SDF for smooth shapes** (§12.10, §8), after measuring the triangle budget.
 - [ ] **PQ-T54 Real set ≥ 12 photos, judge calibration, turntable sheet** (§12.11, §9.1).
