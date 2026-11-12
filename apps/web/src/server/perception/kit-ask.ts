@@ -1,11 +1,11 @@
 import { KIT_ARCHETYPES, type KitArchetype, type ObjectKit } from '@/lib/object-kit';
 
 /**
- * Ask instead of guessing (PQ-T41): when the model doubts the family, the operator picks between the two
- * best ones. Doubt = archetype confidence under `ASK_CONFIDENCE_MAX` (PQ-T12) or two samples that named
- * different families (PQ-T18). Pure.
+ * Ask instead of guessing (PQ-T41, gate raised to 0.82 by PQ-T47 §4.2): when the model doubts the
+ * family, the operator picks between the two best ones. Doubt = archetype confidence under
+ * `ASK_CONFIDENCE_MAX` (PQ-T12) or two samples that named different families (PQ-T18). Pure.
  */
-export const ASK_CONFIDENCE_MAX = 0.5;
+export const ASK_CONFIDENCE_MAX = 0.82;
 
 export type FamilyPair = [KitArchetype, KitArchetype];
 

@@ -3,6 +3,7 @@ import {
   gridBoxToNorm,
   MAX_DETECTIONS,
   parseDetections,
+  parseImageType,
   toApplianceCategory,
   toSceneryType,
 } from '../detect';
@@ -152,5 +153,22 @@ describe('parseDetections (PV-T4)', () => {
       { x: 0.1, y: 0.2, w: 0.2, h: 0.2 },
       { x: 0.4, y: 0.3, w: 0.3, h: 0.25 },
     ]);
+  });
+
+  it('ignores image_type: detections read the same with or without it', () => {
+    const objects = [{ label: 'Fridge', category: 'fridge', bbox: [100, 200, 300, 900] }];
+    expect(parseDetections(JSON.stringify({ objects, image_type: 'drawing' }))).toEqual(
+      parseDetections(reply(objects))
+    );
+  });
+});
+
+describe('parseImageType (PQ-T47 E2)', () => {
+  it('reads drawing, defaults to photo, never throws', () => {
+    expect(parseImageType(JSON.stringify({ objects: [], image_type: 'drawing' }))).toBe('drawing');
+    expect(parseImageType(JSON.stringify({ objects: [], image_type: 'photo' }))).toBe('photo');
+    expect(parseImageType(JSON.stringify({ objects: [] }))).toBe('photo');
+    expect(parseImageType(JSON.stringify({ objects: [], image_type: 'plan' }))).toBe('photo');
+    expect(parseImageType('not json')).toBe('photo');
   });
 });

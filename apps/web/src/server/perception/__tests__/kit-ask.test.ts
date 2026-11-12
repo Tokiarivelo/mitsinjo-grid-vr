@@ -6,14 +6,15 @@ const kit = (archetype: 'house' | 'other' | 'vehicle', archetypeConf?: number) =
   ...(archetypeConf !== undefined ? { confidence: { archetype: archetypeConf } } : {}),
 });
 
-describe('askFamilies (PQ-T41)', () => {
-  it('asks under 0.5 confidence, the kit family first', () => {
+describe('askFamilies (PQ-T41, gate 0.82 PQ-T47 §4.2)', () => {
+  it('asks under 0.82 confidence, the kit family first', () => {
     expect(askFamilies(kit('house', 0.3), 'vehicle')).toEqual(['house', 'vehicle']);
+    expect(askFamilies(kit('house', 0.81), 'vehicle')).toEqual(['house', 'vehicle']);
   });
   it('does not ask when confident, or without confidence and no split', () => {
-    expect(askFamilies(kit('house', 0.8), 'vehicle')).toBeNull();
+    expect(askFamilies(kit('house', 0.82), 'vehicle')).toBeNull();
     expect(askFamilies(kit('house'), 'vehicle')).toBeNull();
-    expect(askFamilies(kit('house', 0.5), 'vehicle')).toBeNull();
+    expect(askFamilies(kit('house', 0.9), 'vehicle')).toBeNull();
   });
   it('a split between samples asks even when confident', () => {
     expect(askFamilies(kit('house', 0.9), 'vehicle', { split: true })).toEqual([

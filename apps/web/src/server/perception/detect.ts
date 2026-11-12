@@ -23,12 +23,13 @@ export const DETECT_SYSTEM_PROMPT = [
   'kind "appliance" with a category from the enum (street lights and lamp posts are "lamp", other if no category fits),',
   'or kind "scenery" for things without a plug (buildings, vehicles, trees, plants, people, animals, water) with a scenery type;',
   'and bbox [x_min, y_min, x_max, y_max] on a 0-1000 grid, origin top-left.',
+  'Also answer image_type: "photo" for a photo, "drawing" for a drawing, plan, elevation or logo.',
   'Omit what you cannot see. Never give watts, kW or any energy value. Nothing visible → empty list.',
 ].join(' ');
 
 /** User turn sent with the photo: must ask for every object, not only appliances (the model follows it over the system prompt). */
 export const DETECT_QUESTION =
-  'List every notable object you can see on this photo with strong recognition: electrical appliances first, then buildings, vehicles, trees, plants, people, animals and water.';
+  'List every notable object you can see on this photo with strong recognition: electrical appliances first, then buildings, vehicles, trees, plants, people, animals and water. Also say whether the image is a photo or a drawing (image_type).';
 
 export const DETECT_JSON_SCHEMA = {
   name: 'ApplianceDetections',
@@ -52,12 +53,14 @@ export const DETECT_JSON_SCHEMA = {
           required: ['label', 'kind', 'bbox'],
         },
       },
+      /** E2 image type (PQ-T47): drawings take the 2D path. Optional: old answers still parse. */
+      image_type: { type: 'string', enum: ['photo', 'drawing'] },
     },
     required: ['objects'],
   },
 };
 
-const ReplySchema = z.object({ objects: z.array(z.unknown()) });
+const ReplySchema = z.object({ objects: z.array(z.unknown()), image_type: z.string().optional() });
 
 const normKey = (raw: string) =>
   raw
@@ -370,4 +373,18 @@ export function parseDetections(content: string): ApplianceDetection[] {
   return [...appliances, ...scenery]
     .slice(0, MAX_DETECTIONS)
     .map((d, i) => ({ id: `det-${i + 1}`, ...d }));
+}
+
+/**
+ * E2 image type (PQ-T47): what the detection call said the image is. Lenient: anything but an
+ * explicit `"drawing"` is a photo, so old answers and region calls (no such question) still read.
+ * Never throws.
+ */
+export function parseImageType(content: string): 'photo' | 'drawing' {
+  try {
+    const json = JSON.parse(stripFence(content)) as { image_type?: unknown };
+    return json?.image_type === 'drawing' ? 'drawing' : 'photo';
+  } catch {
+    return 'photo';
+  }
 }

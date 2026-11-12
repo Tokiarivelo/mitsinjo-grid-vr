@@ -149,5 +149,7 @@ export type CodeResult = z.infer<typeof CodeResultSchema>;
 
 export const DetectionResultSchema = PerceptionSourceSchema.extend({
   detections: z.array(ApplianceDetectionSchema),
+  /** E2 image type (PQ-T47): what the detection call said the image is. */
+  imageType: z.enum(['photo', 'drawing']).optional(),
 });
 export type DetectionResult = z.infer<typeof DetectionResultSchema>;

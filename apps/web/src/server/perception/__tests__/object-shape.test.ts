@@ -739,6 +739,26 @@ describe('runObjectShape asks about the family (PQ-T41)', () => {
   });
 });
 
+describe('runObjectShape records the representation family (PQ-T47 §4.1)', () => {
+  const answer = (archetype: 'cabinet' | 'person'): ShapeResult => {
+    const kit: ObjectKit = {
+      archetype,
+      proportions: { w: 1, h: 0.5, d: 0.4 },
+      colors: { main: '#223344', secondary: '#223344', accent: '#445566' },
+    };
+    return meta(kitToRecipe(kit), { kit });
+  };
+
+  it('cabinet → library, person → sdf', async () => {
+    const lib = await runObjectShape(client(answer('cabinet')), await photo(), 'data:full', target);
+    expect(lib.mode).toBe('recipe');
+    expect(lib.family).toBe('library');
+    const sdf = await runObjectShape(client(answer('person')), await photo(), 'data:full', target);
+    expect(sdf.mode).toBe('recipe');
+    expect(sdf.family).toBe('sdf');
+  });
+});
+
 describe('runObjectShape route B (PQ-T45)', () => {
   const guessed: ObjectKit = {
     archetype: 'house',
@@ -777,14 +797,14 @@ describe('runObjectShape route B (PQ-T45)', () => {
       .png()
       .toBuffer();
     const facadeUrl = `data:image/png;base64,${buffer.toString('base64')}`;
-    const writeBuildCode = vi.fn(async () => ({
+    const writeBuildCode = vi.fn(async (_imageUrl: string, _question: string) => ({
       code: code === 'absent' ? null : code,
-      source: 'meta',
+      source: 'meta' as const,
       model: 'muse-wonder-1.0',
     }));
     const p = {
       ...client(meta(kitToRecipe(guessed), { kit: guessed })),
-      segmentImage: vi.fn(async (url: string, concept: string) => seg(concept)),
+      segmentImage: vi.fn(async (_url: string, concept: string) => seg(concept)),
       ...(code === 'absent' ? {} : { writeBuildCode }),
     };
     const timings: string[] = [];
@@ -815,8 +835,9 @@ describe('runObjectShape route B (PQ-T45)', () => {
     // Losing code: the staged facade draft stands, no code stored.
     expect(out.recipe?.source).toBe('facade');
     expect(seen).toBeUndefined();
-    expect(p.writeBuildCode).toHaveBeenCalled();
-    const [image, question] = p.writeBuildCode.mock.calls[0]!;
+    const writer = p.writeBuildCode!;
+    expect(writer).toHaveBeenCalled();
+    const [image, question] = writer.mock.calls[0]!;
     expect(image).toMatch(/^data:image\/jpeg;base64,/);
     expect(question).toMatch(/Draft: \{/);
     expect(question).toMatch(/Measured: /);
