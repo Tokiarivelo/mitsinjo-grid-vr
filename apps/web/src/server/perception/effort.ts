@@ -14,6 +14,7 @@ export const CALL_EFFORT: Readonly<Record<string, ReasoningEffort>> = {
   judgeShape: 'high',
   checkViews: 'high',
   proposeShapeOps: 'high',
+  writeBuildCode: 'high',
 };
 
 export const DEFAULT_EFFORT: ReasoningEffort = 'high';

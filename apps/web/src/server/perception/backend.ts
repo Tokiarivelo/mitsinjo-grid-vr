@@ -4,6 +4,7 @@ import type { SceneryType } from '@/lib/vision';
 import type { UsageSample } from '@/server/spend';
 import type { StageSheet } from './shape-script-prompt';
 import type {
+  CodeResult,
   CriticResult,
   JudgeResult,
   ViewsCheckResult,
@@ -118,6 +119,16 @@ export interface PerceptionBackend {
     sheet?: StageSheet,
     opts?: ShapeOpsOptions
   ): Promise<PerceptionCall<ShapeOpsResult>>;
+  /**
+   * Sandboxed construction code, route B (PQ-T45, §8bis): `imageUrl` is photo | current
+   * render, `question` the draft, its score and the measures. One Wonder call; null code when
+   * unusable. Optional: no route B without it.
+   */
+  writeBuildCode?(
+    imageUrl: string,
+    question: string,
+    signal?: AbortSignal
+  ): Promise<PerceptionCall<CodeResult>>;
 }
 
 /** Options of one stage call. */

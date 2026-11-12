@@ -280,11 +280,12 @@ export const ObjectRecipeSchema = z.object({
   parts: z.array(RecipePartSchema).min(1).max(MAX_COMPONENTS),
   /**
    * Where the parts came from: a kit template (`kit`, the default when absent), the LLM-imagined
-   * part list (`free`, archetypes without a real template) or the measured 2D elevations
+   * part list (`free`, archetypes without a real template), the measured 2D elevations
    * (`facade`: validated front + Muse Image side, SAM boxes on both; `views`: any other object,
-   * hull of the validated 2D view and its drawn side, PV-H).
+   * hull of the validated 2D view and its drawn side, PV-H) or Wonder-written construction code
+   * run in the §8bis sandbox (`code`, PQ-T45; parts stamped `estimated`).
    */
-  source: z.enum(['kit', 'free', 'facade', 'views']).optional(),
+  source: z.enum(['kit', 'free', 'facade', 'views', 'code']).optional(),
   /** Measured turn of the front away from the camera (PF-T5), radians, + = right end farther. */
   yaw: z.number().min(-MAX_YAW).max(MAX_YAW).optional(),
   /** One tileable 64 px photo swatch per material (PR-1.5), base64 data URL (≤ 8 kB each). */
@@ -483,7 +484,8 @@ export const ShapeStepEventSchema = z.object({ step: z.enum(SHAPE_STEPS) });
  * on-demand outline (overlaps `kit`) · `kit` = Spark kit + vote · `views` = elevations / views
  * measures and the AI check · `masks` = part + facade masks · `fit` = measures, silhouette fit,
  * reshapes and graph · `stages` = staged loop of the first answer · `score` = final scoring ·
- * `critic` = Spark critic round(s). Skipped phases emit nothing.
+ * `critic` = Spark critic round(s) · `code` = route-B construction-code rounds (PQ-T45).
+ * Skipped phases emit nothing.
  */
 export const SHAPE_TIMING_PHASES = [
   'crop',
@@ -495,6 +497,7 @@ export const SHAPE_TIMING_PHASES = [
   'stages',
   'score',
   'critic',
+  'code',
 ] as const;
 export type ShapeTimingPhase = (typeof SHAPE_TIMING_PHASES)[number];
 export const ShapeTimingEventSchema = z.object({

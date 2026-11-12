@@ -738,3 +738,114 @@ describe('runObjectShape asks about the family (PQ-T41)', () => {
     expect(out.ask).toBeUndefined();
   });
 });
+
+describe('runObjectShape route B (PQ-T45)', () => {
+  const guessed: ObjectKit = {
+    archetype: 'house',
+    proportions: { w: 1, h: 0.5, d: 0.4 },
+    colors: { main: '#c8aa78', secondary: '#6e5f55', accent: '#1e232d' },
+    details: { windows: 2 },
+  };
+  const box = (x1: number, y1: number, x2: number, y2: number) => ({
+    box: { x1, y1, x2, y2 },
+    confidence: 0.9,
+  });
+  /** Facade drawing 200×100: house, roof and wall bands, 2 windows, 1 door. */
+  const MASKS: Record<string, Array<ReturnType<typeof box>>> = {
+    house: [box(20, 10, 180, 95)],
+    roof: [box(15, 10, 185, 40)],
+    wall: [box(20, 40, 180, 95)],
+    window: [box(40, 55, 60, 75), box(120, 55, 140, 75)],
+    door: [box(85, 60, 105, 95)],
+  };
+  const seg = (concept: string) => ({
+    source: 'meta' as const,
+    model: 'sam-3.1',
+    concept,
+    imageWidth: 200,
+    imageHeight: 100,
+    instances: MASKS[concept] ?? [],
+    count: (MASKS[concept] ?? []).length,
+    boxCoverage: 0.5,
+  });
+  const LOSING_CODE = `return [{ shape: 'box', at: [0, 0, 0], size: [0.1, 0.1, 0.1], color: '#ffffff' }];`;
+
+  async function facadeRun(code: string | null | 'absent') {
+    const buffer = await sharp({
+      create: { width: 200, height: 100, channels: 3, background: { r: 200, g: 200, b: 200 } },
+    })
+      .png()
+      .toBuffer();
+    const facadeUrl = `data:image/png;base64,${buffer.toString('base64')}`;
+    const writeBuildCode = vi.fn(async () => ({
+      code: code === 'absent' ? null : code,
+      source: 'meta',
+      model: 'muse-wonder-1.0',
+    }));
+    const p = {
+      ...client(meta(kitToRecipe(guessed), { kit: guessed })),
+      segmentImage: vi.fn(async (url: string, concept: string) => seg(concept)),
+      ...(code === 'absent' ? {} : { writeBuildCode }),
+    };
+    const timings: string[] = [];
+    let seen: unknown;
+    const out = await runObjectShape(
+      p,
+      await street(),
+      'data:full',
+      {
+        id: 'det-house',
+        label: 'cottage',
+        category: 'other',
+        scenery: 'building',
+        box: { x: 0, y: 0, w: 1, h: 1 },
+        facadeUrl,
+      },
+      {
+        onTiming: (phase) => timings.push(phase),
+        onCode: (c) => (seen = c),
+      }
+    );
+    return { out, p, timings, seen };
+  }
+
+  it('runs route B on the facade path: writer called, code phase timed', async () => {
+    const { out, p, timings, seen } = await facadeRun(LOSING_CODE);
+    expect(out.mode).toBe('recipe');
+    // Losing code: the staged facade draft stands, no code stored.
+    expect(out.recipe?.source).toBe('facade');
+    expect(seen).toBeUndefined();
+    expect(p.writeBuildCode).toHaveBeenCalled();
+    const [image, question] = p.writeBuildCode.mock.calls[0]!;
+    expect(image).toMatch(/^data:image\/jpeg;base64,/);
+    expect(question).toMatch(/Draft: \{/);
+    expect(question).toMatch(/Measured: /);
+    expect(question).toMatch(/eave /);
+    expect(timings).toContain('code');
+    expect(timings).toContain('views');
+  });
+
+  it('broken code never breaks the run: the draft stands', async () => {
+    const { out, seen } = await facadeRun('const x = ;');
+    expect(out.mode).toBe('recipe');
+    expect(out.recipe?.source).toBe('facade');
+    expect(seen).toBeUndefined();
+  });
+
+  it('null answers are failed rounds, still timed under `code`', async () => {
+    const { out, p, timings, seen } = await facadeRun(null);
+    expect(out.mode).toBe('recipe');
+    expect(out.recipe?.source).toBe('facade');
+    expect(p.writeBuildCode).toHaveBeenCalled();
+    expect(seen).toBeUndefined();
+    expect(timings).toContain('code');
+  });
+
+  it('no writer → route B skipped, no code phase', async () => {
+    const { out, timings, seen } = await facadeRun('absent');
+    expect(out.mode).toBe('recipe');
+    expect(out.recipe?.source).toBe('facade');
+    expect(seen).toBeUndefined();
+    expect(timings).not.toContain('code');
+  });
+});

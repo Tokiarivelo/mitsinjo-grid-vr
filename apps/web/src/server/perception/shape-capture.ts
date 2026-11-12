@@ -12,6 +12,7 @@ import {
   type PartMask,
 } from '@/lib/object-shape';
 import type { PerceptionClient } from './client';
+import { CODE_MAX_BYTES } from './code-sandbox';
 import { pathToRings } from './mask-outline';
 import { runObjectShape } from './object-shape';
 import { boxUnionCoverage } from './parse-sam';
@@ -22,6 +23,20 @@ import { mergeKitPatch } from './shape';
 import type { CropRect } from './shape-crop';
 import { criticImage, requestPatch } from './spark-critic';
 import { photoSize } from './vision-request';
+
+/**
+ * The winning route-B construction code (PQ-T45, §8bis): replayed offline through the sandbox
+ * with the same seed, no Meta call. Absent when no round beat the draft (or route B skipped).
+ */
+export const ShapeCodeSchema = z.object({
+  /** The `build()` body. */
+  text: z.string().min(1).max(CODE_MAX_BYTES),
+  /** Seed the code ran with (`codeSeedFor` of the target id). */
+  seed: z.number().int(),
+  /** Writer prompt version that produced `text` (PQ-T5). */
+  promptVersion: z.number().int().min(1),
+});
+export type ShapeCode = z.infer<typeof ShapeCodeSchema>;
 
 /** One live 3D run, frozen for offline replay (PR-0.4): no API cost per loop iteration. */
 export const ShapeCaptureSchema = z.object({
@@ -55,6 +70,8 @@ export const ShapeCaptureSchema = z.object({
   cropTarget: z.object({ box: ShapeTargetSchema.shape.box, outline: z.string().optional() }),
   /** Per-concept part masks (PR-2.5 fills this; absent until then). */
   partMasks: z.array(z.unknown()).optional(),
+  /** Winning route-B construction code (PQ-T45); absent when the draft won. */
+  code: ShapeCodeSchema.optional(),
 });
 export type ShapeCapture = z.infer<typeof ShapeCaptureSchema>;
 
@@ -204,6 +221,10 @@ export async function criticReplay(
   if (!capture.recipe) throw new Error(`capture ${id}: no recipe to replay`);
   if (capture.recipe.source === 'free')
     throw new Error(`capture ${id}: free recipe, no kit template to patch`);
+  // Route-B recipes rebuild from stored code, not from the kit: patching the kit would replay
+  // the draft the code already beat. Replay `code` through the sandbox instead (offline).
+  if (capture.recipe.source === 'code')
+    throw new Error(`capture ${id}: code recipe, replay its code, no kit template to patch`);
   const target = ShapeTargetSchema.parse({
     id: capture.target.id,
     label: capture.target.label,

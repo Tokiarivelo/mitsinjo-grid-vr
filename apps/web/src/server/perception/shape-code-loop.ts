@@ -1,0 +1,183 @@
+import 'server-only';
+
+import type { ObjectRecipe } from '@/lib/object-shape';
+import { buildCodeQuestion, CODE_PROMPT_VERSION } from './shape-code';
+import { runSandboxedCode, type CodeParams } from './code-sandbox';
+
+/**
+ * Route-B refinement loop (PQ-T45, §8bis): write → run → render → compare → keep only gains.
+ * The draft (route A) shows first; the code model replaces it round by round, never worse.
+ * Scores run 0–1 (the wiring normalises its yardstick); the loop itself never sees a photo.
+ */
+
+/** Gain that keeps a round (§8bis): +0.005 on the 0–1 yardstick. */
+export const CODE_MIN_GAIN = 0.005;
+/** Rounds without gain before the loop stops (§8bis). */
+export const CODE_STALLS_MAX = 3;
+/** Most Wonder rounds per object (spend safety; stalls stop it earlier). */
+export const CODE_ROUNDS_MAX = 5;
+
+export interface CodeRound {
+  round: number;
+  /** Bytes of the tried body, 0 when the writer answered nothing usable. */
+  bytes: number;
+  /** Yardstick of the tried model, null when it failed to run or score. */
+  score: number | null;
+  kept: boolean;
+  dropped: number;
+  reason?: string;
+}
+
+export interface CodeLoopResult {
+  recipe: ObjectRecipe;
+  /** Winning body, null when no round beat the draft. */
+  code: string | null;
+  promptVersion: number;
+  seed: number;
+  rounds: CodeRound[];
+}
+
+export interface CodeLoopInput {
+  label: string;
+  /** Route-A draft: the floor, shown before any round lands. */
+  draft: ObjectRecipe;
+  /** Draft's yardstick (0–1). */
+  baseScore: number;
+  /** Params the guest rebuilds from (its proportions win). */
+  params: CodeParams;
+  /** `name value` measure lines the code must cite. */
+  measuresText?: string;
+  /** Draft detail lines (`recall 0.7 · …`), static for the loop. */
+  detailText?: string;
+  /** Sheet the writer sees beside its question (photo | current render). */
+  sheet: (recipe: ObjectRecipe) => Promise<string>;
+  /** One Wonder call; null code = failed round (counts as no gain, never throws the loop). */
+  writeCode: (
+    imageUrl: string,
+    question: string,
+    signal?: AbortSignal
+  ) => Promise<{ code: string | null } | null>;
+  /** Yardstick of one candidate (0–1), null when unscorable. */
+  score: (recipe: ObjectRecipe) => Promise<number | null>;
+  /** Sandbox execution (default: the §8bis QuickJS runner; tests inject fakes). */
+  execute?: typeof runSandboxedCode;
+  roundsMax?: number;
+  minGain?: number;
+  signal?: AbortSignal;
+}
+
+/** Deterministic seed of one object (FNV-1a of its id): stored code replays bit-identically. */
+export function codeSeedFor(id: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < id.length; i++) {
+    h ^= id.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return h >>> 0;
+}
+
+const trunc = (s: string, n: number) => (s.length > n ? `${s.slice(0, n)}…` : s);
+
+export async function refineWithCode(input: CodeLoopInput): Promise<CodeLoopResult> {
+  const {
+    label,
+    draft,
+    baseScore,
+    params,
+    measuresText,
+    detailText,
+    sheet,
+    writeCode,
+    score,
+    execute = runSandboxedCode,
+    roundsMax = CODE_ROUNDS_MAX,
+    minGain = CODE_MIN_GAIN,
+    signal,
+  } = input;
+  let best = draft;
+  let bestScore = baseScore;
+  let code: string | null = null;
+  let stalls = 0;
+  let droppedText: string | undefined;
+  const rounds: CodeRound[] = [];
+  for (let round = 1; round <= Math.max(1, roundsMax); round++) {
+    if (signal?.aborted) break;
+    let image: string;
+    try {
+      image = await sheet(best);
+    } catch (err) {
+      console.warn(
+        '[vision] 3D code sheet failed, keeping the draft:',
+        err instanceof Error ? err.message : err
+      );
+      break;
+    }
+    const question = buildCodeQuestion({
+      label,
+      draft: best,
+      scoreText: bestScore.toFixed(3),
+      ...(detailText ? { detailText } : {}),
+      ...(measuresText ? { measuresText } : {}),
+      ...(code ? { currentCode: code } : {}),
+      ...(droppedText ? { droppedText } : {}),
+    });
+    const answered = await writeCode(image, question, signal).catch(() => null);
+    const body = answered?.code ?? null;
+    if (!body) {
+      rounds.push({ round, bytes: 0, score: null, kept: false, dropped: 0, reason: 'no code' });
+      stalls += 1;
+      if (stalls >= CODE_STALLS_MAX) break;
+      continue;
+    }
+    const exec = await execute(body, params).catch((err: unknown) => ({
+      ok: false as const,
+      reason: err instanceof Error ? err.message : String(err),
+    }));
+    if (!exec.ok) {
+      rounds.push({
+        round,
+        bytes: Buffer.byteLength(body, 'utf8'),
+        score: null,
+        kept: false,
+        dropped: 0,
+        reason: trunc(exec.reason, 120),
+      });
+      console.info(
+        `[vision] 3D code round ${round} for "${label}": failed (${trunc(exec.reason, 120)})`
+      );
+      stalls += 1;
+      if (stalls >= CODE_STALLS_MAX) break;
+      continue;
+    }
+    droppedText = exec.issues.length
+      ? exec.issues.map((i) => `${i.index}: ${i.reason}`).join('; ')
+      : undefined;
+    const s = await score(exec.recipe).catch(() => null);
+    const kept = s !== null && s - bestScore >= minGain;
+    rounds.push({
+      round,
+      bytes: Buffer.byteLength(body, 'utf8'),
+      score: s,
+      kept,
+      dropped: exec.issues.length,
+      ...(s === null ? { reason: 'unscorable' } : {}),
+    });
+    if (kept && s !== null) {
+      console.info(
+        `[vision] 3D code round ${round} for "${label}": ${bestScore.toFixed(3)}→${s.toFixed(3)} kept (${exec.recipe.parts.length} parts${exec.issues.length ? `, ${exec.issues.length} dropped` : ''})`
+      );
+      best = exec.recipe;
+      bestScore = s;
+      code = body;
+      stalls = 0;
+    } else {
+      console.info(
+        `[vision] 3D code round ${round} for "${label}": ${s === null ? 'unscorable' : `${bestScore.toFixed(3)}→${s.toFixed(3)}`} dropped`
+      );
+      stalls += 1;
+      if (stalls >= CODE_STALLS_MAX) break;
+    }
+  }
+  if (!code) console.info(`[vision] 3D code for "${label}": no round beat the draft`);
+  return { recipe: best, code, promptVersion: CODE_PROMPT_VERSION, seed: params.seed, rounds };
+}

@@ -26,6 +26,7 @@
     "next": "16.4.3",
     "next-intl": "^4.14.9",
     "postprocessing": "6.39.5",
+    "quickjs-emscripten": "0.32.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "recharts": "^2.15.1",
