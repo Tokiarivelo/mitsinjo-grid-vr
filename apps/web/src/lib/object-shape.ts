@@ -812,7 +812,8 @@ export type ObjectShape = z.infer<typeof ObjectShapeSchema>;
 export const SHAPE_TIMEOUT_MS: number | null = null;
 
 /** `check` = the AI checks the views model against the drawings and fixes it (PV-H). */
-export const SHAPE_STEPS = ['crop', 'model', 'fit', 'check'] as const;
+/** `code` (PQ-T64): Muse Wonder writes and refines the construction code; joins the list when it starts. */
+export const SHAPE_STEPS = ['crop', 'model', 'fit', 'check', 'code'] as const;
 export type ShapeStep = (typeof SHAPE_STEPS)[number];
 export const ShapeStepEventSchema = z.object({ step: z.enum(SHAPE_STEPS) });
 

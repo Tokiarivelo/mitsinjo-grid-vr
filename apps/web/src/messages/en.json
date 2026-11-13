@@ -1085,7 +1085,8 @@
         "crop": "Extracting the object from the photo (crop, enlarge)",
         "model": "Muse Spark imagines the parts and colours",
         "fit": "Fitting the parts to the photo proportions",
-        "check": "Muse Spark checks every side against the drawings and adds what is missing"
+        "check": "Muse Spark checks every side against the drawings and adds what is missing",
+        "code": "Muse Wonder writes the 3D code of this object and refines it against the picture (the draft shows meanwhile, about 1 to 2 min per round)"
       },
       "insertTitle": "Add to the simulation",
       "insertSourceLabel": "Where the power comes from",

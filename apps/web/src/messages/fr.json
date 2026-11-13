@@ -1085,7 +1085,8 @@
         "crop": "Extraction de l'objet de la photo (recadrage, agrandissement)",
         "model": "Muse Spark imagine les pièces et les couleurs",
         "fit": "Ajustement des pièces aux proportions de la photo",
-        "check": "Muse Spark vérifie chaque côté par rapport aux dessins et ajoute ce qui manque"
+        "check": "Muse Spark vérifie chaque côté par rapport aux dessins et ajoute ce qui manque",
+        "code": "Muse Wonder écrit le code 3D de cet objet et l'affine contre l'image (le brouillon s'affiche en attendant, environ 1 à 2 min par tour)"
       },
       "insertTitle": "Ajouter à la simulation",
       "insertSourceLabel": "Origine de la puissance",

@@ -127,7 +127,8 @@ function DimStatusLine({ recipe }: { recipe: ObjectRecipe }) {
  */
 function ShapeSteps({ step, seconds }: { step: ShapeStep; seconds: number }) {
   const t = useTranslations('features.visionInsert');
-  const steps = SHAPE_STEPS.filter((s) => s !== 'check' || step === 'check');
+  // Optional steps (views check, Wonder code) join the list only when they start.
+  const steps = SHAPE_STEPS.filter((s) => (s !== 'check' && s !== 'code') || step === s);
   const current = steps.indexOf(step);
   return (
     <div className="flex flex-col gap-1.5 rounded-control border border-ai-violet/30 bg-ai-violet/5 p-3">

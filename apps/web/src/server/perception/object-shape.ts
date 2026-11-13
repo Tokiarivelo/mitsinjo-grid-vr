@@ -434,6 +434,7 @@ export async function runObjectShape(
       );
       const dump = openCodeDump(target.label, codeModel());
       dump?.draft(o.draft, base.score, params);
+      onStep?.('code');
       const live = codeProgress(o.stages, o.carry);
       live.start(o.draft);
       const looped = await refineWithCode({
