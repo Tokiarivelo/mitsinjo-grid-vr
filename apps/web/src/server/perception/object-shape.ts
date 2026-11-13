@@ -68,6 +68,13 @@ import { ELEVATION_ARCHETYPES, measureFacadeElevations } from './facade-views';
 import { routeHouseFacade } from './house-facade-route';
 import { codeSeedFor, refineWithCode } from './shape-code-loop';
 import { openCodeDump } from './code-dump';
+import {
+  drawingDetailText,
+  drawingSheet,
+  drawingTarget,
+  scoreDrawing,
+  skylineText,
+} from './drawing-score';
 import { CODE_PROMPT_VERSION, codeModel, detailTextOf, elevationFrameText } from './shape-code';
 import { criticImage } from './spark-critic';
 import { stageSheet } from './shape-stages-spark';
@@ -736,7 +743,6 @@ export async function runObjectShape(
           const writeBuildCode = perception.writeBuildCode.bind(perception);
           const codeStart = Date.now();
           const rings = front.roofRings ? { roofRings: front.roofRings } : {};
-          const yardstick = (r: ObjectRecipe) => scoreElevation(r, front, rings);
           const sparkDepth = kit.proportions.d / kit.proportions.w;
           const depth = side ? (depthRatio(front, side) ?? sparkDepth) : sparkDepth;
           const draft = recipe;
@@ -751,7 +757,22 @@ export async function runObjectShape(
           const drawingBytes = target.facadeUrl
             ? await imageBytes(target.facadeUrl, signal).catch(() => null)
             : null;
-          const draftScore = yardstick(draft);
+          // PQ-T59: scored on the drawing's own pixels when it is at hand (several volumes and
+          // stepped roofs score right); the label-map elevation score is the fallback.
+          const pixels = drawingBytes ? await drawingTarget(drawingBytes, front) : null;
+          const measure = (r: ObjectRecipe) => {
+            if (pixels) {
+              const d = scoreDrawing(r, front, pixels, rings);
+              return { score: d.score / 100, detail: drawingDetailText(d), drawing: d };
+            }
+            const s = scoreElevation(r, front, rings);
+            return {
+              score: s.score / 100,
+              detail: `iou ${s.iou.toFixed(2)} · edge ${s.edgeF1.toFixed(2)} · openings ${s.openings.matched}/${s.openings.target}`,
+              elevation: s,
+            };
+          };
+          const draftMeasure = measure(draft);
           const codeParams = {
             seed: codeSeedFor(target.id),
             proportions: draft.proportions,
@@ -765,24 +786,33 @@ export async function runObjectShape(
             },
           };
           console.info(
-            `[vision] 3D route B for "${target.label}": Wonder (${codeModel()}, prompt v${CODE_PROMPT_VERSION}) models the house as build() code, draft ${(draftScore.score / 100).toFixed(3)}, goal ${CODE_GOAL_ELEVATION}`
+            `[vision] 3D route B for "${target.label}": Wonder (${codeModel()}, prompt v${CODE_PROMPT_VERSION}) models the house as build() code, draft ${draftMeasure.score.toFixed(3)} on the ${pixels ? 'drawing pixels' : 'elevation labels'}, goal ${CODE_GOAL_ELEVATION}`
           );
           const dump = openCodeDump(target.label, codeModel());
-          dump?.draft(draft, draftScore.score / 100, codeParams);
+          dump?.draft(draft, draftMeasure.score, codeParams);
           const looped = await refineWithCode({
             label: target.label,
             archetype: 'house',
             draft,
-            baseScore: draftScore.score / 100,
+            baseScore: draftMeasure.score,
             params: codeParams,
-            frameText: elevationFrameText(front),
+            frameText: `${elevationFrameText(front)}${pixels ? `\n${skylineText(pixels, front)}` : ''}`,
             measuresText: `eave ${eaveShare.toFixed(2)} · yaw ${yaw0.toFixed(2)} · depth ${depth.toFixed(2)} · windows ${front.windows.length} · doors ${front.doors.length}`,
-            detailText: `iou ${draftScore.iou.toFixed(2)} · edge ${draftScore.edgeF1.toFixed(2)} · openings ${draftScore.openings.matched}/${draftScore.openings.target}`,
+            detailText: draftMeasure.detail,
             goal: CODE_GOAL_ELEVATION,
-            // Drawing | model | diff, the same sheet the Spark stages read (red = drawn, not built).
-            sheet: async (r) => (await stageSheet(r, yardstick(r), drawingBytes)) ?? imageUrl,
+            // Drawing | model | difference (red = drawn, not built; blue = built, not drawn).
+            sheet: async (r) => {
+              const m = measure(carry(r));
+              const sheet =
+                m.drawing && pixels && drawingBytes
+                  ? await drawingSheet(drawingBytes, pixels, m.drawing)
+                  : m.elevation
+                    ? await stageSheet(r, m.elevation, drawingBytes)
+                    : null;
+              return sheet ?? imageUrl;
+            },
             writeCode: (img, q, sig) => writeBuildCode(img, q, sig),
-            score: async (r) => yardstick(carry(r)).score / 100,
+            score: async (r) => measure(carry(r)).score,
             ...(dump ? { onRound: (e) => dump.round(e) } : {}),
             ...(signal ? { signal } : {}),
           });
@@ -790,7 +820,7 @@ export async function runObjectShape(
           dump?.final({
             code: looped.code,
             recipe: looped.recipe,
-            score: looped.rounds.filter((r) => r.kept).at(-1)?.score ?? draftScore.score / 100,
+            score: looped.rounds.filter((r) => r.kept).at(-1)?.score ?? draftMeasure.score,
           });
           if (looped.code) {
             codeWon = true;

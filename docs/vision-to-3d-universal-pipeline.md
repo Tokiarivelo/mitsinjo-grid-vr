@@ -519,6 +519,13 @@ secondaires → détails → vérifier). Arrêt dès que le score d'élévation 
 3 tours sans gain. Si le code gagne, les étapes Spark ne tournent pas (elles retoucheraient des pièces de gabarit et leur
 fond écraserait le modèle du code) ; elles restent le repli. Le prompt v3 est le défaut des deux chemins.
 
+**Étalon sur les pixels du dessin (PQ-T59).** Le score d'élévation suppose une seule ligne d'égout et un rectangle de mur :
+une maison à plusieurs volumes bien construite y perdait contre le gabarit. La voie B se note donc sur le dessin lui-même
+(`drawing-score.ts`) : `0,5 × IoU (zone dessinée vs silhouette du modèle) + 0,2 × couleur + 0,3 × ouvertures mesurées`.
+La planche envoyée à Wonder montre dessin | modèle | différence (rouge = dessiné non construit, bleu = construit non
+dessiné), et la question porte la **ligne de toit mesurée** en 24 stations (`skylineText`) : où commence chaque volume, sa
+hauteur, le sens de chaque pente. Sans image du dessin, repli sur le score d'élévation.
+
 **Chemin photo (PQ-T57).** La voie B tourne aussi pour tout objet de la photo (hors `water`), après le gabarit ajusté et
 la boucle d'étapes : Wonder reçoit la planche photo | rendu courant, le score détaillé, les pièces vues et l'anatomie
 `present`, avec le prompt v2 (familles). Même étalon que le brouillon (silhouette, contours, couleur, masques, anatomie),
