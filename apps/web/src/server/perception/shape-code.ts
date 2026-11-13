@@ -29,7 +29,7 @@ const CODE_API_SPEC = [
   '- Primitives, each takes an options object and returns the part: api.box, api.cylinder, api.sphere, api.cone, api.prism, api.extrude, api.lathe, api.hip, api.hull.',
   '- api.material(name): one of ' + RECIPE_MATERIALS.join(', ') + ' (anything else fails the run).',
   '- api.rng(): deterministic random in [0, 1), same sequence for the same seed.',
-  '- params: { seed, proportions { w, h, d }, colors { main, secondary, accent }, measures { ... } }.',
+  '- params: { seed, proportions { w, h, d }, colors { main, secondary, accent }, palette? [#rrggbb, ...], measures { ... } }.',
   'Coordinates: object centred at the origin, x right, y up, z toward the camera. `at` = part centre, `size` = part extent, both fractions of the object (each within ±0.6, extent 0.01–1).',
   'Part fields: shape, at, size, color (#rrggbb, from params.colors only), material, kind (one of ' +
     PART_KINDS.join(', ') +
@@ -102,7 +102,7 @@ export const CODE_SYSTEM_PROMPT_V3 = [
   'MEASURED FRAME: the question gives the exact object-unit coordinates (at / size) of every opening and the roof outline rings of the drawing. Use those numbers, they are measurements. Where you must choose a value yourself (depth, a hidden face, a missing detail), cite the reason in a comment, and keep it plausible and symmetric.',
   'DEPTH AND FACES: the drawing is the front face (z toward the camera). Give each volume a plausible depth from the object kind; side and back faces repeat the front openings where a real building would have them; never leave a long blank wall without a reason.',
   CODE_KIND_RULES,
-  'Budget: ≤ 32 parts and ≈ 5 000 triangles, spend them on the large visible shapes and openings first. Colours only from params.colors roles. Never output an energy value (no watt, kW, kWh). Answer only the JSON schema: { "code": "<build() body>" }.',
+  'Budget: ≤ 32 parts and ≈ 5 000 triangles, spend them on the large visible shapes and openings first. Colours: when params.palette is given (hex colours measured on the picture, most present first), paint each part with the palette colour you see on it in the picture (walls, roofs, frames, glass, stone are usually different entries); otherwise params.colors roles. Never a colour that is in neither. Never output an energy value (no watt, kW, kWh). Answer only the JSON schema: { "code": "<build() body>" }.',
 ].join('\n');
 
 /** Every writer prompt still comparable by version (current = `CODE_PROMPT_VERSION`). */

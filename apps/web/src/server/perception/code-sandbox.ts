@@ -82,6 +82,8 @@ export interface CodeParams {
   colors: { main: string; secondary: string; accent: string };
   /** Named measurements the guest may cite (`overhang`, `eave`, …), recipe units. */
   measures?: Record<string, number>;
+  /** Colours measured on the reference image, most present first (PQ-T63): `params.palette`. */
+  palette?: string[];
 }
 
 export interface CodeIssue {
@@ -292,6 +294,7 @@ export async function runSandboxedCode(
         proportions: params.proportions,
         colors: params.colors,
         ...(params.measures ? { measures: params.measures } : {}),
+        ...(params.palette?.length ? { palette: params.palette } : {}),
       });
       try {
         const fn = takeValue(ctx, ctx.evalCode(`(api, params) => {\n${code}\n}`, 'build.js'));

@@ -47,6 +47,8 @@ export function codeRoundValid(r: Pick<CodeRound, 'bytes' | 'score' | 'reason'>)
 /** Everything one round produced, for the debug dump (PQ-T56): the body, its model, why it lost. */
 export interface CodeRoundEvent extends CodeRound {
   question: string;
+  /** The sheet the writer saw this round (data URL), for the dump. */
+  sheet?: string;
   /** Score the round had to beat. */
   baseScore: number;
   /** The `build()` body the writer answered, null when it answered nothing usable. */
@@ -144,6 +146,7 @@ export async function refineWithCode(input: CodeLoopInput): Promise<CodeLoopResu
   let stalls = 0;
   let droppedText: string | undefined;
   const rounds: CodeRound[] = [];
+  let lastSheet: string | undefined;
   const record = (
     r: CodeRound,
     question: string,
@@ -153,7 +156,15 @@ export async function refineWithCode(input: CodeLoopInput): Promise<CodeLoopResu
   ) => {
     rounds.push(r);
     try {
-      onRound?.({ ...r, question, baseScore: bestScore, rawBody, recipe, issues });
+      onRound?.({
+        ...r,
+        question,
+        ...(lastSheet ? { sheet: lastSheet } : {}),
+        baseScore: bestScore,
+        rawBody,
+        recipe,
+        issues,
+      });
     } catch (err) {
       console.warn('[vision] 3D code round hook failed:', err instanceof Error ? err.message : err);
     }
@@ -169,6 +180,7 @@ export async function refineWithCode(input: CodeLoopInput): Promise<CodeLoopResu
     let image: string;
     try {
       image = await sheet(best);
+      lastSheet = image;
     } catch (err) {
       console.warn(
         '[vision] 3D code sheet failed, keeping the draft:',

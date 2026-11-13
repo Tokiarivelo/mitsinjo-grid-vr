@@ -3,7 +3,15 @@ import sharp from 'sharp';
 import { describe, expect, it, vi } from 'vitest';
 vi.mock('server-only', () => ({}));
 import type { ObjectRecipe } from '@/lib/object-shape';
-import { drawingSheet, drawingTarget, scoreDrawing, skylineText } from '../drawing-score';
+import {
+  drawingPalette,
+  drawingSheet,
+  drawingTarget,
+  scoreDrawing,
+  scoreDrawingSide,
+  skylineText,
+  stackSheets,
+} from '../drawing-score';
 import type { Elevation } from '../facade-house';
 
 /** Two volumes of different heights on white paper: tall block left, low block right. */
@@ -75,6 +83,22 @@ describe('drawing score (PQ-T59)', () => {
     const text = skylineText(target, front);
     expect(text).toContain('-0.48:0.50');
     expect(text).toMatch(/0\.48:-0\.0[1-5]/);
+  });
+
+  it('reads the palette on the drawing and scores the side view (PQ-T63)', async () => {
+    const png = await sharp(Buffer.from(SVG)).png().toBuffer();
+    const target = (await drawingTarget(png, front))!;
+    const palette = drawingPalette(target);
+    // The drawn wood tone, not the paper.
+    expect(palette[0]).toMatch(/^#(9|a)[0-9a-f]5[0-9a-f]2[0-9a-f]$/);
+    // The same drawing used as a side view: a full-depth block matches its bounding box only.
+    const asSide = scoreDrawingSide(oneBox, front, target);
+    expect(asSide.iou).toBeGreaterThan(0.3);
+    expect(asSide.iou).toBeLessThan(0.85);
+    const a = (await drawingSheet(png, target, scoreDrawing(twoVolumes, front, target)))!;
+    const b = (await drawingSheet(png, target, asSide))!;
+    expect(await stackSheets(a, b)).toMatch(/^data:image\/jpeg;base64,/);
+    expect(skylineText(target, front, 'side')).toContain('z:top y');
   });
 
   it('answers null on an unreadable or blank drawing', async () => {

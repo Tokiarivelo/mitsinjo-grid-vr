@@ -76,10 +76,13 @@ import {
 import { openCodeDump } from './code-dump';
 import {
   drawingDetailText,
+  drawingPalette,
   drawingSheet,
   drawingTarget,
   scoreDrawing,
+  scoreDrawingSide,
   skylineText,
+  stackSheets,
 } from './drawing-score';
 import {
   CODE_PROMPT_VERSION,
@@ -257,6 +260,8 @@ const FACADE_CODE_STAGES: ReadonlyArray<ShapeStageId> = [
 const PHOTO_CODE_STAGES: ReadonlyArray<ShapeStageId> = ['body', 'details', 'details'];
 /** Yardstick (0–1) from which the code loop stops: a good match (PQ-T58). */
 const CODE_GOAL = 0.9;
+/** Share of the side drawing in the code route's score when a side exists (PQ-T63). */
+const SIDE_WEIGHT = 0.3;
 /** Photo path: the photo score is known to flatter mediocre models (methodology §3), so only a near-perfect one skips the writer. */
 const PHOTO_CODE_GOAL = 0.97;
 
@@ -387,6 +392,8 @@ export async function runObjectShape(
     draft: ObjectRecipe;
     colors: { main: string; secondary: string; accent: string };
     measures: Record<string, number>;
+    /** Colours measured on the reference image (`params.palette`). */
+    palette?: string[];
     /** What the code does not build and the draft keeps (turn, swatches, statuses). */
     carry: (r: ObjectRecipe) => ObjectRecipe;
     /** Yardstick 0–1 with its detail line; null = unscorable. */
@@ -420,6 +427,7 @@ export async function runObjectShape(
         proportions: o.draft.proportions,
         colors: o.colors,
         measures: o.measures,
+        ...(o.palette?.length ? { palette: o.palette } : {}),
       };
       console.info(
         `[vision] 3D route B for "${target.label}" (${o.archetype}): ${codeModel()}, prompt v${CODE_PROMPT_VERSION}, draft ${base.score.toFixed(3)} on the ${o.against}${o.goal !== undefined ? `, goal ${o.goal}` : ''}`
@@ -627,6 +635,12 @@ export async function runObjectShape(
         (ELEVATION_ARCHETYPES.includes(hint) || VIEW_ARCHETYPES.includes(hint))) ||
         remedyFacade);
     const viewsStart = measureViews ? Date.now() : null;
+    // The side drawing Muse Image made, kept for the code route's side score (PQ-T63).
+    const sideDrawn: { png: Buffer | null } = { png: null };
+    const keepSide = (png: Buffer) => {
+      sideDrawn.png = png;
+      onSideView?.(png);
+    };
     const elevations =
       target.facadeUrl && perception.segmentImage && ELEVATION_ARCHETYPES.includes(hint)
         ? measureFacadeElevations(
@@ -635,7 +649,7 @@ export async function runObjectShape(
             hint,
             {
               ...(signal ? { signal } : {}),
-              ...(onSideView ? { onSideView } : {}),
+              onSideView: keepSide,
               ...(env.SHAPE_SIDE_V2 ? { sideCards: true } : {}),
             }
           ).catch(() => null)
@@ -646,7 +660,7 @@ export async function runObjectShape(
               photo,
               segment: perception.segmentImage.bind(perception),
               ...(signal ? { signal } : {}),
-              ...(onSideView ? { onSideView } : {}),
+              onSideView: keepSide,
             }).catch(() => null)
           : Promise.resolve(null);
     // PV-H: any other object with a validated 2D view → hull of that view and its drawn side.
@@ -903,10 +917,28 @@ export async function runObjectShape(
           // PQ-T59: scored on the drawing's own pixels when it is at hand (several volumes and
           // stepped roofs score right); the label-map elevation score is the fallback.
           const pixels = drawingBytes ? await drawingTarget(drawingBytes, front) : null;
+          // PQ-T63: the side drawing scores the depth and the side massing (30 %), so a model that
+          // only matches the front no longer wins with a nonsense side.
+          const sideBytes = side ? sideDrawn.png : null;
+          const sidePixels = side && sideBytes ? await drawingTarget(sideBytes, side) : null;
+          const palette = pixels ? drawingPalette(pixels) : [];
+          const measureAll = (r: ObjectRecipe) => {
+            if (!pixels) return null;
+            const f = scoreDrawing(r, front, pixels, rings);
+            const sd = side && sidePixels ? scoreDrawingSide(r, side, sidePixels) : null;
+            return {
+              front: f,
+              side: sd,
+              score: sd
+                ? SIDE_WEIGHT * sd.score + (1 - SIDE_WEIGHT) * (f.score / 100)
+                : f.score / 100,
+            };
+          };
           const won = await codeRoute({
             archetype: 'house',
             draft,
             colors: kit.colors,
+            ...(palette.length ? { palette } : {}),
             measures: {
               eave: eaveShare,
               yaw: yaw0,
@@ -918,13 +950,15 @@ export async function runObjectShape(
               ...r,
               ...(draft.source ? { source: draft.source } : {}),
               ...(draft.yaw !== undefined ? { yaw: draft.yaw } : {}),
-              ...(draft.swatches ? { swatches: draft.swatches } : {}),
               ...(draft.dimStatus ? { dimStatus: draft.dimStatus } : {}),
             }),
             measure: async (r) => {
-              if (pixels) {
-                const d = scoreDrawing(r, front, pixels, rings);
-                return { score: d.score / 100, detail: drawingDetailText(d) };
+              const m = measureAll(r);
+              if (m) {
+                return {
+                  score: m.score,
+                  detail: `front ${drawingDetailText(m.front)}${m.side ? ` · side iou ${m.side.iou.toFixed(2)} colour ${m.side.color.toFixed(2)}` : ''}`,
+                };
               }
               const e = scoreElevation(r, front, rings);
               return {
@@ -932,13 +966,29 @@ export async function runObjectShape(
                 detail: `iou ${e.iou.toFixed(2)} · edge ${e.edgeF1.toFixed(2)} · openings ${e.openings.matched}/${e.openings.target}`,
               };
             },
-            // Drawing | model | difference (red = drawn, not built; blue = built, not drawn).
-            sheet: async (r) =>
-              pixels && drawingBytes
-                ? drawingSheet(drawingBytes, pixels, scoreDrawing(r, front, pixels, rings))
-                : stageSheet(r, scoreElevation(r, front, rings), drawingBytes),
-            against: pixels ? 'drawing pixels' : 'elevation labels',
-            frameText: `${elevationFrameText(front)}${pixels ? `\n${skylineText(pixels, front)}` : ''}`,
+            // Drawing | model | difference (red = drawn, not built; blue = built, not drawn),
+            // the front on top and the side under it.
+            sheet: async (r) => {
+              const m = measureAll(r);
+              if (!m || !pixels || !drawingBytes)
+                return stageSheet(r, scoreElevation(r, front, rings), drawingBytes);
+              const top = await drawingSheet(drawingBytes, pixels, m.front);
+              if (!top || !m.side || !sidePixels || !sideBytes) return top;
+              const under = await drawingSheet(sideBytes, sidePixels, m.side);
+              return under ? ((await stackSheets(top, under)) ?? top) : top;
+            },
+            against: pixels
+              ? `drawing pixels${sidePixels ? ' (front + side)' : ''}`
+              : 'elevation labels',
+            frameText: [
+              elevationFrameText(front),
+              ...(pixels ? [skylineText(pixels, front)] : []),
+              ...(side && sidePixels
+                ? [
+                    `Side drawing (second row of the sheet): the object's depth is params.proportions.d; ${skylineText(sidePixels, side, 'side')}`,
+                  ]
+                : []),
+            ].join('\n'),
             measuresText: `eave ${eaveShare.toFixed(2)} · yaw ${yaw0.toFixed(2)} · depth ${depth.toFixed(2)} · windows ${front.windows.length} · doors ${front.doors.length}`,
             stages: FACADE_CODE_STAGES,
             goal: CODE_GOAL,

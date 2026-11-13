@@ -5,7 +5,9 @@ import type { ObjectRecipe } from '@/lib/object-shape';
 import {
   elevationBox,
   elevationGrid,
+  renderElevation,
   scoreElevation,
+  type ElevationRender,
   type ScoredElevation,
 } from './elevation-score';
 import type { Elevation } from './facade-house';
@@ -114,6 +116,36 @@ export async function drawingTarget(
   }
 }
 
+/** Inked area vs render silhouette (IoU) and colour agreement where both cover. */
+export function compareInk(
+  target: DrawingTarget,
+  render: Pick<ElevationRender, 'mask' | 'rgb'>
+): { iou: number; color: number } {
+  const mask = render.mask.data;
+  const built = render.rgb;
+  let both = 0;
+  let either = 0;
+  let dist = 0;
+  for (let i = 0; i < target.ink.length; i++) {
+    const a = target.ink[i] === 1;
+    const b = mask[i] === 1;
+    if (a || b) either += 1;
+    if (a && b) {
+      both += 1;
+      const k = i * 3;
+      dist += Math.hypot(
+        target.rgb[k]! - built[k]!,
+        target.rgb[k + 1]! - built[k + 1]!,
+        target.rgb[k + 2]! - built[k + 2]!
+      );
+    }
+  }
+  return {
+    iou: either ? both / either : 0,
+    color: both ? Math.max(0, 1 - dist / both / COLOR_FULL_DISTANCE) : 0,
+  };
+}
+
 export interface DrawingScore {
   /** 0–100, higher = closer to the drawing. */
   score: number;
@@ -138,27 +170,7 @@ export function scoreDrawing(
     rows: target.rows,
     ...(opts.roofRings ? { roofRings: opts.roofRings } : {}),
   });
-  const mask = elevation.render.mask.data;
-  const built = elevation.render.rgb;
-  let both = 0;
-  let either = 0;
-  let dist = 0;
-  for (let i = 0; i < target.ink.length; i++) {
-    const a = target.ink[i] === 1;
-    const b = mask[i] === 1;
-    if (a || b) either += 1;
-    if (a && b) {
-      both += 1;
-      const k = i * 3;
-      dist += Math.hypot(
-        target.rgb[k]! - built[k]!,
-        target.rgb[k + 1]! - built[k + 1]!,
-        target.rgb[k + 2]! - built[k + 2]!
-      );
-    }
-  }
-  const iou = either ? both / either : 0;
-  const color = both ? Math.max(0, 1 - dist / both / COLOR_FULL_DISTANCE) : 0;
+  const { iou, color } = compareInk(target, elevation.render);
   const hasOpenings = elevation.openings.target > 0;
   const openings = hasOpenings ? elevation.openings.score : 0;
   const w = DRAWING_WEIGHTS;
@@ -181,13 +193,14 @@ export function drawingDetailText(s: DrawingScore): string {
 export async function drawingSheet(
   drawing: Buffer,
   target: DrawingTarget,
-  s: DrawingScore
+  s: { render: Pick<ElevationRender, 'mask' | 'rgb'> } | DrawingScore
 ): Promise<string | null> {
   try {
     const { cols, rows } = target;
     const [w, h] = [cols * SHEET_ZOOM, rows * SHEET_ZOOM];
-    const mask = s.elevation.render.mask.data;
-    const built = Buffer.from(s.elevation.render.rgb);
+    const render = 'elevation' in s ? s.elevation.render : s.render;
+    const mask = render.mask.data;
+    const built = Buffer.from(render.rgb);
     const diff = Buffer.alloc(cols * rows * 3, 255);
     for (let i = 0; i < mask.length; i++) {
       const a = target.ink[i] === 1;
@@ -232,7 +245,11 @@ export const SKYLINE_STATIONS = 24;
  * evenly spaced stations. It is the massing a modeller reads first: where each volume starts, how
  * high it stands, which way each roof slopes. `none` marks a station with nothing drawn.
  */
-export function skylineText(target: DrawingTarget, e: Elevation): string {
+export function skylineText(
+  target: DrawingTarget,
+  e: Elevation,
+  view: 'front' | 'side' = 'front'
+): string {
   const box = elevationBox(e);
   const { cols, rows, ink } = target;
   const cells: string[] = [];
@@ -246,12 +263,103 @@ export function skylineText(target: DrawingTarget, e: Elevation): string {
         break;
       }
     }
-    const x = (fx - 0.5).toFixed(2);
+    // Side view: the object's front is on the left (z = +0.5 at the left edge).
+    const x = (view === 'side' ? 0.5 - fx : fx - 0.5).toFixed(2);
     if (top < 0) cells.push(`${x}:none`);
     else {
       const y = 0.5 - (top / rows - box.y) / box.h;
       cells.push(`${x}:${Math.max(-0.5, Math.min(0.5, y)).toFixed(2)}`);
     }
   }
-  return `Skyline measured on the drawing (x:top y, object units, left to right): ${cells.join(' ')}. A jump between neighbours is a volume edge; a steady slope is a roof plane.`;
+  return `Skyline measured on the ${view} drawing (${view === 'side' ? 'z' : 'x'}:top y, object units${view === 'side' ? ', front of the object first' : ', left to right'}): ${cells.join(' ')}. A jump between neighbours is a volume edge; a steady slope is a roof plane.`;
+}
+
+/** Colours of the palette given to the writer. */
+export const PALETTE_SIZE = 6;
+/** Two palette colours closer than this (RGB distance) are the same surface. */
+const PALETTE_MIN_DISTANCE = 42;
+
+/**
+ * Dominant colours of the inked object (PQ-T63), most present first: the drawing's own wood, roof,
+ * frame, glass and stone tones. The kit's three roles came from the photo and painted a warm
+ * timber house uniformly dark (live 2026-11-13).
+ */
+export function drawingPalette(target: DrawingTarget, size = PALETTE_SIZE): string[] {
+  const buckets = new Map<number, { n: number; r: number; g: number; b: number }>();
+  for (let i = 0; i < target.ink.length; i++) {
+    if (!target.ink[i]) continue;
+    const [r, g, b] = [target.rgb[i * 3]!, target.rgb[i * 3 + 1]!, target.rgb[i * 3 + 2]!];
+    const key = ((r >> 4) << 8) | ((g >> 4) << 4) | (b >> 4);
+    const hit = buckets.get(key);
+    if (hit) {
+      hit.n += 1;
+      hit.r += r;
+      hit.g += g;
+      hit.b += b;
+    } else buckets.set(key, { n: 1, r, g, b });
+  }
+  const sorted = [...buckets.values()]
+    .map((v) => ({ n: v.n, rgb: [v.r / v.n, v.g / v.n, v.b / v.n] as const }))
+    .sort((a, b) => b.n - a.n);
+  const picked: Array<readonly [number, number, number]> = [];
+  for (const c of sorted) {
+    if (picked.length >= size) break;
+    if (
+      picked.every(
+        (p) => Math.hypot(p[0] - c.rgb[0], p[1] - c.rgb[1], p[2] - c.rgb[2]) >= PALETTE_MIN_DISTANCE
+      )
+    )
+      picked.push(c.rgb);
+  }
+  const hex = (v: number) => Math.round(v).toString(16).padStart(2, '0');
+  return picked.map(([r, g, b]) => `#${hex(r)}${hex(g)}${hex(b)}`);
+}
+
+export interface SideScore {
+  /** 0–1: inked side drawing vs the model seen from the side, plus colour. */
+  score: number;
+  iou: number;
+  color: number;
+  render: ElevationRender;
+}
+
+/** The model's side against the side drawing's pixels (no opening term: the side is drawn by AI). */
+export function scoreDrawingSide(
+  recipe: ObjectRecipe,
+  side: Elevation,
+  target: DrawingTarget
+): SideScore {
+  const render = renderElevation(recipe, side, 'side', target.rows);
+  const { iou, color } = compareInk(target, render);
+  return { score: 0.75 * iou + 0.25 * color, iou, color, render };
+}
+
+/** One sheet above the other (front, then side), same width; null when either is unreadable. */
+export async function stackSheets(top: string, bottom: string): Promise<string | null> {
+  try {
+    const bytes = (url: string) => Buffer.from(url.slice(url.indexOf(',') + 1), 'base64');
+    const [a, b] = [bytes(top), bytes(bottom)];
+    const am = await sharp(a).metadata();
+    const width = am.width ?? 0;
+    if (!width) return null;
+    const b2 = await sharp(b).resize({ width }).toBuffer();
+    const bm = await sharp(b2).metadata();
+    const jpg = await sharp({
+      create: {
+        width,
+        height: (am.height ?? 0) + (bm.height ?? 0),
+        channels: 3,
+        background: '#ffffff',
+      },
+    })
+      .composite([
+        { input: a, left: 0, top: 0 },
+        { input: b2, left: 0, top: am.height ?? 0 },
+      ])
+      .jpeg({ quality: 88 })
+      .toBuffer();
+    return `data:image/jpeg;base64,${jpg.toString('base64')}`;
+  } catch {
+    return null;
+  }
 }

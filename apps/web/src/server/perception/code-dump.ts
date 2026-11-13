@@ -127,6 +127,18 @@ export function openCodeDump(label: string, model: string): CodeDump | null {
     round(e) {
       const n = `round-${e.round}`;
       save(`${n}.question.txt`, e.question);
+      // The sheet the writer saw (reference | model | difference): what it corrected from.
+      const img = /^data:image\/(png|jpeg);base64,(.+)$/s.exec(e.sheet ?? '');
+      if (img) {
+        try {
+          writeFileSync(
+            join(dir, `${n}.sheet.${img[1] === 'png' ? 'png' : 'jpg'}`),
+            Buffer.from(img[2]!, 'base64')
+          );
+        } catch {
+          // best effort, like every dump write
+        }
+      }
       if (e.rawBody) save(`${n}.build.js`, wrapBuild(e.rawBody));
       if (e.recipe && e.rawBody) {
         save(`${n}.parts.json`, JSON.stringify(e.recipe, null, 2));
