@@ -512,6 +512,13 @@ une étape de plus, sans nouvelle infrastructure.
 - **À mesurer au build** : démarrage à froid avec le WASM, mémoire de la fonction, taille du point de reprise avec le
   code. Ces trois mesures n'ont pas été faites : seules les 2,4 Mo du paquet le sont.
 
+**Modeleur d'abord (PQ-T58).** Sur la maison avec dessin 2D, la voie B passe **avant** les étapes Spark : Wonder reçoit la
+planche dessin | modèle | différence, le cadre mesuré en unités d'objet (`elevationFrameText` : chaque ouverture en
+`at/size`, chaque contour de toit en anneau `extrude` prêt à coller) et le prompt v3 (regarder → volumes → formes
+secondaires → détails → vérifier). Arrêt dès que le score d'élévation atteint 0,90 (`CODE_GOAL_ELEVATION`) ou après
+3 tours sans gain. Si le code gagne, les étapes Spark ne tournent pas (elles retoucheraient des pièces de gabarit et leur
+fond écraserait le modèle du code) ; elles restent le repli. Le prompt v3 est le défaut des deux chemins.
+
 **Chemin photo (PQ-T57).** La voie B tourne aussi pour tout objet de la photo (hors `water`), après le gabarit ajusté et
 la boucle d'étapes : Wonder reçoit la planche photo | rendu courant, le score détaillé, les pièces vues et l'anatomie
 `present`, avec le prompt v2 (familles). Même étalon que le brouillon (silhouette, contours, couleur, masques, anatomie),

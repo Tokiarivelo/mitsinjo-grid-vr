@@ -6,6 +6,7 @@ import {
   buildCodeQuestion,
   CODE_JSON_SCHEMA,
   CODE_PROMPT_GENERIC_VERSION,
+  CODE_PROMPT_MODELER_VERSION,
   CODE_PROMPT_VERSION,
   codeModel,
   codePrompt,
@@ -21,13 +22,13 @@ describe('shape-code (PQ-T45)', () => {
     expect(parseBuildCode(JSON.stringify({}))).toBeNull();
     expect(parseBuildCode(JSON.stringify({ code: 42 }))).toBeNull();
     expect(parseBuildCode(JSON.stringify({ code: 'x'.repeat(CODE_MAX_BYTES + 1) }))).toBeNull();
-    expect(CODE_PROMPT_VERSION).toBe(1);
+    expect(CODE_PROMPT_VERSION).toBe(3);
     expect(CODE_JSON_SCHEMA.schema.required).toEqual(['code']);
   });
 
   it('versions the prompt and defaults the model to the refine model', () => {
     expect(codePrompt()).toContain('build(api, params)');
-    expect(codePrompt(1)).toBe(codePrompt());
+    expect(codePrompt(3)).toBe(codePrompt());
     expect(() => codePrompt(99)).toThrow(/unknown code prompt version/);
     if (!process.env.META_CODE_MODEL) expect(codeModel()).toBe(env.META_REFINE_MODEL);
   });
@@ -36,7 +37,6 @@ describe('shape-code (PQ-T45)', () => {
     const v1 = codePrompt(1);
     expect(v1).toMatch(/House rules/);
     expect(v1).not.toMatch(/generator/);
-    expect(CODE_PROMPT_VERSION).toBe(1);
     const v2 = codePrompt(CODE_PROMPT_GENERIC_VERSION);
     expect(v2).not.toBe(v1);
     expect(v2).toContain('build(api, params)');
@@ -98,30 +98,53 @@ describe('shape-code (PQ-T45)', () => {
   });
 });
 
-describe('elevationMeasuresText (PQ-T56)', () => {
-  it('lists roof edges, eave and every opening box', async () => {
-    const { elevationMeasuresText } = await import('../shape-code');
-    const text = elevationMeasuresText({
-      aspect: 1.5,
-      left: 0.05,
-      right: 0.95,
-      wallLeft: 0.1,
-      wallRight: 0.9,
-      top: 0.1,
-      eave: 0.35,
-      bottom: 0.95,
-      ridge: null,
-      windows: [{ x: 0.2, y: 0.4, w: 0.1, h: 0.2 }],
-      doors: [],
-      chimneys: [],
-      plinth: null,
-      steps: [],
-      panes: [],
-      beams: [],
-    });
-    expect(text).toContain('eave y 0.35');
-    expect(text).toContain('windows 1: [0.20,0.40,0.10,0.20]');
-    expect(text).toContain('doors 0');
-    expect(text).toContain('ridge flat share n/a');
+describe('modeler prompt v3 (PQ-T58)', () => {
+  it('is the live default and teaches the modeller order from the measured frame', () => {
+    const v3 = codePrompt();
+    expect(v3).toBe(codePrompt(CODE_PROMPT_MODELER_VERSION));
+    for (const step of ['LOOK', 'COARSE FIRST', 'SECONDARY FORMS', 'DETAILS', 'CHECK']) {
+      expect(v3).toContain(step);
+    }
+    expect(v3).toMatch(/multi-volume|several blocks/);
+    expect(v3).toContain('extrude');
+    expect(v3).toMatch(/no watt/);
+  });
+});
+
+describe('elevationFrameText (PQ-T58)', () => {
+  it('converts the drawing to object units: openings and roof rings ready to paste', async () => {
+    const { elevationFrameText } = await import('../shape-code');
+    const text = elevationFrameText(
+      {
+        aspect: 1.5,
+        left: 0.1,
+        right: 0.9,
+        wallLeft: 0.1,
+        wallRight: 0.9,
+        top: 0.1,
+        eave: 0.4,
+        bottom: 0.9,
+        ridge: null,
+        windows: [{ x: 0.1, y: 0.5, w: 0.4, h: 0.2 }],
+        doors: [],
+        chimneys: [],
+        plinth: null,
+        steps: [],
+        panes: [],
+        beams: [],
+      },
+      [
+        [
+          [0.1, 0.4],
+          [0.9, 0.4],
+          [0.5, 0.1],
+        ],
+      ]
+    );
+    // Box = x 0.1–0.9, y 0.1–0.9: the window centre (0.3, 0.6) maps to (−0.25, −0.125).
+    expect(text).toContain('Windows: at [-0.250, -0.125] size [0.500, 0.250]');
+    expect(text).toContain('Doors: none');
+    expect(text).toContain('Roof outline 1 (extrude part');
+    expect(text).toContain('points [[');
   });
 });

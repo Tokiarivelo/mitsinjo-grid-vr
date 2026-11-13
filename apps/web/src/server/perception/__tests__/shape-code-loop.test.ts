@@ -200,3 +200,30 @@ describe('shape-code-loop (PQ-T45)', () => {
     expect(codeRoundValid({ bytes: 12, score: null, reason: 'unscorable' })).toBe(true);
   });
 });
+
+describe('goal and frame (PQ-T58)', () => {
+  it('stops as soon as the best score reaches the goal, and sends the frame every round', async () => {
+    const questions: string[] = [];
+    const out = await refineWithCode({
+      label: 'house',
+      draft: DRAFT,
+      baseScore: 0.5,
+      params: PARAMS,
+      goal: 0.9,
+      frameText: 'Frame: x 0–1',
+      sheet: async () => 'data:image/png;base64,AA==',
+      writeCode: async (_img, q) => {
+        questions.push(q);
+        return { code: 'good' };
+      },
+      score: async () => 0.95,
+      execute: async () => ({ ok: true as const, recipe: BETTER, issues: [], stats: STATS }),
+      roundsMax: 5,
+    });
+    // Round 1 gains (0.5 → 0.95 ≥ goal): no second Wonder call.
+    expect(questions).toHaveLength(1);
+    expect(questions[0]).toContain('Frame: x 0–1');
+    expect(out.rounds).toHaveLength(1);
+    expect(out.code).toBe('good');
+  });
+});

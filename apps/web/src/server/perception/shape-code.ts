@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { env } from '@/lib/env';
 import { PART_KINDS, RECIPE_MATERIALS, type ObjectRecipe } from '@/lib/object-shape';
 import { CODE_MAX_BYTES } from './code-sandbox';
+import { elevationBox } from './elevation-score';
 import type { Elevation } from './facade-house';
 import type { ModelScore } from './model-score';
 
@@ -14,7 +15,7 @@ import type { ModelScore } from './model-score';
  */
 
 /** Current writer prompt; bumped only with a measured eval behind it (PQ-T5). */
-export const CODE_PROMPT_VERSION = 1;
+export const CODE_PROMPT_VERSION = 3;
 /**
  * Generic writer prompt (PQ-T55): v1 only knew houses, so the B-vs-A eval on willow, car and
  * appliances asks v2. Opt-in until the eval backs it (`writeBuildCode(…, version)`); the live
@@ -80,10 +81,34 @@ export const CODE_SYSTEM_PROMPT_V2 = [
   'Never output an energy value (no watt, kW, kWh). Never invent colours: main/secondary/accent roles only. Answer only the JSON schema: { "code": "<build() body>" }.',
 ].join('\n');
 
+/**
+ * Modeler prompt (PQ-T58, v3): the method of a human modeller, written for the model that writes the
+ * code. It starts from the drawing, not from the template draft: the draft is a floor to beat, never a
+ * shape to preserve. Houses with several volumes, shed roofs and stepped heights come from `extrude`
+ * rings the host measured on the drawing (`elevationFrameText`).
+ */
+export const CODE_PROMPT_MODELER_VERSION = 3;
+
+export const CODE_SYSTEM_PROMPT_V3 = [
+  'You are a 3D modeller. You turn ONE picture (a photo or a 2D elevation drawing) into a 3D object for a SIMULATED rural microgrid editor by writing the body of build(api, params), JavaScript that returns an array of parts. Work like a modeller, in this order:',
+  '1. LOOK. List what you see: the separate VOLUMES (a house is often several blocks of different heights joined together), the roof of each volume and its slope direction, every opening, every beam, balcony, rail, chimney, plinth, garage door. Count them on the picture. Do not simplify a stepped or multi-volume object into one box with a gable roof.',
+  '2. COARSE FIRST. One part per volume (api.box for a plain block, api.extrude with a ring for any profile that is not a rectangle: a shed roof is a quadrilateral ring, a stepped silhouette is a polygon). Place them from the measured frame below, never by eye.',
+  '3. SECONDARY FORMS. Roofs with their overhang (`overhang`), fascias, balcony slabs, the chimney, the plinth, the porch.',
+  '4. DETAILS. Windows and doors as thin proud parts or assemblies at the measured boxes (kind window/door, glazed grid for panes), rails, posts and beams, lights, the garage door panels. Details are parts too: a missing detail is a defect.',
+  '5. CHECK against the sheet (drawing | your model | difference: red = drawn but not built, blue = built but not drawn, amber = wrong part). Fix the largest difference first, in small exact changes. Keep what already matches.',
+  CODE_API_SPEC,
+  CODE_GROWN_OPTIONS,
+  'MEASURED FRAME: the question gives the exact object-unit coordinates (at / size) of every opening and the roof outline rings of the drawing. Use those numbers, they are measurements. Where you must choose a value yourself (depth, a hidden face, a missing detail), cite the reason in a comment, and keep it plausible and symmetric.',
+  'DEPTH AND FACES: the drawing is the front face (z toward the camera). Give each volume a plausible depth from the object kind; side and back faces repeat the front openings where a real building would have them; never leave a long blank wall without a reason.',
+  CODE_KIND_RULES,
+  'Budget: ≤ 32 parts and ≈ 5 000 triangles, spend them on the large visible shapes and openings first. Colours only from params.colors roles. Never output an energy value (no watt, kW, kWh). Answer only the JSON schema: { "code": "<build() body>" }.',
+].join('\n');
+
 /** Every writer prompt still comparable by version (current = `CODE_PROMPT_VERSION`). */
 export const CODE_PROMPTS: Readonly<Record<number, string>> = {
   1: CODE_SYSTEM_PROMPT,
   [CODE_PROMPT_GENERIC_VERSION]: CODE_SYSTEM_PROMPT_V2,
+  [CODE_PROMPT_MODELER_VERSION]: CODE_SYSTEM_PROMPT_V3,
 };
 
 /** The writer system prompt of `version` (default: current); throws on a version not kept. */
@@ -140,6 +165,8 @@ export interface CodeQuestionInput {
   currentCode?: string;
   /** Dropped-part reasons of the last execution to fix (`2: color: Invalid`). */
   droppedText?: string;
+  /** Measured frame of the drawing in object units (`elevationFrameText`, v3). */
+  frameText?: string;
 }
 
 /** The writer question: draft + score + measures (+ current code on a patch round). */
@@ -158,8 +185,9 @@ export function buildCodeQuestion(q: CodeQuestionInput): string {
   });
   const lines = [
     `Object: ${q.label}${q.archetype ? ` (${q.archetype})` : ''}. Draft score ${q.scoreText}${q.detailText ? ` (${q.detailText})` : ''}.`,
-    `Draft: ${draft}`,
+    `Template draft (a floor to beat; do not copy its shape if the picture shows more): ${draft}`,
   ];
+  if (q.frameText) lines.push(q.frameText);
   if (q.measuresText) lines.push(`Measured: ${q.measuresText}. Cite these in comments.`);
   if (q.currentCode) lines.push(`Current code (beat it or keep it):\n${q.currentCode}`);
   if (q.droppedText) lines.push(`Fix these dropped parts: ${q.droppedText}.`);
@@ -167,36 +195,69 @@ export function buildCodeQuestion(q: CodeQuestionInput): string {
   return lines.join('\n');
 }
 
-const f2 = (n: number) => n.toFixed(2);
-const boxText = (b: { x: number; y: number; w: number; h: number }) =>
-  `[${f2(b.x)},${f2(b.y)},${f2(b.w)},${f2(b.h)}]`;
-const boxesText = (
-  name: string,
-  boxes: ReadonlyArray<{ x: number; y: number; w: number; h: number }>
-) =>
-  boxes.length
-    ? `${name} ${boxes.length}: ${boxes.slice(0, 16).map(boxText).join(' ')}`
-    : `${name} 0`;
+type Pt = readonly [number, number];
+const MAX_RING_POINTS = 24;
+
+/** Thin a ring to at most `max` points, keeping the first and spreading the rest evenly. */
+function thin(ring: ReadonlyArray<Pt>, max: number): Pt[] {
+  if (ring.length <= max) return [...ring];
+  const step = ring.length / max;
+  return Array.from({ length: max }, (_, i) => ring[Math.floor(i * step)]!);
+}
 
 /**
- * The measured 2D elevation as writer input (PQ-T56): roof edges, ridge, eave, ground and every
- * opening box, image fractions (x right, y down, boxes [x,y,w,h]). Without it the writer only
- * saw counts and spread the windows evenly, so every house looked alike.
+ * The drawing's frame in object units (PQ-T58): image point (x, y down) → object (X = (x − cx) / W,
+ * Y = (cy − y) / H), so the writer copies measured numbers instead of converting by eye. Lists every
+ * opening as `at [X,Y] size [w,h]` and every roof outline ring as a ready `extrude` part (centre, size
+ * and a ring normalised to the part box, y up). The front face is z = +0.5·depth.
  */
-export function elevationMeasuresText(e: Elevation): string {
-  return [
-    `elevation image aspect ${f2(e.aspect)} (w/h)`,
-    `roof x ${f2(e.left)}–${f2(e.right)}, walls x ${f2(e.wallLeft)}–${f2(e.wallRight)}`,
-    `ridge y ${f2(e.top)}, eave y ${f2(e.eave)}, ground y ${f2(e.bottom)}`,
-    e.ridge === null ? 'ridge flat share n/a' : `ridge flat share ${f2(e.ridge)}`,
-    boxesText('windows', e.windows),
-    boxesText('doors', e.doors),
-    boxesText('chimneys', e.chimneys),
-    boxesText('panes', e.panes),
-    boxesText('beams', e.beams),
-    e.plinth ? `plinth ${boxText(e.plinth)}` : 'plinth none',
-    boxesText('steps', e.steps),
-  ].join('; ');
+export function elevationFrameText(
+  e: Elevation,
+  rings: ReadonlyArray<ReadonlyArray<Pt>> = e.roofRings ?? []
+): string {
+  const box = elevationBox(e);
+  const cx = box.x + box.w / 2;
+  const cy = box.y + box.h / 2;
+  const f3 = (n: number) => n.toFixed(3);
+  const at = (b: { x: number; y: number; w: number; h: number }) =>
+    `at [${f3((b.x + b.w / 2 - cx) / box.w)}, ${f3((cy - (b.y + b.h / 2)) / box.h)}] size [${f3(b.w / box.w)}, ${f3(b.h / box.h)}]`;
+  const list = (
+    name: string,
+    boxes: ReadonlyArray<{ x: number; y: number; w: number; h: number }>
+  ) => (boxes.length ? `${name}: ${boxes.slice(0, 24).map(at).join(' | ')}` : `${name}: none`);
+  const lines = [
+    `Frame: the object's front face spans the image box x ${f3(box.x)}–${f3(box.x + box.w)}, y ${f3(box.y)}–${f3(box.y + box.h)} (y down). In object units x, y ∈ [−0.5, 0.5], y up; sizes are fractions of the box.`,
+    `Wall band (below the eave): ${at({ x: e.wallLeft, y: e.eave, w: e.wallRight - e.wallLeft, h: e.bottom - e.eave })}`,
+    `Roof band (ridge to eave): ${at({ x: e.left, y: e.top, w: e.right - e.left, h: e.eave - e.top })}`,
+    list('Windows', e.windows),
+    list('Doors', e.doors),
+    list('Chimneys', e.chimneys),
+    list('Glass panes', e.panes),
+    list('Beams / posts', e.beams),
+    e.plinth ? `Plinth: ${at(e.plinth)}` : 'Plinth: none',
+    list('Steps', e.steps),
+  ];
+  rings.slice(0, 6).forEach((ring, i) => {
+    const pts = thin(ring, MAX_RING_POINTS);
+    if (pts.length < 3) return;
+    const xs = pts.map((p) => p[0]);
+    const ys = pts.map((p) => p[1]);
+    const b = {
+      x: Math.min(...xs),
+      y: Math.min(...ys),
+      w: Math.max(...xs) - Math.min(...xs),
+      h: Math.max(...ys) - Math.min(...ys),
+    };
+    if (!(b.w > 0) || !(b.h > 0)) return;
+    const unit = pts.map(([x, y]) => [
+      +((x - b.x) / b.w - 0.5).toFixed(3),
+      +(0.5 - (y - b.y) / b.h).toFixed(3),
+    ]);
+    lines.push(
+      `Roof outline ${i + 1} (extrude part, depth is yours): ${at(b)} points ${JSON.stringify(unit)}`
+    );
+  });
+  return lines.join('\n');
 }
 
 /** Draft detail line for the writer question (`recall 0.70 · …`), from the fields measured. */

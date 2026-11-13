@@ -94,6 +94,10 @@ export interface CodeLoopInput {
   execute?: typeof runSandboxedCode;
   /** Called after every round, kept or not (debug dump); must not throw into the loop. */
   onRound?: (event: CodeRoundEvent) => void;
+  /** Static frame text of the drawing, repeated every round (`elevationFrameText`). */
+  frameText?: string;
+  /** Stop as soon as the best score reaches this (0–1): a good match ends the loop. */
+  goal?: number;
   /** Writer prompt version of this run, stored with the code (default: current). */
   promptVersion?: number;
   roundsMax?: number;
@@ -127,6 +131,8 @@ export async function refineWithCode(input: CodeLoopInput): Promise<CodeLoopResu
     score,
     execute = runSandboxedCode,
     onRound,
+    frameText,
+    goal,
     promptVersion = CODE_PROMPT_VERSION,
     roundsMax = CODE_ROUNDS_MAX,
     minGain = CODE_MIN_GAIN,
@@ -154,6 +160,12 @@ export async function refineWithCode(input: CodeLoopInput): Promise<CodeLoopResu
   };
   for (let round = 1; round <= Math.max(1, roundsMax); round++) {
     if (signal?.aborted) break;
+    if (goal !== undefined && bestScore >= goal) {
+      console.info(
+        `[vision] 3D code for "${label}": goal ${goal.toFixed(2)} reached (${bestScore.toFixed(3)}), stop`
+      );
+      break;
+    }
     let image: string;
     try {
       image = await sheet(best);
@@ -173,6 +185,7 @@ export async function refineWithCode(input: CodeLoopInput): Promise<CodeLoopResu
       ...(measuresText ? { measuresText } : {}),
       ...(code ? { currentCode: code } : {}),
       ...(droppedText ? { droppedText } : {}),
+      ...(frameText ? { frameText } : {}),
     });
     const roundStart = Date.now();
     const answered = await writeCode(image, question, signal).catch(() => null);

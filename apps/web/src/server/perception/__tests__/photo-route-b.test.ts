@@ -5,7 +5,6 @@ vi.mock('server-only', () => ({}));
 import { kitToRecipe } from '@/lib/object-kit';
 import type { ShapeTarget } from '@/lib/object-shape';
 import { runObjectShape } from '../object-shape';
-import { CODE_PROMPT_GENERIC_VERSION } from '../shape-code';
 import { GOLDEN_SHAPES, goldenBox, goldenOutline, goldenSvg, PHOTO } from '../__fixtures__/shape';
 
 /** Route B on the photo path (PQ-T57): every object reaches the writer, the draft survives a loss. */
@@ -45,7 +44,7 @@ describe('photo path route B (PQ-T57)', () => {
     expect(String(image)).toMatch(/^data:image\//);
     expect(question).toContain('Draft score');
     expect(question).toContain(`(${c.prior.archetype})`);
-    expect(version).toBe(CODE_PROMPT_GENERIC_VERSION);
+    expect(version).toBeUndefined(); // the live default prompt (v3)
     // The writer's body is out of range: no gain, the fitted draft is what ships.
     expect(onCode).not.toHaveBeenCalled();
     expect(shape.mode).toBe('recipe');
