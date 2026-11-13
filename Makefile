@@ -167,10 +167,10 @@ eval-stages: ## Replay recorded stage loops offline (shape/real/*.stages.json fr
 	$(need_ws)
 	EVAL_STAGES_DIR="$(CURDIR)/apps/web/src/server/perception/__fixtures__/shape/real" $(PNPM) --filter $(WEB) exec vitest run src/server/perception/__tests__/eval-stages.test.ts
 
-facade-e2e: ## Facade → 3D end to end on live Meta, stage loop included (FRONT=view.png OUT=dir [ID=name → stage capture kept] [LABEL=… SCENERY=…] [PROMPT=…], costs API calls)
+facade-e2e: ## Facade → 3D end to end on live Meta, stage loop included (FRONT=view.png OUT=dir [ID=name → stage capture kept] [LABEL=… SCENERY=…] [PROMPT=…] [CODE_MODEL=muse-spark-1.3 → cheaper code writer than Wonder], costs API calls)
 	$(need_ws)
 	@test -n "$(FRONT)" -a -n "$(OUT)" || { echo "Usage: make facade-e2e FRONT=path/front.png OUT=dir [PROMPT='cottage with a red tin roof' to draw FRONT first]"; exit 1; }
-	eval "$$(make -s env-export)" && FACADE_E2E_FRONT="$(abspath $(FRONT))" FACADE_E2E_OUT="$(abspath $(OUT))" $(if $(PROMPT),FACADE_E2E_FRONT_PROMPT="$(PROMPT)") $(if $(LABEL),FACADE_E2E_LABEL="$(LABEL)") $(if $(SCENERY),FACADE_E2E_SCENERY="$(SCENERY)") $(if $(ID),FACADE_E2E_ID="$(ID)" FACADE_E2E_CAPTURE_DIR="$(CURDIR)/apps/web/src/server/perception/__fixtures__/shape/real") $(PNPM) --filter $(WEB) exec vitest run src/server/perception/__tests__/facade-e2e.test.ts
+	eval "$$(make -s env-export)" && FACADE_E2E_FRONT="$(abspath $(FRONT))" FACADE_E2E_OUT="$(abspath $(OUT))" $(if $(CODE_MODEL),META_CODE_MODEL="$(CODE_MODEL)") $(if $(PROMPT),FACADE_E2E_FRONT_PROMPT="$(PROMPT)") $(if $(LABEL),FACADE_E2E_LABEL="$(LABEL)") $(if $(SCENERY),FACADE_E2E_SCENERY="$(SCENERY)") $(if $(ID),FACADE_E2E_ID="$(ID)" FACADE_E2E_CAPTURE_DIR="$(CURDIR)/apps/web/src/server/perception/__fixtures__/shape/real") $(PNPM) --filter $(WEB) exec vitest run src/server/perception/__tests__/facade-e2e.test.ts
 
 photo-audit: ## Every object of a real photo built the app way (2D view → 3D → stages) on live Meta: PHOTO=… TARGETS=targets.json OUT=dir [ONLY=det-1,det-3] (sheet.png + audit.md, costs API calls)
 	$(need_ws)
