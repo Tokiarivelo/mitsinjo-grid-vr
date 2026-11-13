@@ -152,6 +152,13 @@ eval-parts: ## Free-parts call on live Spark over the real captures (PROMPT=1,2,
 	$(need_ws)
 	eval "$$(make -s env-export)" && EVAL_PARTS=1 EVAL_SHAPE_DIR="$(CURDIR)/apps/web/src/server/perception/__fixtures__/shape/real" $(if $(PROMPT),EVAL_SHAPE_PROMPTS="$(PROMPT)") $(if $(IDS),EVAL_PARTS_IDS="$(IDS)") $(PNPM) --filter $(WEB) exec vitest run src/server/perception/__tests__/eval-shape.test.ts -t "make eval-parts"
 
+code-dump: ## Latest route-B debug dump: Wonder build() code + Blender .py per round (debug/shape-code, PQ-T56)
+	@d=$$(ls -dt debug/shape-code/*/ 2>/dev/null | head -1); if [ -z "$$d" ]; then echo "no dump yet: shape a house with LLM_PROVIDER=meta"; else echo "$$d"; ls "$$d"; cat "$$d/summary.json" 2>/dev/null; fi
+
+blender-render: ## Render a dumped model headless: make blender-render F=debug/shape-code/<run>/final.blender.py (needs blender, PQ-T56)
+	@test -n "$(F)" || { echo "usage: make blender-render F=<file.blender.py>"; exit 1; }
+	blender --background --python "$(F)" -- "$(basename $(F)).png"
+
 eval-code: ## Scored route-B vs route-A eval on willow/car/house/appliance, to stall (IDS=… limits the run; PQ-T55 §12.13, costs Wonder + Spark calls)
 	$(need_ws)
 	eval "$$(make -s env-export)" && EVAL_CODE=1 EVAL_CODE_DIR="$(CURDIR)/apps/web/src/server/perception/__fixtures__/shape/real" $(if $(IDS),EVAL_CODE_IDS="$(IDS)") $(PNPM) --filter $(WEB) exec vitest run src/server/perception/__tests__/eval-code.test.ts -t "make eval-code"
@@ -360,5 +367,5 @@ clean: ## Remove build/test output (keeps node_modules)
 clean-all: clean ## Also remove node_modules
 	rm -rf node_modules apps/*/node_modules packages/*/node_modules
 
-.PHONY: help install env setup-claude browsers dev port dev-mock build start test test-engine test-web test-shape family-photos shape-capture shape-judge sam-probe part-probe facade-e2e photo-audit eval-stages eval-code shape-report shape-shots improve-shot test-watch coverage e2e \
+.PHONY: code-dump blender-render help install env setup-claude browsers dev port dev-mock build start test test-engine test-web test-shape family-photos shape-capture shape-judge sam-probe part-probe facade-e2e photo-audit eval-stages eval-code shape-report shape-shots improve-shot test-watch coverage e2e \
         typecheck lint bridge bridge-sim test-bridge format format-check format-changed git-hooks check ci shots mockups scenarios-publish analyze scene-audit scene-audit-gpu lighthouse claude env-export mcp status todo deploy-link deploy clean clean-all video-tts-setup video-voice video-sfx video-capture video-canvas video-build video-thumbnail hf-dataset hf-publish

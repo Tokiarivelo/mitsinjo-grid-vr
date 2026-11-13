@@ -512,6 +512,15 @@ une étape de plus, sans nouvelle infrastructure.
 - **À mesurer au build** : démarrage à froid avec le WASM, mémoire de la fonction, taille du point de reprise avec le
   code. Ces trois mesures n'ont pas été faites : seules les 2,4 Mo du paquet le sont.
 
+**Débogage du code généré (PQ-T56).** Chaque objet passé par la voie B écrit un dossier
+`debug/shape-code/<date>-<objet>/` (ignoré par git ; `SHAPE_CODE_DUMP_DIR`, `off` pour couper) : `draft.blender.py`
+(gabarit A), puis par tour `round-N.build.js` (le `build()` écrit par Wonder), `round-N.blender.py` (le modèle qu'il
+construit, maillage identique au viewer, rejouable dans Blender), `round-N.question.txt`, `round-N.json` (score, gardé,
+raison du rejet, durées, coût), `final.*` si un tour gagne, `summary.json`. `make code-dump` affiche le dernier,
+`make blender-render F=…` le rend sans interface. Les logs `[vision] 3D route B …` et `3D code round …` disent
+pourquoi un tour est écarté (aucun code, échec d'exécution, pas de gain avec les deux scores). Le writer reçoit aussi
+les boîtes mesurées de l'élévation 2D (toit, égout, chaque ouverture) : il place les ouvertures dessus, pas à égale distance.
+
 **Boucle de raffinage.**
 
 1. Wonder reçoit la photo, le rendu courant (face et ¾), le score détaillé, l'anatomie manquante (§5) et le code
@@ -652,5 +661,5 @@ Vérification à chaque pas : `make test-shape` · `make shape-report` (table «
 4. ~~Budgets du fond~~ : décidé le 2026-11-11, **aucune limite de temps** (voir E12, point 7).
 5. **Blender sans interface** comme outil hors ligne (rendus de référence, validation de maillage) : ajoute un
    exécutable au dépôt pour un gain réservé aux évaluations ; non recommandé avant les étapes 1 à 8.
-6. **Modèle de code** : `muse-wonder-1.0` retenu ; une variante plus grosse (« full ») à chercher dans la liste de modèles de l'API (`META_CODE_MODEL`).
+6. **Modèle de code** : `muse-wonder-1.0` retenu. Liste `/models` relevée le 2026-11-13 : `muse-ember-1.0, muse-wonder-1.0, sam-3.1, muse-spark-1.1/1.2/1.3 (+contributor), muse-voice-transcribe-1.0, muse-image-1.0` : **aucune variante « full » de Wonder n'existe**. `META_CODE_MODEL` la prendra le jour où elle paraît.
 7. ~~Enchaînement des tours sur Vercel~~ : décidé, point de reprise porté par le navigateur (§8bis), pas de Neon.

@@ -44,6 +44,19 @@ export function codeRoundValid(r: Pick<CodeRound, 'bytes' | 'score' | 'reason'>)
   return r.bytes > 0 && (r.score !== null || r.reason === 'unscorable');
 }
 
+/** Everything one round produced, for the debug dump (PQ-T56): the body, its model, why it lost. */
+export interface CodeRoundEvent extends CodeRound {
+  question: string;
+  /** Score the round had to beat. */
+  baseScore: number;
+  /** The `build()` body the writer answered, null when it answered nothing usable. */
+  rawBody: string | null;
+  /** Executed recipe, null when the body failed to run. */
+  recipe: ObjectRecipe | null;
+  /** Dropped-part reasons (`index: reason`). */
+  issues: string[];
+}
+
 export interface CodeLoopResult {
   recipe: ObjectRecipe;
   /** Winning body, null when no round beat the draft. */
@@ -79,6 +92,8 @@ export interface CodeLoopInput {
   score: (recipe: ObjectRecipe) => Promise<number | null>;
   /** Sandbox execution (default: the §8bis QuickJS runner; tests inject fakes). */
   execute?: typeof runSandboxedCode;
+  /** Called after every round, kept or not (debug dump); must not throw into the loop. */
+  onRound?: (event: CodeRoundEvent) => void;
   roundsMax?: number;
   minGain?: number;
   signal?: AbortSignal;
@@ -109,6 +124,7 @@ export async function refineWithCode(input: CodeLoopInput): Promise<CodeLoopResu
     writeCode,
     score,
     execute = runSandboxedCode,
+    onRound,
     roundsMax = CODE_ROUNDS_MAX,
     minGain = CODE_MIN_GAIN,
     signal,
@@ -119,6 +135,20 @@ export async function refineWithCode(input: CodeLoopInput): Promise<CodeLoopResu
   let stalls = 0;
   let droppedText: string | undefined;
   const rounds: CodeRound[] = [];
+  const record = (
+    r: CodeRound,
+    question: string,
+    rawBody: string | null,
+    recipe: ObjectRecipe | null,
+    issues: string[]
+  ) => {
+    rounds.push(r);
+    try {
+      onRound?.({ ...r, question, baseScore: bestScore, rawBody, recipe, issues });
+    } catch (err) {
+      console.warn('[vision] 3D code round hook failed:', err instanceof Error ? err.message : err);
+    }
+  };
   for (let round = 1; round <= Math.max(1, roundsMax); round++) {
     if (signal?.aborted) break;
     let image: string;
@@ -148,20 +178,29 @@ export async function refineWithCode(input: CodeLoopInput): Promise<CodeLoopResu
     const costUsd = model && answered?.usage ? estimateCostUsd(model, answered.usage) : undefined;
     const body = answered?.code ?? null;
     if (!body) {
-      rounds.push({
-        round,
-        bytes: 0,
-        score: null,
-        kept: false,
-        dropped: 0,
-        reason: 'no code',
-        ms: Date.now() - roundStart,
-        writeMs,
-        execMs: 0,
-        scoreMs: 0,
-        ...(model ? { model } : {}),
-        ...(costUsd !== undefined ? { costUsd } : {}),
-      });
+      record(
+        {
+          round,
+          bytes: 0,
+          score: null,
+          kept: false,
+          dropped: 0,
+          reason: 'no code',
+          ms: Date.now() - roundStart,
+          writeMs,
+          execMs: 0,
+          scoreMs: 0,
+          ...(model ? { model } : {}),
+          ...(costUsd !== undefined ? { costUsd } : {}),
+        },
+        question,
+        null,
+        null,
+        []
+      );
+      console.info(
+        `[vision] 3D code round ${round} for "${label}": ${answered ? 'writer answer unusable (empty, not JSON or over 64 Ko)' : 'writer call failed'}`
+      );
       stalls += 1;
       if (stalls >= CODE_STALLS_MAX) break;
       continue;
@@ -173,20 +212,26 @@ export async function refineWithCode(input: CodeLoopInput): Promise<CodeLoopResu
     }));
     const execMs = Date.now() - execStart;
     if (!exec.ok) {
-      rounds.push({
-        round,
-        bytes: Buffer.byteLength(body, 'utf8'),
-        score: null,
-        kept: false,
-        dropped: 0,
-        reason: trunc(exec.reason, 120),
-        ms: Date.now() - roundStart,
-        writeMs,
-        execMs,
-        scoreMs: 0,
-        ...(model ? { model } : {}),
-        ...(costUsd !== undefined ? { costUsd } : {}),
-      });
+      record(
+        {
+          round,
+          bytes: Buffer.byteLength(body, 'utf8'),
+          score: null,
+          kept: false,
+          dropped: 0,
+          reason: trunc(exec.reason, 120),
+          ms: Date.now() - roundStart,
+          writeMs,
+          execMs,
+          scoreMs: 0,
+          ...(model ? { model } : {}),
+          ...(costUsd !== undefined ? { costUsd } : {}),
+        },
+        question,
+        body,
+        null,
+        []
+      );
       console.info(
         `[vision] 3D code round ${round} for "${label}": failed (${trunc(exec.reason, 120)})`
       );
@@ -201,20 +246,30 @@ export async function refineWithCode(input: CodeLoopInput): Promise<CodeLoopResu
     const s = await score(exec.recipe).catch(() => null);
     const scoreMs = Date.now() - scoreStart;
     const kept = s !== null && s - bestScore >= minGain;
-    rounds.push({
-      round,
-      bytes: Buffer.byteLength(body, 'utf8'),
-      score: s,
-      kept,
-      dropped: exec.issues.length,
-      ...(s === null ? { reason: 'unscorable' } : {}),
-      ms: Date.now() - roundStart,
-      writeMs,
-      execMs,
-      scoreMs,
-      ...(model ? { model } : {}),
-      ...(costUsd !== undefined ? { costUsd } : {}),
-    });
+    record(
+      {
+        round,
+        bytes: Buffer.byteLength(body, 'utf8'),
+        score: s,
+        kept,
+        dropped: exec.issues.length,
+        ...(s === null
+          ? { reason: 'unscorable' }
+          : !kept
+            ? { reason: `no gain (${s.toFixed(3)} vs ${bestScore.toFixed(3)}, needs +${minGain})` }
+            : {}),
+        ms: Date.now() - roundStart,
+        writeMs,
+        execMs,
+        scoreMs,
+        ...(model ? { model } : {}),
+        ...(costUsd !== undefined ? { costUsd } : {}),
+      },
+      question,
+      body,
+      exec.recipe,
+      exec.issues.map((i) => `${i.index}: ${i.reason}`)
+    );
     const secs = ((Date.now() - roundStart) / 1000).toFixed(1);
     if (kept && s !== null) {
       console.info(

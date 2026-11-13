@@ -97,3 +97,31 @@ describe('shape-code (PQ-T45)', () => {
     expect(without).toMatch(/Object: willow\. Draft/);
   });
 });
+
+describe('elevationMeasuresText (PQ-T56)', () => {
+  it('lists roof edges, eave and every opening box', async () => {
+    const { elevationMeasuresText } = await import('../shape-code');
+    const text = elevationMeasuresText({
+      aspect: 1.5,
+      left: 0.05,
+      right: 0.95,
+      wallLeft: 0.1,
+      wallRight: 0.9,
+      top: 0.1,
+      eave: 0.35,
+      bottom: 0.95,
+      ridge: null,
+      windows: [{ x: 0.2, y: 0.4, w: 0.1, h: 0.2 }],
+      doors: [],
+      chimneys: [],
+      plinth: null,
+      steps: [],
+      panes: [],
+      beams: [],
+    });
+    expect(text).toContain('eave y 0.35');
+    expect(text).toContain('windows 1: [0.20,0.40,0.10,0.20]');
+    expect(text).toContain('doors 0');
+    expect(text).toContain('ridge flat share n/a');
+  });
+});

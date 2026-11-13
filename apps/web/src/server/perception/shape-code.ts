@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { env } from '@/lib/env';
 import { PART_KINDS, RECIPE_MATERIALS, type ObjectRecipe } from '@/lib/object-shape';
 import { CODE_MAX_BYTES } from './code-sandbox';
+import type { Elevation } from './facade-house';
 
 /**
  * Route-B writer (PQ-T45, §8bis): the prompt Wonder answers with a `build()` body, the schema of
@@ -39,7 +40,7 @@ export const CODE_SYSTEM_PROMPT = [
   CODE_API_SPEC,
   'OBSERVE, DO NOT GUESS: every value you choose cites the measure or the photo zone that justifies it in a short comment (e.g. // overhang: roofline measured 6 % wider than the wall). A face the photo does not show is imagined from the object kind (thatch overhangs more than tile) and stays plausible and symmetric.',
   'Rebuild the draft for THIS object: keep what the photo confirms, fix what the score and the current render prove wrong (silhouette, part counts and places, colours per part). Small, exact parts beat many approximate ones.',
-  'House rules: the roof overhang and slope come from the measured roofline; windows and doors sit on all four faces where the photo or the drawing shows them; the roof foot overlaps the wall top (no groove at the joint); gable ends are wall, not roof.',
+  'House rules: the roof overhang and slope come from the measured roofline; windows and doors sit on all four faces where the photo or the drawing shows them; the roof foot overlaps the wall top (no groove at the joint); gable ends are wall, not roof. Front openings go at the measured elevation boxes (image fractions [x,y,w,h], y down → part at/size, y up), never spread evenly.',
   'Never output an energy value (no watt, kW, kWh). Never invent colours: main/secondary/accent roles only. Answer only the JSON schema: { "code": "<build() body>" }.',
 ].join('\n');
 
@@ -62,7 +63,7 @@ const CODE_GROWN_OPTIONS = [
 /** Per-kind rules (PQ-T55 v2): the question names the kind, the matching section applies. */
 const CODE_KIND_RULES = [
   'Follow the section for this object kind:',
-  'HOUSE: the roof overhang and slope come from the measured roofline; windows and doors sit on all four faces where the photo or the drawing shows them; the roof foot overlaps the wall top (no groove at the joint); gable ends are wall, not roof.',
+  'HOUSE: the roof overhang and slope come from the measured roofline; windows and doors sit on all four faces where the photo or the drawing shows them; the roof foot overlaps the wall top (no groove at the joint); gable ends are wall, not roof. Front openings go at the measured elevation boxes (image fractions [x,y,w,h], y down → part at/size, y up), never spread evenly.',
   'VEHICLE: a lofted body along x with a tapered nose and tail beats a box; the glasshouse (windscreen, side glass, rear window) is dark glass proud of the cabin; wheels sit in arches at the four corners, lights and bumpers at both ends.',
   'PLANT: trunk by sweep with base flare, limbs by branch, crown by scatter inside the measured outline volume, hanging strands by drape; the crown underside is hollow (trunk visible into it), never a solid dome.',
   'TECHNICAL (cabinet, machine, screen, tank, fan, lamp, pole, other): one hull box first, then door leaves, handles, vents, feet and displays as thin proud parts; symmetric unless the photo shows otherwise.',
@@ -163,4 +164,36 @@ export function buildCodeQuestion(q: CodeQuestionInput): string {
   if (q.droppedText) lines.push(`Fix these dropped parts: ${q.droppedText}.`);
   lines.push('Write the build() body.');
   return lines.join('\n');
+}
+
+const f2 = (n: number) => n.toFixed(2);
+const boxText = (b: { x: number; y: number; w: number; h: number }) =>
+  `[${f2(b.x)},${f2(b.y)},${f2(b.w)},${f2(b.h)}]`;
+const boxesText = (
+  name: string,
+  boxes: ReadonlyArray<{ x: number; y: number; w: number; h: number }>
+) =>
+  boxes.length
+    ? `${name} ${boxes.length}: ${boxes.slice(0, 16).map(boxText).join(' ')}`
+    : `${name} 0`;
+
+/**
+ * The measured 2D elevation as writer input (PQ-T56): roof edges, ridge, eave, ground and every
+ * opening box, image fractions (x right, y down, boxes [x,y,w,h]). Without it the writer only
+ * saw counts and spread the windows evenly, so every house looked alike.
+ */
+export function elevationMeasuresText(e: Elevation): string {
+  return [
+    `elevation image aspect ${f2(e.aspect)} (w/h)`,
+    `roof x ${f2(e.left)}–${f2(e.right)}, walls x ${f2(e.wallLeft)}–${f2(e.wallRight)}`,
+    `ridge y ${f2(e.top)}, eave y ${f2(e.eave)}, ground y ${f2(e.bottom)}`,
+    e.ridge === null ? 'ridge flat share n/a' : `ridge flat share ${f2(e.ridge)}`,
+    boxesText('windows', e.windows),
+    boxesText('doors', e.doors),
+    boxesText('chimneys', e.chimneys),
+    boxesText('panes', e.panes),
+    boxesText('beams', e.beams),
+    e.plinth ? `plinth ${boxText(e.plinth)}` : 'plinth none',
+    boxesText('steps', e.steps),
+  ].join('; ');
 }

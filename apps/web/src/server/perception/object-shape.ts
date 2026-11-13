@@ -67,6 +67,8 @@ import { formatElevationScore, scoreElevation, type ScoredElevation } from './el
 import { ELEVATION_ARCHETYPES, measureFacadeElevations } from './facade-views';
 import { routeHouseFacade } from './house-facade-route';
 import { codeSeedFor, refineWithCode } from './shape-code-loop';
+import { openCodeDump } from './code-dump';
+import { codeModel, elevationMeasuresText } from './shape-code';
 import type { ShapeCode } from './shape-capture';
 import { photoTarget, tagPhotoParts } from './photo-stages';
 import { fetchPartMasks, partMasksTimeout } from './part-masks';
@@ -749,6 +751,11 @@ export async function runObjectShape(
         }
         // PQ-T45 route B (house first, §8bis): Wonder rewrites the staged draft as
         // construction code, run in the sandbox and kept only on elevation gain.
+        if (!perception.writeBuildCode) {
+          console.info(
+            `[vision] 3D route B skipped for "${target.label}": this perception backend has no writeBuildCode (mock?), the template draft stays`
+          );
+        }
         if (perception.writeBuildCode) {
           const writeBuildCode = perception.writeBuildCode.bind(perception);
           const codeStart = Date.now();
@@ -757,23 +764,30 @@ export async function runObjectShape(
           const sparkDepth = kit.proportions.d / kit.proportions.w;
           const depth = side ? (depthRatio(front, side) ?? sparkDepth) : sparkDepth;
           const draftScore = yardstick(recipe);
+          const codeParams = {
+            seed: codeSeedFor(target.id),
+            proportions: recipe.proportions,
+            colors: kit.colors,
+            measures: {
+              eave: eaveShare,
+              yaw: yaw0,
+              depth,
+              windows: front.windows.length,
+              doors: front.doors.length,
+            },
+          };
+          console.info(
+            `[vision] 3D route B for "${target.label}": Wonder (${codeModel()}) rewrites the draft as build() code, draft ${(draftScore.score / 100).toFixed(3)}`
+          );
+          const dump = openCodeDump(target.label, codeModel());
+          dump?.draft(recipe, draftScore.score / 100, codeParams);
           const looped = await refineWithCode({
             label: target.label,
             draft: recipe,
             baseScore: draftScore.score / 100,
-            params: {
-              seed: codeSeedFor(target.id),
-              proportions: recipe.proportions,
-              colors: kit.colors,
-              measures: {
-                eave: eaveShare,
-                yaw: yaw0,
-                depth,
-                windows: front.windows.length,
-                doors: front.doors.length,
-              },
-            },
-            measuresText: `eave ${eaveShare.toFixed(2)} · yaw ${yaw0.toFixed(2)} · depth ${depth.toFixed(2)} · windows ${front.windows.length} · doors ${front.doors.length}`,
+            params: codeParams,
+            ...(dump ? { onRound: (e) => dump.round(e) } : {}),
+            measuresText: `eave ${eaveShare.toFixed(2)} · yaw ${yaw0.toFixed(2)} · depth ${depth.toFixed(2)} · windows ${front.windows.length} · doors ${front.doors.length}. ${elevationMeasuresText(front)}`,
             detailText: `iou ${draftScore.iou.toFixed(2)} · edge ${draftScore.edgeF1.toFixed(2)} · openings ${draftScore.openings.matched}/${draftScore.openings.target}`,
             sheet: async () => imageUrl,
             writeCode: (img, q, sig) => writeBuildCode(img, q, sig),
@@ -781,6 +795,11 @@ export async function runObjectShape(
             ...(signal ? { signal } : {}),
           });
           timed('code', codeStart);
+          dump?.final({
+            code: looped.code,
+            recipe: looped.recipe,
+            score: looped.rounds.filter((r) => r.kept).at(-1)?.score ?? draftScore.score / 100,
+          });
           if (looped.code) {
             recipe = looped.recipe;
             onCode?.({ text: looped.code, seed: looped.seed, promptVersion: looped.promptVersion });

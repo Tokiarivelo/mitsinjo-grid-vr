@@ -75,3 +75,6 @@ Thumbs.db
 
 # Local reference photos for manual checks (PQ-T1), never committed
 /resources/
+
+# Route-B debug dump (PQ-T56): generated build() code, Blender scripts, questions
+debug/
