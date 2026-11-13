@@ -12,12 +12,20 @@ const envSchema = z.object({
   // Perception models (voice, vision, segmentation, image) and spend cap
   META_VOICE_MODEL: z.string().default('muse-voice-transcribe-1.0'),
   META_VISION_MODEL: z.string().default('muse-spark-1.3'),
-  /** Final 3D check and re-refinement stage (deep reasoning; falls back to META_VISION_MODEL). */
-  META_REFINE_MODEL: z.string().default('muse-wonder-1.0'),
-  /** Rubric judge of the 3D models (PQ-T4, offline `make shape-judge`). */
-  META_JUDGE_MODEL: z.string().default('muse-wonder-1.0'),
+  /** Default model of every 3D step (kit, parts, critic, views check, part questions): the cheap contributor Spark. Changeable per step in the /village gear. */
+  META_3D_MODEL: z.string().default('muse-spark-1.3-contributor'),
+  /** Default writer of the 3D construction code (see META_CODE_MODEL); contributor Spark, not Wonder. */
+  META_REFINE_MODEL: z.string().default('muse-spark-1.3-contributor'),
+  /** Rubric judge of the 3D models (PQ-T4, offline `make shape-judge`); contributor Spark. */
+  META_JUDGE_MODEL: z.string().default('muse-spark-1.3-contributor'),
   /** Writer of the sandboxed construction code, route B (PQ-T45, §8bis); unset = META_REFINE_MODEL. */
   META_CODE_MODEL: z.string().optional(),
+  /** Per-step 3D vision overrides (PQ-T67); each unset = META_VISION_MODEL. */
+  META_KIT_MODEL: z.string().optional(),
+  META_PARTS_MODEL: z.string().optional(),
+  META_CRITIC_MODEL: z.string().optional(),
+  META_VIEWSCHECK_MODEL: z.string().optional(),
+  META_ASKPART_MODEL: z.string().optional(),
   /** Folder of the route-B debug dump (PQ-T56): code, Blender .py, logs per round. `off` disables; unset = `debug/shape-code` outside production. */
   SHAPE_CODE_DUMP_DIR: z.string().optional(),
   META_SEGMENT_MODEL: z.string().default('sam-3.1'),
@@ -36,7 +44,12 @@ const envSchema = z.object({
     .enum(['true', 'false'])
     .default('false')
     .transform((v) => v === 'true'),
-  /** Muse cards in the stage loop, views check and final check (PQ-T15, off until `make eval-stages` shows no loss). */
+  /** Views reconstruction (PQ-T69): also draw the back and the left side when not validated (2 more Muse Image calls per object). */
+  SHAPE_FOUR_FACES: z
+    .enum(['true', 'false'])
+    .default('true')
+    .transform((v) => v === 'true'),
+  /** Muse cards in the stage loop, views check and final check (PQ-T15, off by default). */
   SHAPE_LOOP_CARDS: z
     .enum(['true', 'false'])
     .default('false')
@@ -79,13 +92,20 @@ export const env = envSchema.parse({
   GLIMMER_API_KEY: process.env.GLIMMER_API_KEY,
   META_VOICE_MODEL: process.env.META_VOICE_MODEL || undefined,
   META_VISION_MODEL: process.env.META_VISION_MODEL || undefined,
+  META_3D_MODEL: process.env.META_3D_MODEL || undefined,
   META_REFINE_MODEL: process.env.META_REFINE_MODEL || undefined,
   META_JUDGE_MODEL: process.env.META_JUDGE_MODEL || undefined,
   META_CODE_MODEL: process.env.META_CODE_MODEL || undefined,
+  META_KIT_MODEL: process.env.META_KIT_MODEL || undefined,
+  META_PARTS_MODEL: process.env.META_PARTS_MODEL || undefined,
+  META_CRITIC_MODEL: process.env.META_CRITIC_MODEL || undefined,
+  META_VIEWSCHECK_MODEL: process.env.META_VIEWSCHECK_MODEL || undefined,
+  META_ASKPART_MODEL: process.env.META_ASKPART_MODEL || undefined,
   SHAPE_CODE_DUMP_DIR: process.env.SHAPE_CODE_DUMP_DIR || undefined,
   META_SEGMENT_MODEL: process.env.META_SEGMENT_MODEL || undefined,
   SHAPE_KIT_CARD_FAMILIES: process.env.SHAPE_KIT_CARD_FAMILIES || undefined,
   SHAPE_SIDE_V2: process.env.SHAPE_SIDE_V2 || undefined,
+  SHAPE_FOUR_FACES: process.env.SHAPE_FOUR_FACES || undefined,
   SHAPE_LOOP_CARDS: process.env.SHAPE_LOOP_CARDS || undefined,
   SHAPE_KIT_SAMPLES: process.env.SHAPE_KIT_SAMPLES || undefined,
   SHAPE_CACHE: process.env.SHAPE_CACHE || undefined,

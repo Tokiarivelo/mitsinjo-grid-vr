@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { env } from '@/lib/env';
+import type { StepModelsSelection } from '@/lib/step-models';
 import { errorWithCause, isTransientProviderError } from '@/server/copilot/providers/transient';
 import { spendGuard, type SpendGuard } from '@/server/spend';
 import type {
@@ -8,18 +9,16 @@ import type {
   PartsSubject,
   PerceptionBackend,
   PerceptionCall,
-  ShapeOpsOptions,
   ShapeSubject,
 } from './backend';
 import { MetaPerceptionBackend } from './meta';
 import { MockPerceptionBackend } from './mock';
-import type { StageSheet } from './shape-script-prompt';
 import type {
   CodeResult,
-  ShapeOpsResult,
   CriticResult,
   JudgeResult,
   DetectionResult,
+  ClassMaterialsResult,
   PartAskResult,
   PerceptionSource,
   SegmentResult,
@@ -167,27 +166,26 @@ export class PerceptionClient {
     );
   }
 
+  /** Materials of a reconstruction's colour classes (PQ-T69); a backend without it answers null. */
+  nameClasses(
+    imageUrl: string,
+    question: string,
+    classes: number,
+    signal?: AbortSignal
+  ): Promise<ClassMaterialsResult> {
+    return this.run('nameClasses', (b) =>
+      b.nameClasses
+        ? b.nameClasses(imageUrl, question, classes, signal)
+        : Promise.resolve({ model: b.name, usage: {}, result: { materials: null } })
+    );
+  }
+
   judgeShape(imageUrl: string, question: string, signal?: AbortSignal): Promise<JudgeResult> {
     return this.run('judgeShape', (b) => b.judgeShape(imageUrl, question, signal));
   }
 
   checkViews(imageUrl: string, question: string, signal?: AbortSignal): Promise<ViewsCheckResult> {
     return this.run('checkViews', (b) => b.checkViews(imageUrl, question, signal));
-  }
-
-  /** Shape loop stage patch (PG-T15); a backend without it answers an empty patch. */
-  proposeShapeOps(
-    imageUrl: string,
-    question: string,
-    signal?: AbortSignal,
-    sheet?: StageSheet,
-    opts?: ShapeOpsOptions
-  ): Promise<ShapeOpsResult> {
-    return this.run('proposeShapeOps', (b) =>
-      b.proposeShapeOps
-        ? b.proposeShapeOps(imageUrl, question, signal, sheet, opts)
-        : Promise.resolve({ model: b.name, usage: {}, result: { ops: [] } })
-    );
   }
 
   /** Route-B construction code (PQ-T45); a backend without it answers null (no route B). */
@@ -205,12 +203,18 @@ export class PerceptionClient {
   }
 }
 
-/** Client for one chat session (`budgetKey` = session id): Meta when configured, else mock. */
-export function getPerceptionClient(budgetKey = 'global'): PerceptionClient {
+/**
+ * Client for one chat session (`budgetKey` = session id): Meta when configured, else mock.
+ * `stepModels` = the operator's stored per-step choice: wins over the env defaults.
+ */
+export function getPerceptionClient(
+  budgetKey = 'global',
+  stepModels?: StepModelsSelection
+): PerceptionClient {
   const wantsMeta = env.LLM_PROVIDER === 'meta';
   const hasKey = Boolean(env.META_API_KEY);
   return new PerceptionClient(
-    wantsMeta && hasKey ? new MetaPerceptionBackend() : null,
+    wantsMeta && hasKey ? new MetaPerceptionBackend({ stepModels }) : null,
     new MockPerceptionBackend(),
     spendGuard,
     budgetKey,

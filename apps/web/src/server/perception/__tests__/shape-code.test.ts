@@ -111,44 +111,6 @@ describe('modeler prompt v3 (PQ-T58)', () => {
   });
 });
 
-describe('elevationFrameText (PQ-T58)', () => {
-  it('converts the drawing to object units: openings and roof rings ready to paste', async () => {
-    const { elevationFrameText } = await import('../shape-code');
-    const text = elevationFrameText(
-      {
-        aspect: 1.5,
-        left: 0.1,
-        right: 0.9,
-        wallLeft: 0.1,
-        wallRight: 0.9,
-        top: 0.1,
-        eave: 0.4,
-        bottom: 0.9,
-        ridge: null,
-        windows: [{ x: 0.1, y: 0.5, w: 0.4, h: 0.2 }],
-        doors: [],
-        chimneys: [],
-        plinth: null,
-        steps: [],
-        panes: [],
-        beams: [],
-      },
-      [
-        [
-          [0.1, 0.4],
-          [0.9, 0.4],
-          [0.5, 0.1],
-        ],
-      ]
-    );
-    // Box = x 0.1–0.9, y 0.1–0.9: the window centre (0.3, 0.6) maps to (−0.25, −0.125).
-    expect(text).toContain('Windows: at [-0.250, -0.125] size [0.500, 0.250]');
-    expect(text).toContain('Doors: none');
-    expect(text).toContain('Roof outline 1 (extrude part');
-    expect(text).toContain('points [[');
-  });
-});
-
 describe('silhouetteFrameText (PQ-T61)', () => {
   it('gives any object its outline and parts in object units; the side view maps to depth', async () => {
     const { silhouetteFrameText } = await import('../shape-code');

@@ -533,7 +533,7 @@ function measuredHouse(
   const ridges = roof.gables.map((g) => 0.5 - g.top);
   const highest = Math.max(...ridges);
   // Draft overhang (PQ-T43): the `eaves` value clamped to the roofing bound. No photo measure
-  // here — KitRoof carries no wall extent, so outline-vs-wall (facade-house.ts:574) belongs to the
+  // here — KitRoof carries no wall extent, so outline-vs-wall (removed facade route) belongs to the
   // fit stage and the §8bis code (PQ-T45).
   const bound = boundForRoof(materials?.secondary);
   const overhang = Math.min(d?.eaves ?? bound, bound);

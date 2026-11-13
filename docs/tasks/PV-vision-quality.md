@@ -652,6 +652,17 @@ One task = one commit, with its Vitest test, its `contracts.md` update and its m
 
 **Exit Q6:** no object is finished by fixed code; every phase is timed and the slowness is located.
 
+## Q7. Views reconstruction (2026-11-13)
+
+- [x] **PQ-T69 Any object from its 2D views, by computation.** `server/perception/recon/`: object mask per
+      view, one frame for front / right / back / left, colour classes shared by the views, per-class visual
+      hull, surface slabs, score per view; one contributor call names the materials. Replaces the house
+      facade path, the per-archetype views path and their code routes (deleted).
+      **Test:** `recon.test.ts` (house, car, two views, mirrored view), `object-shape.test.ts` (route, fallback).
+      **Tool:** `make views-3d FRONT=… [RIGHT= BACK= LEFT=] OUT=…`.
+      _Open:_ not live-tested on Meta; one real drawing (same image as front and side) scored 0.76, coarse
+      (thin details lost at 96 rows, 32-part budget).
+
 ## Exit criteria
 
 Every real object meets methodology §9 · every prompt has a version and an eval behind it · the report, the
@@ -661,4 +672,4 @@ loop log and the docs agree · mock mode and the offline tests need no API key.
 
 Non-Meta image-to-3D models · Muse-written code run outside the §8bis sandbox (`eval`, Node `vm` and networked
 workers stay forbidden) · dense meshes or GLB export · projecting the photo on the model · generated top-down
-or back views · tuning a threshold so that one object passes.
+views · tuning a threshold so that one object passes.

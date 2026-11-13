@@ -1,7 +1,5 @@
 import 'server-only';
 
-import { elevationForCheckpoint, type StageLoopContext } from './stage-checkpoint';
-
 import {
   MAX_RECIPE_PARTS,
   clampParts,
@@ -22,7 +20,7 @@ import {
 import { archetypeOf, kitToRecipe, type KitArchetype, type ObjectKit } from '@/lib/object-kit';
 import { pathToRings } from '@/lib/vision';
 import type { PerceptionClient } from './client';
-import { codeProgress } from './code-progress';
+import { codeProgress, type StageProgress } from './code-progress';
 import { measureKitColors, type ObjectPixels } from './color-measure';
 import type { PhotoForRegions } from './region';
 import { measurePerspective, type Perspective } from './perspective';
@@ -40,7 +38,7 @@ import {
 } from './fusion';
 import { coverageForBox, needsFreeParts } from './free-recipe';
 import { conditionsFacts, conditionsTrust, measurePhotoConditions } from './photo-conditions';
-import { fitGrid, fitSilhouette, ringsMask } from './silhouette-fit';
+import { fitSilhouette } from './silhouette-fit';
 import {
   EDGE_COLUMNS,
   sampleNativeGray,
@@ -56,42 +54,11 @@ import { cropForShape, cropRectForShape } from './shape-crop';
 import { extractSwatches } from './photo-swatches';
 import { withLatheBody } from './lathe-body';
 import { fetchFacadeMasks, type FacadeMasks } from './facade-masks';
-import { depthRatio, facadeHouseRecipe, wallTimber, type Elevation } from './facade-house';
-import { STAGE_SAFETY_MS } from './shape-stages';
-import {
-  facadeStageLoop,
-  photoStageLoop,
-  viewStageLoop,
-  type StageProgress,
-  type StagesContinuation,
-} from './shape-stages-spark';
-import { formatElevationScore, scoreElevation, type ScoredElevation } from './elevation-score';
-import { ELEVATION_ARCHETYPES, measureFacadeElevations } from './facade-views';
-import { routeHouseFacade } from './house-facade-route';
-import { CODE_ROUNDS_MAX, codeSeedFor, refineWithCode } from './shape-code-loop';
+import { codeSeedFor, refineWithCode } from './shape-code-loop';
 import { openCodeDump } from './code-dump';
-import {
-  drawingDetailText,
-  drawingPalette,
-  drawingSheet,
-  drawingTarget,
-  scoreDrawing,
-  scoreDrawingSide,
-  skylineText,
-  stackSheets,
-} from './drawing-score';
-import {
-  CODE_PROMPT_VERSION,
-  codeModel,
-  detailTextOf,
-  elevationFrameText,
-  silhouetteFrameText,
-} from './shape-code';
+import { CODE_PROMPT_VERSION, codeModel, detailTextOf, silhouetteFrameText } from './shape-code';
 import { criticImage } from './spark-critic';
-import { stageSheet } from './shape-stages-spark';
 import type { ShapeCode } from './shape-capture';
-import { photoTarget, tagPhotoParts } from './photo-stages';
-import { scoreViews, VIEW_STAGES, viewStageNotes } from './view-stages';
 import { fetchPartMasks, partMasksTimeout } from './part-masks';
 import { fitPartParams, hasPartGroups, preparePartFit } from './part-fit';
 import {
@@ -111,22 +78,9 @@ import { askFamilies, asFamily } from './kit-ask';
 import { familyOf } from './routing';
 import type { ShapeResult } from './schemas';
 import { env } from '@/lib/env';
+import { museImage, museImageReady } from './facade-specialist';
+import { markDrawnInferred, RECON_MODEL, reconstructObject, type ReconDeps } from './recon';
 import { generateImaginedViews } from './views-generation';
-import {
-  ROUND_VIEW_ARCHETYPES,
-  VIEW_ARCHETYPES,
-  VIEWS_TOTAL_MS,
-  checkViewsModel,
-  imageBytes,
-  measureObjectViews,
-  roundViewRecipe,
-  keepPlausibleSide,
-  markDrawnInferred,
-  sparkDepthRatio,
-  viewIou,
-  viewsSheet,
-  viewsRecipe,
-} from './object-views';
 
 export { SHAPE_TIMEOUT_MS };
 
@@ -176,6 +130,9 @@ export function withMeasuredRepetition(
   return { kit: { ...kit, details }, repetition };
 }
 
+/** Archetypes whose walls get a measured tint per face (PQ-T44). */
+const ELEVATION_ARCHETYPES: ReadonlyArray<ObjectKit['archetype']> = ['house', 'building'];
+
 /** Archetypes with straight facade lines (PF-T5): a tree's or a person's edges point nowhere. */
 const STRAIGHT: ReadonlyArray<ObjectKit['archetype']> = [
   'house',
@@ -218,16 +175,10 @@ export interface ObjectShapeOptions {
   onCode?: (code: ShapeCode) => void;
   /** Observes the side elevation Muse Image drew from the facade (end-to-end eval only). */
   onSideView?: (png: Buffer) => void;
-  /** Gets the measured front elevation and its score against the model (end-to-end eval only). */
-  onElevation?: (front: Elevation, score: ScoredElevation) => void;
   /** Facade house loop progress (PG-T17, SSE `shape_stage`). */
   onStage?: (e: StageProgress) => void;
   /** Pause between two batches of a kept code round's reveal (PQ-T66; default 1 s, tests pass 0). */
   sculptStepMs?: number;
-  /** Gets the staged loop's seed model and measured drawing (stage capture, eval only). */
-  onStageSeed?: (seed: ObjectRecipe, front: Elevation) => void;
-  /** Stages that did not fit the first answer: the caller runs them in the background (PG-T18). */
-  onStagesLeft?: (rest: StagesContinuation) => void;
   /**
    * Kit prompt version for the kit and the free-parts calls (default: `KIT_PROMPT_VERSION`). Routes leave
    * it unset; evals pass 2 to run the whole pipeline on the Muse cards (PQ-T12).
@@ -242,24 +193,18 @@ export interface ObjectShapeOptions {
    * Appended to the fetched masks before the builders; builders ignore what they do not consume.
    */
   extraPartMasks?: import('@/lib/object-shape').PartMask[];
+  /**
+   * Views reconstruction (PQ-T69): what draws the missing views and names the materials.
+   * Default: Muse Image + the client's `nameClasses` when Meta is configured, else null (the mock
+   * never feeds the measured path). Tests pass their own or null.
+   */
+  recon?: ReconDeps | null;
 }
 
 /** The second kit sample is asked only with at least this budget (PQ-T18). */
 const SECOND_SAMPLE_MIN_MS = 40_000;
-/** Route-B rounds as stage events: the modeller's order (volumes → roofs → openings → details). */
-const FACADE_CODE_STAGES: ReadonlyArray<ShapeStageId> = [
-  'massing',
-  'roof',
-  'openings',
-  'accessories',
-  'details',
-].slice(0, CODE_ROUNDS_MAX) as ShapeStageId[];
 /** Photo path: fewer rounds (each ≈ 70 s; stalls stop earlier, §8bis). */
 const PHOTO_CODE_STAGES: ReadonlyArray<ShapeStageId> = ['body', 'details', 'details'];
-/** Yardstick (0–1) from which the code loop stops: a good match (PQ-T58). */
-const CODE_GOAL = 0.9;
-/** Share of the side drawing in the code route's score when a side exists (PQ-T63). */
-const SIDE_WEIGHT = 0.3;
 /** Photo path: the photo score is known to flatter mediocre models (methodology §3), so only a near-perfect one skips the writer. */
 const PHOTO_CODE_GOAL = 0.97;
 
@@ -287,7 +232,7 @@ function budgetEnd(from: number, budgetMs: number | null | undefined): number {
 export async function runObjectShape(
   perception: Pick<PerceptionClient, 'describeShape' | 'describeParts'> &
     Partial<
-      Pick<PerceptionClient, 'segmentImage' | 'checkViews' | 'proposeShapeOps' | 'writeBuildCode'>
+      Pick<PerceptionClient, 'segmentImage' | 'checkViews' | 'writeBuildCode' | 'nameClasses'>
     >,
   photo: PhotoForRegions | null,
   fullImageUrl: string,
@@ -301,28 +246,14 @@ export async function runObjectShape(
     onKit,
     onCode,
     onSideView,
-    onElevation,
     onStage,
     sculptStepMs,
-    onStageSeed,
-    onStagesLeft,
     promptVersion,
     kitSamples = env.SHAPE_KIT_SAMPLES,
     extraPartMasks,
+    recon: reconOption,
   }: ObjectShapeOptions = {}
 ): Promise<ObjectShape> {
-  /** Logs each ended stage (first answer and background). */
-  const logStage = (e: StageProgress) => {
-    if (e.state === 'done')
-      console.info(
-        `[vision] 3D stage ${e.index}/${e.total} ${e.stage} (${e.phase}) for "${target.label}": ${e.before?.toFixed(2)}→${e.after?.toFixed(2)} (${e.stop}${e.recipe ? ', model updated' : ''})`
-      );
-  };
-  /** First-answer stage events: logged and streamed (PG-T17). */
-  const stageProgress = (e: StageProgress) => {
-    logStage(e);
-    onStage?.(e);
-  };
   /** Ends a timed phase (PQ-T42): one log line and one `shape_timing` event. */
   const timed = (phase: ShapeTimingPhase, t0: number) => {
     const ms = Date.now() - t0;
@@ -436,50 +367,6 @@ export async function runObjectShape(
       return null;
     }
   };
-  /**
-   * Runs a staged loop (PG-T16…T20): the first answer's stages now, the rest handed to the
-   * caller for the background (`onStagesLeft`, logged the same way). Never worse than `seed`.
-   */
-  const followStages = async (
-    start: () => Promise<{ recipe: ObjectRecipe; rest: StagesContinuation | null }> | null,
-    seed: ObjectRecipe,
-    /** What the loop is built from: lets a later request resume it (Vercel limit). */
-    context?: StageLoopContext
-  ): Promise<ObjectRecipe> => {
-    const stagesStart = Date.now();
-    try {
-      const loop = await start();
-      if (!loop) return seed;
-      if (loop.rest) {
-        console.info(
-          `[vision] 3D stages left for the background for "${target.label}": ${loop.rest.stages.join(', ')}`
-        );
-        const rest = loop.rest;
-        onStagesLeft?.({
-          ...rest,
-          ...(context ? { context } : {}),
-          run: (o) =>
-            rest.run({
-              ...o,
-              onProgress: (e) => {
-                logStage(e);
-                o.onProgress(e.recipe ? { ...e, recipe: drawn(e.recipe) } : e);
-              },
-            }),
-        });
-      }
-      timed('stages', stagesStart);
-      return loop.recipe;
-    } catch (err) {
-      console.warn(
-        '[vision] 3D stages failed, keeping the seed:',
-        err instanceof Error ? err.message : err
-      );
-      timed('stages', stagesStart);
-      return seed;
-    }
-  };
-
   /** `ask` is set once the kit shows doubt about the family (PQ-T41) and rides on every recipe answer. */
   const base: { detectionId: string; ask?: ObjectShape['ask'] } = { detectionId: target.id };
   const silhouette = (
@@ -509,6 +396,44 @@ export async function runObjectShape(
         console.warn('[vision] shape crop failed, sending the whole photo:', err);
       }
       timed('crop', cropStart);
+    }
+    // PQ-T69: every object is rebuilt from its drawn views — the validated front (or one drawn
+    // from the photo), the right side, the back and the left — by measuring them: no template,
+    // no family, no model-written geometry. Null (no drawing, unreadable, views that disagree)
+    // falls back to the photo pipeline below.
+    const reconDeps: ReconDeps | null =
+      reconOption !== undefined
+        ? reconOption
+        : museImageReady()
+          ? {
+              draw: museImage,
+              ...(perception.nameClasses
+                ? { nameClasses: perception.nameClasses.bind(perception) }
+                : {}),
+            }
+          : null;
+    if (reconDeps && (target.facadeUrl || (photo && imageUrl !== fullImageUrl))) {
+      onStep?.('model');
+      const viewsStart = Date.now();
+      const built = await reconstructObject(reconDeps, target, {
+        ...(imageUrl !== fullImageUrl ? { cropUrl: imageUrl } : {}),
+        ...(signal ? { signal } : {}),
+        fourFaces: env.SHAPE_FOUR_FACES,
+        onView: (view, png) => {
+          if (view === 'right') onSideView?.(png);
+        },
+      });
+      timed('views', viewsStart);
+      if (built) {
+        onStep?.('fit');
+        return {
+          ...base,
+          mode: 'recipe',
+          recipe: drawn(built.recipe),
+          source: 'meta',
+          model: RECON_MODEL,
+        };
+      }
     }
     // PR-2.20: without an outline every box pixel counts (hedge outvotes the car): segment the
     // photo for this object while Spark thinks. Best effort, usually free (SAM's call
@@ -579,69 +504,7 @@ export async function runObjectShape(
         timeoutMs >= SECOND_SAMPLE_MIN_MS)
         ? askKit(true).catch(() => null)
         : null;
-    // 2D facade validated (user 2026-11-02): the house is rebuilt from its elevations — front
-    // measured by SAM while Muse Image draws the side, then the side measured — in parallel
-    // with Spark. Null for other archetypes, the mock, or a facade SAM cannot read.
     const hint = archetypeOf(target);
-    // PQ-T42: the honest start of the measures (they run while Spark thinks; the awaits below
-    // only see the remainder).
-    // PQ-T44 remedy 1: houses without a validated drawing get one drawn (in parallel
-    // with Spark); the template stays the fallback when the drawing fails.
-    const remedyFacade =
-      !target.facadeUrl &&
-      !!perception.segmentImage &&
-      ELEVATION_ARCHETYPES.includes(hint) &&
-      !!photo;
-    const measureViews =
-      !!perception.segmentImage &&
-      ((!!target.facadeUrl &&
-        (ELEVATION_ARCHETYPES.includes(hint) || VIEW_ARCHETYPES.includes(hint))) ||
-        remedyFacade);
-    const viewsStart = measureViews ? Date.now() : null;
-    // The side drawing Muse Image made, kept for the code route's side score (PQ-T63).
-    const sideDrawn: { png: Buffer | null } = { png: null };
-    const keepSide = (png: Buffer) => {
-      sideDrawn.png = png;
-      onSideView?.(png);
-    };
-    const elevations =
-      target.facadeUrl && perception.segmentImage && ELEVATION_ARCHETYPES.includes(hint)
-        ? measureFacadeElevations(
-            perception.segmentImage.bind(perception),
-            target.facadeUrl,
-            hint,
-            {
-              ...(signal ? { signal } : {}),
-              onSideView: keepSide,
-              ...(env.SHAPE_SIDE_V2 ? { sideCards: true } : {}),
-            }
-          ).catch(() => null)
-        : remedyFacade && photo && perception.segmentImage
-          ? routeHouseFacade({
-              hint,
-              target,
-              photo,
-              segment: perception.segmentImage.bind(perception),
-              ...(signal ? { signal } : {}),
-              onSideView: keepSide,
-            }).catch(() => null)
-          : Promise.resolve(null);
-    // PV-H: any other object with a validated 2D view → hull of that view and its drawn side.
-    const views =
-      target.facadeUrl && perception.segmentImage && VIEW_ARCHETYPES.includes(hint)
-        ? measureObjectViews(
-            perception.segmentImage.bind(perception),
-            target.facadeUrl,
-            hint,
-            target.label,
-            conceptOf(target),
-            {
-              ...(signal ? { signal } : {}),
-              ...(onSideView ? { onSideView } : {}),
-              ...(env.SHAPE_SIDE_V2 ? { sideV2: { candidates: 2 } } : {}),
-            }
-          ).catch(() => null)
-        : Promise.resolve(null);
     const fetched = await fetchedOutline;
     if (samStart !== null) timed('sam', samStart);
     const shaped = fetched && !target.outline ? { ...target, outline: fetched } : target;
@@ -781,17 +644,11 @@ export async function runObjectShape(
       let built = freeRecipe ?? found.recipe;
       let finalKit = found.kit;
       const px = found.kit ? await pixels : null;
-      const wantElev = !!found.kit && ELEVATION_ARCHETYPES.includes(found.kit.archetype);
-      const elev = wantElev ? await elevations : null;
-      if (wantElev && viewsStart !== null) timed('views', viewsStart);
-      // PG-T22: half-timbered walls take their plaster colour, not plaster + beams averaged.
       let shadowShare = 0;
-      const plaster = !!elev && !!wallTimber(elev.front, found.kit?.details);
       const measuredColors =
         found.kit && px
           ? measureKitColors(px, found.kit.archetype, {
-              plaster,
-              litSurface: !plaster,
+              litSurface: true,
               onShadowShare: (share) => (shadowShare = share),
             })
           : null;
@@ -818,347 +675,6 @@ export async function runObjectShape(
         console.info(
           `[vision] 3D colours measured for "${target.label}" (${px!.y.length} px${target.outline ? ', outline' : ''}): ${colors.main} ${colors.secondary} ${colors.accent}${shadowShare > 0 ? `, ${Math.round(shadowShare * 100)} % shadow read apart` : ''}`
         );
-      }
-      if (found.kit && elev) {
-        const kit = colors ? { ...found.kit, colors } : found.kit;
-        const { front, side } = elev;
-        // Yaw read below the eave, like a measured roof: the slopes point nowhere.
-        const eaveShare = (front.eave - front.top) / (front.bottom - front.top);
-        const persp = photo
-          ? measuredYaw(
-              {
-                archetype: kit.archetype,
-                roof: { eave: eaveShare, gables: [{ x0: 0, x1: 1, peak: 0.5, top: 0 }] },
-              },
-              await edges,
-              target.box,
-              photo
-            )
-          : null;
-        const yaw0 = persp ? mixNumber(persp.yaw, 0, confidence.perspective(persp.inliers)) : 0;
-        const measured = facadeHouseRecipe({
-          front,
-          side,
-          colors: kit.colors,
-          ...(kit.materials ? { materials: kit.materials } : {}),
-          ...(kit.partMaterials ? { partMaterials: kit.partMaterials } : {}),
-          ...(kit.details ? { details: kit.details } : {}),
-          sparkDepth: kit.proportions.d / kit.proportions.w,
-        });
-        let recipe: ObjectRecipe = fitRecipe({ ...measured, source: 'facade' }, 0, yaw0);
-        const template: DimStatus = 'estimated';
-        recipe = {
-          ...recipe,
-          dimStatus: {
-            eave: 'measured',
-            depth: side ? 'inferred' : template,
-            yaw: persp ? 'measured' : template,
-            scale: template,
-          },
-        };
-        if (photo) {
-          try {
-            const swatches = await extractSwatches(photo, shaped, recipe);
-            if (Object.keys(swatches).length > 0) recipe.swatches = swatches;
-          } catch (err) {
-            console.warn('[vision] swatches failed:', err instanceof Error ? err.message : err);
-          }
-        }
-        // PQ-T58 route B first (§8bis): Wonder models the house from the drawing as build() code,
-        // refined round by round until the elevation matches (goal) or stalls. It starts BEFORE the
-        // Spark stages: when its code wins the stages never run (their ops patch template parts and
-        // the background rounds would overwrite the code's model); they stay the fallback.
-        let codeWon = false;
-        {
-          const rings = front.roofRings ? { roofRings: front.roofRings } : {};
-          const sparkDepth = kit.proportions.d / kit.proportions.w;
-          const depth = side ? (depthRatio(front, side) ?? sparkDepth) : sparkDepth;
-          const draft = recipe;
-          const drawingBytes = target.facadeUrl
-            ? await imageBytes(target.facadeUrl, signal).catch(() => null)
-            : null;
-          // PQ-T59: scored on the drawing's own pixels when it is at hand (several volumes and
-          // stepped roofs score right); the label-map elevation score is the fallback.
-          const pixels = drawingBytes ? await drawingTarget(drawingBytes, front) : null;
-          // PQ-T63: the side drawing scores the depth and the side massing (30 %), so a model that
-          // only matches the front no longer wins with a nonsense side.
-          const sideBytes = side ? sideDrawn.png : null;
-          const sidePixels = side && sideBytes ? await drawingTarget(sideBytes, side) : null;
-          const palette = pixels ? drawingPalette(pixels) : [];
-          const measureAll = (r: ObjectRecipe) => {
-            if (!pixels) return null;
-            const f = scoreDrawing(r, front, pixels, rings);
-            const sd = side && sidePixels ? scoreDrawingSide(r, side, sidePixels) : null;
-            return {
-              front: f,
-              side: sd,
-              score: sd
-                ? SIDE_WEIGHT * sd.score + (1 - SIDE_WEIGHT) * (f.score / 100)
-                : f.score / 100,
-            };
-          };
-          const won = await codeRoute({
-            archetype: 'house',
-            draft,
-            colors: kit.colors,
-            ...(palette.length ? { palette } : {}),
-            measures: {
-              eave: eaveShare,
-              yaw: yaw0,
-              depth,
-              windows: front.windows.length,
-              doors: front.doors.length,
-            },
-            carry: (r) => ({
-              ...r,
-              ...(draft.source ? { source: draft.source } : {}),
-              ...(draft.yaw !== undefined ? { yaw: draft.yaw } : {}),
-              ...(draft.dimStatus ? { dimStatus: draft.dimStatus } : {}),
-            }),
-            measure: async (r) => {
-              const m = measureAll(r);
-              if (m) {
-                return {
-                  score: m.score,
-                  detail: `front ${drawingDetailText(m.front)}${m.side ? ` · side iou ${m.side.iou.toFixed(2)} colour ${m.side.color.toFixed(2)}` : ''}`,
-                };
-              }
-              const e = scoreElevation(r, front, rings);
-              return {
-                score: e.score / 100,
-                detail: `iou ${e.iou.toFixed(2)} · edge ${e.edgeF1.toFixed(2)} · openings ${e.openings.matched}/${e.openings.target}`,
-              };
-            },
-            // Drawing | model | difference (red = drawn, not built; blue = built, not drawn),
-            // the front on top and the side under it.
-            sheet: async (r) => {
-              const m = measureAll(r);
-              if (!m || !pixels || !drawingBytes)
-                return stageSheet(r, scoreElevation(r, front, rings), drawingBytes);
-              const top = await drawingSheet(drawingBytes, pixels, m.front);
-              if (!top || !m.side || !sidePixels || !sideBytes) return top;
-              const under = await drawingSheet(sideBytes, sidePixels, m.side);
-              return under ? ((await stackSheets(top, under)) ?? top) : top;
-            },
-            against: pixels
-              ? `drawing pixels${sidePixels ? ' (front + side)' : ''}`
-              : 'elevation labels',
-            frameText: [
-              elevationFrameText(front),
-              ...(pixels ? [skylineText(pixels, front)] : []),
-              ...(side && sidePixels
-                ? [
-                    `Side drawing (second row of the sheet): the object's depth is params.proportions.d; ${skylineText(sidePixels, side, 'side')}`,
-                  ]
-                : []),
-            ].join('\n'),
-            measuresText: `eave ${eaveShare.toFixed(2)} · yaw ${yaw0.toFixed(2)} · depth ${depth.toFixed(2)} · windows ${front.windows.length} · doors ${front.doors.length}`,
-            stages: FACADE_CODE_STAGES,
-            goal: CODE_GOAL,
-            fallbackImage: imageUrl,
-          });
-          if (won) {
-            codeWon = true;
-            recipe = won;
-          }
-        }
-        // PG-T16…T18: staged loop (Spark patches, kept only when the elevation stage score
-        // rises). Stages that fit the first answer's budget run now; the others continue in the
-        // background (`onStagesLeft`). The seed is today's builder, so never worse.
-        if (!codeWon && perception.proposeShapeOps) {
-          const proposeShapeOps = perception.proposeShapeOps.bind(perception);
-          onStageSeed?.(recipe, front);
-          recipe = await followStages(
-            () =>
-              facadeStageLoop({
-                recipe,
-                front,
-                ...(front.roofRings ? { roofRings: front.roofRings } : {}),
-                label: target.label,
-                proposeShapeOps: async (img, q, sig, opts) => ({
-                  result: await proposeShapeOps(img, q, sig, 'elevation', opts),
-                }),
-                drawing: () =>
-                  target.facadeUrl ? imageBytes(target.facadeUrl, signal) : Promise.resolve(null),
-                firstBudgetMs: budgetEnd(started, timeoutMs) - STAGE_SAFETY_MS - Date.now(),
-                ...(signal ? { signal } : {}),
-                onProgress: stageProgress,
-              }),
-            recipe,
-            {
-              label: target.label,
-              loop: {
-                kind: 'facade',
-                front: elevationForCheckpoint(front),
-                ...(target.facadeUrl ? { facadeUrl: target.facadeUrl } : {}),
-              },
-            }
-          );
-        }
-        recipe = drawn(recipe);
-        // PG-T2: the model against the drawing it was built from (the staged loop's yardstick).
-        const scoreStart = Date.now();
-        const elevScore = scoreElevation(recipe, front, {
-          ...(front.roofRings ? { roofRings: front.roofRings } : {}),
-        });
-        timed('score', scoreStart);
-        onElevation?.(front, elevScore);
-        console.info(`[vision] 3D ${formatElevationScore(elevScore)} for "${target.label}"`);
-        const roofPart = recipe.parts.find((p) => p.shape === 'hip' || p.shape === 'prism');
-        console.info(
-          `[vision] 3D facade house for "${target.label}": ${recipe.parts.length} parts, roof ${roofPart ? `${roofPart.shape}${roofPart.shape === 'hip' ? ` ridge ${roofPart.ridge?.toFixed(2)}${roofPart.clip ? ` half-hip ${roofPart.clip.toFixed(2)}` : ''}` : ''}` : 'flat'}, ${front.windows.length} windows, ${front.doors.length} door(s), ${front.chimneys.length} chimney(s), side ${side ? `${side.windows.length} windows, depth ${depthRatio(front, side)?.toFixed(2)}` : 'none'} vs Spark ${(kit.proportions.d / kit.proportions.w).toFixed(2)}, w:h:d ${[recipe.proportions.w, recipe.proportions.h, recipe.proportions.d].map((v) => v.toFixed(2)).join(':')}, yaw ${Math.round((yaw0 * 180) / Math.PI)}° (${seconds} s Spark)`
-        );
-        const facadeConditions = conditionsFor(found.kit?.archetype, recipe.yaw ?? null);
-        return {
-          ...base,
-          mode: 'recipe',
-          recipe,
-          kit: found.kit,
-          ...(shaped.outline ? { outline: shaped.outline } : {}),
-          ...(facadeConditions ? { conditions: facadeConditions } : {}),
-          ...(found.kit ? { family: familyOf(found.kit.archetype) } : {}),
-          ...source,
-        };
-      }
-      const wantViews = !!found.kit && VIEW_ARCHETYPES.includes(found.kit.archetype);
-      const measured = wantViews ? await views : null;
-      if (wantViews && viewsStart !== null) timed('views', viewsStart);
-      const seen =
-        measured && found.kit ? keepPlausibleSide(measured, found.kit, target.label) : null;
-      if (found.kit && seen) {
-        const kit = colors ? { ...found.kit, colors } : found.kit;
-        // Round objects (PG-T19): lathe of the drawn silhouette, no side, no views check.
-        const round = ROUND_VIEW_ARCHETYPES.includes(kit.archetype);
-        let recipe = round ? roundViewRecipe(seen.front, kit) : viewsRecipe(seen, kit);
-        // PQ-T61 route B on the 2D views (any object): Wonder models it from the measured front and
-        // side silhouettes and parts, scored on both views. When its code wins, the views check and
-        // the Spark stages (which patch template parts) do not run.
-        let viewsCodeWon = false;
-        {
-          const draft = recipe;
-          const viewStages = VIEW_STAGES[kit.archetype] ?? [];
-          const won = await codeRoute({
-            archetype: kit.archetype,
-            draft,
-            colors: kit.colors,
-            measures: {
-              frontAspect: seen.front.aspect,
-              ...(seen.side ? { sideAspect: seen.side.aspect } : {}),
-            },
-            carry: (r) => ({
-              ...r,
-              ...(draft.source ? { source: draft.source } : {}),
-              ...(draft.swatches ? { swatches: draft.swatches } : {}),
-              ...(draft.dimStatus ? { dimStatus: draft.dimStatus } : {}),
-            }),
-            measure: async (r) => {
-              const v = scoreViews(r, seen, viewStages);
-              return { score: v.overall, detail: viewStageNotes(v).join(' · ') };
-            },
-            sheet: (r) => viewsSheet(r, seen, signal),
-            against: seen.side ? '2D views (front + side)' : '2D view (front)',
-            frameText: [
-              silhouetteFrameText('front', seen.front.ring, seen.front.parts),
-              ...(seen.side
-                ? [silhouetteFrameText('side', seen.side.ring, seen.side.parts)]
-                : ['No side drawing: choose the depth from the object kind and say why.']),
-            ].join('\n'),
-            measuresText: `front aspect ${seen.front.aspect.toFixed(2)}${seen.side ? ` · side aspect ${seen.side.aspect.toFixed(2)}` : ''}`,
-            stages: PHOTO_CODE_STAGES,
-            goal: CODE_GOAL,
-            fallbackImage: seen.frontUrl,
-          });
-          if (won) {
-            viewsCodeWon = true;
-            recipe = won;
-          }
-        }
-        // After the build, the AI checks every side against the drawings and the model is fixed.
-        if (!viewsCodeWon && !round && perception.checkViews && perception.segmentImage) {
-          onStep?.('check');
-          const checkStart = Date.now();
-          const checked = await checkViewsModel(
-            {
-              checkViews: perception.checkViews.bind(perception),
-              segmentImage: perception.segmentImage.bind(perception),
-            },
-            recipe,
-            seen,
-            kit,
-            target.label,
-            conceptOf(target),
-            { ...(signal ? { signal } : {}), deadline: budgetEnd(started, VIEWS_TOTAL_MS) }
-          );
-          timed('views', checkStart);
-          recipe = checked.recipe;
-          seen.front = checked.views.front;
-          // The check can redraw the side: the same depth guard applies.
-          const kept = keepPlausibleSide(
-            { front: checked.views.front, side: checked.views.side, sidePng: seen.sidePng },
-            kit,
-            target.label
-          );
-          seen.side = kept.side;
-          seen.sidePng = kept.sidePng;
-        }
-        // PG-T20: the archetype's stages, scored part by part on the views.
-        if (!viewsCodeWon && perception.proposeShapeOps) {
-          const proposeShapeOps = perception.proposeShapeOps.bind(perception);
-          const seed = recipe;
-          recipe = await followStages(
-            () =>
-              viewStageLoop({
-                recipe: seed,
-                archetype: kit.archetype,
-                views: seen,
-                label: target.label,
-                proposeShapeOps: async (img, q, sig, sheet, opts) => ({
-                  result: await proposeShapeOps(img, q, sig, sheet, opts),
-                }),
-                firstBudgetMs: budgetEnd(started, VIEWS_TOTAL_MS) - STAGE_SAFETY_MS - Date.now(),
-                ...(signal ? { signal } : {}),
-                onProgress: stageProgress,
-              }),
-            seed,
-            {
-              label: target.label,
-              loop: {
-                kind: 'views',
-                archetype: kit.archetype,
-                front: seen.front,
-                side: seen.side,
-                frontUrl: seen.frontUrl,
-                sidePng: seen.sidePng ? seen.sidePng.toString('base64') : null,
-              },
-            }
-          );
-        }
-        recipe = drawn(recipe);
-        const iou = {
-          front: viewIou(recipe, seen.front, 'front'),
-          side: seen.side ? viewIou(recipe, seen.side, 'side') : null,
-        };
-        const counts = new Map<string, number>();
-        for (const p of [...seen.front.parts, ...(seen.side?.parts ?? [])])
-          counts.set(p.concept, (counts.get(p.concept) ?? 0) + 1);
-        console.info(
-          `[vision] 3D views for "${target.label}": ${recipe.parts[0]!.shape} body, ${recipe.parts.length} parts, side ${seen.side ? `drawn (length/width ${(seen.side.aspect / seen.front.aspect).toFixed(2)})` : `none (Spark depth ${sparkDepthRatio(kit).toFixed(2)})`}, SAM ${[...counts].map(([c, n]) => `${c}×${n}`).join(', ') || 'no parts'}; silhouette IoU front ${iou.front}${iou.side !== null ? `, side ${iou.side}` : ''}, w:h:d ${[recipe.proportions.w, recipe.proportions.h, recipe.proportions.d].map((v) => v.toFixed(2)).join(':')} (${seconds} s Spark)`
-        );
-        const issue = recipeIssue(recipe);
-        if (!issue) {
-          const viewsConditions = conditionsFor(found.kit.archetype, recipe.yaw ?? null);
-          return {
-            ...base,
-            mode: 'recipe',
-            recipe,
-            kit: found.kit,
-            ...(shaped.outline ? { outline: shaped.outline } : {}),
-            ...(viewsConditions ? { conditions: viewsConditions } : {}),
-            ...(found.kit ? { family: familyOf(found.kit.archetype) } : {}),
-            ...source,
-          };
-        }
-        console.info(`[vision] 3D views recipe rejected (${issue}), photo pipeline`);
       }
       let fitStart = Date.now();
       let roofMeasured = false;
@@ -1542,7 +1058,6 @@ export async function runObjectShape(
       timed('fit', fitStart);
       // PQ-T60: before the Spark stages, which only run when no code won (they patch template
       // parts, and their background rounds would overwrite the code's model).
-      let photoCodeWon = false;
       // PQ-T57 route B on the photo path (§8bis, every object): same yardstick as the draft
       // (silhouette, contours, colour, part masks, anatomy).
       if (finalKit && photo && shaped.outline && finalKit.archetype !== 'water') {
@@ -1613,56 +1128,7 @@ export async function runObjectShape(
           fallbackImage: imageUrl,
         });
         if (won) {
-          photoCodeWon = true;
           recipe = won;
-        }
-      }
-      // PQ-T19: the staged loop on the photo — stages scored on the outline and the part masks,
-      // parts the photo cannot see locked. First stages now, the rest in the background; the seed
-      // wins when no stage kept a change (the kinds the loop tags are not worth a different model).
-      if (!photoCodeWon && finalKit && photo && shaped.outline && perception.proposeShapeOps) {
-        const proposeShapeOps = perception.proposeShapeOps.bind(perception);
-        const archetype = finalKit.archetype;
-        const rings = pathToRings(shaped.outline).filter((r) => r.length >= 3);
-        const { cols, rows } = fitGrid(aspect);
-        const crop =
-          rings.length && aspect > 0
-            ? await sampleObjectRgb(photo, shaped.box, cols, rows).catch(() => null)
-            : null;
-        const photoT =
-          crop &&
-          photoTarget({
-            aspect,
-            crop,
-            outline: ringsMask(rings, shaped.box, cols, rows),
-            masks: objectMasks,
-            geom: {
-              photoW: photo.width,
-              photoH: photo.height,
-              box: shaped.box,
-              crop: cropRectForShape(photo.width, photo.height, shaped.box),
-            },
-          });
-        if (photoT) {
-          const seed = recipe;
-          const tagged = tagPhotoParts(seed, archetype);
-          const looped = await followStages(
-            () =>
-              photoStageLoop({
-                recipe: seed,
-                archetype,
-                target: photoT,
-                label: target.label,
-                proposeShapeOps: async (img, q, sig, sheet, opts) => ({
-                  result: await proposeShapeOps(img, q, sig, sheet, opts),
-                }),
-                firstBudgetMs: budgetEnd(started, timeoutMs) - STAGE_SAFETY_MS - Date.now(),
-                ...(signal ? { signal } : {}),
-                onProgress: stageProgress,
-              }),
-            seed
-          );
-          if (JSON.stringify(looped.parts) !== JSON.stringify(tagged.parts)) recipe = looped;
         }
       }
       if (photo) {

@@ -13,6 +13,13 @@ Judge every change with `/shape-loop`.
 the fallback. Work like a modeller: look → volumes → secondary forms → details → check. Debug a run with
 `make code-dump` (`debug/shape-code/`: build() per round, Blender `.py`, question, score).
 
+**Views first (PQ-T69).** An object with a 2D front is rebuilt by `server/perception/recon/` from its four drawn
+views, by measurement only (`views.ts` → `palette.ts` → `carve.ts` → `recipe.ts`, judged by `score.ts`; `route.ts`
+draws missing views and asks the materials). No template and no archetype there: never add an object-specific
+rule to it; improve the general step and prove it on `__tests__/recon.test.ts` and `make views-3d`. The files
+`facade-house`, `facade-views`, `object-views`, `view-stages`, `shape-stages`, `elevation-score` named below are
+gone; the photo path (kit → template → code) is the fallback when no view can be read.
+
 **Hard rules**
 
 1. Meta models only (Muse Spark / Wonder, Muse Image, SAM 3.1). No other AI vendor.

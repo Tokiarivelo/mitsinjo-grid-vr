@@ -38,6 +38,7 @@ describe('shape cache keys (PQ-T49 E12)', () => {
     expect(kitCacheKey(CROP, subject({ archetype: 'cabinet' }))).not.toBe(base);
     expect(kitCacheKey(CROP, subject({ facadeUrl: 'data:image/png;base64,BB' }))).not.toBe(base);
     expect(kitCacheKey('data:image/jpeg;base64,BB', subject())).not.toBe(base);
+    expect(kitCacheKey(CROP, subject({ model: 'muse-spark-1.2' }))).not.toBe(base);
   });
 
   it('SAM key: the crop plus the concept word', () => {

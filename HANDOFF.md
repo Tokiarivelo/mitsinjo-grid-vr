@@ -1,39 +1,40 @@
 # HANDOFF — read first, overwrite at end of session (≤40 lines)
 
-**Updated:** 2026-11-12 · **By:** Muse Code · **Branch:** `feat/pq-t55-b-vs-a-eval`
-(stacked on T54 `6aee64e`)
+**Updated:** 2026-11-13 · **By:** Claude Code · **Branch:** `feat/pq-t67-step-models`
+(from `d61ee81`, not re-branched from `main`: offline at start; rebase before the PR)
 
-## PRIORITY NEXT: PQ-T56+ or Q6 exit
+## NEXT: live test of PQ-T69 on Meta, then commit
 
-PQ-T55 done (§12.13, commit `feat/pq-t55-b-vs-a-eval`).
-First follow-up: clamp guest `generator.seed` into
-0–2147483647 in `code-sandbox.ts` (willow B valid
-0/3, all parts fail on the seed only), then re-run
-`make eval-code IDS=willow` (~$0.5). Then Vercel tour
-after merge (see Open).
+Nothing committed: PQ-T67, PQ-T68 and PQ-T69 are all in the working tree.
+Live check: `make dev` + `LLM_PROVIDER=meta` → `/village` → validate a 2D front (and faces) → 3D
+(scenarios V289, V290, V294, V295). Offline: `make views-3d FRONT=… [RIGHT= BACK= LEFT=] OUT=…`.
 
-## Current state (PQ-T55 done)
+## PQ-T69 — views reconstruction (this session)
 
-- B-vs-A eval (`eval-code.ts`, `make eval-code`,
-  one yardstick, verdict = gain/$): willow tie 51,
-  car A 52→55, house B 48→54, fridge tie 92; mean
-  tour 68.4 s (writer ≈ 100 %); A $0.17 + B $2.11.
-- Writer v2 opt-in (live stays v1); round timings
-  on `CodeRound`; capture budget 600 s / 900 s.
-- Report frozen (synth 92, real 53, ΔE 10.1).
+- New `apps/web/src/server/perception/recon/` (pure TS + `route.ts`): mask per view → shared frame
+  (front / right / back / left, mirrored views flipped) → shared CIELAB colour classes → per-class
+  visual hull → surface slabs → score per view. Geometry is computed; one contributor call
+  (`nameClasses`, step model `parts`) only names materials.
+- `runObjectShape`: object with a 2D front or a photo crop → `reconstructObject` first
+  (`model: 'views-reconstruction'`, `source: 'views'`); score < 0.5 or no views → photo pipeline
+  (kit → template → code route), unchanged.
+- Deleted: `facade-house`, `facade-views`, `object-views`, `view-stages`, `view-candidates`,
+  `elevation-score`, `drawing-score`, `shape-stages`, `stage-steps`, `stage-sheet`,
+  `house-facade-route`, their tests and fixtures; `make facade-e2e`, `photo-audit`, `eval-stages`.
+- Backup of the tree before deletion: git ref `refs/backup/pre-recon` (`4d53373`, tracked files);
+  untracked files were in a session tarball (temporary, may be gone).
 
-## Verify (this session)
+## Decisions
 
-- 1141 pass (perception+lib); tsc + lint green;
-  goldens 5/5 non-strict; strict-timing +
-  view-stages round-tags fail on base too (worktree).
-- Live: willow captured (51); 4-id eval to natural
-  stop; willow seed cause proven by probe (deleted).
-- Push: no push (task said commit only). Unsigned.
+- No per-archetype rule in the reconstruction: houses, cars, anything take the same code.
+- `SHAPE_FOUR_FACES` now means « also draw back + left » for every object.
+- No Neon migration (no stored shape changed). No HF republish (bench output unchanged).
+
+## Verify
+
+- `make check` green (2627 web tests, i18n 3/3); synthetic house / car ≈ 0.99; real drawing 0.76.
 
 ## Open
 
-- Vercel tour: merge → main auto-deploys → house
-  shape request → SSE `shape_timing{code}` (~$1).
-- OVHcloud: no infra in repo (no docs/SSH/CLI).
-- Scratch in /tmp: `pq55-*` + prior files.
+- Not live-tested; fidelity bounded by the 96-row grid and 32 parts; concavities no view shows are lost.
+- Possibly orphaned: `views-check.ts` + `checkViews`, `graph-edits.ts`, `eval-code/shape.ts`.

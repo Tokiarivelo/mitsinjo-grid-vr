@@ -6,7 +6,7 @@ import { RECIPE_MATERIALS, type RecipeMaterial } from '@/lib/object-shape';
  * l'IA … il devrait l'auto corriger »): Spark sees each drawn view next to the model rendered from
  * the same side and names what is missing (a part, or a side drawn wrong). It never gives
  * coordinates: SAM measures each named part on its view, the builder places it. Pure (prompt,
- * schema, parsing); the round itself lives in `object-views.ts`.
+ * schema, parsing). The round that used it (`object-views.ts`) was removed with PQ-T69.
  */
 
 /** Most missing parts acted on per check. */

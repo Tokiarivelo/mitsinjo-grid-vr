@@ -131,6 +131,17 @@ export type PartAskResult = Omit<z.infer<typeof PartAskResultSchema>, 'answer'> 
   answer: import('./part-question').PartAnswer | null;
 };
 
+/**
+ * Material of each colour class of a views reconstruction (PQ-T69), by class index; null when
+ * the answer is unusable (mock: always null). Parsed in `parseClassMaterials`.
+ */
+export const ClassMaterialsResultSchema = PerceptionSourceSchema.extend({
+  materials: z.array(z.string().nullable()).nullable(),
+});
+export type ClassMaterialsResult = Omit<z.infer<typeof ClassMaterialsResultSchema>, 'materials'> & {
+  materials: Array<import('@/lib/object-shape').RecipeMaterial | undefined> | null;
+};
+
 /** Rubric judge (PQ-T4): six 1–5 grades and notes; null when unusable. Parsed in `parseJudge`. */
 export const JudgeResultSchema = PerceptionSourceSchema.extend({
   judgement: z.record(z.string(), z.unknown()).nullable(),
@@ -146,12 +157,6 @@ export const ViewsCheckResultSchema = PerceptionSourceSchema.extend({
 export type ViewsCheckResult = Omit<z.infer<typeof ViewsCheckResultSchema>, 'check'> & {
   check: import('./views-check').ViewsCheck | null;
 };
-
-/** Stage patch of the shape loop (PG-T15): raw ShapeScript ops, null when unusable or mock. */
-export const ShapeOpsResultSchema = PerceptionSourceSchema.extend({
-  ops: z.array(z.unknown()).nullable(),
-});
-export type ShapeOpsResult = z.infer<typeof ShapeOpsResultSchema>;
 
 /**
  * Sandboxed construction code, route B (PQ-T45): the `build()` body (§8bis), null when

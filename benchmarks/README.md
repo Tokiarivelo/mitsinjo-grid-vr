@@ -55,4 +55,4 @@ is exactly what the copilot explains, with the run IDs as evidence.
 `pnpm --filter web exec vitest run src/server/copilot/__tests__/eval` → **96 / 96 checks pass**
 (45 scripted cases + a synthetic battery). Each case asserts the right tool call, a `SIM-` run ID in the
 evidence and the four answer sections (What happened · Computed evidence · Why it matters · Explore next).
-3D shape quality has its own golden set: `make test-shape` (IoU, colour, 300 ms budget) and `make eval-stages`.
+3D shape quality has its own golden set: `make test-shape` (IoU, colour, 300 ms budget) and `make views-3d` (one object from its 2D drawings).

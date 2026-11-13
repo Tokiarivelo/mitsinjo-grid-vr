@@ -51,7 +51,7 @@ mitsinjo-grid/
             │   ├── api/voice/route.ts  # chat microphone → transcribe (Meta Voice / mock)
             │   ├── api/vision/route.ts # photo → appliances (Muse boxes, SAM outlines / mock), SSE
             │   └── api/vision/shape/route.ts # selected object → 3D recipe (Spark) or silhouette fallback, JSON
-            │   └── api/vision/shape/stages/route.ts # background stage job of a 3D shape: resume (GET SSE) / cancel (DELETE)
+            │   └── api/vision/shape/blender/route.ts # recipe → Blender Python script (download)
             ├── features/
             │   ├── overview/           # ui/ hooks/ utils/ __tests__/ index.ts
             │   ├── simulation/         # controls, run/reset, timeline
@@ -66,6 +66,7 @@ mitsinjo-grid/
             ├── stores/simulation.store.ts   # single source of UI state
             ├── server/copilot/         # server-only: provider, tools, prompts, loop, adaptive model router
             ├── server/perception/      # server-only: voice / vision / SAM clients (Meta + deterministic mock)
+            │   └── recon/              # views → 3D (PQ-T69): pure math (views, palette, carve, recipe, score) + route.ts (drawing, naming)
             ├── server/media/           # server-only: engine result → image prompts + overlays (M5-T1, pure)
             ├── server/spend/           # server-only: estimated Meta spend per session, cap → mock
             ├── server/storage/         # server-only: R2 media (uploads, generated images), re-signed on session reopen

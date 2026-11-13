@@ -43,6 +43,8 @@ export interface KitCacheSubject {
   category: string;
   archetype?: string;
   facadeUrl?: string;
+  /** Model asked: another model must not be answered from a kit another one wrote. */
+  model?: string;
 }
 
 /**
@@ -59,6 +61,7 @@ export function kitCacheKey(imageUrl: string, subject: KitCacheSubject): string 
       subject.category,
       subject.archetype ?? '',
       subject.facadeUrl ? fingerprint(subject.facadeUrl) : '',
+      subject.model ?? '',
     ].join('\n')
   );
 }

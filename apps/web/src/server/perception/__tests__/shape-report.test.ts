@@ -22,65 +22,7 @@ import {
   type TurntableRow,
 } from '../shape-report';
 import { GOLDEN_SHAPES, REAL_SHAPES, type RealCase } from '../__fixtures__/shape';
-import { GOLDEN_ELEVATIONS } from '../__fixtures__/elevation';
-import {
-  elevationDiff,
-  elevationTarget,
-  scoreElevation,
-  ELEVATION_CONCEPTS,
-} from '../elevation-score';
-import { facadeHouseRecipe, measureElevation } from '../facade-house';
-import { fitRecipe } from '@/lib/object-shape';
-import { elevationMarkdown, type ElevationRow } from '../shape-report';
 import { runGolden, writeGoldenCapture } from './golden-run';
-
-/** Grey levels of the drawing's concepts (label map tile, PG-T4). */
-const LABEL_GREY = [200, 160, 120, 70, 90, 30];
-
-/** One elevation row: drawing labels | render | diff, ×2 nearest. */
-async function elevationTile(
-  recipe: Parameters<typeof elevationDiff>[0],
-  s: Parameters<typeof elevationDiff>[1]
-): Promise<Buffer> {
-  const { cols, rows, label } = s.target;
-  const labels = Buffer.alloc(cols * rows * 3, 255);
-  label.forEach((v, i) => {
-    if (v >= 0) labels.fill(LABEL_GREY[v]!, i * 3, i * 3 + 3);
-  });
-  const built = Buffer.from(s.render.rgb);
-  s.render.mask.data.forEach((v, i) => {
-    if (!v) built.fill(255, i * 3, i * 3 + 3);
-  });
-  const diff = Buffer.from(elevationDiff(recipe, s).rgb);
-  const png = (b: Buffer) =>
-    sharp(b, { raw: { width: cols, height: rows, channels: 3 } })
-      .resize(cols * 2, rows * 2, { kernel: 'nearest' })
-      .png()
-      .toBuffer();
-  const tiles = await Promise.all([labels, built, diff].map(png));
-  return sharp({
-    create: { width: cols * 6, height: rows * 2, channels: 3, background: '#ffffff' },
-  })
-    .composite(tiles.map((input, i) => ({ input, left: i * cols * 2, top: 0 })))
-    .png()
-    .toBuffer();
-}
-
-/** PNG tiles stacked vertically. */
-async function stack(tiles: Buffer[]): Promise<Buffer> {
-  const metas = await Promise.all(tiles.map((t) => sharp(t).metadata()));
-  const width = Math.max(...metas.map((m) => m.width!));
-  let top = 0;
-  const parts = metas.map((m, i) => {
-    const p = { input: tiles[i]!, left: 0, top };
-    top += m.height!;
-    return p;
-  });
-  return sharp({ create: { width, height: top, channels: 3, background: '#ffffff' } })
-    .composite(parts)
-    .png()
-    .toBuffer();
-}
 
 const score = (over: Partial<ModelScore>): ModelScore => ({
   iou: 0.9,
@@ -198,25 +140,6 @@ describe('shape report (PR-0.3)', () => {
     expect(REAL_SHAPES.filter((c) => c.hard).length).toBeGreaterThanOrEqual(3);
   });
 
-  it('writes the elevation section with ✓ / ✗ against the stop criteria', () => {
-    const front = measureElevation(GOLDEN_ELEVATIONS[0]!.masks)!;
-    const recipe = fitRecipe(
-      {
-        ...facadeHouseRecipe({ front, side: null, colors: GOLDEN_ELEVATIONS[0]!.colors }),
-        source: 'facade',
-      },
-      0
-    );
-    const md = elevationMarkdown([
-      { name: 'thatched house', score: scoreElevation(recipe, front) },
-    ]);
-    expect(md).toContain('## Elevation');
-    expect(md).toMatch(/\| thatched house \| \d+ \| (1|0\.9\d*) ✓ \|/);
-    expect(md).toContain('| 3/3 |');
-    expect(ELEVATION_CONCEPTS).toHaveLength(6);
-    expect(elevationTarget(front).openings).toHaveLength(3);
-  });
-
   it('builds a contact sheet with a row per object', async () => {
     const { shape, photo, target } = await runGolden(GOLDEN_SHAPES[3]!);
     const s = (await scoreRecipe(photo, target, shape.recipe!))!;
@@ -293,41 +216,13 @@ describe.runIf(process.env.SHAPE_REPORT)('make shape-report', () => {
       missing: real.missing,
       unscored: real.unscored,
     });
-    // PG-T4: every golden drawing rebuilt and scored straight on.
-    const elevRows: ElevationRow[] = [];
-    const elevTiles: Buffer[] = [];
-    for (const g of GOLDEN_ELEVATIONS) {
-      const front = measureElevation(g.masks)!;
-      const recipe = fitRecipe(
-        {
-          ...facadeHouseRecipe({
-            front,
-            side: null,
-            colors: g.colors,
-            ...(g.partMaterials ? { partMaterials: g.partMaterials } : {}),
-          }),
-          source: 'facade',
-        },
-        0
-      );
-      const s = scoreElevation(
-        recipe,
-        front,
-        front.roofRings ? { roofRings: front.roofRings } : {}
-      );
-      elevRows.push({ name: g.name, score: s });
-      recipes.push({ name: g.name, recipe });
-      elevTiles.push(await elevationTile(recipe, s));
-    }
-    const elevMd = elevationMarkdown(elevRows);
-    await writeFile(join(dir, 'index.md'), md + '\n' + elevMd);
-    if (elevTiles.length) await writeFile(join(dir, 'elevation-sheet.png'), await stack(elevTiles));
+    await writeFile(join(dir, 'index.md'), md);
     await writeFile(join(dir, 'contact-sheet.png'), await contactSheet(sheet));
     if (turntable.length)
       await writeFile(join(dir, 'turntable-sheet.png'), await turntableSheet(turntable));
     // Fitted recipes for `make shape-shots` (the real 3D viewer, stubbed API).
     await writeFile(join(dir, 'recipes.json'), JSON.stringify(recipes));
-    console.info(`\n${md}\n${elevMd}\n→ ${dir}`);
+    console.info(`\n${md}\n→ ${dir}`);
     expect(rows.length).toBe(GOLDEN_SHAPES.length);
   }, 60_000);
 });

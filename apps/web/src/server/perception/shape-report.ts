@@ -7,7 +7,6 @@ import type { KitArchetype } from '@/lib/object-kit';
 import type { ObjectRecipe, PartMask } from '@/lib/object-shape';
 import type { RealCase } from './__fixtures__/shape';
 import { degenerateView, type ViewCheck } from './detail-score';
-import type { ElevationScore } from './elevation-score';
 import { renderFlat, THREE_QUARTER, type FlatRender } from './flat-render';
 import type { ModelScore, RgbGrid } from './model-score';
 import { checkConstraints, notBuilt } from './object-graph';
@@ -415,30 +414,4 @@ export async function turntableSheet(rows: TurntableRow[]): Promise<Buffer> {
     .composite(composites)
     .png()
     .toBuffer();
-}
-
-/** Elevation stop criteria (PV-G): silhouette, structure lines, openings. */
-export const ELEVATION_STOP = { iou: 0.9, edgeF1: 0.75, openings: 0.9 } as const;
-
-export interface ElevationRow {
-  name: string;
-  score: ElevationScore;
-}
-
-/** « Elevation » section of the report: the model straight on against its validated drawing. */
-export function elevationMarkdown(rows: ReadonlyArray<ElevationRow>): string {
-  const lines = [
-    '## Elevation (model vs validated 2D drawing)',
-    '',
-    `Stop: IoU ≥ ${ELEVATION_STOP.iou} · edge F1 ≥ ${ELEVATION_STOP.edgeF1} · openings ≥ ${ELEVATION_STOP.openings}. Sheet: \`elevation-sheet.png\` (drawing labels | render | diff).`,
-    '',
-    '| Drawing | Score | IoU | Edge F1 | Massing | Roof | Openings | Accessories | Matched |',
-    '| ------- | ----- | --- | ------- | ------- | ---- | -------- | ----------- | ------- |',
-  ];
-  for (const { name, score: s } of rows)
-    lines.push(
-      `| ${name} | ${s.score} | ${s.iou} ${ok(s.iou >= ELEVATION_STOP.iou)} | ${s.edgeF1} ${ok(s.edgeF1 >= ELEVATION_STOP.edgeF1)} | ` +
-        `${s.stages.massing} | ${s.stages.roof} | ${s.stages.openings} ${ok(s.stages.openings >= ELEVATION_STOP.openings)} | ${s.stages.accessories} | ${s.openings.matched}/${s.openings.target} |`
-    );
-  return lines.join('\n') + '\n';
 }

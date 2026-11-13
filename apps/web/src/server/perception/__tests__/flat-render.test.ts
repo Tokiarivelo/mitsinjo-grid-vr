@@ -4,10 +4,8 @@ vi.mock('server-only', () => ({}));
 import { frameColor } from '@/features/vision-insert/utils/openings';
 import { cpuMs } from '@/test/cpu-time';
 import { kitToRecipe } from '@/lib/object-kit';
-import { fitRecipe, type ObjectRecipe, type RecipePart } from '@/lib/object-shape';
+import { type ObjectRecipe, type RecipePart } from '@/lib/object-shape';
 import { hexToRgb } from '../color-measure';
-import { facadeHouseRecipe, measureElevation } from '../facade-house';
-import { GOLDEN_ELEVATIONS } from '../__fixtures__/elevation';
 import { FLAT_AMBIENT, FLAT_LIGHT, renderFlat, THREE_QUARTER } from '../flat-render';
 import { SDF_BALL, SDF_PERSON, sdfPart } from '@/test/sdf-blobs';
 import { iou, renderRecipe } from '../silhouette-fit';
@@ -529,23 +527,6 @@ describe('assembly details (PQ-T3): the judge sees what the viewer shows', () =>
     expect(pocketed.mask.data.reduce((a, b) => a + b, 0)).toBe(
       solid.mask.data.reduce((a, b) => a + b, 0)
     );
-  });
-
-  it('the heaviest detailed model (golden facade house) renders within budget', () => {
-    const front = measureElevation(GOLDEN_ELEVATIONS[0]!.masks)!;
-    const house = fitRecipe(
-      {
-        ...facadeHouseRecipe({ front, side: null, colors: GOLDEN_ELEVATIONS[0]!.colors }),
-        source: 'facade',
-      },
-      0
-    );
-    renderFlat(house, 1, 128, 128); // warm-up
-    const t0 = cpuMs();
-    const r = renderFlat(house, 1, 128, 128);
-    const ms = cpuMs() - t0;
-    expect(r.mask.data.some((v) => v === 1)).toBe(true);
-    expect(ms).toBeLessThan(process.env.SHAPE_BUDGET_STRICT ? 300 : 900);
   });
 
   it('wall tints colour faces by normal (PQ-T44)', () => {

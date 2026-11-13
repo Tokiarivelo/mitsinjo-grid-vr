@@ -14,10 +14,11 @@ export const CALL_EFFORT: Readonly<Record<string, ReasoningEffort>> = {
   criticizeShape: 'high',
   judgeShape: 'high',
   checkViews: 'high',
-  proposeShapeOps: 'high',
   writeBuildCode: 'high',
   /** Yes/no short questions (PQ-T52, E12.6): `low`, confirmed accepted by the live probe. */
   askPart: 'low',
+  /** Class materials (PQ-T69): a closed-list answer per tile, same `low` as the short questions. */
+  nameClasses: 'low',
 };
 
 export const DEFAULT_EFFORT: ReasoningEffort = 'high';

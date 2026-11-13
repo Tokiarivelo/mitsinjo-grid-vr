@@ -356,12 +356,9 @@ make sam-probe ID=utility-pole CONCEPTS="pole,utility pole"
 make shape-judge            # REPLAY=1: stored answers only, no API call
 # Kit eval on live Spark, two prompt versions in one table (costs API calls)
 make eval-shape PROMPT=1,2
-# Facade → 3D on live Meta (front + side, sheet.png in OUT); any object with LABEL/SCENERY
-make facade-e2e FRONT=front.png OUT=test-results/facade
-make facade-e2e FRONT=car.png OUT=test-results/car LABEL='purple vintage car' SCENERY=vehicle
-# Same, keeping the stage loop's Spark answers, then replay them offline (no API cost)
-make facade-e2e FRONT=front.png OUT=test-results/facade ID=thatched
-make eval-stages
+# Views → 3D on your own drawings (PQ-T69): offline with the front + one side; a missing view is drawn by Muse Image (API cost)
+make views-3d FRONT=front.png RIGHT=right.png OUT=test-results/views
+make views-3d FRONT=front.png RIGHT=right.png BACK=back.png LEFT=left.png OUT=test-results/views LABEL='stone house'
 
 # Real 3D viewer shots of those recipes, dark + light (dev server running, API stubbed)
 make shape-shots

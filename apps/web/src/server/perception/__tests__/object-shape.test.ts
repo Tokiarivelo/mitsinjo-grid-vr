@@ -2,9 +2,11 @@
 import sharp from 'sharp';
 import { describe, expect, it, vi } from 'vitest';
 import {
+  ObjectRecipeSchema,
   ObjectShapeSchema,
   ShapeTimingEventSchema,
   type ObjectRecipe,
+  type RecipeMaterial,
   type ShapeTarget,
 } from '@/lib/object-shape';
 vi.mock('server-only', () => ({}));
@@ -13,6 +15,8 @@ import { runObjectShape, SHAPE_TIMEOUT_MS } from '../object-shape';
 import type { ShapeResult } from '../schemas';
 import type { GrayGrid } from '../repetition';
 import { turned } from './fixtures/render-facade';
+import { houseViews } from './fixtures/draw-views';
+import type { ViewImage } from '../recon';
 import { kitToRecipe, type ObjectKit } from '@/lib/object-kit';
 
 const target: ShapeTarget = {
@@ -762,115 +766,142 @@ describe('runObjectShape records the representation family (PQ-T47 §4.1)', () =
   });
 });
 
-describe('runObjectShape route B (PQ-T45)', () => {
+describe('runObjectShape views reconstruction (PQ-T69)', () => {
   const guessed: ObjectKit = {
     archetype: 'house',
     proportions: { w: 1, h: 0.5, d: 0.4 },
     colors: { main: '#c8aa78', secondary: '#6e5f55', accent: '#1e232d' },
-    details: { windows: 2 },
   };
-  const box = (x1: number, y1: number, x2: number, y2: number) => ({
-    box: { x1, y1, x2, y2 },
-    confidence: 0.9,
-  });
-  /** Facade drawing 200×100: house, roof and wall bands, 2 windows, 1 door. */
-  const MASKS: Record<string, Array<ReturnType<typeof box>>> = {
-    house: [box(20, 10, 180, 95)],
-    roof: [box(15, 10, 185, 40)],
-    wall: [box(20, 40, 180, 95)],
-    window: [box(40, 55, 60, 75), box(120, 55, 140, 75)],
-    door: [box(85, 60, 105, 95)],
-  };
-  const seg = (concept: string) => ({
-    source: 'meta' as const,
-    model: 'sam-3.1',
-    concept,
-    imageWidth: 200,
-    imageHeight: 100,
-    instances: MASKS[concept] ?? [],
-    count: (MASKS[concept] ?? []).length,
-    boxCoverage: 0.5,
-  });
-  const LOSING_CODE = `return [{ shape: 'box', at: [0, 0, 0], size: [0.1, 0.1, 0.1], color: '#ffffff' }];`;
-
-  async function facadeRun(code: string | null | 'absent') {
-    const buffer = await sharp({
-      create: { width: 200, height: 100, channels: 3, background: { r: 200, g: 200, b: 200 } },
-    })
+  const png = (img: ViewImage) =>
+    sharp(Buffer.from(img.rgb), { raw: { width: img.cols, height: img.rows, channels: 3 } })
       .png()
       .toBuffer();
-    const facadeUrl = `data:image/png;base64,${buffer.toString('base64')}`;
-    const writeBuildCode = vi.fn(async (_imageUrl: string, _question: string) => ({
-      code: code === 'absent' ? null : code,
+  const url = async (img: ViewImage) =>
+    `data:image/png;base64,${(await png(img)).toString('base64')}`;
+  const house: ShapeTarget = {
+    id: 'det-house',
+    label: 'cottage',
+    category: 'other',
+    scenery: 'building',
+    box: { x: 0, y: 0, w: 1, h: 1 },
+  };
+
+  it('builds the object from its drawings: missing faces drawn in order, no kit, no template', async () => {
+    const views = houseViews();
+    // Muse Image stand-in: answers the face the prompt names.
+    const draw = vi.fn(async (prompt: string) =>
+      png(
+        prompt.includes('RIGHT SIDE')
+          ? views.right
+          : prompt.includes('BACK')
+            ? views.back
+            : views.left
+      )
+    );
+    const nameClasses = vi.fn(async () => ({
       source: 'meta' as const,
-      model: 'muse-wonder-1.0',
+      model: 'muse-spark-1.3-contributor',
+      materials: ['wood', 'slate', 'stone', 'glass'] as RecipeMaterial[],
     }));
-    const p = {
-      ...client(meta(kitToRecipe(guessed), { kit: guessed })),
-      segmentImage: vi.fn(async (_url: string, concept: string) => seg(concept)),
-      ...(code === 'absent' ? {} : { writeBuildCode }),
-    };
+    const p = client(meta(kitToRecipe(guessed), { kit: guessed }));
+    const steps: string[] = [];
     const timings: string[] = [];
-    let seen: unknown;
     const out = await runObjectShape(
       p,
       await street(),
       'data:full',
+      { ...house, facadeUrl: await url(views.front) },
       {
-        id: 'det-house',
-        label: 'cottage',
-        category: 'other',
-        scenery: 'building',
-        box: { x: 0, y: 0, w: 1, h: 1 },
-        facadeUrl,
-      },
-      {
-        onTiming: (phase) => timings.push(phase),
-        onCode: (c) => (seen = c),
+        recon: { draw, nameClasses },
+        onStep: (s) => steps.push(s),
+        onTiming: (t) => timings.push(t),
       }
     );
-    return { out, p, timings, seen };
-  }
-
-  it('runs route B on the facade path: writer called, code phase timed', async () => {
-    const { out, p, timings, seen } = await facadeRun(LOSING_CODE);
-    expect(out.mode).toBe('recipe');
-    // Losing code: the staged facade draft stands, no code stored.
-    expect(out.recipe?.source).toBe('facade');
-    expect(seen).toBeUndefined();
-    const writer = p.writeBuildCode!;
-    expect(writer).toHaveBeenCalled();
-    const [image, question] = writer.mock.calls[0]!;
-    expect(image).toMatch(/^data:image\/jpeg;base64,/);
-    expect(question).toMatch(/Template draft \(a floor to beat[^)]*\): \{/);
-    expect(question).toMatch(/Measured: /);
-    expect(question).toMatch(/eave /);
-    expect(timings).toContain('code');
+    expect(out).toMatchObject({ mode: 'recipe', source: 'meta', model: 'views-reconstruction' });
+    expect(out.recipe!.source).toBe('views');
+    expect(ObjectRecipeSchema.safeParse(out.recipe).success).toBe(true);
+    // The model is measured on the drawings: the kit is never asked.
+    expect(p.describeShape).not.toHaveBeenCalled();
+    // Right side from the front alone, then back and left from the front and the side.
+    expect(draw.mock.calls.map((c) => (c as unknown as [string, string[]])[1].length)).toEqual([
+      1, 2, 2,
+    ]);
+    expect(nameClasses).toHaveBeenCalledTimes(1);
+    expect(out.recipe!.parts.some((q) => q.material === 'slate' && q.shape === 'hull')).toBe(true);
+    expect(steps).toEqual(['crop', 'model', 'fit']);
     expect(timings).toContain('views');
   });
 
-  it('broken code never breaks the run: the draft stands', async () => {
-    const { out, seen } = await facadeRun('const x = ;');
-    expect(out.mode).toBe('recipe');
-    expect(out.recipe?.source).toBe('facade');
-    expect(seen).toBeUndefined();
+  it('uses the faces the operator validated instead of drawing them', async () => {
+    const views = houseViews();
+    const draw = vi.fn(async () => png(views.left));
+    const out = await runObjectShape(
+      client(meta(kitToRecipe(guessed), { kit: guessed })),
+      await street(),
+      'data:full',
+      {
+        ...house,
+        facadeUrl: await url(views.front),
+        faceUrls: { side: await url(views.right), back: await url(views.back) },
+      },
+      { recon: { draw } }
+    );
+    expect(out.recipe!.source).toBe('views');
+    expect(draw).toHaveBeenCalledTimes(1);
   });
 
-  it('null answers are failed rounds, still timed under `code`', async () => {
-    const { out, p, timings, seen } = await facadeRun(null);
-    expect(out.mode).toBe('recipe');
-    expect(out.recipe?.source).toBe('facade');
-    expect(p.writeBuildCode).toHaveBeenCalled();
-    expect(seen).toBeUndefined();
-    expect(timings).toContain('code');
+  it('a clean front (drawn where the photo shows nothing) reads inferred, the body apart', async () => {
+    const views = houseViews();
+    const out = await runObjectShape(
+      client(meta(kitToRecipe(guessed), { kit: guessed })),
+      await street(),
+      'data:full',
+      {
+        ...house,
+        cleanFront: true,
+        facadeUrl: await url(views.front),
+        faceUrls: { side: await url(views.right) },
+      },
+      { recon: { draw: null } }
+    );
+    const parts = out.recipe!.parts;
+    expect(parts.filter((q) => q.status === 'measured')).toEqual([parts.find((q) => q.front)]);
   });
 
-  it('no writer → route B skipped, no code phase', async () => {
-    const { out, timings, seen } = await facadeRun('absent');
+  it('unreadable drawings or a failed drawer → the photo pipeline answers as before', async () => {
+    const blank = await sharp({
+      create: { width: 80, height: 60, channels: 3, background: { r: 255, g: 255, b: 255 } },
+    })
+      .png()
+      .toBuffer();
+    const p = client(meta(kitToRecipe(guessed), { kit: guessed }));
+    const out = await runObjectShape(
+      p,
+      await street(),
+      'data:full',
+      { ...house, facadeUrl: `data:image/png;base64,${blank.toString('base64')}` },
+      {
+        recon: {
+          draw: async () => {
+            throw new Error('Meta Image API error (500)');
+          },
+        },
+      }
+    );
     expect(out.mode).toBe('recipe');
-    expect(out.recipe?.source).toBe('facade');
-    expect(seen).toBeUndefined();
-    expect(timings).not.toContain('code');
+    expect(out.recipe!.source).not.toBe('views');
+    expect(p.describeShape).toHaveBeenCalled();
+  });
+
+  it('mock mode (nothing can draw or name) never takes the measured path', async () => {
+    const views = houseViews();
+    const p = client(meta(kitToRecipe(guessed), { kit: guessed }));
+    const out = await runObjectShape(p, await street(), 'data:full', {
+      ...house,
+      facadeUrl: await url(views.front),
+    });
+    expect(out.recipe!.source).not.toBe('views');
+    expect(p.describeShape).toHaveBeenCalled();
   });
 });
 

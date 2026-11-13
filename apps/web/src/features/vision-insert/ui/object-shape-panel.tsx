@@ -38,7 +38,11 @@ import { recipeMaterials } from '../utils/surface-look';
 import { ImproveChip } from './improve-chip';
 import { ObjectDisplayControls } from './object-display-controls';
 import { Facade2dPanel } from './facade-2d-panel';
+import { FacadeFacesPanel } from './facade-faces-panel';
+import { BlenderExportButton } from './blender-export-button';
+import { StepModelsGear } from './step-models-gear';
 import { useFacade2d, validatedFacade, type ValidatedFacade } from '../hooks/use-facade-2d';
+import { useFacadeFaces, validatedFaces } from '../hooks/use-facade-faces';
 
 /** Placeholder while the viewer chunk loads or Spark builds the recipe. */
 function ViewerSkeleton() {
@@ -189,6 +193,8 @@ export interface ObjectShapePanelProps extends ObjectShapeState {
   sessionId?: string;
   /** Keeps the 2D facade across page visits (see `useKeptState`). */
   scope?: string;
+  /** The step-model choice was saved: drop kept shapes built with the previous one. */
+  onStepModelsSaved?: () => void;
 }
 
 type ShapeTab = 'model' | 'facade';
@@ -216,6 +222,7 @@ export function ObjectShapePanel({
   onGenerate,
   sessionId,
   scope,
+  onStepModelsSaved,
 }: ObjectShapePanelProps) {
   const t = useTranslations('features.visionInsert');
   const webgl = useWebGLAvailable();
@@ -228,6 +235,7 @@ export function ObjectShapePanel({
   const liveViewer =
     ready || (loading && (preview !== undefined || detection.outline !== undefined));
   const seconds = useElapsedSeconds(startedAt, status === 'loading');
+  const faceViews = useFacadeFaces(detection, facade.facade);
   const showTabs = ready && Boolean(facade.facade);
   // Tab choice is per object: a new detection restarts on the model tab.
   const [tabState, setTabState] = useState({ id: detection.id, tab: 'model' as ShapeTab });
@@ -327,9 +335,21 @@ export function ObjectShapePanel({
               onValidate={() => {
                 facade.validate();
                 setTab('model');
-                onGenerate?.(validatedFacade(facade.facade));
+                onGenerate?.(validatedFacade(facade.facade, validatedFaces(faceViews.faces)));
               }}
               isValidating3D={loading}
+              faces={
+                <FacadeFacesPanel
+                  faces={faceViews.faces}
+                  onGenerate={(face, details) => void faceViews.generate(face, details)}
+                  onGenerateAll={() => void faceViews.generateAll()}
+                  onDetailsChange={faceViews.setUserPrompt}
+                  onValidate={faceViews.validate}
+                  onValidateAll={faceViews.validateAll}
+                  disabled={loading}
+                />
+              }
+              modelsGear={<StepModelsGear sessionId={sessionId} onSaved={onStepModelsSaved} />}
             />
           ) : (
             <div className="relative">
@@ -400,7 +420,11 @@ export function ObjectShapePanel({
             </div>
           )}
           {shape.mode === 'recipe' && (onRegenerate ?? onRetry) && (
-            <div className="flex justify-end pt-1">
+            <div className="flex items-center justify-end gap-2 pt-1">
+              <StepModelsGear sessionId={sessionId} onSaved={onStepModelsSaved} />
+              {shape.recipe && (
+                <BlenderExportButton recipe={shape.recipe} label={detection.label} />
+              )}
               <button
                 type="button"
                 onClick={onRegenerate ?? onRetry}

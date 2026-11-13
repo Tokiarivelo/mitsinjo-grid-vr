@@ -100,7 +100,7 @@ export function buildCleanFrontPrompt(
 /**
  * Generates synthetic architectural facade SVG for mock/offline mode.
  */
-function createSyntheticFacadeSvg(archetype: KitArchetype, label: string): string {
+export function createSyntheticFacadeSvg(archetype: KitArchetype, label: string): string {
   const cleanLabel = label.replace(/[<>&"']/g, '');
 
   switch (archetype) {

@@ -1,8 +1,10 @@
 import 'server-only';
 
-import type { ObjectRecipe, PartKind, ShapeStageId } from '@/lib/object-shape';
+import type { ObjectRecipe, PartKind, ShapeStageEvent, ShapeStageId } from '@/lib/object-shape';
 import type { CodeRoundEvent } from './shape-code-loop';
-import type { StageProgress } from './shape-stages-spark';
+
+/** One stage event of the code route, as streamed (`shape_stage`, without the job id). */
+export type StageProgress = Omit<ShapeStageEvent, 'jobId'>;
 
 /**
  * Route-B progress on the existing stage events (PQ-T60, PQ-T66): the draft previews at once, then

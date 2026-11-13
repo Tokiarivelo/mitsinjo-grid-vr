@@ -6,7 +6,7 @@
 > wording inside the grey blocks is what gets sent.
 > **Status.** Target of PV-Q (`tasks/PV-vision-quality.md`, PQ-T11 to PQ-T16). The prompts in the code today are the
 > ones in `server/perception/shape.ts`, `free-recipe.ts`, `views-check.ts`, `shape-script-prompt.ts`,
-> `object-views.ts` and `facade-views.ts`. A card replaces a prompt only after its eval says it is not worse (§1.3).
+> `object-views.ts` and `facade-views.ts` (both removed with PQ-T69; face prompts now live in `recon/route.ts`). A card replaces a prompt only after its eval says it is not worse (§1.3).
 > **Method and file list:** `vision-to-3d-methodology.md`.
 
 ---
@@ -45,10 +45,10 @@ user    = MEASURED FACTS line  (what the code measured on this photo)
 | Card kind              | Command                                    | Kept when                                                                   |
 | ---------------------- | ------------------------------------------ | --------------------------------------------------------------------------- |
 | Base, kit, archetype   | `make eval-shape MODEL=… PROMPT=<version>` | Field agreement on the real captures not lower; median latency reported     |
-| Stage ops, final check | `make eval-stages`                         | Accepted ops per round not lower; no stage score lower                      |
+| Stage ops, final check | removed (2026-11-13)                       | Accepted ops per round not lower; no stage score lower                      |
 | Critic, views check    | `make shape-report` on the real set        | Mean score and detail score not lower; no object down by more than 2 points |
 | Judge                  | `make shape-judge`                         | Damaged models graded lower in ≥ 90 % of pairs (methodology §6.2)           |
-| Muse Image views       | `make facade-e2e …`                        | Kept side views per attempt not lower on the same fronts                    |
+| Muse Image views       | `make views-3d …`                          | Kept side views per attempt not lower on the same fronts                    |
 
 ---
 

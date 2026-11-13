@@ -660,6 +660,16 @@ export const SHAPE_OUTLINE_MAX = 20_000;
 /** Longest facade URL accepted: an inline PNG elevation is ≈ 1–3 MB of base64. */
 export const FACADE_URL_MAX = 8_000_000;
 
+/** The three faces drawn beside the front (PQ-T68): right side, back, left side. */
+export const FACE_NAMES = ['side', 'back', 'left'] as const;
+export type FaceName = (typeof FACE_NAMES)[number];
+
+/** An image URL accepted for a 2D view: inline image or https link, at most `FACADE_URL_MAX` characters. */
+const viewUrl = z
+  .string()
+  .max(FACADE_URL_MAX)
+  .regex(/^(data:image\/(png|jpeg|webp);base64,|https:\/\/)/);
+
 export const ShapeTargetSchema = z.object({
   id: z.string().min(1).max(64),
   label: z.string().min(1).max(40),
@@ -680,6 +690,13 @@ export const ShapeTargetSchema = z.object({
     .optional(),
   /** R2 / storage key of the validated 2D facade image. */
   facadeKey: z.string().optional(),
+  /**
+   * Faces the operator validated in the 2D panel (PQ-T68): drawn from the front and from each other,
+   * so the four views agree. A face not listed is drawn by the pipeline itself.
+   */
+  faceUrls: z.object({ side: viewUrl, back: viewUrl, left: viewUrl }).partial().optional(),
+  /** Storage keys of those faces (they make a new validation a new request). */
+  faceKeys: z.object({ side: z.string(), back: z.string(), left: z.string() }).partial().optional(),
   /** Family the operator picked when asked (PQ-T41): it becomes the kit hint and the kit's archetype. */
   archetype: z.string().max(16).optional(),
   /** The validated 2D view is a clean front drawn from a hidden object (PQ-T23): its parts are inferred. */
@@ -917,26 +934,6 @@ export const ShapeStageEventSchema = z.object({
   recipe: ObjectRecipeSchema.optional(),
 });
 export type ShapeStageEvent = z.infer<typeof ShapeStageEventSchema>;
-
-/** `shape_stages_done`: the loop ended (`done`) or was cut (`stopped` + cause). */
-export const ShapeStagesDoneSchema = z.object({
-  jobId: z.string().max(64).optional(),
-  status: z.enum(['done', 'stopped']),
-  cause: z.enum(['timeout', 'error', 'aborted']).optional(),
-});
-export type ShapeStagesDone = z.infer<typeof ShapeStagesDoneSchema>;
-
-/**
- * `shape_stages_checkpoint`: the request ran out of time (`SHAPE_FUNCTION_MS`), the loop is not
- * done. The browser posts `checkpoint` back as is (`POST /api/vision/shape/stages`), the server
- * validates it; opaque here.
- */
-export const ShapeStagesCheckpointEventSchema = z.object({
-  jobId: z.string().max(64).optional(),
-  checkpoint: z.record(z.string(), z.unknown()),
-});
-/** `shape_stages_resumed`: first event of a resumed slice, with its job (to cancel it). */
-export const ShapeStagesResumedSchema = z.object({ jobId: z.string().max(64) });
 
 const volume = (p: RecipePart) => p.size[0] * p.size[1] * p.size[2];
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));

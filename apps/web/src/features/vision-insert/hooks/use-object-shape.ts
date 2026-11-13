@@ -6,9 +6,6 @@ import {
   ImaginedViewsResponseSchema,
   ObjectShapeSchema,
   ShapeStageEventSchema,
-  ShapeStagesCheckpointEventSchema,
-  ShapeStagesDoneSchema,
-  ShapeStagesResumedSchema,
   ShapeStepEventSchema,
   type ImaginedAngleView,
   type ObjectRecipe,
@@ -64,7 +61,6 @@ export interface ShapeImprove {
 }
 
 /** Reconnects to a dropped background job before giving up (« Amélioration arrêtée »). */
-export const STAGE_RESUME_TRIES = 3;
 
 const IDLE: ObjectShapeState = { status: 'idle', viewsStatus: 'idle' };
 
@@ -96,7 +92,7 @@ export const keepShape = (shape: ObjectShape) =>
  * asks Spark again instead of returning the model made without it (or with an older one).
  */
 export const shapeRequestKey = (t: ShapeRequest) =>
-  `${shapeKey(t)}${t.facadeKey ? `|facade:${t.facadeKey}` : ''}${t.archetype ? `|family:${t.archetype}` : ''}`;
+  `${shapeKey(t)}${t.facadeKey ? `|facade:${t.facadeKey}` : ''}${t.faceKeys ? `|faces:${Object.values(t.faceKeys).sort().join(',')}` : ''}${t.archetype ? `|family:${t.archetype}` : ''}`;
 
 /** Object to model; `adjusted` = the operator corrected its box, so the box is part of the key. */
 export type ShapeRequest = ShapeTarget & { adjusted?: true };
@@ -133,6 +129,8 @@ async function shapeForm(imageDataUrl: string, target: ShapeRequest, sessionId?:
         : {}),
       ...(target.facadeUrl ? { facadeUrl: target.facadeUrl } : {}),
       ...(target.facadeKey ? { facadeKey: target.facadeKey } : {}),
+      ...(target.faceUrls ? { faceUrls: target.faceUrls } : {}),
+      ...(target.faceKeys ? { faceKeys: target.faceKeys } : {}),
       ...(target.cleanFront ? { cleanFront: true } : {}),
       ...(target.archetype ? { archetype: target.archetype } : {}),
     })
@@ -162,7 +160,11 @@ export function useObjectShape(scope?: string) {
   const facadesRef = useKeptRef(
     scope,
     'shapeFacades',
-    () => new Map<string, Pick<ShapeRequest, 'facadeUrl' | 'facadeKey' | 'cleanFront'>>()
+    () =>
+      new Map<
+        string,
+        Pick<ShapeRequest, 'facadeUrl' | 'facadeKey' | 'faceUrls' | 'faceKeys' | 'cleanFront'>
+      >()
   );
   /** Family the operator picked per object (PQ-T41): « Regenerate » keeps asking with it. */
   const familiesRef = useKeptRef(scope, 'shapeFamilies', () => new Map<string, string>());
@@ -173,19 +175,6 @@ export function useObjectShape(scope?: string) {
   );
   /** Object (`shapeKey`) the state is about: a kept page coming back to it leaves it running. */
   const forKeyRef = useKeptRef<string | null>(scope, 'shapeFor', () => null);
-
-  /** Background stage job being followed (PG-T18), cancelled when it would be overwritten. */
-  const jobRef = useKeptRef<string | null>(scope, 'shapeJob', () => null);
-
-  /** Stops following the background stages and tells the server to stop them (saves Spark calls). */
-  const cancelJob = useCallback(() => {
-    const id = jobRef.current;
-    jobRef.current = null;
-    if (!id) return;
-    void fetch(`/api/vision/shape/stages?job=${encodeURIComponent(id)}`, {
-      method: 'DELETE',
-    }).catch(() => undefined);
-  }, [jobRef]);
 
   // Leaving the page cancels the running request, unless the state is kept (it goes on then).
   useEffect(() => {
@@ -239,6 +228,8 @@ export function useObjectShape(scope?: string) {
         facadesRef.current.set(objectKey, {
           facadeUrl: request.facadeUrl,
           facadeKey: request.facadeKey,
+          ...(request.faceUrls ? { faceUrls: request.faceUrls } : {}),
+          ...(request.faceKeys ? { faceKeys: request.faceKeys } : {}),
           ...(request.cleanFront ? { cleanFront: true } : {}),
         });
       }
@@ -261,7 +252,6 @@ export function useObjectShape(scope?: string) {
         }));
         return;
       }
-      cancelJob();
       const controller = new AbortController();
       abortRef.current = controller;
       setState((s) => ({
@@ -272,11 +262,8 @@ export function useObjectShape(scope?: string) {
         preview: undefined,
         improve: undefined,
       }));
-      const job: { id?: string; seq: number; done: boolean } = { seq: -1, done: false };
-      /** Checkpoint of a loop cut by the request limit: posted back to go on (Vercel, 300 s). */
-      let pending: Record<string, unknown> | null = null;
       let finalized = false;
-      /** The first answer: shown at once (the stream may go on with background stages). */
+      /** The first answer: shown at once . */
       const finalize = (shape: ObjectShape) => {
         finalized = true;
         if (keepShape(shape)) {
@@ -289,22 +276,17 @@ export function useObjectShape(scope?: string) {
           status: 'ready',
           shape,
           preview: undefined,
-          // First-answer stages only: the model is final now.
-          ...(s.improve && !job.id ? { improve: { ...s.improve, status: 'done' as const } } : {}),
+          // The code rounds are over: the model is final now.
+          ...(s.improve ? { improve: { ...s.improve, status: 'done' as const } } : {}),
         }));
       };
       const onEvent = (event: string, data: Record<string, unknown>) => {
         if (controller.signal.aborted) return;
-        if (typeof data.seq === 'number') job.seq = Math.max(job.seq, data.seq);
         if (event === 'shape_step') {
           const step = ShapeStepEventSchema.safeParse(data);
           if (step.success) setState((s) => ({ ...s, step: step.data.step }));
         } else if (event === 'shape_result') {
           const parsed = ObjectShapeSchema.safeParse(data.shape);
-          if (typeof data.jobId === 'string') {
-            job.id = data.jobId;
-            jobRef.current = data.jobId;
-          }
           if (parsed.success) finalize(parsed.data);
           else console.warn('[vision] 3D shape reply not readable:', parsed.error.issues[0]);
         } else if (event === 'shape_stage') {
@@ -336,34 +318,6 @@ export function useObjectShape(scope?: string) {
             }
             return { ...s, improve };
           });
-        } else if (event === 'shape_stages_resumed') {
-          const r = ShapeStagesResumedSchema.safeParse(data);
-          if (!r.success) return;
-          job.id = r.data.jobId;
-          jobRef.current = r.data.jobId;
-        } else if (event === 'shape_stages_checkpoint') {
-          const c = ShapeStagesCheckpointEventSchema.safeParse(data);
-          if (!c.success) return;
-          job.done = true;
-          jobRef.current = null;
-          pending = c.data.checkpoint;
-        } else if (event === 'shape_stages_done') {
-          const d = ShapeStagesDoneSchema.safeParse(data);
-          if (!d.success) return;
-          job.done = true;
-          jobRef.current = null;
-          setState((s) =>
-            s.improve
-              ? {
-                  ...s,
-                  improve: {
-                    ...s.improve,
-                    status: d.data.status,
-                    ...(d.data.cause ? { cause: d.data.cause } : {}),
-                  },
-                }
-              : s
-          );
         }
       };
       let detail = 'no_result';
@@ -385,79 +339,8 @@ export function useObjectShape(scope?: string) {
       }
       if (controller.signal.aborted) return;
       if (!finalized) finalize(offlineSilhouette(target.id, detail));
-      /**
-       * Background stages: a dropped stream resumes from the last event seen; a job that ends
-       * neither done nor checkpointed shows « stopped » (`lost` when the server forgot it).
-       * `expectJob`: a resumed slice always has a job, the first answer only when stages are left.
-       */
-      const followDropped = async (expectJob: boolean): Promise<'ok' | 'aborted'> => {
-        let lost = false;
-        for (let tries = 0; job.id && !job.done && tries < STAGE_RESUME_TRIES; tries++) {
-          try {
-            const res = await fetch(
-              `/api/vision/shape/stages?job=${encodeURIComponent(job.id)}&from=${job.seq + 1}`,
-              { signal: controller.signal }
-            );
-            // 404: the job is gone (server restarted or job expired), nothing to resume.
-            lost = res.status === 404;
-            if (!res.ok || !res.body) break;
-            await readSseStream(res.body, onEvent);
-          } catch (err) {
-            if (controller.signal.aborted) return 'aborted';
-            console.warn('[vision] 3D stages stream dropped:', err);
-          }
-          if (controller.signal.aborted) return 'aborted';
-        }
-        if (!job.done && (job.id || expectJob)) {
-          jobRef.current = null;
-          setState((s) =>
-            s.improve
-              ? {
-                  ...s,
-                  improve: { ...s.improve, status: 'stopped', cause: lost ? 'lost' : 'error' },
-                }
-              : s
-          );
-        }
-        return 'ok';
-      };
-      if ((await followDropped(false)) === 'aborted') return;
-      // Cut by the request limit: each checkpoint is posted back and a new request goes on, until
-      // the loop is done or « Cancel » (which aborts this controller).
-      while (pending) {
-        const checkpoint: Record<string, unknown> = pending;
-        pending = null;
-        Object.assign(job, { id: undefined, seq: -1, done: false });
-        let started = false;
-        for (let tries = 0; !started && tries < STAGE_RESUME_TRIES; tries++) {
-          try {
-            const res = await fetch('/api/vision/shape/stages', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ checkpoint, ...(sessionId ? { sessionId } : {}) }),
-              signal: controller.signal,
-            });
-            // A refused checkpoint will not pass on a retry either.
-            if (res.status === 400 || res.status === 413) break;
-            if (!res.ok || !res.body) continue;
-            started = true;
-            await readSseStream(res.body, onEvent);
-          } catch (err) {
-            if (controller.signal.aborted) return;
-            console.warn('[vision] 3D stages resume failed:', err);
-          }
-          if (controller.signal.aborted) return;
-        }
-        if (!started) {
-          setState((s) =>
-            s.improve ? { ...s, improve: { ...s.improve, status: 'stopped', cause: 'error' } } : s
-          );
-          return;
-        }
-        if ((await followDropped(true)) === 'aborted') return;
-      }
     },
-    [cancelJob, abortRef, cacheRef, facadesRef, familiesRef, lastRef, forKeyRef, jobRef, setState]
+    [abortRef, cacheRef, facadesRef, familiesRef, lastRef, forKeyRef, setState]
   );
 
   /**
@@ -472,7 +355,6 @@ export function useObjectShape(scope?: string) {
       if (scope && forKeyRef.current === key) return;
       forKeyRef.current = key;
       abortRef.current?.abort();
-      cancelJob();
       const cached = cacheRef.current.get(key);
       const views = viewsCacheRef.current.get(key);
       setState({
@@ -480,7 +362,7 @@ export function useObjectShape(scope?: string) {
         ...(views ? { viewsStatus: 'ready' as const, views } : { viewsStatus: 'idle' as const }),
       });
     },
-    [cancelJob, scope, abortRef, cacheRef, viewsCacheRef, forKeyRef, setState]
+    [scope, abortRef, cacheRef, viewsCacheRef, forKeyRef, setState]
   );
 
   /** « Try the AI shape again »: same object, cache skipped (Spark answers vary). */
@@ -514,7 +396,6 @@ export function useObjectShape(scope?: string) {
    * otherwise wait for Meta with no time limit, request after request); the last model is kept.
    */
   const cancelImprove = useCallback(() => {
-    cancelJob();
     // Also stops a resumed slice (the server cancels it when its request closes).
     abortRef.current?.abort();
     setState((s) =>
@@ -522,14 +403,21 @@ export function useObjectShape(scope?: string) {
         ? { ...s, improve: { ...s.improve, status: 'stopped', cause: 'aborted' } }
         : s
     );
-  }, [cancelJob, abortRef, setState]);
+  }, [abortRef, setState]);
 
   const reset = useCallback(() => {
     abortRef.current?.abort();
-    cancelJob();
     forKeyRef.current = null;
     setState(IDLE);
-  }, [cancelJob, abortRef, forKeyRef, setState]);
+  }, [abortRef, forKeyRef, setState]);
+
+  /**
+   * The step-model choice was saved: kept shapes were built with the previous one, so the
+   * next « Generate » / « Regenerate » asks again. Facades, families and views are kept.
+   */
+  const dropShapeCache = useCallback(() => {
+    cacheRef.current.clear();
+  }, [cacheRef]);
 
   /** New photo: forget every kept shape and preview (ids repeat across photos). */
   const clear = useCallback(() => {
@@ -540,19 +428,8 @@ export function useObjectShape(scope?: string) {
     lastRef.current = null;
     forKeyRef.current = null;
     abortRef.current?.abort();
-    cancelJob();
     setState(IDLE);
-  }, [
-    cancelJob,
-    abortRef,
-    cacheRef,
-    viewsCacheRef,
-    facadesRef,
-    familiesRef,
-    lastRef,
-    forKeyRef,
-    setState,
-  ]);
+  }, [abortRef, cacheRef, viewsCacheRef, facadesRef, familiesRef, lastRef, forKeyRef, setState]);
 
   return {
     ...state,
@@ -565,5 +442,6 @@ export function useObjectShape(scope?: string) {
     cancelImprove,
     reset,
     clear,
+    dropShapeCache,
   };
 }

@@ -2,14 +2,13 @@ import type { ApplianceCategory } from '@mitsinjo/engine';
 import type { KitArchetype } from '@/lib/object-kit';
 import type { SceneryType } from '@/lib/vision';
 import type { UsageSample } from '@/server/spend';
-import type { StageSheet } from './shape-script-prompt';
 import type {
   CodeResult,
   CriticResult,
   JudgeResult,
+  ClassMaterialsResult,
   PartAskResult,
   ViewsCheckResult,
-  ShapeOpsResult,
   DetectionResult,
   SegmentResult,
   ShapeResult,
@@ -102,6 +101,17 @@ export interface PerceptionBackend {
     signal?: AbortSignal
   ): Promise<PerceptionCall<PartAskResult>>;
   /**
+   * Materials of a views reconstruction's colour classes (PQ-T69): `imageUrl` is the class
+   * sheet (tile 0 = the object, one tile per class), `classes` how many to answer. One cheap
+   * call at `low` effort; null when unusable. Optional: the model is built without materials.
+   */
+  nameClasses?(
+    imageUrl: string,
+    question: string,
+    classes: number,
+    signal?: AbortSignal
+  ): Promise<PerceptionCall<ClassMaterialsResult>>;
+  /**
    * Rubric judge (PQ-T4): `imageUrl` is photo | model | model ¾, `question` names the object.
    * Asked of `META_JUDGE_MODEL` (Muse Wonder); offline and background only.
    */
@@ -120,21 +130,10 @@ export interface PerceptionBackend {
     signal?: AbortSignal
   ): Promise<PerceptionCall<ViewsCheckResult>>;
   /**
-   * Shape loop stage (PG-T15): `imageUrl` is drawing | model | diff, `question` the stage, its
-   * scores and the components. One vision call; null ops when unusable. Optional: no loop without it.
-   * `refine` = the final check stage: asked of the deep-reasoning model (Muse Wonder).
-   */
-  proposeShapeOps?(
-    imageUrl: string,
-    question: string,
-    signal?: AbortSignal,
-    sheet?: StageSheet,
-    opts?: ShapeOpsOptions
-  ): Promise<PerceptionCall<ShapeOpsResult>>;
-  /**
    * Sandboxed construction code, route B (PQ-T45, §8bis): `imageUrl` is photo | current
-   * render, `question` the draft, its score and the measures. One Wonder call; null code when
-   * unusable. Optional: no route B without it.
+   * render, `question` the draft, its score and the measures. One writer-model call
+   * (`stepModel('code')`, Wonder by default); null code when unusable. Optional: no route B
+   * without it.
    */
   writeBuildCode?(
     imageUrl: string,
@@ -143,12 +142,6 @@ export interface PerceptionBackend {
     /** Writer prompt version (PQ-T55 v2: generic kinds; default = current). */
     version?: number
   ): Promise<PerceptionCall<CodeResult>>;
-}
-
-/** Options of one stage call. */
-export interface ShapeOpsOptions {
-  /** Final check and re-refinement: deep-reasoning model instead of the standard vision one. */
-  refine?: boolean;
 }
 
 /** What `describeShape` is told about the object. */

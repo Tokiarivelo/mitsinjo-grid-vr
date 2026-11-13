@@ -5,12 +5,12 @@ import { env } from '@/lib/env';
 import { DEFAULT_META_BASE_URL } from '@/server/copilot/providers/meta';
 import { fetchPreferringContributor } from '@/server/copilot/providers/contributor';
 import type { UsageSample } from '@/server/spend';
+import type { StepModelsSelection, StepModelStep } from '@/lib/step-models';
 import type {
   CriticOptions,
   PartsSubject,
   PerceptionBackend,
   PerceptionCall,
-  ShapeOpsOptions,
   ShapeSubject,
 } from './backend';
 import {
@@ -45,13 +45,9 @@ import {
   JUDGE_SYSTEM_PROMPT,
   parseJudge,
 } from './rubric-judge';
-import {
-  CODE_JSON_SCHEMA,
-  CODE_PROMPT_VERSION,
-  codeModel,
-  codePrompt,
-  parseBuildCode,
-} from './shape-code';
+import { CODE_JSON_SCHEMA, CODE_PROMPT_VERSION, codePrompt, parseBuildCode } from './shape-code';
+import { logStepModelsOnce, stepModel } from './step-models';
+import { LABEL_JSON_SCHEMA, LABEL_SYSTEM_PROMPT, parseClassMaterials } from './recon/label-classes';
 import {
   VIEWS_CHECK_JSON_SCHEMA,
   VIEWS_CHECK_CARDS_VERSION,
@@ -78,14 +74,6 @@ import {
   shapeQuestion,
 } from './shape';
 import { boxUnionCoverage, parseSamOutput } from './parse-sam';
-import {
-  SHAPE_SCRIPT_JSON_SCHEMA,
-  SHAPE_SCRIPT_CARDS_VERSION,
-  SHAPE_SCRIPT_PROMPT_VERSION,
-  shapeScriptSystemPrompt,
-  type StageSheet,
-  parseStageOps,
-} from './shape-script-prompt';
 import { effortFor } from './effort';
 import {
   PART_QUESTION_JSON_SCHEMA,
@@ -98,9 +86,9 @@ import {
   type CodeResult,
   type CriticResult,
   type JudgeResult,
+  type ClassMaterialsResult,
   type PartAskResult,
   type ViewsCheckResult,
-  type ShapeOpsResult,
   type DetectionResult,
   type SegmentResult,
   type ShapeResult,
@@ -178,8 +166,15 @@ export class MetaPerceptionBackend implements PerceptionBackend {
   private readonly apiKey: string;
   private readonly baseUrl: string;
   private readonly preferContributor: boolean;
+  private readonly stepModels: StepModelsSelection;
 
-  constructor(options?: { apiKey?: string; baseUrl?: string; preferContributor?: boolean }) {
+  constructor(options?: {
+    apiKey?: string;
+    baseUrl?: string;
+    preferContributor?: boolean;
+    /** Operator's stored per-step choice (`shape_step_models`): wins over the env defaults. */
+    stepModels?: StepModelsSelection;
+  }) {
     ensureNetworkDefaults();
     this.preferContributor = options?.preferContributor ?? env.META_PREFER_CONTRIBUTOR;
     this.apiKey = options?.apiKey || env.META_API_KEY || '';
@@ -187,6 +182,13 @@ export class MetaPerceptionBackend implements PerceptionBackend {
       /\/$/,
       ''
     );
+    this.stepModels = options?.stepModels ?? {};
+    logStepModelsOnce();
+  }
+
+  /** Model id serving one 3D step for this request (stored choice, else env). */
+  private modelFor(step: StepModelStep): string {
+    return stepModel(step, this.stepModels);
   }
 
   private async post(path: string, body: BodyInit, init: HeadersInit, signal?: AbortSignal) {
@@ -277,7 +279,7 @@ export class MetaPerceptionBackend implements PerceptionBackend {
     if (log) {
       const schema = (jsonSchema as { name?: unknown }).name;
       console.info(
-        `[vision] 3D ${log.kind} → params ${JSON.stringify(log.params ?? {}, redactDataUrls)} image ${redactDataUrls('image', imageUrl)}${extraImages.map((u) => ` + reference ${redactDataUrls('image', u)}`).join('')} schema ${typeof schema === 'string' ? schema : 'custom'}`
+        `[vision] 3D ${log.kind} → model ${baseModel} params ${JSON.stringify(log.params ?? {}, redactDataUrls)} image ${redactDataUrls('image', imageUrl)}${extraImages.map((u) => ` + reference ${redactDataUrls('image', u)}`).join('')} schema ${typeof schema === 'string' ? schema : 'custom'}`
       );
       console.info(`[vision] 3D ${log.kind} system: ${system}`);
       console.info(`[vision] 3D ${log.kind} question: ${question}`);
@@ -409,12 +411,13 @@ export class MetaPerceptionBackend implements PerceptionBackend {
             category: target.category,
             ...(target.archetype ? { archetype: target.archetype } : {}),
             ...(target.facadeUrl ? { facadeUrl: target.facadeUrl } : {}),
+            model: this.modelFor('kit'),
           })
         : null;
     const remembered = cacheKey ? getCachedKit(cacheKey) : undefined;
     if (remembered) {
       console.info(
-        `[vision] 3D kit cache hit (${remembered.result.kit?.archetype ?? '?'}, prompt v${promptVersion})`
+        `[vision] 3D kit cache hit from ${remembered.model} (${remembered.result.kit?.archetype ?? '?'}, prompt v${promptVersion})`
       );
       return { model: remembered.model, usage: {}, result: remembered.result };
     }
@@ -426,7 +429,8 @@ export class MetaPerceptionBackend implements PerceptionBackend {
       signal,
       false,
       { kind: 'describeShape', params: { ...target, promptVersion } },
-      target.facadeUrl ? [target.facadeUrl] : []
+      target.facadeUrl ? [target.facadeUrl] : [],
+      this.modelFor('kit')
     );
     const kit = parseKit(content, hint);
     if (!kit) console.info(`[vision] ${model} gave no usable 3D kit: ${content.slice(0, 300)}`);
@@ -458,7 +462,8 @@ export class MetaPerceptionBackend implements PerceptionBackend {
       signal,
       false,
       { kind: 'describeParts', params: { ...target } },
-      target.facadeUrl ? [target.facadeUrl] : []
+      target.facadeUrl ? [target.facadeUrl] : [],
+      this.modelFor('parts')
     );
     const recipe = parseFreeParts(content);
     if (!recipe)
@@ -486,7 +491,9 @@ export class MetaPerceptionBackend implements PerceptionBackend {
       criticJsonSchema(promptVersion),
       signal,
       false,
-      { kind: 'criticizeShape', params: { promptVersion } }
+      { kind: 'criticizeShape', params: { promptVersion } },
+      [],
+      this.modelFor('critic')
     );
     const parsed = parseKitPatch(content);
     // Version 2 cuts a long patch to its first 4 fields (PQ-T14); version 3 keeps version 1 whole.
@@ -516,13 +523,40 @@ export class MetaPerceptionBackend implements PerceptionBackend {
       PART_QUESTION_JSON_SCHEMA,
       signal,
       false,
-      { kind: 'askPart' }
+      { kind: 'askPart' },
+      [],
+      this.modelFor('askPart')
     );
     const answer = parsePartAnswer(content);
     console.info(
       `[vision] 3D part answer from ${model}: ${answer ? (answer.present ? `yes${answer.where ? ` (${answer.where})` : ''}${answer.color ? ` ${answer.color}` : ''}` : 'no') : 'unusable'}`
     );
     return { model, usage, result: { answer } };
+  }
+
+  async nameClasses(
+    imageUrl: string,
+    question: string,
+    classes: number,
+    signal?: AbortSignal
+  ): Promise<PerceptionCall<ClassMaterialsResult>> {
+    // The cheapest seeing model (contributor allowed): a wrong answer costs a surface look only.
+    const { content, model, usage } = await this.visionJson(
+      LABEL_SYSTEM_PROMPT,
+      question,
+      imageUrl,
+      LABEL_JSON_SCHEMA,
+      signal,
+      true,
+      { kind: 'nameClasses' },
+      [],
+      this.modelFor('parts')
+    );
+    const materials = parseClassMaterials(content, classes);
+    console.info(
+      `[vision] 3D class materials from ${model}: ${materials ? materials.map((m, i) => `${i + 1}=${m ?? '?'}`).join(' ') : 'unusable'}`
+    );
+    return { model, usage, result: { materials } };
   }
 
   async judgeShape(
@@ -539,7 +573,7 @@ export class MetaPerceptionBackend implements PerceptionBackend {
       false,
       { kind: 'judgeShape', params: { promptVersion: JUDGE_PROMPT_VERSION } },
       [],
-      env.META_JUDGE_MODEL
+      this.modelFor('judge')
     );
     const judgement = parseJudge(content);
     console.info(
@@ -563,7 +597,7 @@ export class MetaPerceptionBackend implements PerceptionBackend {
       false,
       { kind: 'writeBuildCode', params: { promptVersion: version } },
       [],
-      codeModel()
+      this.modelFor('code')
     );
     const code = parseBuildCode(content);
     console.info(
@@ -587,62 +621,15 @@ export class MetaPerceptionBackend implements PerceptionBackend {
       VIEWS_CHECK_JSON_SCHEMA,
       signal,
       false,
-      { kind: 'checkViews', params: { promptVersion } }
+      { kind: 'checkViews', params: { promptVersion } },
+      [],
+      this.modelFor('viewsCheck')
     );
     const check = parseViewsCheck(content);
     console.info(
       `[vision] 3D views check from ${model}: ${check ? `${check.missing.map((m) => `${m.part} (${m.view})`).join(', ') || 'complete'}${check.redrawSide ? ', redraw side' : ''}` : 'unusable'}`
     );
     return { model, usage, result: { check } };
-  }
-
-  async proposeShapeOps(
-    imageUrl: string,
-    question: string,
-    signal?: AbortSignal,
-    sheet: StageSheet = 'elevation',
-    opts: ShapeOpsOptions = {}
-  ): Promise<PerceptionCall<ShapeOpsResult>> {
-    const promptVersion = env.SHAPE_LOOP_CARDS
-      ? SHAPE_SCRIPT_CARDS_VERSION
-      : SHAPE_SCRIPT_PROMPT_VERSION;
-    const ask = (baseModel: string) =>
-      this.visionJson(
-        shapeScriptSystemPrompt(sheet, env.SHAPE_LOOP_CARDS),
-        question,
-        imageUrl,
-        SHAPE_SCRIPT_JSON_SCHEMA,
-        signal,
-        false,
-        {
-          kind: 'proposeShapeOps',
-          params: { promptVersion, sheet, refine: !!opts.refine },
-        },
-        [],
-        baseModel
-      );
-    let answer: Awaited<ReturnType<typeof ask>>;
-    if (opts.refine && env.META_REFINE_MODEL !== env.META_VISION_MODEL) {
-      // Final check on Wonder; one retry on the standard model when Wonder is not served.
-      try {
-        answer = await ask(env.META_REFINE_MODEL);
-      } catch (err) {
-        if (signal?.aborted) throw err;
-        console.warn(
-          `[vision] 3D final check on ${env.META_REFINE_MODEL} failed, retrying on ${env.META_VISION_MODEL}:`,
-          err instanceof Error ? err.message : err
-        );
-        answer = await ask(env.META_VISION_MODEL);
-      }
-    } else {
-      answer = await ask(env.META_VISION_MODEL);
-    }
-    const { content, model, usage } = answer;
-    const ops = parseStageOps(content);
-    console.info(
-      `[vision] 3D stage ops from ${model} (prompt v${promptVersion}): ${ops ? ops.map((o) => `${(o as { op: string }).op} ${(o as { id?: string }).id ?? ''}`.trim()).join(', ') || 'none' : 'unusable'}`
-    );
-    return { model, usage, result: { ops } };
   }
 
   async segmentImage(
