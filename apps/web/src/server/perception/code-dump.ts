@@ -56,7 +56,8 @@ export function codeDumpRoot(): string | null {
   const configured = env.SHAPE_CODE_DUMP_DIR?.trim();
   if (configured?.toLowerCase() === 'off') return null;
   if (configured) return isAbsolute(configured) ? configured : resolve(repoRoot(), configured);
-  if (process.env.NODE_ENV === 'production') return null;
+  // Tests and production write nothing unless a folder is asked for.
+  if (process.env.NODE_ENV === 'production' || process.env.VITEST) return null;
   return join(repoRoot(), 'debug', 'shape-code');
 }
 

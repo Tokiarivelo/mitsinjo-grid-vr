@@ -94,6 +94,8 @@ export interface CodeLoopInput {
   execute?: typeof runSandboxedCode;
   /** Called after every round, kept or not (debug dump); must not throw into the loop. */
   onRound?: (event: CodeRoundEvent) => void;
+  /** Writer prompt version of this run, stored with the code (default: current). */
+  promptVersion?: number;
   roundsMax?: number;
   minGain?: number;
   signal?: AbortSignal;
@@ -125,6 +127,7 @@ export async function refineWithCode(input: CodeLoopInput): Promise<CodeLoopResu
     score,
     execute = runSandboxedCode,
     onRound,
+    promptVersion = CODE_PROMPT_VERSION,
     roundsMax = CODE_ROUNDS_MAX,
     minGain = CODE_MIN_GAIN,
     signal,
@@ -288,5 +291,5 @@ export async function refineWithCode(input: CodeLoopInput): Promise<CodeLoopResu
     }
   }
   if (!code) console.info(`[vision] 3D code for "${label}": no round beat the draft`);
-  return { recipe: best, code, promptVersion: CODE_PROMPT_VERSION, seed: params.seed, rounds };
+  return { recipe: best, code, promptVersion, seed: params.seed, rounds };
 }

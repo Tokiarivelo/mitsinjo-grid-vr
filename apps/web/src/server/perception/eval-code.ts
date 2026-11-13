@@ -6,10 +6,9 @@ import { z } from 'zod';
 import type { ObjectRecipe } from '@/lib/object-shape';
 import type { PerceptionClient } from './client';
 import { presentAnatomy } from './fusion';
-import type { ModelScore } from './model-score';
 import { scoreRecipe, type RecipeScore } from './score-shape';
 import { captureMasks, criticReplay, readCapture, type CriticReplayRound } from './shape-capture';
-import { CODE_PROMPT_GENERIC_VERSION } from './shape-code';
+import { CODE_PROMPT_GENERIC_VERSION, detailTextOf } from './shape-code';
 import { codeRoundValid, codeSeedFor, refineWithCode, type CodeRound } from './shape-code-loop';
 import { criticImage } from './spark-critic';
 
@@ -77,19 +76,6 @@ export function codeVerdict(
   if (b > a) return 'B';
   if (a > b) return 'A';
   return 'tie';
-}
-
-/** Draft detail line for the writer question (`recall 0.70 · …`), from the fields measured. */
-export function detailTextOf(score: ModelScore): string | undefined {
-  const d = score.detail;
-  if (!d) return undefined;
-  const cells: string[] = [];
-  if (d.partRecall !== undefined) cells.push(`recall ${d.partRecall.toFixed(2)}`);
-  if (d.partPrecision !== undefined) cells.push(`precision ${d.partPrecision.toFixed(2)}`);
-  if (d.interiorEdgeF1 !== undefined) cells.push(`interior F1 ${d.interiorEdgeF1.toFixed(2)}`);
-  if (d.partDeltaE !== undefined) cells.push(`part ΔE ${d.partDeltaE.toFixed(1)}`);
-  if (d.anatomyRecall !== undefined) cells.push(`ana ${d.anatomyRecall.toFixed(2)}`);
-  return cells.length ? cells.join(' · ') : undefined;
 }
 
 /** Median tour duration and writer share over loop rounds (0 rounds → zeros). */

@@ -5,6 +5,7 @@ import { env } from '@/lib/env';
 import { PART_KINDS, RECIPE_MATERIALS, type ObjectRecipe } from '@/lib/object-shape';
 import { CODE_MAX_BYTES } from './code-sandbox';
 import type { Elevation } from './facade-house';
+import type { ModelScore } from './model-score';
 
 /**
  * Route-B writer (PQ-T45, §8bis): the prompt Wonder answers with a `build()` body, the schema of
@@ -196,4 +197,17 @@ export function elevationMeasuresText(e: Elevation): string {
     e.plinth ? `plinth ${boxText(e.plinth)}` : 'plinth none',
     boxesText('steps', e.steps),
   ].join('; ');
+}
+
+/** Draft detail line for the writer question (`recall 0.70 · …`), from the fields measured. */
+export function detailTextOf(score: ModelScore): string | undefined {
+  const d = score.detail;
+  if (!d) return undefined;
+  const cells: string[] = [];
+  if (d.partRecall !== undefined) cells.push(`recall ${d.partRecall.toFixed(2)}`);
+  if (d.partPrecision !== undefined) cells.push(`precision ${d.partPrecision.toFixed(2)}`);
+  if (d.interiorEdgeF1 !== undefined) cells.push(`interior F1 ${d.interiorEdgeF1.toFixed(2)}`);
+  if (d.partDeltaE !== undefined) cells.push(`part ΔE ${d.partDeltaE.toFixed(1)}`);
+  if (d.anatomyRecall !== undefined) cells.push(`ana ${d.anatomyRecall.toFixed(2)}`);
+  return cells.length ? cells.join(' · ') : undefined;
 }

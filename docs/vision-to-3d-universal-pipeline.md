@@ -512,6 +512,12 @@ une étape de plus, sans nouvelle infrastructure.
 - **À mesurer au build** : démarrage à froid avec le WASM, mémoire de la fonction, taille du point de reprise avec le
   code. Ces trois mesures n'ont pas été faites : seules les 2,4 Mo du paquet le sont.
 
+**Chemin photo (PQ-T57).** La voie B tourne aussi pour tout objet de la photo (hors `water`), après le gabarit ajusté et
+la boucle d'étapes : Wonder reçoit la planche photo | rendu courant, le score détaillé, les pièces vues et l'anatomie
+`present`, avec le prompt v2 (familles). Même étalon que le brouillon (silhouette, contours, couleur, masques, anatomie),
+≤ 3 tours (`PHOTO_CODE_ROUNDS`), gain ≥ 0,005 ou le brouillon reste ; lacet, teintes de mur et statuts restent ceux du
+brouillon. Le tour est inline (pas encore en fond) : il allonge la première réponse d'environ 70 s par tour.
+
 **Débogage du code généré (PQ-T56).** Chaque objet passé par la voie B écrit un dossier
 `debug/shape-code/<date>-<objet>/` (ignoré par git ; `SHAPE_CODE_DUMP_DIR`, `off` pour couper) : `draft.blender.py`
 (gabarit A), puis par tour `round-N.build.js` (le `build()` écrit par Wonder), `round-N.blender.py` (le modèle qu'il
