@@ -525,6 +525,18 @@ une maison à plusieurs volumes bien construite y perdait contre le gabarit. La 
 La planche envoyée à Wonder montre dessin | modèle | différence (rouge = dessiné non construit, bleu = construit non
 dessiné), et la question porte la **ligne de toit mesurée** en 24 stations (`skylineText`) : où commence chaque volume, sa
 hauteur, le sens de chaque pente. Sans image du dessin, repli sur le score d'élévation.
+**Vue de côté d'une maison à plusieurs volumes (PQ-T65).** `sideConsistent` comparait la part de mur sous l'égout entre
+face et côté : sur une maison à plusieurs volumes cette part n'a pas de sens (plusieurs égouts) et tout dessin de côté
+était refusé, donc la profondeur n'était jamais notée. Quand la face ou le côté est `multi`, seul un côté **copié de la
+face** est refusé (même rapport de mur et même nombre de fenêtres) ; le côté accepté pèse 30 % du score (`SIDE_WEIGHT`).
+
+**Sculpture en direct (PQ-T66, `code-progress.ts`).** Un tour gardé n'est plus échangé d'un bloc : ses pièces partent
+dans l'ordre où le code les a construites (volumes, toits, ouvertures, détails), en 6 lots à 1 s d'intervalle
+(`SCULPT_STEPS`, `SCULPT_STEP_MS`), sur les événements `shape_stage` existants (`running` + `recipe` partielle + `kinds`
+du lot), puis l'événement `done` porte le modèle entier. Le visualiseur imprime chaque lot de bas en haut et entoure les
+pièces ajoutées ou modifiées ; pendant qu'un tour s'écrit, il cadre les pièces de l'étape (`STAGE_FOCUS`). La révélation
+passe par une file à part : la boucle n'attend pas, le tour suivant part aussitôt. La réponse de Wonder elle-même arrive
+d'un bloc (pas de flux de jetons) : le direct commence quand un tour se termine.
 
 **Chemin photo (PQ-T57).** La voie B tourne aussi pour tout objet de la photo (hors `water`), après le gabarit ajusté et
 la boucle d'étapes : Wonder reçoit la planche photo | rendu courant, le score détaillé, les pièces vues et l'anatomie

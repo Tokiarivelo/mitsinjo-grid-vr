@@ -95,7 +95,7 @@ export interface CodeLoopInput {
   /** Sandbox execution (default: the §8bis QuickJS runner; tests inject fakes). */
   execute?: typeof runSandboxedCode;
   /** Called after every round, kept or not (debug dump); must not throw into the loop. */
-  onRound?: (event: CodeRoundEvent) => void;
+  onRound?: (event: CodeRoundEvent) => void | Promise<void>;
   /** Static frame text of the drawing, repeated every round (`elevationFrameText`). */
   frameText?: string;
   /** Stop as soon as the best score reaches this (0–1): a good match ends the loop. */
@@ -147,7 +147,7 @@ export async function refineWithCode(input: CodeLoopInput): Promise<CodeLoopResu
   let droppedText: string | undefined;
   const rounds: CodeRound[] = [];
   let lastSheet: string | undefined;
-  const record = (
+  const record = async (
     r: CodeRound,
     question: string,
     rawBody: string | null,
@@ -156,7 +156,7 @@ export async function refineWithCode(input: CodeLoopInput): Promise<CodeLoopResu
   ) => {
     rounds.push(r);
     try {
-      onRound?.({
+      await onRound?.({
         ...r,
         question,
         ...(lastSheet ? { sheet: lastSheet } : {}),
@@ -206,7 +206,7 @@ export async function refineWithCode(input: CodeLoopInput): Promise<CodeLoopResu
     const costUsd = model && answered?.usage ? estimateCostUsd(model, answered.usage) : undefined;
     const body = answered?.code ?? null;
     if (!body) {
-      record(
+      await record(
         {
           round,
           bytes: 0,
@@ -240,7 +240,7 @@ export async function refineWithCode(input: CodeLoopInput): Promise<CodeLoopResu
     }));
     const execMs = Date.now() - execStart;
     if (!exec.ok) {
-      record(
+      await record(
         {
           round,
           bytes: Buffer.byteLength(body, 'utf8'),
@@ -274,7 +274,7 @@ export async function refineWithCode(input: CodeLoopInput): Promise<CodeLoopResu
     const s = await score(exec.recipe).catch(() => null);
     const scoreMs = Date.now() - scoreStart;
     const kept = s !== null && s - bestScore >= minGain;
-    record(
+    await record(
       {
         round,
         bytes: Buffer.byteLength(body, 'utf8'),

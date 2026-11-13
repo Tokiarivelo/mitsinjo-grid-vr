@@ -22,6 +22,7 @@ import {
 import { archetypeOf, kitToRecipe, type KitArchetype, type ObjectKit } from '@/lib/object-kit';
 import { pathToRings } from '@/lib/vision';
 import type { PerceptionClient } from './client';
+import { codeProgress } from './code-progress';
 import { measureKitColors, type ObjectPixels } from './color-measure';
 import type { PhotoForRegions } from './region';
 import { measurePerspective, type Perspective } from './perspective';
@@ -67,12 +68,7 @@ import {
 import { formatElevationScore, scoreElevation, type ScoredElevation } from './elevation-score';
 import { ELEVATION_ARCHETYPES, measureFacadeElevations } from './facade-views';
 import { routeHouseFacade } from './house-facade-route';
-import {
-  CODE_ROUNDS_MAX,
-  codeSeedFor,
-  refineWithCode,
-  type CodeRoundEvent,
-} from './shape-code-loop';
+import { CODE_ROUNDS_MAX, codeSeedFor, refineWithCode } from './shape-code-loop';
 import { openCodeDump } from './code-dump';
 import {
   drawingDetailText,
@@ -226,6 +222,8 @@ export interface ObjectShapeOptions {
   onElevation?: (front: Elevation, score: ScoredElevation) => void;
   /** Facade house loop progress (PG-T17, SSE `shape_stage`). */
   onStage?: (e: StageProgress) => void;
+  /** Pause between two batches of a kept code round's reveal (PQ-T66; default 1 s, tests pass 0). */
+  sculptStepMs?: number;
   /** Gets the staged loop's seed model and measured drawing (stage capture, eval only). */
   onStageSeed?: (seed: ObjectRecipe, front: Elevation) => void;
   /** Stages that did not fit the first answer: the caller runs them in the background (PG-T18). */
@@ -305,6 +303,7 @@ export async function runObjectShape(
     onSideView,
     onElevation,
     onStage,
+    sculptStepMs,
     onStageSeed,
     onStagesLeft,
     promptVersion,
@@ -323,51 +322,6 @@ export async function runObjectShape(
   const stageProgress = (e: StageProgress) => {
     logStage(e);
     onStage?.(e);
-  };
-  /**
-   * Route-B progress on the existing stage events (PQ-T60): the draft previews at once, then each
-   * kept round swaps the model in while the request is still running. No new event, no new UI.
-   */
-  const codeProgress = (
-    stages: ReadonlyArray<ShapeStageId>,
-    carry: (r: ObjectRecipe) => ObjectRecipe
-  ) => {
-    const total = stages.length;
-    const stageOf = (round: number) => stages[Math.min(total, Math.max(1, round)) - 1]!;
-    const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
-    return {
-      total,
-      start: (draft: ObjectRecipe) =>
-        onStage?.({
-          phase: 'first',
-          index: 1,
-          total,
-          stage: stageOf(1),
-          state: 'running',
-          recipe: drawn(draft),
-        }),
-      round: (e: CodeRoundEvent) => {
-        onStage?.({
-          phase: 'first',
-          index: Math.min(total, e.round),
-          total,
-          stage: stageOf(e.round),
-          state: 'done',
-          before: clamp01(e.baseScore),
-          ...(e.score !== null ? { after: clamp01(e.score) } : {}),
-          ...(e.kept ? {} : { stop: e.score === null ? ('error' as const) : ('no_gain' as const) }),
-          ...(e.kept && e.recipe ? { recipe: drawn(carry(e.recipe)) } : {}),
-        });
-        if (e.round < total)
-          onStage?.({
-            phase: 'first',
-            index: e.round + 1,
-            total,
-            stage: stageOf(e.round + 1),
-            state: 'running',
-          });
-      },
-    };
   };
   /** Ends a timed phase (PQ-T42): one log line and one `shape_timing` event. */
   const timed = (phase: ShapeTimingPhase, t0: number) => {
@@ -435,7 +389,13 @@ export async function runObjectShape(
       const dump = openCodeDump(target.label, codeModel());
       dump?.draft(o.draft, base.score, params);
       onStep?.('code');
-      const live = codeProgress(o.stages, o.carry);
+      const live = codeProgress({
+        stages: o.stages,
+        shown: (r) => drawn(o.carry(r)),
+        onStage,
+        signal,
+        ...(sculptStepMs !== undefined ? { stepMs: sculptStepMs } : {}),
+      });
       live.start(o.draft);
       const looped = await refineWithCode({
         label: target.label,
@@ -457,6 +417,8 @@ export async function runObjectShape(
         },
         ...(signal ? { signal } : {}),
       });
+      // The last kept round finishes printing before the answer replaces the preview.
+      await live.flush();
       timed('code', codeStart);
       dump?.final({
         code: looped.code,
