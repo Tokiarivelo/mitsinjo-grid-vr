@@ -148,3 +148,24 @@ describe('elevationFrameText (PQ-T58)', () => {
     expect(text).toContain('points [[');
   });
 });
+
+describe('silhouetteFrameText (PQ-T61)', () => {
+  it('gives any object its outline and parts in object units; the side view maps to depth', async () => {
+    const { silhouetteFrameText } = await import('../shape-code');
+    const ring = [
+      [0, 0],
+      [1, 0],
+      [1, 1],
+      [0, 1],
+    ] as const;
+    const parts = [{ concept: 'wheel', box: { x: 0.1, y: 0.7, w: 0.2, h: 0.3 } }];
+    const front = silhouetteFrameText('front', ring, parts);
+    expect(front).toContain('[[-0.5,-0.5],[0.5,-0.5],[0.5,0.5],[-0.5,0.5]]');
+    expect(front).toContain('wheel at [-0.3, -0.35] size [0.2, 0.3]');
+    const side = silhouetteFrameText('side', ring, parts);
+    // Side view: the front of the object is on the left, so x 0.2 → z +0.3.
+    expect(side).toContain('wheel at [0.3, -0.35]');
+    expect(side).toContain('[z, y]');
+    expect(silhouetteFrameText('photo', ring, [])).toContain('measured on the photo');
+  });
+});

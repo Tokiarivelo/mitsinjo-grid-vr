@@ -10,7 +10,7 @@ import { GOLDEN_SHAPES, goldenBox, goldenOutline, goldenSvg, PHOTO } from '../__
 /** Route B on the photo path (PQ-T57): every object reaches the writer, the draft survives a loss. */
 describe('photo path route B (PQ-T57)', () => {
   it('asks the writer (prompt v2) for a fitted object and keeps the draft when nothing wins', async () => {
-    const c = GOLDEN_SHAPES.find((g) => g.name === 'fridge')!;
+    const c = GOLDEN_SHAPES.find((g) => g.name === 'car')!;
     const buffer = await sharp(Buffer.from(goldenSvg(c)))
       .jpeg({ quality: 85 })
       .toBuffer();
@@ -36,8 +36,10 @@ describe('photo path route B (PQ-T57)', () => {
       writeBuildCode,
     };
     const onCode = vi.fn();
+    const onStage = vi.fn();
     const shape = await runObjectShape(spark, { buffer, ...PHOTO }, 'data:full', target, {
       onCode,
+      onStage,
     });
     expect(writeBuildCode).toHaveBeenCalled();
     const [image, question, , version] = writeBuildCode.mock.calls[0]!;
@@ -47,6 +49,10 @@ describe('photo path route B (PQ-T57)', () => {
     expect(version).toBeUndefined(); // the live default prompt (v3)
     // The writer's body is out of range: no gain, the fitted draft is what ships.
     expect(onCode).not.toHaveBeenCalled();
+    // PQ-T60: the draft previews at once, each lost round reports its stop.
+    expect(onStage.mock.calls[0]![0]).toMatchObject({ phase: 'first', state: 'running', index: 1 });
+    expect(onStage.mock.calls[0]![0].recipe.parts.length).toBeGreaterThan(0);
+    expect(onStage.mock.calls.some(([e]) => e.state === 'done' && e.stop === 'error')).toBe(true);
     expect(shape.mode).toBe('recipe');
     expect(shape.recipe!.parts.length).toBeGreaterThan(0);
   });

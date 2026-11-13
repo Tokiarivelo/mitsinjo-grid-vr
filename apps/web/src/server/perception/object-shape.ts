@@ -17,6 +17,7 @@ import {
   type ShapeStep,
   type ShapeTarget,
   type ShapeTimingPhase,
+  type ShapeStageId,
 } from '@/lib/object-shape';
 import { archetypeOf, kitToRecipe, type KitArchetype, type ObjectKit } from '@/lib/object-kit';
 import { pathToRings } from '@/lib/vision';
@@ -66,7 +67,12 @@ import {
 import { formatElevationScore, scoreElevation, type ScoredElevation } from './elevation-score';
 import { ELEVATION_ARCHETYPES, measureFacadeElevations } from './facade-views';
 import { routeHouseFacade } from './house-facade-route';
-import { codeSeedFor, refineWithCode } from './shape-code-loop';
+import {
+  CODE_ROUNDS_MAX,
+  codeSeedFor,
+  refineWithCode,
+  type CodeRoundEvent,
+} from './shape-code-loop';
 import { openCodeDump } from './code-dump';
 import {
   drawingDetailText,
@@ -75,11 +81,18 @@ import {
   scoreDrawing,
   skylineText,
 } from './drawing-score';
-import { CODE_PROMPT_VERSION, codeModel, detailTextOf, elevationFrameText } from './shape-code';
+import {
+  CODE_PROMPT_VERSION,
+  codeModel,
+  detailTextOf,
+  elevationFrameText,
+  silhouetteFrameText,
+} from './shape-code';
 import { criticImage } from './spark-critic';
 import { stageSheet } from './shape-stages-spark';
 import type { ShapeCode } from './shape-capture';
 import { photoTarget, tagPhotoParts } from './photo-stages';
+import { scoreViews, VIEW_STAGES, viewStageNotes } from './view-stages';
 import { fetchPartMasks, partMasksTimeout } from './part-masks';
 import { fitPartParams, hasPartGroups, preparePartFit } from './part-fit';
 import {
@@ -92,7 +105,7 @@ import { withMaskChimney } from './mask-chimney';
 import { withMaskPanels } from './mask-panels';
 import { withMaskWheels } from './mask-wheels';
 import { withProfileBody } from './profile-body';
-import { scoreRecipe } from './score-shape';
+import { gridParts, scoreRecipe } from './score-shape';
 import { timeoutSignal } from './abort';
 import { voteKits } from './kit-vote';
 import { askFamilies, asFamily } from './kit-ask';
@@ -112,6 +125,7 @@ import {
   markDrawnInferred,
   sparkDepthRatio,
   viewIou,
+  viewsSheet,
   viewsRecipe,
 } from './object-views';
 
@@ -231,10 +245,20 @@ export interface ObjectShapeOptions {
 
 /** The second kit sample is asked only with at least this budget (PQ-T18). */
 const SECOND_SAMPLE_MIN_MS = 40_000;
-/** Most Wonder rounds on the photo path (each ≈ 70 s; stalls stop earlier, §8bis). */
-const PHOTO_CODE_ROUNDS = 3;
-/** Elevation score (0–1) from which the code loop on a drawing stops: a good match (PQ-T58). */
-const CODE_GOAL_ELEVATION = 0.9;
+/** Route-B rounds as stage events: the modeller's order (volumes → roofs → openings → details). */
+const FACADE_CODE_STAGES: ReadonlyArray<ShapeStageId> = [
+  'massing',
+  'roof',
+  'openings',
+  'accessories',
+  'details',
+].slice(0, CODE_ROUNDS_MAX) as ShapeStageId[];
+/** Photo path: fewer rounds (each ≈ 70 s; stalls stop earlier, §8bis). */
+const PHOTO_CODE_STAGES: ReadonlyArray<ShapeStageId> = ['body', 'details', 'details'];
+/** Yardstick (0–1) from which the code loop stops: a good match (PQ-T58). */
+const CODE_GOAL = 0.9;
+/** Photo path: the photo score is known to flatter mediocre models (methodology §3), so only a near-perfect one skips the writer. */
+const PHOTO_CODE_GOAL = 0.97;
 
 /** End of a budget started at `from` (Infinity when unbounded: every stage runs, all masks wait). */
 function budgetEnd(from: number, budgetMs: number | null | undefined): number {
@@ -295,6 +319,51 @@ export async function runObjectShape(
     logStage(e);
     onStage?.(e);
   };
+  /**
+   * Route-B progress on the existing stage events (PQ-T60): the draft previews at once, then each
+   * kept round swaps the model in while the request is still running. No new event, no new UI.
+   */
+  const codeProgress = (
+    stages: ReadonlyArray<ShapeStageId>,
+    carry: (r: ObjectRecipe) => ObjectRecipe
+  ) => {
+    const total = stages.length;
+    const stageOf = (round: number) => stages[Math.min(total, Math.max(1, round)) - 1]!;
+    const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
+    return {
+      total,
+      start: (draft: ObjectRecipe) =>
+        onStage?.({
+          phase: 'first',
+          index: 1,
+          total,
+          stage: stageOf(1),
+          state: 'running',
+          recipe: drawn(draft),
+        }),
+      round: (e: CodeRoundEvent) => {
+        onStage?.({
+          phase: 'first',
+          index: Math.min(total, e.round),
+          total,
+          stage: stageOf(e.round),
+          state: 'done',
+          before: clamp01(e.baseScore),
+          ...(e.score !== null ? { after: clamp01(e.score) } : {}),
+          ...(e.kept ? {} : { stop: e.score === null ? ('error' as const) : ('no_gain' as const) }),
+          ...(e.kept && e.recipe ? { recipe: drawn(carry(e.recipe)) } : {}),
+        });
+        if (e.round < total)
+          onStage?.({
+            phase: 'first',
+            index: e.round + 1,
+            total,
+            stage: stageOf(e.round + 1),
+            state: 'running',
+          });
+      },
+    };
+  };
   /** Ends a timed phase (PQ-T42): one log line and one `shape_timing` event. */
   const timed = (phase: ShapeTimingPhase, t0: number) => {
     const ms = Date.now() - t0;
@@ -307,6 +376,95 @@ export async function runObjectShape(
    * on what they add), and on every background stage update.
    */
   const drawn = (r: ObjectRecipe): ObjectRecipe => (target.cleanFront ? markDrawnInferred(r) : r);
+  /**
+   * Route B, one implementation for every path (PQ-T61, §8bis): the code model writes `build()` for
+   * this object, the sandbox runs it, `measure` scores it on the path's own yardstick, and only
+   * gains are kept. The draft previews at once and each kept round swaps the model in. Returns the
+   * winning recipe (already carried), or null when no round beat the draft or nothing can write.
+   */
+  const codeRoute = async (o: {
+    archetype: string;
+    draft: ObjectRecipe;
+    colors: { main: string; secondary: string; accent: string };
+    measures: Record<string, number>;
+    /** What the code does not build and the draft keeps (turn, swatches, statuses). */
+    carry: (r: ObjectRecipe) => ObjectRecipe;
+    /** Yardstick 0–1 with its detail line; null = unscorable. */
+    measure: (r: ObjectRecipe) => Promise<{ score: number; detail?: string } | null>;
+    /** Reference | model (| difference) for the writer; null falls back to the crop. */
+    sheet: (r: ObjectRecipe) => Promise<string | null>;
+    /** What the yardstick compares with, for the log (`drawing pixels`, `photo`, `2D views`). */
+    against: string;
+    frameText?: string;
+    measuresText?: string;
+    stages: ReadonlyArray<ShapeStageId>;
+    goal?: number;
+    fallbackImage: string;
+  }): Promise<ObjectRecipe | null> => {
+    if (!perception.writeBuildCode) {
+      console.info(
+        `[vision] 3D route B skipped for "${target.label}": this perception backend has no writeBuildCode (mock?), the template draft stays`
+      );
+      return null;
+    }
+    const writeBuildCode = perception.writeBuildCode.bind(perception);
+    const codeStart = Date.now();
+    try {
+      const base = await o.measure(o.carry(o.draft));
+      if (!base) {
+        console.info(`[vision] 3D route B skipped for "${target.label}": draft unscorable`);
+        return null;
+      }
+      const params = {
+        seed: codeSeedFor(target.id),
+        proportions: o.draft.proportions,
+        colors: o.colors,
+        measures: o.measures,
+      };
+      console.info(
+        `[vision] 3D route B for "${target.label}" (${o.archetype}): ${codeModel()}, prompt v${CODE_PROMPT_VERSION}, draft ${base.score.toFixed(3)} on the ${o.against}${o.goal !== undefined ? `, goal ${o.goal}` : ''}`
+      );
+      const dump = openCodeDump(target.label, codeModel());
+      dump?.draft(o.draft, base.score, params);
+      const live = codeProgress(o.stages, o.carry);
+      live.start(o.draft);
+      const looped = await refineWithCode({
+        label: target.label,
+        archetype: o.archetype,
+        draft: o.draft,
+        baseScore: base.score,
+        params,
+        ...(o.frameText ? { frameText: o.frameText } : {}),
+        ...(o.measuresText ? { measuresText: o.measuresText } : {}),
+        ...(base.detail ? { detailText: base.detail } : {}),
+        ...(o.goal !== undefined ? { goal: o.goal } : {}),
+        roundsMax: live.total,
+        sheet: async (r) => (await o.sheet(o.carry(r))) ?? o.fallbackImage,
+        writeCode: (img, q, sig) => writeBuildCode(img, q, sig),
+        score: async (r) => (await o.measure(o.carry(r)))?.score ?? null,
+        onRound: (e) => {
+          dump?.round(e);
+          live.round(e);
+        },
+        ...(signal ? { signal } : {}),
+      });
+      timed('code', codeStart);
+      dump?.final({
+        code: looped.code,
+        recipe: looped.recipe,
+        score: looped.rounds.filter((r) => r.kept).at(-1)?.score ?? base.score,
+      });
+      if (!looped.code) return null;
+      onCode?.({ text: looped.code, seed: looped.seed, promptVersion: looped.promptVersion });
+      return o.carry(looped.recipe);
+    } catch (err) {
+      console.warn(
+        `[vision] 3D route B failed for "${target.label}", the draft stays:`,
+        err instanceof Error ? err.message : err
+      );
+      return null;
+    }
+  };
   /**
    * Runs a staged loop (PG-T16…T20): the first answer's stages now, the rest handed to the
    * caller for the background (`onStagesLeft`, logged the same way). Never worse than `seed`.
@@ -734,48 +892,20 @@ export async function runObjectShape(
         // Spark stages: when its code wins the stages never run (their ops patch template parts and
         // the background rounds would overwrite the code's model); they stay the fallback.
         let codeWon = false;
-        if (!perception.writeBuildCode) {
-          console.info(
-            `[vision] 3D route B skipped for "${target.label}": this perception backend has no writeBuildCode (mock?), the template draft stays`
-          );
-        }
-        if (perception.writeBuildCode) {
-          const writeBuildCode = perception.writeBuildCode.bind(perception);
-          const codeStart = Date.now();
+        {
           const rings = front.roofRings ? { roofRings: front.roofRings } : {};
           const sparkDepth = kit.proportions.d / kit.proportions.w;
           const depth = side ? (depthRatio(front, side) ?? sparkDepth) : sparkDepth;
           const draft = recipe;
-          // The code builds parts only: turn, swatches and statuses stay the draft's.
-          const carry = (r: ObjectRecipe): ObjectRecipe => ({
-            ...r,
-            ...(draft.source ? { source: draft.source } : {}),
-            ...(draft.yaw !== undefined ? { yaw: draft.yaw } : {}),
-            ...(draft.swatches ? { swatches: draft.swatches } : {}),
-            ...(draft.dimStatus ? { dimStatus: draft.dimStatus } : {}),
-          });
           const drawingBytes = target.facadeUrl
             ? await imageBytes(target.facadeUrl, signal).catch(() => null)
             : null;
           // PQ-T59: scored on the drawing's own pixels when it is at hand (several volumes and
           // stepped roofs score right); the label-map elevation score is the fallback.
           const pixels = drawingBytes ? await drawingTarget(drawingBytes, front) : null;
-          const measure = (r: ObjectRecipe) => {
-            if (pixels) {
-              const d = scoreDrawing(r, front, pixels, rings);
-              return { score: d.score / 100, detail: drawingDetailText(d), drawing: d };
-            }
-            const s = scoreElevation(r, front, rings);
-            return {
-              score: s.score / 100,
-              detail: `iou ${s.iou.toFixed(2)} · edge ${s.edgeF1.toFixed(2)} · openings ${s.openings.matched}/${s.openings.target}`,
-              elevation: s,
-            };
-          };
-          const draftMeasure = measure(draft);
-          const codeParams = {
-            seed: codeSeedFor(target.id),
-            proportions: draft.proportions,
+          const won = await codeRoute({
+            archetype: 'house',
+            draft,
             colors: kit.colors,
             measures: {
               eave: eaveShare,
@@ -784,48 +914,39 @@ export async function runObjectShape(
               windows: front.windows.length,
               doors: front.doors.length,
             },
-          };
-          console.info(
-            `[vision] 3D route B for "${target.label}": Wonder (${codeModel()}, prompt v${CODE_PROMPT_VERSION}) models the house as build() code, draft ${draftMeasure.score.toFixed(3)} on the ${pixels ? 'drawing pixels' : 'elevation labels'}, goal ${CODE_GOAL_ELEVATION}`
-          );
-          const dump = openCodeDump(target.label, codeModel());
-          dump?.draft(draft, draftMeasure.score, codeParams);
-          const looped = await refineWithCode({
-            label: target.label,
-            archetype: 'house',
-            draft,
-            baseScore: draftMeasure.score,
-            params: codeParams,
+            carry: (r) => ({
+              ...r,
+              ...(draft.source ? { source: draft.source } : {}),
+              ...(draft.yaw !== undefined ? { yaw: draft.yaw } : {}),
+              ...(draft.swatches ? { swatches: draft.swatches } : {}),
+              ...(draft.dimStatus ? { dimStatus: draft.dimStatus } : {}),
+            }),
+            measure: async (r) => {
+              if (pixels) {
+                const d = scoreDrawing(r, front, pixels, rings);
+                return { score: d.score / 100, detail: drawingDetailText(d) };
+              }
+              const e = scoreElevation(r, front, rings);
+              return {
+                score: e.score / 100,
+                detail: `iou ${e.iou.toFixed(2)} · edge ${e.edgeF1.toFixed(2)} · openings ${e.openings.matched}/${e.openings.target}`,
+              };
+            },
+            // Drawing | model | difference (red = drawn, not built; blue = built, not drawn).
+            sheet: async (r) =>
+              pixels && drawingBytes
+                ? drawingSheet(drawingBytes, pixels, scoreDrawing(r, front, pixels, rings))
+                : stageSheet(r, scoreElevation(r, front, rings), drawingBytes),
+            against: pixels ? 'drawing pixels' : 'elevation labels',
             frameText: `${elevationFrameText(front)}${pixels ? `\n${skylineText(pixels, front)}` : ''}`,
             measuresText: `eave ${eaveShare.toFixed(2)} · yaw ${yaw0.toFixed(2)} · depth ${depth.toFixed(2)} · windows ${front.windows.length} · doors ${front.doors.length}`,
-            detailText: draftMeasure.detail,
-            goal: CODE_GOAL_ELEVATION,
-            // Drawing | model | difference (red = drawn, not built; blue = built, not drawn).
-            sheet: async (r) => {
-              const m = measure(carry(r));
-              const sheet =
-                m.drawing && pixels && drawingBytes
-                  ? await drawingSheet(drawingBytes, pixels, m.drawing)
-                  : m.elevation
-                    ? await stageSheet(r, m.elevation, drawingBytes)
-                    : null;
-              return sheet ?? imageUrl;
-            },
-            writeCode: (img, q, sig) => writeBuildCode(img, q, sig),
-            score: async (r) => measure(carry(r)).score,
-            ...(dump ? { onRound: (e) => dump.round(e) } : {}),
-            ...(signal ? { signal } : {}),
+            stages: FACADE_CODE_STAGES,
+            goal: CODE_GOAL,
+            fallbackImage: imageUrl,
           });
-          timed('code', codeStart);
-          dump?.final({
-            code: looped.code,
-            recipe: looped.recipe,
-            score: looped.rounds.filter((r) => r.kept).at(-1)?.score ?? draftMeasure.score,
-          });
-          if (looped.code) {
+          if (won) {
             codeWon = true;
-            recipe = carry(looped.recipe);
-            onCode?.({ text: looped.code, seed: looped.seed, promptVersion: looped.promptVersion });
+            recipe = won;
           }
         }
         // PG-T16…T18: staged loop (Spark patches, kept only when the elevation stage score
@@ -896,8 +1017,51 @@ export async function runObjectShape(
         // Round objects (PG-T19): lathe of the drawn silhouette, no side, no views check.
         const round = ROUND_VIEW_ARCHETYPES.includes(kit.archetype);
         let recipe = round ? roundViewRecipe(seen.front, kit) : viewsRecipe(seen, kit);
+        // PQ-T61 route B on the 2D views (any object): Wonder models it from the measured front and
+        // side silhouettes and parts, scored on both views. When its code wins, the views check and
+        // the Spark stages (which patch template parts) do not run.
+        let viewsCodeWon = false;
+        {
+          const draft = recipe;
+          const viewStages = VIEW_STAGES[kit.archetype] ?? [];
+          const won = await codeRoute({
+            archetype: kit.archetype,
+            draft,
+            colors: kit.colors,
+            measures: {
+              frontAspect: seen.front.aspect,
+              ...(seen.side ? { sideAspect: seen.side.aspect } : {}),
+            },
+            carry: (r) => ({
+              ...r,
+              ...(draft.source ? { source: draft.source } : {}),
+              ...(draft.swatches ? { swatches: draft.swatches } : {}),
+              ...(draft.dimStatus ? { dimStatus: draft.dimStatus } : {}),
+            }),
+            measure: async (r) => {
+              const v = scoreViews(r, seen, viewStages);
+              return { score: v.overall, detail: viewStageNotes(v).join(' · ') };
+            },
+            sheet: (r) => viewsSheet(r, seen, signal),
+            against: seen.side ? '2D views (front + side)' : '2D view (front)',
+            frameText: [
+              silhouetteFrameText('front', seen.front.ring, seen.front.parts),
+              ...(seen.side
+                ? [silhouetteFrameText('side', seen.side.ring, seen.side.parts)]
+                : ['No side drawing: choose the depth from the object kind and say why.']),
+            ].join('\n'),
+            measuresText: `front aspect ${seen.front.aspect.toFixed(2)}${seen.side ? ` · side aspect ${seen.side.aspect.toFixed(2)}` : ''}`,
+            stages: PHOTO_CODE_STAGES,
+            goal: CODE_GOAL,
+            fallbackImage: seen.frontUrl,
+          });
+          if (won) {
+            viewsCodeWon = true;
+            recipe = won;
+          }
+        }
         // After the build, the AI checks every side against the drawings and the model is fixed.
-        if (!round && perception.checkViews && perception.segmentImage) {
+        if (!viewsCodeWon && !round && perception.checkViews && perception.segmentImage) {
           onStep?.('check');
           const checkStart = Date.now();
           const checked = await checkViewsModel(
@@ -925,7 +1089,7 @@ export async function runObjectShape(
           seen.sidePng = kept.sidePng;
         }
         // PG-T20: the archetype's stages, scored part by part on the views.
-        if (perception.proposeShapeOps) {
+        if (!viewsCodeWon && perception.proposeShapeOps) {
           const proposeShapeOps = perception.proposeShapeOps.bind(perception);
           const seed = recipe;
           recipe = await followStages(
@@ -1363,10 +1527,87 @@ export async function runObjectShape(
         recipe = safe.recipe;
       }
       timed('fit', fitStart);
+      // PQ-T60: before the Spark stages, which only run when no code won (they patch template
+      // parts, and their background rounds would overwrite the code's model).
+      let photoCodeWon = false;
+      // PQ-T57 route B on the photo path (§8bis, every object): same yardstick as the draft
+      // (silhouette, contours, colour, part masks, anatomy).
+      if (finalKit && photo && shaped.outline && finalKit.archetype !== 'water') {
+        const outlinePath = shaped.outline;
+        const anatomy = presentAnatomy(finalKit);
+        const answered = anatomy.length ? anatomy : undefined;
+        const draft = recipe;
+        const scoreOf = (r: ObjectRecipe) =>
+          scoreRecipe(
+            photo,
+            { box: shaped.box, outline: outlinePath },
+            r,
+            objectMasks,
+            undefined,
+            answered
+          );
+        const visible = (finalKit.evidence?.visibleParts ?? []).slice(0, 12).join(', ');
+        // The SAM outline and part masks in object-box fractions: what the writer builds from.
+        const photoRing = (
+          pathToRings(outlinePath)
+            .filter((r) => r.length >= 3)
+            .sort((a, b) => b.length - a.length)[0] ?? []
+        ).map(
+          ([x, y]) =>
+            [(x - shaped.box.x) / shaped.box.w, 1 - (y - shaped.box.y) / shaped.box.h] as const
+        );
+        const photoParts = gridParts(
+          objectMasks,
+          {
+            photoW: photo.width,
+            photoH: photo.height,
+            box: shaped.box,
+            crop: cropRectForShape(photo.width, photo.height, shaped.box),
+          },
+          1,
+          1
+        ).map((g) => ({
+          concept: g.concept,
+          box: { x: g.x0, y: g.y0, w: g.x1 - g.x0, h: g.y1 - g.y0 },
+        }));
+        const won = await codeRoute({
+          archetype: finalKit.archetype,
+          draft,
+          colors: finalKit.colors,
+          measures: { yaw: draft.yaw ?? 0, aspect },
+          // The code builds parts only: the measured turn, tints and statuses stay the draft's.
+          carry: (r) => ({
+            ...r,
+            ...(draft.yaw !== undefined ? { yaw: draft.yaw } : {}),
+            ...(draft.wallTints ? { wallTints: draft.wallTints } : {}),
+            ...(draft.dimStatus ? { dimStatus: draft.dimStatus } : {}),
+          }),
+          measure: async (r) => {
+            const sc = await scoreOf(r);
+            if (!sc) return null;
+            const detail = detailTextOf(sc.score);
+            return { score: sc.score.score / 100, ...(detail ? { detail } : {}) };
+          },
+          sheet: async (r) => {
+            const sc = await scoreOf(r);
+            return sc ? criticImage(sc.crop, r, aspect) : null;
+          },
+          against: 'photo',
+          frameText: silhouetteFrameText('photo', photoRing, photoParts),
+          measuresText: `yaw ${(draft.yaw ?? 0).toFixed(2)} rad · photo aspect ${aspect.toFixed(2)}${visible ? ` · parts seen: ${visible}` : ''}${answered ? ` · anatomy present: ${answered.join(', ')}` : ''}`,
+          stages: PHOTO_CODE_STAGES,
+          goal: PHOTO_CODE_GOAL,
+          fallbackImage: imageUrl,
+        });
+        if (won) {
+          photoCodeWon = true;
+          recipe = won;
+        }
+      }
       // PQ-T19: the staged loop on the photo — stages scored on the outline and the part masks,
       // parts the photo cannot see locked. First stages now, the rest in the background; the seed
       // wins when no stage kept a change (the kinds the loop tags are not worth a different model).
-      if (finalKit && photo && shaped.outline && perception.proposeShapeOps) {
+      if (!photoCodeWon && finalKit && photo && shaped.outline && perception.proposeShapeOps) {
         const proposeShapeOps = perception.proposeShapeOps.bind(perception);
         const archetype = finalKit.archetype;
         const rings = pathToRings(shaped.outline).filter((r) => r.length >= 3);
@@ -1409,97 +1650,6 @@ export async function runObjectShape(
             seed
           );
           if (JSON.stringify(looped.parts) !== JSON.stringify(tagged.parts)) recipe = looped;
-        }
-      }
-      // PQ-T57 route B on the photo path (§8bis, every object): Wonder rewrites the fitted draft as
-      // build() code, run in the sandbox and kept only on photo-score gain (same yardstick as the
-      // draft: silhouette, contours, colour, part masks, anatomy). The draft shows when nothing wins.
-      if (
-        finalKit &&
-        photo &&
-        shaped.outline &&
-        perception.writeBuildCode &&
-        finalKit.archetype !== 'water'
-      ) {
-        const writeBuildCode = perception.writeBuildCode.bind(perception);
-        const outlinePath = shaped.outline;
-        const anatomy = presentAnatomy(finalKit);
-        const answered = anatomy.length ? anatomy : undefined;
-        const draft = recipe;
-        // The code builds parts only: the measured turn, tints and statuses stay the draft's.
-        const carry = (r: ObjectRecipe): ObjectRecipe => ({
-          ...r,
-          ...(draft.yaw !== undefined ? { yaw: draft.yaw } : {}),
-          ...(draft.wallTints ? { wallTints: draft.wallTints } : {}),
-          ...(draft.dimStatus ? { dimStatus: draft.dimStatus } : {}),
-        });
-        const scoreOf = (r: ObjectRecipe) =>
-          scoreRecipe(
-            photo,
-            { box: shaped.box, outline: outlinePath },
-            carry(r),
-            objectMasks,
-            undefined,
-            answered
-          );
-        try {
-          const draftScored = await scoreOf(draft);
-          if (draftScored) {
-            const codeStart = Date.now();
-            const base = draftScored.score.score / 100;
-            const codeParams = {
-              seed: codeSeedFor(target.id),
-              proportions: draft.proportions,
-              colors: finalKit.colors,
-              measures: { yaw: draft.yaw ?? 0, aspect },
-            };
-            const visible = (finalKit.evidence?.visibleParts ?? []).slice(0, 12).join(', ');
-            console.info(
-              `[vision] 3D route B for "${target.label}" (${finalKit.archetype}): Wonder (${codeModel()}) rewrites the draft as build() code, draft ${base.toFixed(3)}`
-            );
-            const dump = openCodeDump(target.label, codeModel());
-            dump?.draft(draft, base, codeParams);
-            const loopedB = await refineWithCode({
-              label: target.label,
-              archetype: finalKit.archetype,
-              draft,
-              baseScore: base,
-              params: codeParams,
-              measuresText: `yaw ${(draft.yaw ?? 0).toFixed(2)} rad · photo aspect ${aspect.toFixed(2)}${visible ? ` · parts seen: ${visible}` : ''}${answered ? ` · anatomy present: ${answered.join(', ')}` : ''}`,
-              detailText: detailTextOf(draftScored.score),
-              roundsMax: PHOTO_CODE_ROUNDS,
-              sheet: async (r) => {
-                const s = await scoreOf(r);
-                return s ? criticImage(s.crop, carry(r), aspect) : imageUrl;
-              },
-              writeCode: (img, q, sig) => writeBuildCode(img, q, sig),
-              score: async (r) => {
-                const s = await scoreOf(r);
-                return s ? s.score.score / 100 : null;
-              },
-              ...(dump ? { onRound: (e) => dump.round(e) } : {}),
-              ...(signal ? { signal } : {}),
-            });
-            timed('code', codeStart);
-            dump?.final({
-              code: loopedB.code,
-              recipe: loopedB.recipe,
-              score: loopedB.rounds.filter((r) => r.kept).at(-1)?.score ?? base,
-            });
-            if (loopedB.code) {
-              recipe = carry(loopedB.recipe);
-              onCode?.({
-                text: loopedB.code,
-                seed: loopedB.seed,
-                promptVersion: loopedB.promptVersion,
-              });
-            }
-          }
-        } catch (err) {
-          console.warn(
-            '[vision] route B failed, the draft stays:',
-            err instanceof Error ? err.message : err
-          );
         }
       }
       if (photo) {

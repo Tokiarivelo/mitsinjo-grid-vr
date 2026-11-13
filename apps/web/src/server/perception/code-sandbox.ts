@@ -61,6 +61,17 @@ export const CODE_STACK_BYTES = 512 * 1024;
 /** Wall-clock budget of one execution, ms (runaway loops; healthy builds take a few ms). */
 export const CODE_EXEC_LIMIT_MS = 2000;
 
+/** Part fields a part cannot live without: an invalid one drops the part, never just the field. */
+const REQUIRED_PART_FIELDS: ReadonlySet<string> = new Set([
+  'shape',
+  'at',
+  'size',
+  'color',
+  'points',
+  'profile',
+  'blobs',
+]);
+
 /** What the host passes the guest: the draft to rebuild, nothing the photo did not show. */
 export interface CodeParams {
   /** Seed of `api.rng`: the same code + seed builds the same parts, every run. */
@@ -297,7 +308,29 @@ export async function runSandboxedCode(
                 issues.push({ index, reason: `over the ${MAX_COMPONENTS} part budget` });
                 return;
               }
-              const parsed = RecipePartSchema.safeParse(raw);
+              let parsed = RecipePartSchema.safeParse(raw);
+              // PQ-T62: a wrong OPTIONAL field (live: `glazed: true`, `panels: [2,2]`) used to
+              // drop the whole window; the field goes, the part stays, the reason is reported.
+              if (!parsed.success && raw && typeof raw === 'object' && !Array.isArray(raw)) {
+                const bad = new Set(
+                  parsed.error.issues
+                    .map((i) => String(i.path[0] ?? ''))
+                    .filter((k) => k && !REQUIRED_PART_FIELDS.has(k))
+                );
+                if (bad.size) {
+                  const kept = Object.fromEntries(
+                    Object.entries(raw as Record<string, unknown>).filter(([k]) => !bad.has(k))
+                  );
+                  const retry = RecipePartSchema.safeParse(kept);
+                  if (retry.success) {
+                    issues.push({
+                      index,
+                      reason: `field(s) ${[...bad].join(', ')} invalid and ignored (part kept): ${parsed.error.issues[0]?.message ?? ''}`,
+                    });
+                    parsed = retry;
+                  }
+                }
+              }
               if (!parsed.success) {
                 const first = parsed.error.issues[0];
                 issues.push({

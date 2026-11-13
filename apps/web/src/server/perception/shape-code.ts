@@ -33,7 +33,8 @@ const CODE_API_SPEC = [
   'Coordinates: object centred at the origin, x right, y up, z toward the camera. `at` = part centre, `size` = part extent, both fractions of the object (each within ±0.6, extent 0.01–1).',
   'Part fields: shape, at, size, color (#rrggbb, from params.colors only), material, kind (one of ' +
     PART_KINDS.join(', ') +
-    '), front (main body), axis (cylinder/cone: x/y/z), apex (prism ridge x, 0–1), ridge/clip (hip), points (extrude/hull ring), section (hull side ring), profile (lathe radius-vs-height), grid/leaves/glazed/panels/sill/lintel/cap/bulge/rim (assemblies), overhang (roof eave, object units each side).',
+    '), front (main body), axis (cylinder/cone: x/y/z), apex (prism ridge x, 0–1), ridge/clip (hip), points (extrude/hull ring), section (hull side ring), profile (lathe radius-vs-height), overhang (roof eave, object units each side, number 0–0.12).',
+  "Assembly fields, with their exact types (a wrong type is ignored): grid [across, down] integers (window / door panes); leaves 1 or 2 (door / window leaves); glazed NUMBER 0–1 (glass share of a door, not a boolean); panels INTEGER (door panels, not an array); sill, lintel, cap, rim BOOLEAN; bulge number (thatch eave roll). extrude / hull points: closed ring of [x, y] in the part's own box, each within ±0.5, 3–64 points.",
   'Limits: ≤ 64 api calls, ≤ 32 parts returned, ≈ 5 000 triangles. Invalid parts are dropped with their reason; no valid part fails the run.',
 ].join('\n');
 
@@ -271,4 +272,36 @@ export function detailTextOf(score: ModelScore): string | undefined {
   if (d.partDeltaE !== undefined) cells.push(`part ΔE ${d.partDeltaE.toFixed(1)}`);
   if (d.anatomyRecall !== undefined) cells.push(`ana ${d.anatomyRecall.toFixed(2)}`);
   return cells.length ? cells.join(' · ') : undefined;
+}
+
+/**
+ * A measured silhouette as writer input (PQ-T61), any object: the outline ring and the part boxes
+ * read on one view, in object units (x right, y up, both within ±0.5 of the object box). On a
+ * `side` view the horizontal axis is the depth: the object's front is on the left (z = −x).
+ * `ring` = object-box fractions, u right, v up (0–1); part boxes = fractions, y down.
+ */
+export function silhouetteFrameText(
+  view: 'front' | 'side' | 'photo',
+  ring: ReadonlyArray<Pt>,
+  parts: ReadonlyArray<{ concept: string; box: { x: number; y: number; w: number; h: number } }>
+): string {
+  const f = (n: number) => +n.toFixed(2);
+  const flip = view === 'side' ? -1 : 1;
+  const axis = view === 'side' ? '[z, y] (depth, front of the object at z = +0.5)' : '[x, y]';
+  const pts = thin(ring, 28).map(([u, v]) => [f(flip * (u - 0.5)), f(v - 0.5)]);
+  const lines = [
+    `${view === 'photo' ? 'Outline measured on the photo (the object as it is turned there)' : `Outline measured on the ${view} drawing`}, object units ${axis}, y up, box = ±0.5: ${JSON.stringify(pts)}`,
+  ];
+  if (parts.length) {
+    lines.push(
+      `Parts measured on the ${view}: ${parts
+        .slice(0, 24)
+        .map(
+          (p) =>
+            `${p.concept} at [${f(flip * (p.box.x + p.box.w / 2 - 0.5))}, ${f(0.5 - (p.box.y + p.box.h / 2))}] size [${f(p.box.w)}, ${f(p.box.h)}]`
+        )
+        .join(' | ')}`
+    );
+  }
+  return lines.join('\n');
 }
