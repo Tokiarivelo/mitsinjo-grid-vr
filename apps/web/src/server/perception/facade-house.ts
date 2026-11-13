@@ -78,6 +78,8 @@ export interface Elevation {
   beams: NormBox[];
   /** Roof outline on the drawing (SAM rings), for the elevation score (PG-T2). */
   roofRings?: Ring[];
+  /** Several volumes (PQ-T62): `eave` and `ridge` describe the largest roof only. */
+  multi?: boolean;
 }
 
 /** A roof thinner than this share of the body height is a flat top (shop, block). */
@@ -210,6 +212,7 @@ export function measureElevation(m: ElevationMasks): Elevation | null {
         (b.h >= BEAM_ASPECT * b.w * m.aspect || b.w * m.aspect >= BEAM_ASPECT * b.h)
     ),
     ...(m.roof?.rings?.length ? { roofRings: m.roof.rings.map((r) => [...r]) } : {}),
+    ...(multi ? { multi: true } : {}),
   };
 }
 
@@ -483,6 +486,14 @@ export function sideRoofHint(front: Elevation): 'slope' | 'end' | null {
  * roof on both views with the same body shape — a copy, unless the plan is square.
  */
 export function sideConsistent(front: Elevation, side: Elevation): boolean {
+  // PQ-T65: a house of several volumes has no single eave line; its largest roof's eave differs
+  // from one view to the other by nature (live: both side drawings of a stepped shed-roof house
+  // were rejected, so nothing guided the depth). Only the copied-front test applies there.
+  if (front.multi || side.multi) {
+    const r = wallRatio(side) / wallRatio(front);
+    const sameOpenings = side.windows.length === front.windows.length && front.windows.length > 0;
+    return !(Math.abs(r - 1) < COPY_RATIO && sameOpenings);
+  }
   if (Math.abs(eaveShare(front) - eaveShare(side)) > EAVE_SHARE_TOLERANCE) return false;
   if (peaked(front) && peaked(side)) {
     const r = wallRatio(side) / wallRatio(front);
