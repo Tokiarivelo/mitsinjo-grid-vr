@@ -3,7 +3,17 @@
 **Updated:** 2026-11-14 · **By:** Claude Code · **Branch:** `feat/pq-t76-cars`
 (from `feat/pq-t74-house-quality`; PQ-T67–T75 not on `main` yet; rebase before the PR)
 
-## NEXT: PQ-T76 (a) — vehicle proportions read on the profile, replayed offline on the 3 cars
+## NEXT: PQ-T76 (b) — wheels measured on the profile (dark circles, `mask-wheels.ts`), then `CarPlan`
+
+## PQ-T76 (a) — vehicle proportions from the elevations (done 2026-11-14)
+
+- `recon/views.ts`: `AlignedViews.aspects` (w, d per unit height, before the grid clamp),
+  `profileProportions`, `bodyWidthShare` (widest row of the lower half: mirrors out), `vehicleAspects`.
+  `recon/route.ts`: a `vehicle` takes them; `depthFromPlan` no longer applies to it.
+- Replays w/d · h/d: sedan 0.42 · 0.35, SUV 0.39 · 0.35, truck 0.40 · 0.41 (were 0.55 · 0.46, 0.57 · 0.46,
+  0.49 · 0.50). Outputs `c-*/t76a/`, captures `c-*/voiture-3d-t76a.jpg`, `t76a-sheet.jpg`.
+- Houses: bungalow replay = `house-pq-t72.json`; bungalow + school `recipe.json` identical before / after.
+- Full-run flake: `recon.test.ts` "stays in the time budget" can exceed 900 ms under parallel load (passes alone).
 
 Brief: `docs/tasks/PV-car-generation.md` § 6 (step 0 findings + proposed order). Task: `PV-vision-quality.md` PQ-T76.
 Offline replay: `make views-3d FRONT=…/view-front.png RIGHT=… BACK=… LEFT=… TOP=… OUT=… LABEL=car OFFLINE=1 MATERIALS=metal,glass,…`
@@ -22,8 +32,7 @@ Offline replay: `make views-3d FRONT=…/view-front.png RIGHT=… BACK=… LEFT=
 ## Decisions
 
 - Step 1 of the brief (profile-first prompt) deprioritised: the drawings are fine, the recon is not.
-- Proposed order: (a) proportions from the profile for `vehicle` (cap lifted, plan as a check only),
-  (b) wheels measured on the profile (`mask-wheels.ts`) then `CarPlan`, (c) glazing / body split.
+- Order: (a) done; (b) wheels measured on the profile (`mask-wheels.ts`) then `CarPlan`, (c) glazing / body split.
 - Any change to `views.ts` must leave houses identical (it is shared): check `house-mesh.test.ts` hashes and
   the bungalow replay (`cmp` with `house-pq-t72.json`).
 

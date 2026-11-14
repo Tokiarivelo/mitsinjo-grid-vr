@@ -32,6 +32,8 @@ import { bleedPaper, maskAt, shrink, trimPaper } from './texture';
 import {
   alignTop,
   depthFromPlan,
+  profileProportions,
+  vehicleAspects,
   type AlignedViews,
   type GridView,
   type ViewFrame,
@@ -317,6 +319,10 @@ export async function reconstructObject(
       return null;
     }
     const { recipe, report } = finishRecipe(recon);
+    // A vehicle's length is its profile (PQ-T76): read on the elevations, not clamped by the grid,
+    // its width on the body without the wing mirrors.
+    if (archetype === 'vehicle')
+      recipe.proportions = profileProportions(vehicleAspects(recon.aligned));
     // The drawings themselves go on the model (never the photo): best effort, flat colours without.
     const { W, D } = recon.aligned;
     const topImage = top ? await decodeView(top) : null;
@@ -365,8 +371,9 @@ export async function reconstructObject(
         footprint,
         plan ? (rect) => planContrast(plan, rect) : undefined
       );
-      // The plan shows width and depth on one drawing: it sets the depth of the model.
-      if (footprint && topRead)
+      // The plan shows width and depth on one drawing: it sets the depth of the model (not of a
+      // vehicle, whose depth is its profile: Muse draws a car seen from above too wide).
+      if (footprint && topRead && archetype !== 'vehicle')
         recipe.proportions = depthFromPlan(recipe.proportions, topRead.aspect);
       if (hull.boxes.length)
         recipe.faces = {

@@ -753,10 +753,18 @@ One task = one commit, with its Vitest test, its `contracts.md` update and its m
       byte-identical; the rule fires on the half-timbered house only across the 12 bench houses.
       Captures: `h-fachwerk/maison-3d-t75.jpg`, `h-stilt/maison-3d-t75.jpg`.
 
-- [ ] **PQ-T76 Cars from a photo.** Brief: `PV-car-generation.md`. - [x] Step 0, measured on `sedan`, `suv`, `truck-side` live, no code change (brief § 6). Muse draws
-      good, consistent views (the front-first prompt is not the problem). The model is 25–40 % too short:
-      `GRID_COLS_MAX` caps depth at 2 × height and `depthFromPlan` trusts a top view drawn too wide. No
-      part roles, no real wheels (0–2 flat cylinders), boxy body; dark roof / glazing / body classes merge. - [ ] Vehicle proportions from the profile, then wheels, `CarPlan`, `carMesh`, bench of 10.
+- [ ] **PQ-T76 Cars from a photo.** Brief: `PV-car-generation.md` (step 0 findings in its § 6).
+      Step 0, done: `sedan`, `suv`, `truck-side` run live with no code change. Muse draws good,
+      consistent views (the front-first prompt is not the problem); the model came out 25–40 % too
+      short (`GRID_COLS_MAX` capped depth at 2 × height, `depthFromPlan` trusted a top view drawn too
+      wide); no part roles, no real wheels (0–2 flat cylinders), boxy body; dark roof / glazing / body
+      classes merge. (a) Done: a vehicle's proportions come from the elevations (`profileProportions`,
+      `vehicleAspects`, `AlignedViews.aspects` unclamped; the plan no longer sets its depth; wing
+      mirrors left out by `bodyWidthShare`). Offline replays, w/d · h/d: sedan 0.55 · 0.46 → 0.42 ·
+      0.35, SUV 0.57 · 0.46 → 0.39 · 0.35, truck 0.49 · 0.50 → 0.40 · 0.41. Left: wheels measured on
+      the profile, `CarPlan`, `carMesh`, bench of 10.
+      **Test:** `recon.test.ts`. Houses unchanged: bungalow replay = `house-pq-t72.json`, bungalow and
+      school recipes identical before / after. Captures: `c-*/voiture-3d-t76a.jpg`, `t76a-sheet.jpg`.
 
 ## Exit criteria
 

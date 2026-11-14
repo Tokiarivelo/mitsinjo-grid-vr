@@ -129,6 +129,10 @@ plan seulement en contrôle), rejeu hors ligne des 3 voitures ; (b) roues mesur�
 sombres, `mask-wheels.ts`) puis `CarPlan` ; (c) séparation vitrage / caisse. L'étape 1 (prompt profil en
 premier) n'est plus prioritaire.
 
+**(a) fait (PQ-T76a)** : proportions d'un véhicule lues sur les élévations (`profileProportions`,
+`vehicleAspects`), rétroviseurs hors largeur. Rejeux w/d · h/d : berline 0,42 · 0,35, SUV 0,39 · 0,35, pick-up
+0,40 · 0,41. Maisons inchangées. Captures `c-*/voiture-3d-t76a.jpg`, `t76a-sheet.jpg`.
+
 ## 7. Définition de « fini » pour une étape
 
 - Tests Vitest verts (`pnpm --filter web test -- car`, plus les suites maison), typecheck, lint sans erreur.
