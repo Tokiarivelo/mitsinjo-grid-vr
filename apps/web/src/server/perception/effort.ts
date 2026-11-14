@@ -31,6 +31,9 @@ export const CALL_EFFORT: Readonly<Record<string, ReasoningEffort>> = {
    */
   housePilot: 'medium',
   houseTool: 'high',
+  /** Car team (PQ-T76): the pilot briefs (`medium`), each specialist measures its part (`high`). */
+  carPilot: 'medium',
+  carTool: 'high',
 };
 
 export const DEFAULT_EFFORT: ReasoningEffort = 'high';

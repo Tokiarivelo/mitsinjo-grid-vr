@@ -142,6 +142,12 @@ premier) n'est plus prioritaire.
 portée de Muse retirée (papier assombri, teinté sous les pneus) ; voie lue sur la face. 2 essieux sur les
 trois voitures, rayons cohérents (`t76b-wheels.jpg`). Rejeu : `make car-replay OUT=…`.
 
+**(c) fait (PQ-T76c)** : l'équipe voiture (pilote + `body`, `glazing`, `lights`, `finishes`, appel `askCarTool`
+séparé de la maison). Essai live sur la berline seule (5 appels Spark) : berline 4 portes bicolore chromée,
+11 vitres, 34 détails ; la face est bien placée, le profil décalé de 0,02 à 0,05 (`t76c-reading.jpg`) : le fit
+devra accrocher ces lectures sur les pixels. Lecture rangée dans `c-sedan/car-reading.json`, rejouée par
+`make car-replay`. Suite : `fitCar` puis `carMesh`.
+
 ## 7. Définition de « fini » pour une étape
 
 - Tests Vitest verts (`pnpm --filter web test -- car`, plus les suites maison), typecheck, lint sans erreur.

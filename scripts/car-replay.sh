@@ -17,7 +17,10 @@ for n in "${names[@]}"; do
   for v in front right back left top; do [ -f "$D/view-$v.png" ] && views+=("${v^^}=$D/view-$v.png"); done
   label=car
   case "$n" in truck* | pickup*) label=truck ;; minibus* | van*) label=van ;; esac
-  if make -s views-3d "${views[@]}" OUT="$D/$OUT" LABEL="$label" OFFLINE=1 MATERIALS="$mats" >"$D/$OUT.log" 2>&1; then
+  # A saved car team reading (live run) is replayed for free.
+  reading=()
+  [ -f "$D/car-reading.json" ] && reading=(CAR_READING="$D/car-reading.json")
+  if make -s views-3d "${views[@]}" "${reading[@]}" OUT="$D/$OUT" LABEL="$label" OFFLINE=1 MATERIALS="$mats" >"$D/$OUT.log" 2>&1; then
     echo "✓ $n: $(grep -oE 'car (not measured|[0-9]+ axles.*)' "$D/$OUT.log" | head -1)"
   else
     echo "✗ $n: replay failed ($D/$OUT.log)"

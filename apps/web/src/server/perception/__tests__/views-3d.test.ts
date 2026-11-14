@@ -7,6 +7,8 @@ vi.mock('server-only', () => ({}));
 import { museImage, museImageReady } from '../facade-specialist';
 import { renderFlat, THREE_QUARTER } from '../flat-render';
 import { getPerceptionClient } from '../client';
+import { carToolAsk, liveReadCar } from '../car/car-specialist';
+import { CarReadingSchema } from '../car/car-tools';
 import { houseToolAsk } from '../house/house-specialist';
 import { reconstructObject, reportLine, type ViewName } from '../recon';
 import { reconstructFromViews } from '../recon/reconstruct';
@@ -74,6 +76,17 @@ describe.runIf(process.env.VIEWS_3D_FRONT || process.env.VIEWS_3D_PHOTO)('make v
                 ...(process.env.VIEWS_3D_SINGLE ? {} : { askHouseTool: houseToolAsk(perception) }),
               }
             : {}),
+        // PQ-T76: a vehicle is read by the car team (`CAR_READING=car-reading.json` replays a saved one).
+        ...(process.env.VIEWS_3D_CAR_READING
+          ? {
+              readCar: async () =>
+                CarReadingSchema.parse(
+                  JSON.parse(await readFile(process.env.VIEWS_3D_CAR_READING!, 'utf8'))
+                ),
+            }
+          : perception
+            ? { readCar: liveReadCar(carToolAsk(perception)) }
+            : {}),
         // Offline: materials given by hand, largest class first (`MATERIALS=slate,wood,…`).
         ...(process.env.VIEWS_3D_MATERIALS
           ? {
@@ -98,6 +111,8 @@ describe.runIf(process.env.VIEWS_3D_FRONT || process.env.VIEWS_3D_PHOTO)('make v
         onView: (view: ViewName | 'top', png) => void writeFile(join(out, `view-${view}.png`), png),
         onHouseReading: (reading) =>
           void writeFile(join(out, 'house-reading.json'), JSON.stringify(reading, null, 2)),
+        onCarReading: (reading) =>
+          void writeFile(join(out, 'car-reading.json'), JSON.stringify(reading, null, 2)),
       }
     );
     if (!built)

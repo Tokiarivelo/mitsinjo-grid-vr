@@ -766,9 +766,14 @@ One task = one commit, with its Vitest test, its `contracts.md` update and its m
       arc of each tyre, symmetric round the contact, Muse's ground shadow dropped) and the track on the
       front. Replays: 2 axles on all three, radii per car within 0.01 (sedan 0.22, SUV 0.22, truck
       0.16), rims on sedan and truck (black SUV rims: none). Limit: the sedan's front shadow spans the
-      whole width, no track. Left: car specialists, `carMesh`, bench of 10.
-      **Test:** `car-proportions.test.ts`, `car-wheels.test.ts`, `make house-regress`, `make car-replay`. Houses unchanged: bungalow replay = `house-pq-t72.json`, bungalow and
-      school recipes identical before / after. Captures: `c-*/voiture-3d-t76a.jpg`, `t76a-sheet.jpg`, `t76b-wheels.jpg`.
+      whole width, no track. (c) Done: the car team (`car/car-tools.ts`, `car/car-specialist.ts`,
+      `askCarTool`): pilot + `body`, `glazing`, `lights`, `finishes`, a retry each, 8 min deadline;
+      reading saved and replayed (`CAR_READING=`, `make car-replay`); it sets `CarPlan.kind`. Live
+      once on the sedan (5 Spark calls): sedan, 4 doors, two-tone, chrome; 11 windows, 34 details,
+      6 finishes; front parts well placed, side stations / windows 0.02–0.05 off (to snap on the
+      pixels). House code untouched. Left: `fitCar`, `carMesh`, bench of 10.
+      **Test:** `car-proportions.test.ts`, `car-wheels.test.ts`, `car-tools.test.ts`, `make house-regress`, `make car-replay`. Houses unchanged: bungalow replay = `house-pq-t72.json`, bungalow and
+      school recipes identical before / after. Captures: `c-*/voiture-3d-t76a.jpg`, `t76a-sheet.jpg`, `t76b-wheels.jpg`, `c-sedan/t76c-reading.jpg`.
 
 ## Exit criteria
 

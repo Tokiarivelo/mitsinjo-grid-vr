@@ -3,38 +3,34 @@
 **Updated:** 2026-11-14 · **By:** Claude Code · **Branch:** `feat/pq-t76-cars`
 (from `feat/pq-t74-house-quality`; PQ-T67–T75 not on `main` yet; rebase before the PR)
 
-## NEXT: PQ-T76 (b) — wheels measured on the profile (dark circles, `mask-wheels.ts`), then `CarPlan`
+## NEXT: PQ-T76 (d) — `fitCar`: snap the team reading on the pixels, then `carMesh`
 
-## PQ-T76 (a) — vehicle proportions from the elevations (done 2026-11-14)
+Brief: `docs/tasks/PV-car-generation.md` (§ 4 rules, § 6 findings + done steps). Task: `PV-vision-quality.md` PQ-T76.
 
-- `recon/views.ts`: `AlignedViews.aspects` (w, d per unit height, before the grid clamp),
-  `profileProportions`, `bodyWidthShare` (widest row of the lower half: mirrors out), `vehicleAspects`.
-  `recon/route.ts`: a `vehicle` takes them; `depthFromPlan` no longer applies to it.
-- Replays w/d · h/d: sedan 0.42 · 0.35, SUV 0.39 · 0.35, truck 0.40 · 0.41 (were 0.55 · 0.46, 0.57 · 0.46,
-  0.49 · 0.50). Outputs `c-*/t76a/`, captures `c-*/voiture-3d-t76a.jpg`, `t76a-sheet.jpg`.
-- Houses: bungalow replay = `house-pq-t72.json`; bungalow + school `recipe.json` identical before / after.
-- Full-run flake: `recon.test.ts` "stays in the time budget" can exceed 900 ms under parallel load (passes alone).
+## Rules set by the user (2026-11-14)
 
-Brief: `docs/tasks/PV-car-generation.md` § 6 (step 0 findings + proposed order). Task: `PV-vision-quality.md` PQ-T76.
-Offline replay: `make views-3d FRONT=…/view-front.png RIGHT=… BACK=… LEFT=… TOP=… OUT=… LABEL=car OFFLINE=1 MATERIALS=metal,glass,…`
-(drawings in `~/Téléchargements/generated-view/c-{sedan,suv,truck-side}/`).
+- Live Meta calls cost money: house non-regression is **offline only**, `make house-regress` (~30 s, free).
+- Car code lives in `server/perception/car/` + `lib/car-*.ts`; never edit `house/` or `lib/house-*.ts`;
+  shared `recon/` changes gated on `vehicle`. Cars are built by their own specialist team.
+- Go live once per car to get a reading, then replay it: `make car-replay OUT=…` (offline, free).
 
-## PQ-T76 step 0 — three cars live, no code change (2026-11-14)
+## Done this session (PQ-T76)
 
-- Muse views are good and consistent (front-first prompt is **not** the problem). Truck top view drawn
-  lengthwise → rejected by `alignTop` (correct).
-- Model 25–40 % too short: `GRID_COLS_MAX` 256 / `GRID_ROWS` 128 caps depth at 2 × height (h/d floor 0.50);
-  `depthFromPlan` lets a too-wide Muse top view (w/d 0.54–0.57) override the profile (0.43–0.47).
-- No part roles, wheels absent or flat (sedan 2 thin cylinders on one axle, SUV/truck 0), boxy body.
-- Colour classes: dark roof falls into glass (sedan), body ≈ glass on the black SUV; materials mislabelled.
+- Step 0 findings (three cars live). (a) proportions from the elevations (`car/car-proportions.ts`).
+- (b) `CarPlan` (`lib/car-plan.ts`, `recipe.car`), wheels measured on the profile (`car/car-wheels.ts`,
+  `car-measure.ts`: Muse ground shadow dropped, symmetric arc fit), track on the front.
+- (c) Car team: `car/car-tools.ts` (prompts, schemas, merge), `car/car-specialist.ts` (pilot + 4 specialists,
+  retry, deadline), `askCarTool` (backend, client, meta; kinds `carPilot`/`carTool` streamed). Live once on
+  the sedan: `c-sedan/car-reading.json` (side stations 0.02–0.05 off: fit must snap them).
+- Captures in `~/Téléchargements/generated-view/`: `t76a-sheet.jpg`, `t76b-wheels.jpg`, `c-sedan/t76c-reading.jpg`.
 
 ## Decisions
 
-- Brief step 1 (profile-first prompt) deprioritised: drawings fine, recon not. Order: (a) done; (b) wheels measured on the profile (`mask-wheels.ts`) then `CarPlan`, (c) glazing / body split.
-- Any change to `views.ts` must leave houses identical (it is shared): check `house-mesh.test.ts` hashes and
-  the bungalow replay (`cmp` with `house-pq-t72.json`).
+- Wheels are measured, never asked. Reading sets only `CarPlan.kind` until `fitCar` exists.
+- Car team orchestration is its own code (not shared with the house team) to leave house code untouched.
 
-## Open (houses, unchanged)
+## Open
 
-- V335–V343 not played on `/village`; phase PR PQ-T67 → T75 not opened.
-- Pending user calls: door snap fix (moves the bungalow reference), views check + redraw.
+- Sedan front shadow spans the width: no track. SUV black rims: no rim found.
+- `recon.test.ts` "time budget" can exceed 900 ms under full parallel load (passes alone).
+- Houses: V335–V343 not played; phase PR PQ-T67 → T75 not opened; door snap + views check pending.

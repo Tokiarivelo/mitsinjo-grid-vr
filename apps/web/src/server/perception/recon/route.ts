@@ -29,6 +29,7 @@ import {
   roofClassOf,
 } from './reconstruct';
 import { measureCarPlan } from '../car/car-measure';
+import { carImages, type ReadCar } from '../car/car-specialist';
 import { profileProportions, vehicleAspects } from '../car/car-proportions';
 import { bleedPaper, maskAt, shrink, trimPaper } from './texture';
 import {
@@ -70,6 +71,8 @@ export interface ReconDeps {
   readHouse?: ReadHouse;
   /** The piloted part specialists (PQ-T73); absent = the single reading. */
   askHouseTool?: AskHouseTool;
+  /** The car team (PQ-T76), live or a saved reading; absent = a car keeps its measured plan. */
+  readCar?: ReadCar;
 }
 
 export interface ReconOptions {
@@ -84,6 +87,8 @@ export interface ReconOptions {
   topPng?: Buffer;
   /** The house specialist's raw reading, for captures and evals. */
   onHouseReading?: (reading: unknown) => void;
+  /** The car team's reading, for captures, evals and replays (PQ-T76). */
+  onCarReading?: (reading: unknown) => void;
 }
 
 export interface ReconOutcome {
@@ -212,7 +217,15 @@ export async function buildFaceAtlas(
 export async function reconstructObject(
   deps: ReconDeps,
   target: ShapeTarget,
-  { cropUrl, signal, onView, fourFaces = true, topPng, onHouseReading }: ReconOptions = {}
+  {
+    cropUrl,
+    signal,
+    onView,
+    fourFaces = true,
+    topPng,
+    onHouseReading,
+    onCarReading,
+  }: ReconOptions = {}
 ): Promise<ReconOutcome | null> {
   const tag = `[vision] 3D views reconstruction for "${target.label}"`;
   try {
@@ -383,7 +396,26 @@ export async function reconstructObject(
     }
     // A vehicle: its wheels, track and clearance measured on the drawings (PQ-T76).
     if (archetype === 'vehicle' && !signal?.aborted) {
-      const car = await measureCarPlan(pngs, recon.aligned);
+      let car = await measureCarPlan(pngs, recon.aligned);
+      // The car team reads what pixels cannot name: kind, body stations, windows, lamps, finishes.
+      if (deps.readCar && !signal?.aborted) {
+        const { order, images } = await carImages(
+          pngs,
+          recon.aligned,
+          top && topRead ? { png: top, frame: topRead.frame } : null
+        );
+        const reading =
+          order[0] === 'front'
+            ? await deps.readCar(target.label, order, images, signal).catch((err) => {
+                console.warn(`${tag}: car team failed:`, err instanceof Error ? err.message : err);
+                return null;
+              })
+            : null;
+        if (reading) {
+          onCarReading?.(reading);
+          car = { ...(car ?? { wheels: [] }), ...(reading.kind ? { kind: reading.kind } : {}) };
+        }
+      }
       if (car) recipe.car = car;
       console.info(
         `${tag}: car ${car ? `${car.wheels.length} axles (${car.wheels.map((w) => `z ${w.z} r ${w.r}`).join(', ')}), clearance ${car.clearance ?? '?'}, track ${car.track ? `${car.track.x0}–${car.track.x1}` : '?'}` : 'not measured'}`

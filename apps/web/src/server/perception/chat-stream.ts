@@ -10,6 +10,8 @@ export const STREAMED_KINDS: ReadonlySet<string> = new Set([
   'readHouse',
   'housePilot',
   'houseTool',
+  'carPilot',
+  'carTool',
 ]);
 
 /** The completion as a non-streamed call returns it. */

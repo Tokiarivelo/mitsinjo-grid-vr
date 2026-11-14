@@ -137,6 +137,19 @@ export interface PerceptionBackend {
     signal?: AbortSignal
   ): Promise<PerceptionCall<{ content: string | null }>>;
   /**
+   * One call of the car team (PQ-T76): the pilot or a specialist, with its own system prompt and
+   * JSON schema; the raw answer. Optional: without it a car keeps its measured plan only.
+   */
+  askCarTool?(
+    tool: string,
+    system: string,
+    schema: { name: string; schema: object },
+    imageUrl: string,
+    question: string,
+    references: ReadonlyArray<string>,
+    signal?: AbortSignal
+  ): Promise<PerceptionCall<{ content: string | null }>>;
+  /**
    * Rubric judge (PQ-T4): `imageUrl` is photo | model | model ¾, `question` names the object.
    * Asked of `META_JUDGE_MODEL` (Muse Wonder); offline and background only.
    */
