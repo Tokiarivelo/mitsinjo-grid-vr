@@ -1,40 +1,33 @@
 # HANDOFF — read first, overwrite at end of session (≤40 lines)
 
-**Updated:** 2026-11-14 · **By:** Claude Code · **Branch:** `feat/pq-t74-house-quality`
-(from `feat/pq-t73-house-parts`; PQ-T67–T74 not on `main` yet; rebase before the PR)
+**Updated:** 2026-11-14 · **By:** Claude Code · **Branch:** `feat/pq-t76-cars`
+(from `feat/pq-t74-house-quality`; PQ-T67–T75 not on `main` yet; rebase before the PR)
 
-## NEXT: try V335–V343 on `/village`, then open the phase PR (PQ-T67 → PQ-T75)
+## NEXT: PQ-T76 (a) — vehicle proportions read on the profile, replayed offline on the 3 cars
 
-Brief and open limits: `docs/tasks/PV-house-generation-next.md` (§ « Traité en PQ-T74 » + what is left).
-Offline replay: `make views-3d FRONT=… RIGHT=… BACK=… LEFT=… TOP=… OUT=… LABEL=house OFFLINE=1 READING=… MATERIALS=wood,slate`.
+Brief: `docs/tasks/PV-car-generation.md` § 6 (step 0 findings + proposed order). Task: `PV-vision-quality.md` PQ-T76.
+Offline replay: `make views-3d FRONT=…/view-front.png RIGHT=… BACK=… LEFT=… TOP=… OUT=… LABEL=car OFFLINE=1 MATERIALS=metal,glass,…`
+(drawings in `~/Téléchargements/generated-view/c-{sedan,suv,truck-side}/`).
 
-## PQ-T74 — house quality on five new house types (2026-11-14)
+## PQ-T76 step 0 — three cars live, no code change (2026-11-14)
 
-Live runs from photos (`resources/refine-3d/h-{thatch,fachwerk,stilt,logcabin,aframe}.jpg`, credits in
-`SOURCES-refine.md`), each failure fixed in the pure fit / mesh, then replayed:
-
-- `house-fit.ts`: `measuredBase` (base colour at the foot of the walls), `growToFootprint` (a strip along a
-  block grows it), `ANNEX_PITCH`, chimney `finish: 'stone'`, `swatchOblique`, `lowerFinishes`
-  (`HouseVolume.lower`), figured walls cut no wall swatch, bands of gable walls kept up to the ridge.
-- `house-mesh.ts`: `THATCH_EDGE` (thick thatch eaves and verges), `EAVE_DROP_MAX`, lower cladding (gable
-  walls cut level), chimney in the stone slot. `house-projection.ts`: thatch never wears the drawn swatch.
-- `house-tools.ts`: prompt v2 (`figured`, `base`), `patchReading` (single reading completed by the
-  specialists that answered), garbled colour keys read by their start. `recon/recipe.ts`: parts cut at 96.
-- Results: `~/Téléchargements/generated-view/h-*/maison-3d-t74.jpg`, sheet `t74-sheet.jpg`.
-- PQ-T75: `gableEnds` (hip → gable where windows sit in a peaked gable end), lower cladding behind
-  verandas and in recesses (`maison-3d-t75.jpg` for fachwerk and stilt).
-
-Next subject after the PR: cars, brief in `docs/tasks/PV-car-generation.md` (PQ-T76, start with its step 0).
+- Muse views are good and consistent (front-first prompt is **not** the problem). Truck top view drawn
+  lengthwise → rejected by `alignTop` (correct).
+- Model 25–40 % too short: `GRID_COLS_MAX` 256 / `GRID_ROWS` 128 caps depth at 2 × height (h/d floor 0.50);
+  `depthFromPlan` lets a too-wide Muse top view (w/d 0.54–0.57) override the profile (0.43–0.47).
+- No part roles, wheels absent or flat (sedan 2 thin cylinders on one axle, SUV/truck 0), boxy body.
+- Colour classes: dark roof falls into glass (sedan), body ≈ glass on the black SUV; materials mislabelled.
+- Captures: `c-*/views-sheet.jpg`, `c-*/viewer/`, `c-*/voiture-3d-t76.jpg` (photo | viewer | hull).
 
 ## Decisions
 
-- Zero-regression rule: `house-mesh.test.ts` hashes unchanged; bungalow single replay = `house-pq-t72.json`
-  byte for byte. School single replay differs by `look.base` only (grey default → measured `#8a584b`):
-  intended (limit 17), the brief's "red plinth" came from the reading being null there.
-- `STRIP_MAX` 0.16 and `ANNEX_PITCH` 2 chosen so the bungalow's annexes stay as they were.
-- New plan fields optional (`chimney.finish`, `volume.lower`). No Neon migration, no HF republish.
+- Step 1 of the brief (profile-first prompt) deprioritised: the drawings are fine, the recon is not.
+- Proposed order: (a) proportions from the profile for `vehicle` (cap lifted, plan as a check only),
+  (b) wheels measured on the profile (`mask-wheels.ts`) then `CarPlan`, (c) glazing / body split.
+- Any change to `views.ts` must leave houses identical (it is shared): check `house-mesh.test.ts` hashes and
+  the bungalow replay (`cmp` with `house-pq-t72.json`).
 
-## Open
+## Open (houses, unchanged)
 
-- `figured` and the v2 prompt were not run live yet (fachwerk replayed with the flag set by hand).
-- Left: Muse views that disagree (views check + redraw), door snapped too wide (fix moves the bungalow reference).
+- V335–V343 not played on `/village`; phase PR PQ-T67 → T75 not opened.
+- Pending user calls: door snap fix (moves the bungalow reference), views check + redraw.

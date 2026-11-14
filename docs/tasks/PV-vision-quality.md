@@ -753,6 +753,11 @@ One task = one commit, with its Vitest test, its `contracts.md` update and its m
       byte-identical; the rule fires on the half-timbered house only across the 12 bench houses.
       Captures: `h-fachwerk/maison-3d-t75.jpg`, `h-stilt/maison-3d-t75.jpg`.
 
+- [ ] **PQ-T76 Cars from a photo.** Brief: `PV-car-generation.md`. - [x] Step 0, measured on `sedan`, `suv`, `truck-side` live, no code change (brief § 6). Muse draws
+      good, consistent views (the front-first prompt is not the problem). The model is 25–40 % too short:
+      `GRID_COLS_MAX` caps depth at 2 × height and `depthFromPlan` trusts a top view drawn too wide. No
+      part roles, no real wheels (0–2 flat cylinders), boxy body; dark roof / glazing / body classes merge. - [ ] Vehicle proportions from the profile, then wheels, `CarPlan`, `carMesh`, bench of 10.
+
 ## Exit criteria
 
 Every real object meets methodology §9 · every prompt has a version and an eval behind it · the report, the
