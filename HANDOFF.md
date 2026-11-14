@@ -1,40 +1,39 @@
 # HANDOFF — read first, overwrite at end of session (≤40 lines)
 
-**Updated:** 2026-11-13 · **By:** Claude Code · **Branch:** `feat/pq-t67-step-models`
-(from `d61ee81`, not re-branched from `main`: offline at start; rebase before the PR)
+**Updated:** 2026-11-14 · **By:** Claude Code · **Branch:** `feat/pq-t67-step-models`
+(from `d61ee81`, not re-branched from `main`; rebase before the PR)
 
-## NEXT: live test of PQ-T69 on Meta, then commit
+## NEXT: look at PQ-T70 on `/village` in the browser, then village / VR texturing
 
-Nothing committed: PQ-T67, PQ-T68 and PQ-T69 are all in the working tree.
-Live check: `make dev` + `LLM_PROVIDER=meta` → `/village` → validate a 2D front (and faces) → 3D
-(scenarios V289, V290, V294, V295). Offline: `make views-3d FRONT=… [RIGHT= BACK= LEFT=] OUT=…`.
+`make dev` + `LLM_PROVIDER=meta` → `/village` → validate a 2D front (and faces) → 3D
+(scenarios V296–V313). Offline: `make views-3d FRONT=… | PHOTO=… [RIGHT= BACK= LEFT= TOP=] OUT=…`.
 
-## PQ-T69 — views reconstruction (this session)
+## PQ-T70 — the model wears its drawings (2026-11-13 / 14)
 
-- New `apps/web/src/server/perception/recon/` (pure TS + `route.ts`): mask per view → shared frame
-  (front / right / back / left, mirrored views flipped) → shared CIELAB colour classes → per-class
-  visual hull → surface slabs → score per view. Geometry is computed; one contributor call
-  (`nameClasses`, step model `parts`) only names materials.
-- `runObjectShape`: object with a 2D front or a photo crop → `reconstructObject` first
-  (`model: 'views-reconstruction'`, `source: 'views'`); score < 0.5 or no views → photo pipeline
-  (kit → template → code route), unchanged.
-- Deleted: `facade-house`, `facade-views`, `object-views`, `view-stages`, `view-candidates`,
-  `elevation-score`, `drawing-score`, `shape-stages`, `stage-steps`, `stage-sheet`,
-  `house-facade-route`, their tests and fixtures; `make facade-e2e`, `photo-audit`, `eval-stages`.
-- Backup of the tree before deletion: git ref `refs/backup/pre-recon` (`4d53373`, tracked files);
-  untracked files were in a session tarball (temporary, may be gone).
+- `recipe.faces = { atlas, views, hull }` (`views` source only, `docs/contracts.md`): atlas = the
+  validated drawings (never the photo) cut to the object (`recon/texture.ts`, `buildFaceAtlas`);
+  hull = every front run × every side run per row, stacked into boxes (`lib/face-hull.ts`).
+  The 3D object view draws the hull wearing the atlas (`facesMesh`, `face-projection.ts`).
+- Refined on eight photos of `resources/refine-3d`: view from above (footprint, top texture,
+  depth), roof ended at the eave (`eaveRow`), `ROOF_AGREEMENT`, pale blue paper.
+
+## PQ-T71 — edit the surfaces, plan in the UI, drawings in the village (2026-11-14)
+
+- Surface editor under the 3D view (`ui/surface-editor.tsx`, `faces.surfaces`, `restyleSurface`,
+  `useObjectShape().restyle`); `hullMesh().surface` + `facesMesh` groups + `faceMaterials`.
+- « Top view » is a 4th card of the 2D faces panel (`FACE_NAMES` + `top`, `faceUrls.top`).
+- Village: `PlacedDrawnModelMesh` (cap 8, high tier); Blender: `drawnGroups` + embedded atlas.
+- `dropGhosts` (plan contrast), bump relief, `roofClassOf` (geometry before the naming model).
 
 ## Decisions
 
-- No per-archetype rule in the reconstruction: houses, cars, anything take the same code.
-- `SHAPE_FOUR_FACES` now means « also draw back + left » for every object.
-- No Neon migration (no stored shape changed). No HF republish (bench output unchanged).
-
-## Verify
-
-- `make check` green (2627 web tests, i18n 3/3); synthetic house / car ≈ 0.99; real drawing 0.76.
+- The hull uses the front and right silhouettes only (back / left drawings often disagree).
+- The parts recipe stays for the flat render, the score, the low tier and models past the cap.
+- No Neon migration (shapes not stored). No HF republish (bench unchanged).
 
 ## Open
 
-- Not live-tested; fidelity bounded by the 96-row grid and 32 parts; concavities no view shows are lost.
-- Possibly orphaned: `views-check.ts` + `checkViews`, `graph-edits.ts`, `eval-code/shape.ts`.
+- A chimney seen on one elevation only makes a thin fin; openings are lit relief, not geometry.
+- VR spatial-shoot miniature = generic kit; the recipe `hip` and the score still read the class.
+- Not committed (GPG passphrase needed): PQ-T69 rework, PQ-T70, PQ-T71. Shots:
+  `~/Téléchargements/generated-view/<name>/planche.jpg`.

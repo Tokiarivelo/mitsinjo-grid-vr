@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildCleanFrontPrompt,
   buildFacadePrompt,
+  DRAWING_BACKGROUND,
   generateFacadeImage,
 } from '../facade-specialist';
 import type { ShapeTarget } from '@/lib/object-shape';
@@ -39,7 +40,7 @@ describe('facade-specialist', () => {
       expect(prompt).toContain('Architectural orthographic front elevation');
       expect(prompt).toContain('rural clinic cottage');
       expect(prompt).toContain('0 degree perspective tilt');
-      expect(prompt).toContain('solid clean neutral background');
+      expect(prompt).toContain(DRAWING_BACKGROUND);
     });
 
     it('builds an orthographic prompt for a vehicle', () => {
@@ -53,7 +54,7 @@ describe('facade-specialist', () => {
       const prompt = buildFacadePrompt('tree', 'mango tree');
       expect(prompt).toContain('mango tree');
       expect(prompt).toContain('from the ground to its top');
-      expect(prompt).toContain('solid clean neutral background');
+      expect(prompt).toContain(DRAWING_BACKGROUND);
     });
 
     it('draws a bush or flower bed low and without a trunk (before: a flowering tree)', () => {

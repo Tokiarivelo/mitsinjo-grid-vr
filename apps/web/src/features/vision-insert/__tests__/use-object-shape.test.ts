@@ -379,3 +379,48 @@ describe('useObjectShape code rounds (PQ-T60)', () => {
     });
   });
 });
+
+describe('useObjectShape restyle (PQ-T71)', () => {
+  const drawnShape: ObjectShape = {
+    ...recipeShape,
+    recipe: {
+      ...recipeShape.recipe!,
+      faces: {
+        atlas: 'data:image/png;base64,AAAA',
+        views: ['front', 'right'],
+        hull: { grid: [4, 4, 4], boxes: [[0, 4, 0, 4, 0, 4]] },
+      },
+    },
+  };
+
+  it('restyles a surface of a drawn model, with no server call, and keeps it on reselect', async () => {
+    fetchMock.mockResolvedValue(sse(drawnShape));
+    const { result } = renderHook(() => useObjectShape());
+    act(() => {
+      void result.current.requestShape('data:image/png;base64,AA', target);
+    });
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+    act(() => result.current.restyle('roof', { material: 'tile', color: '#aa4422' }));
+    expect(result.current.shape?.recipe?.faces?.surfaces).toEqual({
+      roof: { material: 'tile', color: '#aa4422' },
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    // Another object, then back: the kept model still has the look.
+    act(() => result.current.peek({ ...target, id: 'det-2' }));
+    act(() => result.current.peek(target));
+    expect(result.current.shape?.recipe?.faces?.surfaces?.roof?.material).toBe('tile');
+    act(() => result.current.restyle('roof', null));
+    expect(result.current.shape?.recipe?.faces?.surfaces).toBeUndefined();
+  });
+
+  it('does nothing on a model without drawings', async () => {
+    fetchMock.mockResolvedValue(sse(recipeShape));
+    const { result } = renderHook(() => useObjectShape());
+    act(() => {
+      void result.current.requestShape('data:image/png;base64,AA', target);
+    });
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+    act(() => result.current.restyle('roof', { material: 'tile' }));
+    expect(result.current.shape).toEqual(recipeShape);
+  });
+});

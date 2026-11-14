@@ -3,6 +3,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import type { SectorId } from '@mitsinjo/engine';
 import type { KitArchetype } from '@/lib/object-kit';
 import type { ObjectRecipe } from '@/lib/object-shape';
+import { facesMesh } from '@/features/vision-insert/utils/face-projection';
 import { recipeMesh, triangleCount } from '@/features/vision-insert/utils/object-geometry';
 import { terrainHeight } from './landscape';
 import { TOKEN_HEX } from './scene-palette';
@@ -31,7 +32,25 @@ export interface PlacedModelsGeometryResult {
   plinths: PlacedPlinth[];
   /** Heights and footprint radius per model id (for tag positioning and click bounds). */
   modelBounds: Record<string, { height: number; radius: number }>;
+  /** Models that wear their drawings (PQ-T71): drawn one by one, outside the merged mesh. */
+  drawn: PlacedDrawnModel[];
 }
+
+/** One model drawn with its own drawings: where it stands and how its feeder state tints it. */
+export interface PlacedDrawnModel {
+  id: string;
+  recipe: ObjectRecipe & { faces: NonNullable<ObjectRecipe['faces']> };
+  position: [number, number, number];
+  scale: number;
+  yaw: number;
+  state: 'served' | 'unserved' | 'fire';
+}
+
+/**
+ * Most models drawn with their drawings (one draw call and one texture each, high tier only);
+ * the next ones, and every model on the low tier, stay in the merged flat-colour mesh.
+ */
+export const PLACED_DRAWN_MAX = 8;
 
 export interface SectorStateOverride {
   unserved?: boolean;
@@ -77,12 +96,13 @@ export function buildPlacedModelsGeometry(
   tier: 'high' | 'low' = 'high'
 ): PlacedModelsGeometryResult {
   if (items.length === 0) {
-    return { modelsGeometry: null, plinths: [], modelBounds: {} };
+    return { modelsGeometry: null, plinths: [], modelBounds: {}, drawn: [] };
   }
 
   const plinths: PlacedPlinth[] = [];
   const modelBounds: Record<string, { height: number; radius: number }> = {};
   const geometriesToMerge: THREE.BufferGeometry[] = [];
+  const drawn: PlacedDrawnModel[] = [];
   let lowTriangles = 0;
 
   for (const item of items) {
@@ -122,7 +142,11 @@ export function buildPlacedModelsGeometry(
         : item.recipe;
     // The model's own shape on both tiers (a lamp post stays a lamp post); the low tier takes the
     // light assemblies and, past its budget, a coloured box for the remaining models.
-    let g = recipeMesh(recipeWithYaw, tier === 'low' ? 'low' : 'full');
+    const faces =
+      tier === 'high' && drawn.length < PLACED_DRAWN_MAX ? item.recipe.faces : undefined;
+    let g = faces
+      ? facesMesh({ proportions: item.recipe.proportions, faces }).rotateY(effYaw)
+      : recipeMesh(recipeWithYaw, tier === 'low' ? 'low' : 'full');
     if (tier === 'low') {
       const tris = triangleCount(g);
       if (lowTriangles + tris > PLACED_LOW_TRIANGLES) {
@@ -142,15 +166,29 @@ export function buildPlacedModelsGeometry(
       radius: fp.radius,
     };
 
-    g.scale(effScale, effScale, effScale);
-    // Translate so the bottom of the model rests on the ground (or its plinth)
-    g.translate(x, restY - bottomY * effScale, z);
-
     // Apply feeder / departure states to vertex colors
     const sec = sectorStatus?.[item.sector];
     const onFire = sec?.onFire ?? false;
     // Dimmed when the sector is unserved or the appliance draws nothing now (same as the box markers).
     const unserved = (sec?.unserved ?? false) || !item.running;
+
+    if (faces) {
+      // Wears its drawings: its own mesh and texture, same place, same bounds.
+      drawn.push({
+        id: item.id,
+        recipe: { ...item.recipe, faces },
+        position: [x, restY - bottomY * effScale, z],
+        scale: effScale,
+        yaw: effYaw,
+        state: onFire ? 'fire' : unserved ? 'unserved' : 'served',
+      });
+      g.dispose();
+      continue;
+    }
+
+    g.scale(effScale, effScale, effScale);
+    // Translate so the bottom of the model rests on the ground (or its plinth)
+    g.translate(x, restY - bottomY * effScale, z);
 
     const colorAttr = g.getAttribute('color');
     if (colorAttr) {
@@ -178,13 +216,16 @@ export function buildPlacedModelsGeometry(
     geometriesToMerge.push(g);
   }
 
-  const merged = mergeGeometries(geometriesToMerge, false) ?? null;
+  const merged = geometriesToMerge.length
+    ? (mergeGeometries(geometriesToMerge, false) ?? null)
+    : null;
   for (const g of geometriesToMerge) g.dispose();
 
   return {
     modelsGeometry: merged,
     plinths,
     modelBounds,
+    drawn,
   };
 }
 

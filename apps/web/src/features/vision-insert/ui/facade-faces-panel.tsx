@@ -17,9 +17,9 @@ export interface FacadeFacesPanelProps {
 }
 
 /**
- * The other three faces of the validated front (PQ-T68): each drawn from the front and the faces
- * already there, validated, regenerated or modified (details) one by one. Optional: a face left
- * out is drawn by the 3D pipeline itself.
+ * The other views of the validated front (PQ-T68; view from above PQ-T71): each drawn from the
+ * front and the faces already there, validated, regenerated or modified (details) one by one.
+ * Optional: a view left out is drawn by the 3D pipeline itself.
  */
 export function FacadeFacesPanel({
   faces,
@@ -69,7 +69,7 @@ export function FacadeFacesPanel({
         </div>
       </div>
 
-      <ul className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {FACE_NAMES.map((face) => (
           <FaceCard
             key={face}

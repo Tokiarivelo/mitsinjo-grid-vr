@@ -1,3 +1,4 @@
+import { eaveRow, hullRows } from '@/lib/face-hull';
 import type { ObjectRecipe, RecipeMaterial } from '@/lib/object-shape';
 import { carve, type CarveResult } from './carve';
 import type { ViewImage } from './grid';
@@ -12,22 +13,75 @@ import { alignViews, type AlignedViews, type ViewName } from './views';
  * house, a car, a tree or a pump: nothing here knows what the object is.
  */
 
-export interface Reconstruction {
+/** The drawings read: one frame, shared colour classes. What the labelling step looks at. */
+export interface ViewsReading {
   aligned: AlignedViews;
   palette: Palette;
-  carved: CarveResult;
 }
 
-/** Null when the front or both sides are unreadable, or nothing solid comes out. */
-export function reconstructFromViews(
-  input: Partial<Record<ViewName, ViewImage>>
-): Reconstruction | null {
+export interface Reconstruction extends ViewsReading {
+  carved: CarveResult;
+  /** Material of each colour class, as given to the solver (may be empty). */
+  materials: ReadonlyArray<RecipeMaterial | undefined>;
+}
+
+/** The roof class holds at least this share of the front above the eave… */
+export const ROOF_CLASS_SHARE = 0.5;
+/** …and at most this share of the front under it (else walls and roof are one colour). */
+export const ROOF_CLASS_WALL_SHARE = 0.35;
+
+/**
+ * The colour class of the roof, read on the geometry (PQ-T71): the class that fills the front
+ * above the eave of the silhouettes and not the walls under it. Null when the silhouettes show
+ * no eave (flat roof), or when one class covers both (brick under clay tiles). The naming model
+ * answers this badly; it is asked only when the geometry cannot tell.
+ */
+export function roofClassOf(reading: ViewsReading): number | null {
+  const { front, right } = reading.aligned.views;
+  const labels = reading.palette.labels.front;
+  if (!labels) return null;
+  const rows = hullRows(front, right);
+  const eave = eaveRow(rows, 0, rows.length);
+  if (eave >= rows.length || eave < 2) return null;
+  const classes = reading.palette.classes.length;
+  const above = new Uint32Array(classes);
+  const under = new Uint32Array(classes);
+  labels.forEach((l, i) => {
+    if (l >= 0) (Math.floor(i / front.cols) < eave ? above : under)[l]!++;
+  });
+  const total = (v: Uint32Array) => v.reduce((t, n) => t + n, 0);
+  let best = 0;
+  for (let c = 1; c < classes; c++) if (above[c]! > above[best]!) best = c;
+  const [roof, walls] = [total(above), total(under)];
+  if (!roof || above[best]! < ROOF_CLASS_SHARE * roof) return null;
+  if (walls && under[best]! > ROOF_CLASS_WALL_SHARE * walls) return null;
+  return best;
+}
+
+/** Null when the front or both sides are unreadable. */
+export function readViews(input: Partial<Record<ViewName, ViewImage>>): ViewsReading | null {
   const aligned = alignViews(input);
-  if (!aligned) return null;
-  const palette = buildPalette(aligned);
-  const carved = carve(aligned, palette);
+  return aligned ? { aligned, palette: buildPalette(aligned) } : null;
+}
+
+/** The solids of a reading; null when nothing solid comes out. */
+export function solveViews(
+  reading: ViewsReading,
+  materials: ReadonlyArray<RecipeMaterial | undefined> = [],
+  roofClass: number | null = null
+): Reconstruction | null {
+  const carved = carve(reading.aligned, reading.palette, materials, roofClass);
   if (!carved.solids.some((s) => s.role !== 'detail')) return null;
-  return { aligned, palette, carved };
+  return { ...reading, carved, materials };
+}
+
+/** Reading then solving; null when the front or both sides are unreadable, or nothing solid comes out. */
+export function reconstructFromViews(
+  input: Partial<Record<ViewName, ViewImage>>,
+  materials: ReadonlyArray<RecipeMaterial | undefined> = []
+): Reconstruction | null {
+  const reading = readViews(input);
+  return reading ? solveViews(reading, materials) : null;
 }
 
 export interface ReconReport {
@@ -41,20 +95,12 @@ export interface ReconReport {
   score: ReconScore;
 }
 
-/** The recipe of a reconstruction (`materials[class]` from the labelling step, optional) and its report. */
-export function finishRecipe(
-  recon: Reconstruction,
-  materials: ReadonlyArray<RecipeMaterial | undefined> = []
-): { recipe: ObjectRecipe; report: ReconReport } {
-  const { aligned, palette, carved } = recon;
+/** The recipe of a reconstruction and its report. */
+export function finishRecipe(recon: Reconstruction): { recipe: ObjectRecipe; report: ReconReport } {
+  const { aligned, palette, carved, materials } = recon;
   const { W, H, D } = aligned;
-  const recipe = solidsToRecipe(carved.solids, palette, { W, H, D }, materials);
-  const score = scoreRecipeOnViews(
-    recipe,
-    carved.solids.map((s) => s.cls),
-    aligned,
-    palette
-  );
+  const { recipe, classOf } = solidsToRecipe(carved.solids, palette, { W, H, D }, materials);
+  const score = scoreRecipeOnViews(recipe, classOf, aligned, palette, carved.group);
   return {
     recipe,
     report: {
@@ -83,7 +129,7 @@ export function reportLine(r: ReconReport): string {
       return s ? `${v} iou ${s.iou.toFixed(2)} match ${s.match.toFixed(2)}` : `${v} unread`;
     })
     .join(' · ');
-  return `grid ${r.grid.W}×${r.grid.H}×${r.grid.D}, ${r.classes.length} classes (${r.classes.map((c) => `${c.hex}${c.material ? ` ${c.material}` : ''} ${pct(c.share)}`).join(', ')}), ${r.counts.volumes} volumes + ${r.counts.fills} fills + ${r.counts.details} details (${r.counts.hidden} hidden dropped)${r.flipped.length ? `, flipped ${r.flipped.join('+')}` : ''}${r.rightFromLeft ? ', right side from the left drawing' : ''}; ${views}; overall ${r.score.overall.toFixed(3)}`;
+  return `grid ${r.grid.W}×${r.grid.H}×${r.grid.D}, ${r.classes.length} classes (${r.classes.map((c) => `${c.hex}${c.material ? ` ${c.material}` : ''} ${pct(c.share)}`).join(', ')}), ${r.counts.volumes} bodies + ${r.counts.details} details (${r.counts.hidden} hidden dropped)${r.flipped.length ? `, flipped ${r.flipped.join('+')}` : ''}${r.rightFromLeft ? ', right side from the left drawing' : ''}; ${views}; overall ${r.score.overall.toFixed(3)}`;
 }
 
 /** Pixel scale and gap of the class sheet tiles. */
@@ -98,7 +144,7 @@ const MARK: readonly [number, number, number] = [220, 20, 30];
  * colour class, left to right, with that class's cells in red on the grey silhouette. The model
  * answers by tile number, never by colour code or coordinate.
  */
-export function classSheet(recon: Reconstruction): ViewImage {
+export function classSheet(recon: ViewsReading): ViewImage {
   const { front } = recon.aligned.views;
   const labels = recon.palette.labels.front!;
   const tiles = recon.palette.classes.length + 1;

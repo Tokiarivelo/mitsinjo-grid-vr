@@ -15,8 +15,15 @@ import { imageCard } from './skills';
  * Sent with the photo crop as reference (user 2026-11-05): without it Muse Image drew a generic
  * object of the label (an ornate Victorian lamp for a plain lantern post).
  */
+/**
+ * Background asked of every drawing the reconstruction reads (PQ-T70): on white paper a white
+ * wall is paper, and the silhouette of a white building came back with holes.
+ */
+export const DRAWING_BACKGROUND =
+  'plain flat pale blue background (one uniform colour, no gradient, no ground, no shadow; walls, even white ones, stay clearly different from it)';
+
 export const FACADE_FROM_PHOTO =
-  'Draw exactly the object inside the clear rectangle of the reference photo: same type, shape, proportions, colours, materials and details. Complete the parts hidden by people, plants or other objects. Do not draw the background or anything else from the photo.';
+  'Draw exactly the object inside the clear rectangle of the reference photo: same type, shape, proportions, colours, materials and details, with the same number and placement of doors, windows, wings, gables, chimneys and roof slopes, even when the object is not symmetrical (never mirror one half onto the other). Complete the parts hidden by people, plants or other objects. The photo may be taken from an angle: redraw the object straight on all the same, as a flat elevation of its main face only, with every horizontal line of the object perfectly horizontal in the image, no vanishing point and no second face receding to the side. Do not draw the background or anything else from the photo.';
 
 /**
  * Builds a strict orthographic architectural elevation prompt for Meta Muse Image.
@@ -33,34 +40,34 @@ export function buildFacadePrompt(
   switch (archetype) {
     case 'house':
     case 'building':
-      basePrompt = `Architectural orthographic front elevation drawing of a complete rural building facade, ${label}. Perfectly straight-on eye-level view, 0 degree perspective tilt, symmetrical, sharp edges, unoccluded, centered on a solid clean neutral background, architectural blueprint illustration style, crisp daylight.`;
+      basePrompt = `Architectural orthographic front elevation drawing of a complete rural building facade, ${label}. Perfectly straight-on eye-level view, 0 degree perspective tilt, sharp edges, unoccluded, centered on a ${DRAWING_BACKGROUND}, architectural elevation illustration style, crisp daylight.`;
       break;
     case 'vehicle':
-      basePrompt = `Direct front orthographic elevation view of a complete vehicle, ${label}. Straight-on eye-level view, symmetrical headlights, front grille, windshield, unoccluded, centered on a clean solid neutral background.`;
+      basePrompt = `Direct front orthographic elevation view of a complete vehicle, ${label}. Straight-on eye-level view, symmetrical headlights, front grille, windshield, unoccluded, centered on a ${DRAWING_BACKGROUND}.`;
       break;
     case 'panel':
-      basePrompt = `Direct front elevation view of a complete solar panel installation, ${label}. Clean industrial elevation, mounting frame, photovoltaic cells, unoccluded, clean solid neutral background.`;
+      basePrompt = `Direct front elevation view of a complete solar panel installation, ${label}. Clean industrial elevation, mounting frame, photovoltaic cells, unoccluded, ${DRAWING_BACKGROUND}.`;
       break;
     case 'lamp_post':
     case 'pole':
-      basePrompt = `Direct front elevation view of a complete utility pole or lamp post, ${label}. Straight-on vertical elevation, unoccluded, clean solid neutral background.`;
+      basePrompt = `Direct front elevation view of a complete utility pole or lamp post, ${label}. Straight-on vertical elevation, unoccluded, ${DRAWING_BACKGROUND}.`;
       break;
     case 'tree':
-      basePrompt = `Direct front elevation view of a complete ${label}, botanical illustration. Straight-on eye-level view of the whole plant from the ground to its top, clear silhouette of the crown and the trunk, unoccluded, centered on a solid clean neutral background.`;
+      basePrompt = `Direct front elevation view of a complete ${label}, botanical illustration. Straight-on eye-level view of the whole plant from the ground to its top, clear silhouette of the crown and the trunk, unoccluded, centered on a ${DRAWING_BACKGROUND}.`;
       break;
     case 'bush':
       // No trunk asked (user 2026-11-05: a low flower bed came back as a flowering tree).
-      basePrompt = `Direct front elevation view of a complete ${label}, botanical illustration. Straight-on eye-level view of the whole low plant from the ground to its top, as wide and as low as it grows, no trunk unless one is visible, unoccluded, centered on a solid clean neutral background.`;
+      basePrompt = `Direct front elevation view of a complete ${label}, botanical illustration. Straight-on eye-level view of the whole low plant from the ground to its top, as wide and as low as it grows, no trunk unless one is visible, unoccluded, centered on a ${DRAWING_BACKGROUND}.`;
       break;
     case 'cabinet':
     case 'machine':
     case 'fan':
     case 'screen':
     case 'tank':
-      basePrompt = `Direct front orthographic product elevation of a complete ${label}. Clean appliance casing, control elements, unoccluded, centered on a solid clean neutral background.`;
+      basePrompt = `Direct front orthographic product elevation of a complete ${label}. Clean appliance casing, control elements, unoccluded, centered on a ${DRAWING_BACKGROUND}.`;
       break;
     default:
-      basePrompt = `Direct front orthographic elevation of a complete ${label}. Centered, unoccluded, straight-on view, solid clean neutral background.`;
+      basePrompt = `Direct front orthographic elevation of a complete ${label}. Centered, unoccluded, straight-on view, ${DRAWING_BACKGROUND}.`;
       break;
   }
 

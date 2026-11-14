@@ -1,6 +1,8 @@
 import 'server-only';
 
+import { facesMesh, surfaceColor } from '@/features/vision-insert/utils/face-projection';
 import { recipeMesh } from '@/features/vision-insert/utils/object-geometry';
+import { HULL_SURFACES } from '@/lib/face-hull';
 import { SURFACES } from '@/features/vision-insert/utils/surface-look';
 import type { ObjectRecipe } from '@/lib/object-shape';
 
@@ -21,11 +23,56 @@ export interface MeshGroup {
   colors: number[];
 }
 
+/** One surface of a model that wears its drawings (PQ-T71): the hull with its atlas uvs. */
+export interface DrawnGroup {
+  /** `roof`, `front`, `right`, `back` or `left`. */
+  surface: string;
+  positions: number[];
+  /** Flat uv per vertex in the atlas image (v up). */
+  uvs: number[];
+  /** The operator's colour for the surface (tint of the drawing, or colour of its material). */
+  color?: string;
+  /** Material that replaces the drawing on this surface, when the operator chose one. */
+  material?: string;
+}
+
+/** The drawn hull of a recipe by surface, as the 3D view draws it; empty without drawn faces. */
+export function drawnGroups(recipe: ObjectRecipe): DrawnGroup[] {
+  if (!recipe.faces) return [];
+  const geo = facesMesh({ proportions: recipe.proportions, faces: recipe.faces });
+  const pos = geo.getAttribute('position');
+  const uv = geo.getAttribute('uv');
+  const out = geo.groups.map((g): DrawnGroup => {
+    const surface = HULL_SURFACES[g.materialIndex ?? 0]!;
+    const look = recipe.faces!.surfaces?.[surface];
+    const positions: number[] = [];
+    const uvs: number[] = [];
+    for (let i = g.start; i < g.start + g.count; i++) {
+      positions.push(r4(pos.getX(i)), r4(pos.getY(i)), r4(pos.getZ(i)));
+      uvs.push(r4(uv.getX(i)), r4(uv.getY(i)));
+    }
+    const color = surfaceColor(look);
+    return {
+      surface,
+      positions,
+      uvs,
+      ...(color ? { color } : {}),
+      ...(look?.material ? { material: look.material } : {}),
+    };
+  });
+  geo.dispose();
+  return out;
+}
+
 export interface BlenderExportInput {
   label: string;
   /** Free text lines written as comments in the header (score, round, model…). */
   notes?: string[];
   groups: MeshGroup[];
+  /** Surfaces of a model that wears its drawings; with them the script builds the textured hull. */
+  drawn?: DrawnGroup[];
+  /** The atlas of the drawings (data URL), written next to the script's temp files by Blender. */
+  atlas?: string;
   /** The recipe parts as data: the python mirror of what `build()` returned. */
   recipe: ObjectRecipe;
   /** The JS body Wonder wrote, appended as a comment block when the model came from code. */
@@ -130,6 +177,58 @@ def build_group(group):
     return obj
 
 
+def load_atlas():
+    # The drawings the model wears, embedded in this script.
+    import base64, os, tempfile
+    path = os.path.join(tempfile.gettempdir(), "mitsinjo_atlas.jpg")
+    with open(path, "wb") as f:
+        f.write(base64.b64decode(ATLAS_B64))
+    return bpy.data.images.load(path)
+
+
+def hex_rgb(value):
+    return tuple(int(value[i : i + 2], 16) / 255.0 for i in (1, 3, 5)) + (1.0,)
+
+
+def build_drawn(group, image):
+    flat = group["positions"]
+    count = len(flat) // 3
+    verts = [to_blender(flat[i * 3 : i * 3 + 3]) for i in range(count)]
+    faces = [(i, i + 1, i + 2) for i in range(0, count - count % 3, 3)]
+    mesh = bpy.data.meshes.new(group["surface"])
+    mesh.from_pydata(verts, [], faces)
+    mesh.update()
+    layer = mesh.uv_layers.new(name="Atlas")
+    for loop in mesh.loops:
+        layer.data[loop.index].uv = group["uvs"][loop.vertex_index * 2 : loop.vertex_index * 2 + 2]
+    mat = bpy.data.materials.new(group["surface"])
+    mat.use_nodes = True
+    tree = mat.node_tree
+    bsdf = tree.nodes["Principled BSDF"]
+    bsdf.inputs["Roughness"].default_value = 0.85
+    color = hex_rgb(group["color"]) if group.get("color") else None
+    if group.get("material"):
+        # The operator replaced the drawing by a material: its colour, no texture.
+        bsdf.inputs["Base Color"].default_value = color or (0.7, 0.7, 0.7, 1.0)
+    else:
+        tex = tree.nodes.new("ShaderNodeTexImage")
+        tex.image = image
+        tex.extension = "EXTEND"
+        if color:
+            mix = tree.nodes.new("ShaderNodeMixRGB")
+            mix.blend_type = "MULTIPLY"
+            mix.inputs["Fac"].default_value = 1.0
+            mix.inputs["Color2"].default_value = color
+            tree.links.new(tex.outputs["Color"], mix.inputs["Color1"])
+            tree.links.new(mix.outputs["Color"], bsdf.inputs["Base Color"])
+        else:
+            tree.links.new(tex.outputs["Color"], bsdf.inputs["Base Color"])
+    mesh.materials.append(mat)
+    obj = bpy.data.objects.new(group["surface"], mesh)
+    bpy.context.collection.objects.link(obj)
+    return obj
+
+
 def add_stage():
     bpy.ops.object.light_add(type="SUN", location=(4, -6, 10))
     bpy.context.object.data.energy = 3.0
@@ -141,8 +240,14 @@ def add_stage():
 
 def main():
     clear_scene()
-    for group in GROUPS:
-        build_group(group)
+    if DRAWN:
+        # The model wears its drawings: the textured hull, as in the 3D view.
+        image = load_atlas()
+        for group in DRAWN:
+            build_drawn(group, image)
+    else:
+        for group in GROUPS:
+            build_group(group)
     add_stage()
     argv = sys.argv[sys.argv.index("--") + 1 :] if "--" in sys.argv else []
     if argv:
@@ -155,7 +260,8 @@ main()
 
 /** The Blender script of one model. Pure string building: no three.js, no Blender needed here. */
 export function blenderScript(input: BlenderExportInput): string {
-  const { label, notes = [], groups, recipe, jsCode } = input;
+  const { label, notes = [], groups, recipe, jsCode, drawn = [], atlas } = input;
+  const atlasB64 = drawn.length && atlas ? atlas.slice(atlas.indexOf(',') + 1) : '';
   const parts = recipe.parts.map((p) => {
     const { shape, at, size, color, material, kind, ...rest } = p;
     return { shape, at, size, color, material, kind, ...rest };
@@ -178,6 +284,16 @@ export function blenderScript(input: BlenderExportInput): string {
         `    {"surface": ${JSON.stringify(g.surface)}, "positions": ${py(g.positions)}, "colors": ${py(g.colors)}},`
     ),
     ']',
+    '',
+    '# The hull wearing the validated drawings (uvs in the atlas), one group per surface; empty',
+    '# for a model in flat colours. With it, main() builds this instead of GROUPS.',
+    `ATLAS_B64 = ${JSON.stringify(atlasB64)}`,
+    'DRAWN = [',
+    ...(atlasB64 ? drawn : []).map(
+      (g) =>
+        `    {"surface": ${JSON.stringify(g.surface)}, "positions": ${py(g.positions)}, "uvs": ${py(g.uvs)}, "color": ${py(g.color ?? null)}, "material": ${py(g.material ?? null)}},`
+    ),
+    ']',
     BUILDER,
   ];
   if (jsCode) {
@@ -195,5 +311,10 @@ export function recipeToBlender(
   recipe: ObjectRecipe,
   meta: Pick<BlenderExportInput, 'label' | 'notes' | 'jsCode'>
 ): string {
-  return blenderScript({ ...meta, groups: recipeGroups(recipe), recipe });
+  return blenderScript({
+    ...meta,
+    groups: recipeGroups(recipe),
+    recipe,
+    ...(recipe.faces ? { drawn: drawnGroups(recipe), atlas: recipe.faces.atlas } : {}),
+  });
 }

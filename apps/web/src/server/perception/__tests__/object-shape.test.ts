@@ -766,7 +766,8 @@ describe('runObjectShape records the representation family (PQ-T47 §4.1)', () =
   });
 });
 
-describe('runObjectShape views reconstruction (PQ-T69)', () => {
+// The face atlas (PQ-T70) cuts and bleeds four 512 px tiles per run: slow on a loaded machine.
+describe('runObjectShape views reconstruction (PQ-T69)', { timeout: 20_000 }, () => {
   const guessed: ObjectKit = {
     archetype: 'house',
     proportions: { w: 1, h: 0.5, d: 0.4 },
@@ -822,12 +823,16 @@ describe('runObjectShape views reconstruction (PQ-T69)', () => {
     expect(ObjectRecipeSchema.safeParse(out.recipe).success).toBe(true);
     // The model is measured on the drawings: the kit is never asked.
     expect(p.describeShape).not.toHaveBeenCalled();
-    // Right side from the front alone, then back and left from the front and the side.
+    // Right side from the front alone, then back, left and the view from above from both.
     expect(draw.mock.calls.map((c) => (c as unknown as [string, string[]])[1].length)).toEqual([
-      1, 2, 2,
+      1, 2, 2, 2,
     ]);
+    // The drawings go on the model: the atlas and the silhouette hull ride on the recipe.
+    expect(out.recipe!.faces?.views).toEqual(expect.arrayContaining(['front', 'right']));
+    expect(out.recipe!.faces?.hull.boxes.length).toBeGreaterThan(0);
     expect(nameClasses).toHaveBeenCalledTimes(1);
-    expect(out.recipe!.parts.some((q) => q.material === 'slate' && q.shape === 'hull')).toBe(true);
+    // Named a roofing material before the solver runs: the roof is pitched.
+    expect(out.recipe!.parts.some((q) => q.material === 'slate' && q.shape === 'hip')).toBe(true);
     expect(steps).toEqual(['crop', 'model', 'fit']);
     expect(timings).toContain('views');
   });
@@ -847,7 +852,8 @@ describe('runObjectShape views reconstruction (PQ-T69)', () => {
       { recon: { draw } }
     );
     expect(out.recipe!.source).toBe('views');
-    expect(draw).toHaveBeenCalledTimes(1);
+    // The missing left side and the view from above.
+    expect(draw).toHaveBeenCalledTimes(2);
   });
 
   it('a clean front (drawn where the photo shows nothing) reads inferred, the body apart', async () => {

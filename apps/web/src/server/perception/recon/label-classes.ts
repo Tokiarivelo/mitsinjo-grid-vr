@@ -13,8 +13,9 @@ export const LABEL_SYSTEM_PROMPT = [
   'Every next tile shows the same object in grey with ONE region in red: tile 1, tile 2, … left to right.',
   'For each red region, look at tile 0 at the same place and say what that part is made of.',
   `Answer only with a material from this list: ${RECIPE_MATERIALS.join(', ')}, or "unknown" when none fits or you cannot tell.`,
+  'Also say which tile is the ROOF covering of the object (the region that covers the top of a building, whatever it is made of: tiles, slate, thatch, metal sheets): "roof" = that tile number, or 0 when the object has no roof covering or its roof is flat and hidden.',
   'Never describe shapes, sizes or positions. Answer every tile exactly once.',
-  'Example for 3 tiles of a house: {"tiles":[{"tile":1,"material":"plaster"},{"tile":2,"material":"tile"},{"tile":3,"material":"glass"}]}',
+  'Example for 3 tiles of a house: {"tiles":[{"tile":1,"material":"plaster"},{"tile":2,"material":"tile"},{"tile":3,"material":"glass"}],"roof":2}',
 ].join('\n');
 
 export const LABEL_JSON_SCHEMA = {
@@ -33,6 +34,7 @@ export const LABEL_JSON_SCHEMA = {
           required: ['tile', 'material'],
         },
       },
+      roof: { type: 'integer', minimum: 0 },
     },
     required: ['tiles'],
   },
@@ -40,11 +42,12 @@ export const LABEL_JSON_SCHEMA = {
 
 /** The question of one sheet: the object's name and how many tiles to answer. */
 export function buildLabelQuestion(label: string, classes: number): string {
-  return `Object: ${label}. The sheet has tile 0 and ${classes} red-region tile${classes > 1 ? 's' : ''} (1 to ${classes}). Give the material of each.`;
+  return `Object: ${label}. The sheet has tile 0 and ${classes} red-region tile${classes > 1 ? 's' : ''} (1 to ${classes}). Give the material of each, and the roof tile (0 = none).`;
 }
 
 const AnswerSchema = z.object({
   tiles: z.array(z.object({ tile: z.number().int(), material: z.string() })),
+  roof: z.number().int().optional(),
 });
 
 /**
@@ -73,4 +76,19 @@ export function parseClassMaterials(
       out[tile - 1] = material as RecipeMaterial;
   }
   return out;
+}
+
+/** The class the model calls the roof covering (tile n = class n − 1); null when none or unusable. */
+export function parseRoofClass(content: string, classes: number): number | null {
+  try {
+    // The model garbles the key ("roof teritorial", "roof "): any key that starts with "roof" counts.
+    const raw: unknown = JSON.parse(content);
+    if (typeof raw !== 'object' || raw === null) return null;
+    const roof = Object.entries(raw).find(
+      ([key, value]) => /^roof/i.test(key) && Number.isInteger(value)
+    )?.[1] as number | undefined;
+    return roof !== undefined && roof >= 1 && roof <= classes ? roof - 1 : null;
+  } catch {
+    return null;
+  }
 }

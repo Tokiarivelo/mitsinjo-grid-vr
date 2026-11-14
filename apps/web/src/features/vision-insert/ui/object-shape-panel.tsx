@@ -37,6 +37,9 @@ import type { ObjectShapeState } from '../hooks/use-object-shape';
 import { recipeMaterials } from '../utils/surface-look';
 import { ImproveChip } from './improve-chip';
 import { ObjectDisplayControls } from './object-display-controls';
+import { SurfaceEditor } from './surface-editor';
+import type { HullSurface } from '@/lib/face-hull';
+import type { FaceSurface } from '@/lib/object-shape';
 import { Facade2dPanel } from './facade-2d-panel';
 import { FacadeFacesPanel } from './facade-faces-panel';
 import { BlenderExportButton } from './blender-export-button';
@@ -195,6 +198,8 @@ export interface ObjectShapePanelProps extends ObjectShapeState {
   scope?: string;
   /** The step-model choice was saved: drop kept shapes built with the previous one. */
   onStepModelsSaved?: () => void;
+  /** The operator restyles a surface of a drawn model (PQ-T71); null = back to its drawing. */
+  onRestyle?: (surface: HullSurface, look: FaceSurface | null) => void;
 }
 
 type ShapeTab = 'model' | 'facade';
@@ -223,6 +228,7 @@ export function ObjectShapePanel({
   sessionId,
   scope,
   onStepModelsSaved,
+  onRestyle,
 }: ObjectShapePanelProps) {
   const t = useTranslations('features.visionInsert');
   const webgl = useWebGLAvailable();
@@ -250,6 +256,17 @@ export function ObjectShapePanel({
   const shown = display.id === detection.id ? display : { id: detection.id, scale: 1, tint: null };
   const setDisplay = (patch: Partial<{ scale: number; tint: string | null }>) =>
     setDisplayState({ id: detection.id, scale: shown.scale, tint: shown.tint, ...patch });
+  // Surface picked in the surface editor (PQ-T71), per object.
+  const [picked, setPicked] = useState<{ id: string; surface: HullSurface | null }>({
+    id: detection.id,
+    surface: null,
+  });
+  const surface = picked.id === detection.id ? picked.surface : null;
+  const pickSurface = (next: HullSurface | null) => setPicked({ id: detection.id, surface: next });
+  const drawnFaces =
+    shape?.mode === 'recipe' && shape.recipe?.faces && !shape.recipe.yaw
+      ? shape.recipe.faces
+      : null;
   const activeTab: ShapeTab = ready ? userTab : 'model';
 
   return (
@@ -367,6 +384,9 @@ export function ObjectShapePanel({
                     scale={shown.scale}
                     tint={shown.tint}
                     {...(improve ? { improve } : {})}
+                    {...(ready && drawnFaces && onRestyle
+                      ? { selectedSurface: surface, onPickSurface: pickSurface }
+                      : {})}
                   />
                 ) : (
                   <ViewerSkeleton />
@@ -394,6 +414,14 @@ export function ObjectShapePanel({
               onScale={(scale) => setDisplay({ scale })}
               onTint={(tint) => setDisplay({ tint })}
               onReset={() => setDisplay({ scale: 1, tint: null })}
+            />
+          )}
+          {webgl && drawnFaces && onRestyle && (
+            <SurfaceEditor
+              surfaces={drawnFaces.surfaces ?? {}}
+              selected={surface}
+              onSelect={pickSurface}
+              onChange={onRestyle}
             />
           )}
 

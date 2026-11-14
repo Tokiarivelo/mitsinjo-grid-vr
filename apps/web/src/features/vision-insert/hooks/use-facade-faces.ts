@@ -20,7 +20,12 @@ export interface FaceState {
 export type FacesState = Record<FaceName, FaceState>;
 
 const IDLE_FACE: FaceState = { status: 'idle', validated: false, userPrompt: '' };
-const idle = (): FacesState => ({ side: IDLE_FACE, back: IDLE_FACE, left: IDLE_FACE });
+const idle = (): FacesState => ({
+  side: IDLE_FACE,
+  back: IDLE_FACE,
+  left: IDLE_FACE,
+  top: IDLE_FACE,
+});
 
 /** Faces a validation hands to the 3D call: the validated ones only. */
 export interface ValidatedFaces {
@@ -42,9 +47,9 @@ export const validatedFaces = (faces: FacesState): ValidatedFaces | undefined =>
 };
 
 /**
- * Right side, back and left side of the validated front. Each face is drawn from the front AND the
- * faces already there (at most 3 references), so the four views agree; « Generate all » goes
- * right → back → left for that reason. A new front (another file key) starts again from nothing.
+ * Right side, back, left side and view from above of the validated front. Each one is drawn from
+ * the front AND the faces already there (at most 3 references), so the views agree; « Generate
+ * all » goes right → back → left → above for that reason. A new front (another file key) starts again from nothing.
  * Regenerating a face un-validates it only: the others stay as the operator checked them.
  */
 export function useFacadeFaces(target: ShapeRequest | null, front?: FacadeData) {
@@ -77,7 +82,8 @@ export function useFacadeFaces(target: ShapeRequest | null, front?: FacadeData) 
       const current = storeRef.current[forKey] ?? idle();
       const details = userPrompt ?? current[face].userPrompt;
       // The front first, then the other faces already drawn (3 references at most).
-      const others = FACE_NAMES.filter((f) => f !== face)
+      // The plan is never a reference of an elevation; it is drawn from the elevations.
+      const others = FACE_NAMES.filter((f) => f !== face && f !== 'top')
         .map((f) => current[f].imageUrl)
         .filter((u): u is string => !!u);
       const references = [front.imageUrl, ...others].slice(0, 3);

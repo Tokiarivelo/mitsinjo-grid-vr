@@ -47,7 +47,12 @@ import {
 } from './rubric-judge';
 import { CODE_JSON_SCHEMA, CODE_PROMPT_VERSION, codePrompt, parseBuildCode } from './shape-code';
 import { logStepModelsOnce, stepModel } from './step-models';
-import { LABEL_JSON_SCHEMA, LABEL_SYSTEM_PROMPT, parseClassMaterials } from './recon/label-classes';
+import {
+  LABEL_JSON_SCHEMA,
+  LABEL_SYSTEM_PROMPT,
+  parseClassMaterials,
+  parseRoofClass,
+} from './recon/label-classes';
 import {
   VIEWS_CHECK_JSON_SCHEMA,
   VIEWS_CHECK_CARDS_VERSION,
@@ -553,10 +558,11 @@ export class MetaPerceptionBackend implements PerceptionBackend {
       this.modelFor('parts')
     );
     const materials = parseClassMaterials(content, classes);
+    const roof = materials ? parseRoofClass(content, classes) : null;
     console.info(
-      `[vision] 3D class materials from ${model}: ${materials ? materials.map((m, i) => `${i + 1}=${m ?? '?'}`).join(' ') : 'unusable'}`
+      `[vision] 3D class materials from ${model}: ${materials ? materials.map((m, i) => `${i + 1}=${m ?? '?'}`).join(' ') : 'unusable'}${roof !== null ? `, roof = ${roof + 1}` : ''}`
     );
-    return { model, usage, result: { materials } };
+    return { model, usage, result: { materials, ...(roof !== null ? { roof } : {}) } };
   }
 
   async judgeShape(

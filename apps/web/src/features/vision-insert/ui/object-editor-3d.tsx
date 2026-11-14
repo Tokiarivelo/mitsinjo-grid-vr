@@ -1,7 +1,7 @@
 'use client';
 
 import { Suspense, useEffect, useMemo, useState } from 'react';
-import { Canvas, useLoader, useThree } from '@react-three/fiber';
+import { Canvas, useLoader, useThree, type ThreeEvent } from '@react-three/fiber';
 import { ContactShadows, OrbitControls } from '@react-three/drei';
 import { EffectComposer, ToneMapping } from '@react-three/postprocessing';
 import { ToneMappingMode } from 'postprocessing';
@@ -24,6 +24,8 @@ import {
 } from '@/features/microgrid-3d/hooks/use-shader-warmup';
 import { cn } from '@/lib/utils';
 import type { ShapeImprove } from '../hooks/use-object-shape';
+import { HULL_SURFACES, type HullSurface } from '@/lib/face-hull';
+import { faceMaterials, facesMesh } from '../utils/face-projection';
 import { recipeMesh, silhouetteDepth, silhouetteMesh } from '../utils/object-geometry';
 import { surfaceMaterial, SURFACES } from '../utils/surface-look';
 import { buildStudioScene, STUDIO_SIGMA } from '../utils/studio-env';
@@ -48,6 +50,10 @@ export interface ObjectEditor3dProps {
   tint?: string | null;
   /** Staged build in progress: the camera orbits and frames the parts each stage works on. */
   improve?: ShapeImprove;
+  /** Surface selected in the surface editor (PQ-T71, drawn models only): it glows. */
+  selectedSurface?: HullSurface | null;
+  /** A click on the model names the surface under the pointer. */
+  onPickSurface?: (surface: HullSurface) => void;
 }
 
 /** Strength of the studio reflections and fill (image-based light). */
@@ -80,6 +86,11 @@ function StudioEnvironment() {
 
 /** Ink strength in the editor (PT-5): a clear drawn edge on the single object. */
 export const EDITOR_INK = 0.6;
+/** Ink on a model that wears its drawings (PQ-T70): the drawn lines are already there. */
+export const PROJECTED_INK = 0.2;
+
+/** Pointer travel (px) past which a click on the model was an orbit drag. */
+const PICK_MAX_DRAG = 4;
 
 /** Camera on a ¾ view, far enough for a 1 × 1 × 1 object. */
 const CAMERA_POSITION: [number, number, number] = [1.3, 0.85, 2.35];
@@ -93,6 +104,8 @@ function ObjectModel({
   scale = 1,
   tint = null,
   improve,
+  selectedSurface = null,
+  onPickSurface,
 }: ObjectEditor3dProps) {
   const reducedMotion = useReducedMotion();
   // Photo size only (silhouette proportions); cached image, no GPU upload.
@@ -118,17 +131,21 @@ function ObjectModel({
 
   const activeRecipe = shapeRecipe ?? livePreview ?? fallbackRecipe;
 
+  // Model from its drawn views (PQ-T70): the drawings are projected on it (never the photo).
+  const faces = activeRecipe?.faces && !activeRecipe.yaw ? activeRecipe.faces : null;
   const mesh = useMemo(
     () =>
-      activeRecipe
-        ? recipeMesh(activeRecipe)
-        : silhouetteMesh(
-            silhouetteRings(detection),
-            detection.box,
-            photoAspect,
-            silhouetteDepth(detection)
-          ),
-    [activeRecipe, detection, photoAspect]
+      faces && activeRecipe
+        ? facesMesh({ proportions: activeRecipe.proportions, faces })
+        : activeRecipe
+          ? recipeMesh(activeRecipe)
+          : silhouetteMesh(
+              silhouetteRings(detection),
+              detection.box,
+              photoAspect,
+              silhouetteDepth(detection)
+            ),
+    [activeRecipe, faces, detection, photoAspect]
   );
   useEffect(() => () => mesh.dispose(), [mesh]);
   const invalidate = useThree((s) => s.invalidate);
@@ -138,6 +155,14 @@ function ObjectModel({
   // model uses get their relief maps (PR-1.4: stone blocks, slate rows…) or photo swatches (PR-1.5),
   // tinted by the measured colours and compensated with a brightness gain so surfaces do not darken.
   const surfaces = useMemo(() => {
+    if (faces)
+      return faceMaterials(faces, {
+        tint,
+        selected: selectedSurface
+          ? { surface: selectedSurface, color: TOKEN_HEX.energyCyan }
+          : null,
+        onLoad: invalidate,
+      });
     const used = new Set(mesh.groups.map((g) => g.materialIndex));
     return SURFACES.map((s, i) => {
       const maps = vertexColors && used.has(i) ? surfaceTextures(s) : null;
@@ -152,7 +177,7 @@ function ObjectModel({
         ...(map ? { map } : {}),
       });
     });
-  }, [mesh, vertexColors, swatches, tint, invalidate]);
+  }, [mesh, vertexColors, swatches, tint, invalidate, faces, selectedSurface]);
   useEffect(() => () => surfaces.forEach((m) => m.dispose()), [surfaces]);
   // Plain silhouette material, memo'd like the surfaces (so the print wipe can clip it too).
   const silhouetteMaterial = useMemo(
@@ -180,7 +205,7 @@ function ObjectModel({
   // frameloop="demand": a display tweak must request its frame.
   useEffect(() => {
     invalidate();
-  }, [scale, tint, invalidate]);
+  }, [scale, tint, surfaces, invalidate]);
 
   return (
     <group>
@@ -194,7 +219,22 @@ function ObjectModel({
       />
       <group scale={scale}>
         {vertexColors ? (
-          <mesh geometry={mesh} material={surfaces} />
+          <mesh
+            geometry={mesh}
+            material={surfaces}
+            {...(faces && onPickSurface
+              ? {
+                  onClick: (e: ThreeEvent<MouseEvent>) => {
+                    // A drag that orbits the camera is not a pick.
+                    if (e.delta > PICK_MAX_DRAG) return;
+                    const surface = HULL_SURFACES[e.face?.materialIndex ?? -1];
+                    if (!surface) return;
+                    e.stopPropagation();
+                    onPickSurface(surface);
+                  },
+                }
+              : {})}
+          />
         ) : (
           <mesh geometry={mesh} material={silhouetteMaterial} />
         )}
@@ -229,6 +269,8 @@ export function ObjectEditor3d(props: ObjectEditor3dProps) {
   // Shader warm-up (PT-7): fade in once the materials are compiled (≤ 1 s).
   const [warmTarget, setWarmTarget] = useState<WarmupTarget | null>(null);
   const warm = useShaderWarmup(warmTarget);
+  const shown = props.shape?.mode === 'recipe' ? props.shape.recipe : props.preview;
+  const projected = Boolean(shown?.faces && !shown.yaw);
   return (
     <Canvas
       onCreated={({ gl, scene, camera }) => setWarmTarget({ gl, scene, camera })}
@@ -263,7 +305,7 @@ export function ObjectEditor3d(props: ObjectEditor3dProps) {
         enableNormalPass={false}
       >
         <ToneMapping mode={ToneMappingMode.NEUTRAL} />
-        <Ink strength={EDITOR_INK} />
+        <Ink strength={projected ? PROJECTED_INK : EDITOR_INK} />
       </EffectComposer>
     </Canvas>
   );

@@ -595,6 +595,7 @@ export function VillageEditorPage() {
                         onRegenerate={regenerateShape}
                         onChooseFamily={chooseFamily}
                         onCancelImprove={cancelImprove}
+                        onRestyle={objectShape.restyle}
                         onGenerate={generateShape}
                         scope={VILLAGE_SCOPE}
                         onStepModelsSaved={dropShapeCache}

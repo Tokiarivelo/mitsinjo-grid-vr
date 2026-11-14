@@ -2,7 +2,9 @@
 // `make shape-report` (recipes.json), opens /village, stubs the vision API (no Meta call, any server
 // mode), generates the 3D model and screenshots the viewer in dark and light.
 // Usage: node scripts/object-viewer-shot.mjs <baseUrl> <reportDir> [outDir]   (dev server must run)
-// Env: SHOT_GL=gpu → real GPU (default SwiftShader software GL). SHOT_SUFFIX=before → name-before-dark.png.
+// Env: SHOT_SCALE=3 → sharper shots (device pixel ratio). SHOT_DRAG=110,-40 → orbit by that many pixels
+// first (x then y; a negative y lowers the camera), the shot gets a `-turned` suffix. SHOT_PANEL=roof → that
+// surface is picked and given a material in the surface editor, and the whole 3D block is shot. SHOT_GL=gpu → real GPU (default SwiftShader software GL). SHOT_SUFFIX=before → name-before-dark.png.
 import { chromium } from '@playwright/test';
 import { mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -40,7 +42,10 @@ for (const theme of ['dark', 'light']) {
   // SHOT_WIDTH=320: phone-width shots (height follows a 16:10 → 9:19.5 phone ratio).
   const width = Number(process.env.SHOT_WIDTH) || 1440;
   const height = width < 768 ? Math.round(width * 2.1) : 900;
-  const context = await browser.newContext({ viewport: { width, height } });
+  const context = await browser.newContext({
+    viewport: { width, height },
+    deviceScaleFactor: Number(process.env.SHOT_SCALE) || 1,
+  });
   await context.addInitScript((t) => localStorage.setItem('mitsinjo_theme', t), theme);
   const page = await context.newPage();
   // SHOT_LOG=1: print browser warnings and errors (shader compile errors, WebGL warnings).
@@ -118,8 +123,29 @@ for (const theme of ['dark', 'light']) {
     await viewer.locator('canvas').waitFor({ timeout: 30_000 });
     await viewer.scrollIntoViewIfNeeded();
     await page.waitForTimeout(1500); // frameloop="demand": let the env map and shadow settle
-    const file = join(outDir, `${name.replace(/\W+/g, '-')}${suffix}-${theme}.png`);
-    await viewer.screenshot({ path: file });
+    const [drag = 0, lift = 0] = (process.env.SHOT_DRAG ?? '').split(',').map(Number);
+    if (drag) {
+      const box = await viewer.boundingBox();
+      const [cx, cy] = [box.x + box.width / 2, box.y + box.height / 2];
+      await page.mouse.move(cx, cy);
+      await page.mouse.down();
+      await page.mouse.move(cx + drag, cy + lift, { steps: 8 });
+      await page.mouse.up();
+      await page.waitForTimeout(600);
+    }
+    const file = join(
+      outDir,
+      `${name.replace(/\W+/g, '-')}${suffix}${drag ? '-turned' : ''}-${theme}.png`
+    );
+    // SHOT_PANEL=roof: pick that surface in the surface editor, give it a material, and shoot the
+    // whole « 3D model » block (viewer + editor) instead of the viewer alone.
+    const surface = process.env.SHOT_PANEL;
+    if (surface) {
+      await page.getByRole('radio', { name: new RegExp(`^${surface}`, 'i') }).click();
+      await page.getByRole('button', { name: /^material$/i }).click();
+      await page.waitForTimeout(600);
+      await viewer.locator('xpath=ancestor::section[1]').screenshot({ path: file });
+    } else await viewer.screenshot({ path: file });
     console.log(`✓ ${file}`);
     await page.unrouteAll();
   }

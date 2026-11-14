@@ -98,6 +98,13 @@ function morph(mask: Uint8Array, cols: number, rows: number, grow: boolean): Uin
   return out;
 }
 
+/** Dilation by `radius` cells: the mask grown outward. */
+export function grow(mask: Uint8Array, cols: number, rows: number, radius: number): Uint8Array {
+  let m = mask;
+  for (let k = 0; k < radius; k++) m = morph(m, cols, rows, true);
+  return m;
+}
+
 /** Morphological opening: strokes thinner than `2 * radius + 1` cells vanish, bodies keep their shape. */
 export function open(mask: Uint8Array, cols: number, rows: number, radius: number): Uint8Array {
   let m = mask;
@@ -105,6 +112,15 @@ export function open(mask: Uint8Array, cols: number, rows: number, radius: numbe
   for (let k = 0; k < radius; k++) m = morph(m, cols, rows, true);
   // Opening never adds cells: keep it inside the source.
   return m.map((v, i) => v & mask[i]!);
+}
+
+/** Morphological closing: gaps thinner than `2 * radius + 1` cells are bridged (panes of one window). */
+export function close(mask: Uint8Array, cols: number, rows: number, radius: number): Uint8Array {
+  let m = mask;
+  for (let k = 0; k < radius; k++) m = morph(m, cols, rows, true);
+  for (let k = 0; k < radius; k++) m = morph(m, cols, rows, false);
+  // Closing never removes cells.
+  return m.map((v, i) => v | mask[i]!);
 }
 
 /**

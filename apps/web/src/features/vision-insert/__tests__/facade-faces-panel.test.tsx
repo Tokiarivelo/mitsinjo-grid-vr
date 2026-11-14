@@ -30,13 +30,14 @@ const renderPanel = (faces: FacesState, props = {}) => {
 };
 
 describe('FacadeFacesPanel (PQ-T68)', () => {
-  it('starts empty: three faces to draw, « Draw the 3 faces » draws them all', () => {
-    const h = renderPanel({ side: idleFace, back: idleFace, left: idleFace });
-    expect(screen.getAllByRole('listitem')).toHaveLength(3);
-    expect(screen.getAllByRole('button', { name: 'Draw this face' })).toHaveLength(3);
-    fireEvent.click(screen.getByRole('button', { name: 'Draw the 3 faces' }));
+  it('starts empty: three faces and the top view to draw, « Draw all views » draws them all', () => {
+    const h = renderPanel({ side: idleFace, back: idleFace, left: idleFace, top: idleFace });
+    expect(screen.getAllByRole('listitem')).toHaveLength(4);
+    expect(screen.getAllByRole('button', { name: 'Draw this face' })).toHaveLength(4);
+    expect(screen.getByText('Top view')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Draw all views' }));
     expect(h.onGenerateAll).toHaveBeenCalled();
-    expect(screen.queryByRole('button', { name: 'Validate all faces' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Validate all views' })).toBeNull();
   });
 
   it('a drawn face is validated, redrawn with details, or un-validated on its own', () => {
@@ -44,6 +45,7 @@ describe('FacadeFacesPanel (PQ-T68)', () => {
       side: ready('side'),
       back: ready('back', true),
       left: idleFace,
+      top: idleFace,
     });
     fireEvent.click(screen.getAllByRole('button', { name: 'Validate' })[0]!);
     expect(h.onValidate).toHaveBeenCalledWith('side', true);
@@ -58,9 +60,14 @@ describe('FacadeFacesPanel (PQ-T68)', () => {
     expect(screen.getByRole('img', { name: 'Back' })).toBeTruthy();
   });
 
-  it('offers « Validate all faces » once the three are drawn, and a busy panel locks the buttons', () => {
-    const h = renderPanel({ side: ready('side'), back: ready('back'), left: ready('left') });
-    fireEvent.click(screen.getByRole('button', { name: 'Validate all faces' }));
+  it('offers « Validate all views » once every view is drawn, and a busy panel locks the buttons', () => {
+    const h = renderPanel({
+      side: ready('side'),
+      back: ready('back'),
+      left: ready('left'),
+      top: ready('top'),
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Validate all views' }));
     expect(h.onValidateAll).toHaveBeenCalled();
   });
 
@@ -69,6 +76,7 @@ describe('FacadeFacesPanel (PQ-T68)', () => {
       side: { ...idleFace, status: 'error' },
       back: idleFace,
       left: idleFace,
+      top: idleFace,
     });
     expect(screen.getByRole('alert').textContent).toContain('could not be drawn');
   });

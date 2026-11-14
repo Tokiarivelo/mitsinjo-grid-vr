@@ -1,7 +1,9 @@
 export { reconstructObject, RECON_MODEL, type ReconDeps, type ReconOutcome } from './route';
 export {
   finishRecipe,
+  readViews,
   reconstructFromViews,
+  solveViews,
   reportLine,
   type ReconReport,
   type Reconstruction,

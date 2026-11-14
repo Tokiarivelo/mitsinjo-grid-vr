@@ -43,13 +43,13 @@ const stubFetch = () => {
 describe('useFacadeFaces (PQ-T68)', () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it('draws right → back → left, each seeing the front and the faces already there', async () => {
+  it('draws right → back → left → above, each seeing the front and the faces already there', async () => {
     const calls = stubFetch();
     const { result } = renderHook(() => useFacadeFaces(target, front));
     await act(async () => {
       await result.current.generateAll();
     });
-    expect(calls.map((c) => c.face)).toEqual(['side', 'back', 'left']);
+    expect(calls.map((c) => c.face)).toEqual(['side', 'back', 'left', 'top']);
     expect(calls[0]!.references).toEqual(['https://r2/front.png']);
     expect(calls[1]!.references).toEqual(['https://r2/front.png', 'https://r2/side.png']);
     expect(calls[2]!.references).toEqual([
@@ -57,7 +57,13 @@ describe('useFacadeFaces (PQ-T68)', () => {
       'https://r2/side.png',
       'https://r2/back.png',
     ]);
-    expect(result.current.faces.left.status).toBe('ready');
+    // The plan is drawn from the front and two elevations (3 references at most).
+    expect(calls[3]!.references).toEqual([
+      'https://r2/front.png',
+      'https://r2/side.png',
+      'https://r2/back.png',
+    ]);
+    expect(result.current.faces.top.status).toBe('ready');
   });
 
   it('validates face by face; a regenerated face is un-validated, the others stay', async () => {
@@ -71,6 +77,7 @@ describe('useFacadeFaces (PQ-T68)', () => {
       side: 'side-1',
       back: 'back-1',
       left: 'left-1',
+      top: 'top-1',
     });
     await act(async () => {
       await result.current.generate('back', 'add a window');
@@ -83,6 +90,7 @@ describe('useFacadeFaces (PQ-T68)', () => {
     expect(Object.keys(validatedFaces(result.current.faces)!.urls).sort()).toEqual([
       'left',
       'side',
+      'top',
     ]);
   });
 

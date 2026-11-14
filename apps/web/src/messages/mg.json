@@ -1043,14 +1043,15 @@
       "facade2dGenerate": "Alao sary an-tsaina ny endrika 2D",
       "facade2dGenerating": "Eo am-pamoronana ny endrika 2D…",
       "facade2dRetry": "Andramo indray miaraka amin'ny antsipiriany",
-      "facesTitle": "Ny lafiny hafa (havanana, aoriana, havia)",
-      "facesHint": "Alaina avy amin'ny lafiny aloha sy ireo efa misy ny sary tsirairay, mba hifanaraka ny sary efatra. Hamarino iray isaky ny iray ; ny lafiny navela dia tsarain'ny dingana 3D mihitsy.",
-      "facesGenerateAll": "Sary ny lafiny 3",
-      "facesValidateAll": "Ekeo ny lafiny rehetra",
+      "facesTitle": "Ny sary hafa (havanana, aoriana, havia, ambony)",
+      "facesHint": "Alaina avy amin'ny lafiny aloha sy ireo efa misy ny sary tsirairay, mba hifanaraka izy rehetra ; ny sary avy any ambony no manome ny drafitra, ny tafo jerena avy any ambony ary ny halalin'ny modely. Hamarino iray isaky ny iray ; ny sary navela dia tsarain'ny dingana 3D mihitsy.",
+      "facesGenerateAll": "Sary ny sary rehetra",
+      "facesValidateAll": "Ekeo ny sary rehetra",
       "faces": {
         "side": "Lafiny havanana",
         "back": "Aoriana",
-        "left": "Lafiny havia"
+        "left": "Lafiny havia",
+        "top": "Sary avy any ambony"
       },
       "facesValidated": "Voekena",
       "facesToCheck": "Hojerena",
@@ -1351,7 +1352,26 @@
       "tourRoom_garden": "Zaridaina",
       "tourRoom_avenue": "Lalana misy hazo",
       "tourRoom_forest": "Ala",
-      "tourRoom_woods": "Anaty ala"
+      "tourRoom_woods": "Anaty ala",
+      "surfaceEditorTitle": "Hanova ny velarana",
+      "surfaceEditorHint": "Tsindrio ny tafo na rindrina iray eo amin'ny modely, na safidio eto, dia tazony ny sariny, lokoy na omeo akora.",
+      "surfaceEditorPick": "Velarana hovaina",
+      "surfaceName": {
+        "roof": "Tafo",
+        "front": "Aloha",
+        "right": "Ilany havanana",
+        "back": "Aoriana",
+        "left": "Ilany havia"
+      },
+      "surfaceSource": "Izay asehon'ny velarana",
+      "surfaceMode": {
+        "drawing": "Sary",
+        "material": "Akora"
+      },
+      "surfaceMaterial": "Akora",
+      "surfaceColor": "Loko",
+      "surfaceTint": "Loko manampy",
+      "surfaceReset": "Hiverina amin'ny sary"
     },
     "dispatch": {
       "modeLabel": "Fomba fandefasana",

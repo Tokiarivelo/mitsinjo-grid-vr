@@ -1043,14 +1043,15 @@
       "facade2dGenerate": "Imaginer la façade 2D",
       "facade2dGenerating": "Imagination de la façade 2D…",
       "facade2dRetry": "Réessayer avec des détails",
-      "facesTitle": "Les autres faces (droite, arrière, gauche)",
-      "facesHint": "Chaque face est dessinée à partir de la façade et des faces déjà là, pour que les quatre vues concordent. Vérifie-les une par une ; une face laissée de côté est dessinée par l'étape 3D elle-même.",
-      "facesGenerateAll": "Dessiner les 3 faces",
-      "facesValidateAll": "Valider toutes les faces",
+      "facesTitle": "Les autres vues (droite, arrière, gauche, dessus)",
+      "facesHint": "Chaque vue est dessinée à partir de la façade et des vues déjà là, pour qu'elles concordent ; la vue de dessus donne le plan, le toit vu d'en haut et la profondeur du modèle. Vérifie-les une par une ; une vue laissée de côté est dessinée par l'étape 3D elle-même.",
+      "facesGenerateAll": "Dessiner toutes les vues",
+      "facesValidateAll": "Valider toutes les vues",
       "faces": {
         "side": "Côté droit",
         "back": "Arrière",
-        "left": "Côté gauche"
+        "left": "Côté gauche",
+        "top": "Vue de dessus"
       },
       "facesValidated": "Validée",
       "facesToCheck": "À vérifier",
@@ -1351,7 +1352,26 @@
       "tourRoom_garden": "Jardin",
       "tourRoom_avenue": "Allée d’arbres",
       "tourRoom_forest": "Forêt",
-      "tourRoom_woods": "Sous-bois"
+      "tourRoom_woods": "Sous-bois",
+      "surfaceEditorTitle": "Modifier les surfaces",
+      "surfaceEditorHint": "Clique le toit ou un mur sur le modèle, ou choisis-le ici, puis garde son dessin, teinte-le ou donne-lui une matière.",
+      "surfaceEditorPick": "Surface à modifier",
+      "surfaceName": {
+        "roof": "Toit",
+        "front": "Face",
+        "right": "Côté droit",
+        "back": "Arrière",
+        "left": "Côté gauche"
+      },
+      "surfaceSource": "Ce que montre la surface",
+      "surfaceMode": {
+        "drawing": "Dessin",
+        "material": "Matière"
+      },
+      "surfaceMaterial": "Matière",
+      "surfaceColor": "Couleur",
+      "surfaceTint": "Teinte",
+      "surfaceReset": "Revenir au dessin"
     },
     "dispatch": {
       "modeLabel": "Mode de dispatch",

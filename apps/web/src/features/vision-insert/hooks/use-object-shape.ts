@@ -7,6 +7,8 @@ import {
   ObjectShapeSchema,
   ShapeStageEventSchema,
   ShapeStepEventSchema,
+  restyleSurface,
+  type FaceSurface,
   type ImaginedAngleView,
   type ObjectRecipe,
   type ObjectShape,
@@ -16,6 +18,7 @@ import {
   type ShapeStep,
   type ShapeTarget,
 } from '@/lib/object-shape';
+import type { HullSurface } from '@/lib/face-hull';
 import { readSseStream } from '@/lib/sse';
 import { prepareVisionImage } from '../utils/prepare-image';
 import { useKeptRef, useKeptState } from './use-kept-state';
@@ -419,6 +422,24 @@ export function useObjectShape(scope?: string) {
     cacheRef.current.clear();
   }, [cacheRef]);
 
+  /**
+   * The operator restyles one surface of a drawn model (PQ-T71): the shown recipe and its kept
+   * copy change together, so the look follows the object to the simulation. No server call.
+   */
+  const restyle = useCallback(
+    (surface: HullSurface, look: FaceSurface | null) => {
+      setState((s) => {
+        const shape = s.shape;
+        if (!shape || shape.mode !== 'recipe' || !shape.recipe?.faces) return s;
+        const next = { ...shape, recipe: restyleSurface(shape.recipe, surface, look) };
+        for (const [key, kept] of cacheRef.current)
+          if (kept === shape) cacheRef.current.set(key, next);
+        return { ...s, shape: next };
+      });
+    },
+    [cacheRef, setState]
+  );
+
   /** New photo: forget every kept shape and preview (ids repeat across photos). */
   const clear = useCallback(() => {
     cacheRef.current.clear();
@@ -443,5 +464,6 @@ export function useObjectShape(scope?: string) {
     reset,
     clear,
     dropShapeCache,
+    restyle,
   };
 }

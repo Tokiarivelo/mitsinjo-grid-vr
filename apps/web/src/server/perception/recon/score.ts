@@ -38,7 +38,9 @@ export function scoreRecipeOnViews(
   recipe: ObjectRecipe,
   classOf: ReadonlyArray<number>,
   aligned: AlignedViews,
-  palette: Palette
+  palette: Palette,
+  /** `group[class]`: the class its material is drawn as (default: itself). */
+  group: ReadonlyArray<number> = []
 ): ReconScore {
   const { w, h, d } = recipe.proportions;
   const views: ReconScore['views'] = {};
@@ -72,7 +74,7 @@ export function scoreRecipeOnViews(
       if (drawn || built) union++;
       if (drawn) {
         object++;
-        if (built && classOf[part[i]!] === target[i]) same++;
+        if (built && classOf[part[i]!] === (group[target[i]!] ?? target[i])) same++;
       }
     }
     const score = { iou: union ? inter / union : 0, match: object ? same / object : 0 };

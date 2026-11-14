@@ -1043,14 +1043,15 @@
       "facade2dGenerate": "Imagine 2D facade",
       "facade2dGenerating": "Imagining 2D facade…",
       "facade2dRetry": "Retry with details",
-      "facesTitle": "The other faces (right, back, left)",
-      "facesHint": "Each face is drawn from the front and the faces already there, so the four views agree. Check them one by one; a face left out is drawn by the 3D step itself.",
-      "facesGenerateAll": "Draw the 3 faces",
-      "facesValidateAll": "Validate all faces",
+      "facesTitle": "The other views (right, back, left, top)",
+      "facesHint": "Each view is drawn from the front and the views already there, so they all agree; the top view gives the plan, the roof seen from above and the depth of the model. Check them one by one; a view left out is drawn by the 3D step itself.",
+      "facesGenerateAll": "Draw all views",
+      "facesValidateAll": "Validate all views",
       "faces": {
         "side": "Right side",
         "back": "Back",
-        "left": "Left side"
+        "left": "Left side",
+        "top": "Top view"
       },
       "facesValidated": "Validated",
       "facesToCheck": "To check",
@@ -1351,7 +1352,26 @@
       "tourRoom_garden": "Garden",
       "tourRoom_avenue": "Tree-lined road",
       "tourRoom_forest": "Forest",
-      "tourRoom_woods": "Woods"
+      "tourRoom_woods": "Woods",
+      "surfaceEditorTitle": "Edit the surfaces",
+      "surfaceEditorHint": "Click the roof or a wall on the model, or pick it here, then keep its drawing, tint it or give it a material.",
+      "surfaceEditorPick": "Surface to edit",
+      "surfaceName": {
+        "roof": "Roof",
+        "front": "Front",
+        "right": "Right side",
+        "back": "Back",
+        "left": "Left side"
+      },
+      "surfaceSource": "What the surface shows",
+      "surfaceMode": {
+        "drawing": "Drawing",
+        "material": "Material"
+      },
+      "surfaceMaterial": "Material",
+      "surfaceColor": "Colour",
+      "surfaceTint": "Tint",
+      "surfaceReset": "Back to the drawing"
     },
     "dispatch": {
       "modeLabel": "Dispatch mode",

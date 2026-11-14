@@ -137,3 +137,5 @@ them after mount (re-targeting races React root unmounts and can leave a label e
 - Extérieur : 7 photos 4096×2048 JPEG q72 (0,7–2,3 Mo, feuillages lourds) ; même règle pièce courante + voisines (le jardin en a 4).
 - Marche (VS-T16) : tout dans le shader de la sphère (intersection rayon / sol + mur, 2 textures seulement pendant la traversée), aucune géométrie ni allocation par image ; positions des flèches mutées sur place.
 - Photo de scan (1280×720) calculée sur CPU au tir seulement (pixels de la pièce mis en cache), jamais par image.
+
+- **Placed models that wear their drawings (PQ-T71):** each one is its own mesh (`PlacedDrawnModelMesh`: one atlas texture ≤ 1536 × 1024, one draw call per surface kind in use) instead of joining the merged placed-models mesh. High tier only and at most `PLACED_DRAWN_MAX` = 8; the others and the whole low tier stay in the merged flat-colour mesh (≤ +2 draw calls rule unchanged for them).

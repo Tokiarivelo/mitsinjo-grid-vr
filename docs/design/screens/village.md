@@ -58,3 +58,4 @@ the engine catalog gives power (never the AI). Sidebar + MobileNav entry « Vill
 - Photo zoom (− / 100 % / +, pan by scrolling or the hand toggle while drawing) and « Adjust the box » on the selected object
   (AI box moved / resized, then saved) — `components.md` § DetectionCanvas.
 - States: loading / refining / ready / empty / error + retry (states-copy.md « vision »). Mobile: one column, `pb-20`.
+- Surface editor (PQ-T71, drawn models only), under the 3D display tweaks: chips Roof / Front / Right side / Back / Left side (or a click on the model), « Drawing | Material », material select, colour (tint of the drawing, or colour of the material), « Back to the drawing ». Touch targets 44 px, chips scroll sideways on mobile. The look is kept with the model when it is added to the simulation. 2D faces panel: four cards (right, back, left, top view).

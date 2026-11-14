@@ -137,6 +137,8 @@ export type PartAskResult = Omit<z.infer<typeof PartAskResultSchema>, 'answer'> 
  */
 export const ClassMaterialsResultSchema = PerceptionSourceSchema.extend({
   materials: z.array(z.string().nullable()).nullable(),
+  /** Class index of the roof covering, whatever its material (PQ-T70); absent = none named. */
+  roof: z.number().int().min(0).nullable().optional(),
 });
 export type ClassMaterialsResult = Omit<z.infer<typeof ClassMaterialsResultSchema>, 'materials'> & {
   materials: Array<import('@/lib/object-shape').RecipeMaterial | undefined> | null;

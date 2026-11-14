@@ -13,6 +13,8 @@ import { VIEW_NAMES, type AlignedViews, type ViewName } from './views';
 export const PALETTE_CLUSTERS = 8;
 /** Two clusters closer than this (CIEDE2000) are one material under two lights. */
 export const PALETTE_MERGE_DELTA_E = 9;
+/** A class this close (CIEDE2000) to the sheet's colour is paper seen through the drawing. */
+export const PAPER_CLASS_DELTA_E = 10;
 /** A class under this share of the object pixels is noise: its pixels join their neighbours. */
 export const CLASS_MIN_SHARE = 0.004;
 /** Label smoothing passes (3 × 3 majority): texture grain and drawn outlines dissolve. */
@@ -26,6 +28,8 @@ export interface PaletteClass {
   lab: [number, number, number];
   /** Share of all object pixels (every view). */
   share: number;
+  /** The class has the sheet's own colour: glass, an open porch — a surface feature, never a mass. */
+  paper: boolean;
 }
 
 export interface Palette {
@@ -37,6 +41,7 @@ export interface Palette {
 /** Classes of the aligned views, largest first, and each view's label map. */
 export function buildPalette(aligned: AlignedViews): Palette {
   const names = VIEW_NAMES.filter((n) => aligned.views[n]);
+  const paperLab = linearToLab(...srgbToLinear(...aligned.paper));
   // Every object pixel of every view, in view order.
   let total = 0;
   for (const n of names) for (const m of aligned.views[n]!.mask) total += m;
@@ -68,22 +73,37 @@ export function buildPalette(aligned: AlignedViews): Palette {
     }
     return { count, values: sum.map((s) => (count ? s / count : 0)) };
   };
-  // Merge clusters of one material (single link on the cluster means).
+  // Merge clusters of one material: the closest pair first, its mean recomputed, until every
+  // pair is apart (a chain of near shades never fuses two materials, as single link would).
   const parent = Array.from({ length: groups }, (_, g) => g);
   const root = (g: number): number => (parent[g] === g ? g : (parent[g] = root(parent[g]!)));
   const centres = parent.map((g) => mean((x) => x === g));
-  for (let a = 0; a < groups; a++) {
-    for (let b = a + 1; b < groups; b++) {
-      if (!centres[a]!.count || !centres[b]!.count) continue;
-      const d = deltaE2000(
-        centres[a]!.values.slice(0, 3) as [number, number, number],
-        centres[b]!.values.slice(0, 3) as [number, number, number]
-      );
-      if (d < PALETTE_MERGE_DELTA_E) parent[root(b)] = root(a);
+  for (;;) {
+    let best: [number, number] | null = null;
+    let bestD = PALETTE_MERGE_DELTA_E;
+    for (let a = 0; a < groups; a++) {
+      if (root(a) !== a || !centres[a]!.count) continue;
+      for (let b = a + 1; b < groups; b++) {
+        if (root(b) !== b || !centres[b]!.count) continue;
+        const d = deltaE2000(
+          centres[a]!.values.slice(0, 3) as [number, number, number],
+          centres[b]!.values.slice(0, 3) as [number, number, number]
+        );
+        if (d < bestD) [best, bestD] = [[a, b], d];
+      }
     }
+    if (!best) break;
+    const [a, b] = best;
+    const [ca, cb] = [centres[a]!, centres[b]!];
+    const count = ca.count + cb.count;
+    centres[a] = {
+      count,
+      values: ca.values.map((v, i) => (v * ca.count + cb.values[i]! * cb.count) / count),
+    };
+    parent[b] = a;
   }
   const merged = [...new Set(parent.map((_, g) => root(g)))]
-    .map((r) => ({ r, ...mean((x) => root(x) === r) }))
+    .map((r) => ({ r, ...centres[r]! }))
     .filter((m) => m.count > 0)
     .sort((a, b) => b.count - a.count || a.r - b.r);
   // Noise classes are dropped from the list; their pixels are relabelled by the smoothing below.
@@ -96,6 +116,7 @@ export function buildPalette(aligned: AlignedViews): Palette {
     hex: linearToHex(m.values[3]!, m.values[4]!, m.values[5]!),
     lab: [m.values[0]!, m.values[1]!, m.values[2]!],
     share: m.count / total,
+    paper: deltaE2000([m.values[0]!, m.values[1]!, m.values[2]!], paperLab) < PAPER_CLASS_DELTA_E,
   }));
   /** Nearest kept class of a dropped cluster's pixel. */
   const nearest = (i: number) => {

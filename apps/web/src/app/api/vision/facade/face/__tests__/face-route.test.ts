@@ -4,7 +4,7 @@ import type { NextRequest } from 'next/server';
 
 vi.mock('server-only', () => ({}));
 
-import { buildFacePrompt } from '@/server/perception/facade-faces';
+import { buildFacePrompt, buildTopPrompt, ROOF_AGREEMENT } from '@/server/perception/facade-faces';
 import { POST } from '../route';
 
 const FRONT = 'data:image/png;base64,AAAA';
@@ -35,7 +35,9 @@ describe('POST /api/vision/facade/face (PQ-T68)', () => {
   });
 
   it('refuses an unknown face, no reference, too many references or a non-image link', async () => {
-    expect((await post({ target, face: 'top', references: [FRONT] })).status).toBe(400);
+    expect((await post({ target, face: 'bottom', references: [FRONT] })).status).toBe(400);
+    // The view from above is a view like the others (PQ-T71).
+    expect((await post({ target, face: 'top', references: [FRONT] })).status).toBe(200);
     expect((await post({ target, face: 'side', references: [] })).status).toBe(400);
     expect(
       (await post({ target, face: 'side', references: [FRONT, FRONT, FRONT, FRONT] })).status
@@ -60,5 +62,27 @@ describe('buildFacePrompt', () => {
     expect(many).toContain('all four views must agree');
     expect(many).toContain('add a window');
     expect(buildFacePrompt('back', 'cottage', 'house')).toContain('BACK');
+    // The view from above is asked as a plan, with the operator's details.
+    const top = buildFacePrompt('top', 'cottage', 'house', {
+      known: 3,
+      userPrompt: 'two chimneys',
+    });
+    expect(top).toContain('from directly above');
+    expect(top).toContain('two chimneys');
+  });
+
+  it('asks a house for one and the same roof on every elevation', () => {
+    expect(buildFacePrompt('side', 'cottage', 'house')).toContain(ROOF_AGREEMENT);
+    expect(buildFacePrompt('side', 'pickup', 'vehicle')).not.toContain(ROOF_AGREEMENT);
+  });
+});
+
+describe('buildTopPrompt', () => {
+  it('asks for the plan seen from above, the front at the bottom', () => {
+    const prompt = buildTopPrompt('cottage', 3);
+    expect(prompt).toContain('from directly above');
+    expect(prompt).toContain('BOTTOM');
+    expect(prompt).toContain('3 reference images are');
+    expect(buildTopPrompt('cottage', 1)).toContain('1 reference image is');
   });
 });

@@ -76,15 +76,20 @@ export function unitRing(
   return ring.map(([a, y]) => [clamp((a - a0) / w - 0.5), clamp(0.5 - (y - y0) / h)]);
 }
 
-const STATUS = { volume: 'measured', fill: 'inferred', detail: 'measured' } as const;
+/** Ridge length of a pitched roof, share of its width: the measured value is kept in this range. */
+/** Row of the roof where its ridge length is read, share of its height from the top. */
+export const RIDGE_ROW = 0.15;
+export const RIDGE_RANGE: readonly [number, number] = [0.2, 0.9];
 
-/** The solids as recipe parts, same order (part i = solid i). */
+const STATUS = { volume: 'measured', detail: 'measured' } as const;
+
+/** The solids as recipe parts, and the colour class of each part (`classOf[i]` for part i). */
 export function solidsToRecipe(
   solids: readonly Solid[],
   palette: Palette,
   dims: { W: number; H: number; D: number },
   materials: ReadonlyArray<RecipeMaterial | undefined> = []
-): ObjectRecipe {
+): { recipe: ObjectRecipe; classOf: number[] } {
   const { W, H, D } = dims;
   const max = Math.max(W, H, D);
   const bound = (v: number) => Math.max(-RECIPE_BOUND, Math.min(RECIPE_BOUND, v));
@@ -94,8 +99,45 @@ export function solidsToRecipe(
     (best, s, i) => (s.role !== 'detail' && s.visible > (solids[best]?.visible ?? -1) ? i : best),
     0
   );
-  const parts = solids.map((s, i): RecipePart => {
-    const b = s.box;
+  /**
+   * The pitched roof: the bodies the solver marked are one roof rising to a ridge along the width.
+   * The ridge length is read on the front drawing (a row near the top / widest row of the widest of them).
+   */
+  const roofing = solids.flatMap((s, i) => (s.role === 'volume' && s.roof ? [i] : []));
+  let roof: { keep: number; box: Solid['box']; ridge: number } | null = null;
+  if (roofing.length) {
+    const boxes = roofing.map((i) => solids[i]!.box);
+    const box = {
+      x0: Math.min(...boxes.map((b) => b.x0)),
+      x1: Math.max(...boxes.map((b) => b.x1)),
+      y0: Math.min(...boxes.map((b) => b.y0)),
+      y1: Math.max(...boxes.map((b) => b.y1)),
+      z0: Math.min(...boxes.map((b) => b.z0)),
+      z1: Math.max(...boxes.map((b) => b.z1)),
+    };
+    const keep = roofing.reduce((best, i) =>
+      solids[i]!.box.x1 - solids[i]!.box.x0 > solids[best]!.box.x1 - solids[best]!.box.x0 ? i : best
+    );
+    const front = solids[keep]!.front!;
+    const widths = front.lo.map((lo, r) => front.hi[r]! - lo + 1);
+    // Read a little under the top: the first rows may be a chimney foot or a ridge cap.
+    const top = widths[Math.floor(widths.length * RIDGE_ROW)]!;
+    const ridge = Math.max(RIDGE_RANGE[0], Math.min(RIDGE_RANGE[1], top / Math.max(...widths)));
+    roof = { keep, box, ridge };
+  }
+  const inRoof = (i: number | undefined) => roof !== null && i !== undefined && roofing.includes(i);
+  const classOf: number[] = [];
+  const parts = solids.flatMap((s, i): RecipePart[] => {
+    // The roofing bodies are one roof: the widest carries it, the others are in it.
+    if (inRoof(i) && i !== roof!.keep) return [];
+    classOf.push(s.cls);
+    let b = s.box;
+    if (roof && i === roof.keep) b = roof.box;
+    else if (roof && s.roof && s.role === 'detail') {
+      // A gable runs back to the ridge.
+      const cz = (roof.box.z0 + roof.box.z1) / 2;
+      b = s.face === 'front' ? { ...b, z0: Math.min(b.z0, cz) } : { ...b, z1: Math.max(b.z1, cz) };
+    }
     const material = materials[s.cls];
     const part: RecipePart = {
       shape: s.shape,
@@ -111,26 +153,59 @@ export function solidsToRecipe(
       ...(s.axis ? { axis: s.axis } : {}),
       ...(i === main ? { front: true } : {}),
     };
-    if (s.shape !== 'hull') return part;
-    return {
-      ...part,
-      points: s.front
-        ? unitRing(rowsPolygon(s.front), b.x0, b.x1, b.y0, b.y1)
-        : SQUARE.map((p) => [...p] as [number, number]),
-      section: s.side
-        ? unitRing(colsPolygon(s.side), b.z0, b.z1, b.y0, b.y1)
-        : s.profile
-          ? unitRing(rowsPolygon(s.profile), b.z0, b.z1, b.y0, b.y1)
+    if (roof && i === roof.keep)
+      return [{ ...part, shape: 'hip', ridge: roof.ridge, status: 'inferred' }];
+    if (roof && s.roof && s.role === 'detail' && s.front) {
+      // A gable: a roof-coloured prism from the face back to the ridge, and the drawn face on it.
+      const apex = ((s.front.lo[0]! + s.front.hi[0]! + 1) / 2 - b.x0) / Math.max(1, b.x1 - b.x0);
+      const top = solids[roof.keep]!;
+      const topMaterial = materials[top.cls];
+      classOf.push(s.cls);
+      classOf[classOf.length - 2] = top.cls;
+      const f = s.box;
+      return [
+        {
+          ...part,
+          shape: 'prism',
+          apex: Math.max(0, Math.min(1, apex)),
+          color: palette.classes[top.cls]!.hex,
+          status: 'inferred',
+          material: topMaterial,
+        },
+        {
+          ...part,
+          shape: 'extrude',
+          at: [part.at[0], part.at[1], bound((f.z0 + f.z1) / 2 / D - 0.5)],
+          size: [part.size[0], part.size[1], extent((f.z1 - f.z0) / D)],
+          points: unitRing(rowsPolygon(s.front), f.x0, f.x1, f.y0, f.y1),
+        },
+      ];
+    }
+    if (s.shape === 'extrude')
+      return [{ ...part, points: unitRing(rowsPolygon(s.front!), b.x0, b.x1, b.y0, b.y1) }];
+    if (s.shape !== 'hull') return [part];
+    return [
+      {
+        ...part,
+        points: s.front
+          ? unitRing(rowsPolygon(s.front), b.x0, b.x1, b.y0, b.y1)
           : SQUARE.map((p) => [...p] as [number, number]),
-    };
+        section: s.side
+          ? unitRing(colsPolygon(s.side), b.z0, b.z1, b.y0, b.y1)
+          : s.profile
+            ? unitRing(rowsPolygon(s.profile), b.z0, b.z1, b.y0, b.y1)
+            : SQUARE.map((p) => [...p] as [number, number]),
+      },
+    ];
   });
-  return ObjectRecipeSchema.parse({
+  const recipe = ObjectRecipeSchema.parse({
     proportions: { w: extent(W / max), h: extent(H / max), d: extent(D / max) },
     parts,
     source: 'views',
     // Width, height and depth are read on the drawings; the metric scale is not.
     dimStatus: { depth: 'measured', scale: 'estimated' },
   });
+  return { recipe, classOf };
 }
 
 /**

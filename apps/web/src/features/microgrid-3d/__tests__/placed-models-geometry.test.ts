@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import type { ObjectRecipe } from '@/lib/object-shape';
 import {
   buildPlacedModelsGeometry,
+  PLACED_DRAWN_MAX,
   PLACED_LOW_TRIANGLES,
   placedGeometryKey,
   type PlacedModelItem,
@@ -242,5 +243,63 @@ describe('placed-models-geometry (PI-T2)', () => {
         k
       );
     });
+  });
+});
+
+/** A tiny 1 × 1 atlas: enough for the mesh and the materials (the pixels are never read here). */
+const ATLAS =
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+
+describe('placed models that wear their drawings (PQ-T71)', () => {
+  const drawnRecipe: ObjectRecipe = {
+    ...SAMPLE_RECIPE,
+    faces: {
+      atlas: ATLAS,
+      views: ['front', 'right'],
+      hull: { grid: [4, 4, 4], boxes: [[0, 4, 0, 4, 0, 4]] },
+    },
+  };
+  const item = (i: number, recipe: ObjectRecipe, running = true): PlacedModelItem => ({
+    id: `app-${i}`,
+    sector: 'households',
+    running,
+    position: [i * 3 - 12, 0, 0],
+    recipe,
+    scale: 1,
+    archetype: 'house',
+  });
+
+  it('draws them one by one outside the merged mesh, with their bounds and feeder state', () => {
+    const res = buildPlacedModelsGeometry([
+      item(0, drawnRecipe),
+      item(1, SAMPLE_RECIPE),
+      item(2, drawnRecipe, false),
+    ]);
+    expect(res.drawn.map((d) => [d.id, d.state])).toEqual([
+      ['app-0', 'served'],
+      ['app-2', 'unserved'],
+    ]);
+    expect(res.modelsGeometry).not.toBeNull();
+    expect(res.modelBounds['app-0']!.height).toBeCloseTo(0.8);
+    // Resting on the ground: the mesh origin is half a height above it.
+    expect(res.drawn[0]!.position[1]).toBeCloseTo(0.4, 1);
+    res.modelsGeometry?.dispose();
+  });
+
+  it('keeps flat colours on the low tier and past the cap', () => {
+    expect(buildPlacedModelsGeometry([item(0, drawnRecipe)], undefined, 'low').drawn).toHaveLength(
+      0
+    );
+    const many = Array.from({ length: PLACED_DRAWN_MAX + 2 }, (_, i) => item(i, drawnRecipe));
+    const res = buildPlacedModelsGeometry(many);
+    expect(res.drawn).toHaveLength(PLACED_DRAWN_MAX);
+    expect(res.modelsGeometry).not.toBeNull();
+    res.modelsGeometry?.dispose();
+  });
+
+  it('is nothing but drawn models when every model wears its drawings', () => {
+    const res = buildPlacedModelsGeometry([item(0, drawnRecipe)]);
+    expect(res.modelsGeometry).toBeNull();
+    expect(res.drawn).toHaveLength(1);
   });
 });

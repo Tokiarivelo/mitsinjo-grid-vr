@@ -1,5 +1,7 @@
 import { ApplianceCategorySchema } from '@mitsinjo/engine';
 import { z } from 'zod';
+import { ATLAS_VIEWS } from './face-atlas';
+import { HULL_BOXES_MAX, type HullSurface } from './face-hull';
 import type { ObjectKit } from './object-kit';
 import {
   boxPath,
@@ -52,6 +54,12 @@ export const HIP_CLIP_MAX = 0.9;
  * ≤ `MAX_TRIANGLES`. The LLM and photo paths keep `MAX_RECIPE_PARTS`.
  */
 export const MAX_COMPONENTS = 32;
+/**
+ * Parts of a recipe computed from the drawn views (PQ-T69, `source: 'views'`): mostly boxes and
+ * thin slabs (12 triangles each), so more of them fit the triangle budget. The schema accepts up
+ * to this many; every other builder enforces `MAX_COMPONENTS` itself.
+ */
+export const MAX_VIEW_PARTS = 96;
 /** Alias kept for the PV-H builders. */
 export const MAX_BUILT_PARTS = MAX_COMPONENTS;
 /** Triangle budget of one object's mesh (assemblies drop their details past it). */
@@ -603,10 +611,25 @@ export function facePoint(parent: RecipePart, face: Face, u: number, v: number) 
   return { at, ax, vAxis: vAxis as 1 | 2, vSign: vSign as 1 | -1 };
 }
 
+/** Longest face atlas accepted (base64 data URL, ≈ 1.5 MB of JPEG). */
+export const FACE_ATLAS_MAX_CHARS = 2_000_000;
+
+/** One restyled surface of a model that wears its drawings (`ObjectRecipe.faces.surfaces`). */
+export const FaceSurfaceSchema = z.object({
+  color: z
+    .string()
+    .regex(/^#[0-9a-f]{6}$/i)
+    .optional(),
+  material: RecipeMaterialSchema.optional(),
+});
+export type FaceSurface = z.infer<typeof FaceSurfaceSchema>;
+/** A hull coordinate, grid cells. */
+const hullCell = z.number().int().min(0).max(1024);
+
 export const ObjectRecipeSchema = z.object({
   /** Real proportions of the object, largest side = 1. */
   proportions: z.object({ w: extent, h: extent, d: extent }),
-  parts: z.array(RecipePartSchema).min(1).max(MAX_COMPONENTS),
+  parts: z.array(RecipePartSchema).min(1).max(MAX_VIEW_PARTS),
   /**
    * Where the parts came from: a kit template (`kit`, the default when absent), the LLM-imagined
    * part list (`free`, archetypes without a real template), the measured 2D elevations
@@ -619,6 +642,40 @@ export const ObjectRecipeSchema = z.object({
   yaw: z.number().min(-MAX_YAW).max(MAX_YAW).optional(),
   /** One tileable 64 px photo swatch per material (PR-1.5), base64 data URL (≤ 8 kB each). */
   swatches: z.record(RecipeMaterialSchema, z.string()).optional(),
+  /**
+   * Drawn views projected on the model (PQ-T70, `views` source only): `atlas` is one image (data
+   * URL, layout in `lib/face-atlas.ts`) of the validated drawings cut to the object, `views` the
+   * drawings in it, `hull` the silhouette hull they are projected on (`lib/face-hull.ts`). The
+   * 3D view draws the hull wearing the drawings instead of the parts. Never the photo.
+   */
+  faces: z
+    .object({
+      atlas: z.string().startsWith('data:image/').max(FACE_ATLAS_MAX_CHARS),
+      views: z.array(z.enum(ATLAS_VIEWS)).min(1).max(ATLAS_VIEWS.length),
+      hull: z.object({
+        grid: z.tuple([hullCell.min(1), hullCell.min(1), hullCell.min(1)]),
+        boxes: z
+          .array(z.tuple([hullCell, hullCell, hullCell, hullCell, hullCell, hullCell]))
+          .min(1)
+          .max(HULL_BOXES_MAX),
+      }),
+      /**
+       * The operator's own look per surface (roof, each wall): no entry = the drawing as it is;
+       * `color` alone tints the drawing; `material` replaces the drawing by that material in
+       * `color`. Set in the surface editor of the 3D view, never by a model.
+       */
+      surfaces: z
+        .object({
+          roof: FaceSurfaceSchema,
+          front: FaceSurfaceSchema,
+          right: FaceSurfaceSchema,
+          back: FaceSurfaceSchema,
+          left: FaceSurfaceSchema,
+        } satisfies Record<HullSurface, typeof FaceSurfaceSchema>)
+        .partial()
+        .optional(),
+    })
+    .optional(),
   /**
    * Measured wall tints per face (PQ-T44 remedy 4): medians on the photo's wall regions,
    * yawed views only (straight views keep the role colour). Absent faces fall back to the
@@ -660,8 +717,11 @@ export const SHAPE_OUTLINE_MAX = 20_000;
 /** Longest facade URL accepted: an inline PNG elevation is ≈ 1–3 MB of base64. */
 export const FACADE_URL_MAX = 8_000_000;
 
-/** The three faces drawn beside the front (PQ-T68): right side, back, left side. */
-export const FACE_NAMES = ['side', 'back', 'left'] as const;
+/**
+ * The views drawn beside the front (PQ-T68): right side, back, left side, then the view from
+ * above (PQ-T71: the plan, validated like the faces).
+ */
+export const FACE_NAMES = ['side', 'back', 'left', 'top'] as const;
 export type FaceName = (typeof FACE_NAMES)[number];
 
 /** An image URL accepted for a 2D view: inline image or https link, at most `FACADE_URL_MAX` characters. */
@@ -694,9 +754,15 @@ export const ShapeTargetSchema = z.object({
    * Faces the operator validated in the 2D panel (PQ-T68): drawn from the front and from each other,
    * so the four views agree. A face not listed is drawn by the pipeline itself.
    */
-  faceUrls: z.object({ side: viewUrl, back: viewUrl, left: viewUrl }).partial().optional(),
+  faceUrls: z
+    .object({ side: viewUrl, back: viewUrl, left: viewUrl, top: viewUrl })
+    .partial()
+    .optional(),
   /** Storage keys of those faces (they make a new validation a new request). */
-  faceKeys: z.object({ side: z.string(), back: z.string(), left: z.string() }).partial().optional(),
+  faceKeys: z
+    .object({ side: z.string(), back: z.string(), left: z.string(), top: z.string() })
+    .partial()
+    .optional(),
   /** Family the operator picked when asked (PQ-T41): it becomes the kit hint and the kit's archetype. */
   archetype: z.string().max(16).optional(),
   /** The validated 2D view is a clean front drawn from a hidden object (PQ-T23): its parts are inferred. */
@@ -988,6 +1054,7 @@ export function fitRecipe(recipe: ObjectRecipe, boxAspect: number, yaw = 0): Obj
     ...(turn !== 0 ? { yaw: turn } : {}),
     ...(recipe.source ? { source: recipe.source } : {}),
     ...(recipe.swatches ? { swatches: recipe.swatches } : {}),
+    ...(recipe.faces ? { faces: recipe.faces } : {}),
   };
 }
 
@@ -1064,4 +1131,25 @@ export function silhouetteRings(
       )
     ) / 2;
   return rings.sort((a, b) => area(b) - area(a));
+}
+
+/**
+ * The recipe with one surface restyled (PQ-T71): `look` null (or empty) gives the surface back to
+ * its drawing. A recipe without drawn faces is returned as it is. Pure, never mutates.
+ */
+export function restyleSurface(
+  recipe: ObjectRecipe,
+  surface: HullSurface,
+  look: FaceSurface | null
+): ObjectRecipe {
+  if (!recipe.faces) return recipe;
+  const surfaces = { ...recipe.faces.surfaces };
+  if (look && (look.color || look.material)) surfaces[surface] = look;
+  else delete surfaces[surface];
+  const { surfaces: _dropped, ...faces } = recipe.faces;
+  void _dropped;
+  return {
+    ...recipe,
+    faces: { ...faces, ...(Object.keys(surfaces).length ? { surfaces } : {}) },
+  };
 }
