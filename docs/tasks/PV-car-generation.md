@@ -137,6 +137,11 @@ premier) n'est plus prioritaire.
 `vehicleAspects`), rétroviseurs hors largeur. Rejeux w/d · h/d : berline 0,42 · 0,35, SUV 0,39 · 0,35, pick-up
 0,40 · 0,41. Maisons inchangées. Captures `c-*/voiture-3d-t76a.jpg`, `t76a-sheet.jpg`.
 
+**(b) fait (PQ-T76b)** : `CarPlan` (`lib/car-plan.ts`, `recipe.car`) ; roues mesurées sur le profil
+(`car/car-wheels.ts`) : arc bas de chaque pneu sur la silhouette, symétrique autour du contact au sol, ombre
+portée de Muse retirée (papier assombri, teinté sous les pneus) ; voie lue sur la face. 2 essieux sur les
+trois voitures, rayons cohérents (`t76b-wheels.jpg`). Rejeu : `make car-replay OUT=…`.
+
 ## 7. Définition de « fini » pour une étape
 
 - Tests Vitest verts (`pnpm --filter web test -- car`, plus les suites maison), typecheck, lint sans erreur.

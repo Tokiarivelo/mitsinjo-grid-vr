@@ -171,6 +171,10 @@ house-regress: ## House zero-regression check, offline (no Meta call, free): bun
 	$(need_ws)
 	./scripts/house-regress.sh $(REF)
 
+car-replay: ## Car offline replay (PQ-T76, no Meta call): rebuilds every c-*/ car from its saved drawings [OUT=replay REF=~/Téléchargements/generated-view NAMES="sedan suv"] → <dir>/<OUT>/recipe.json, car.json
+	$(need_ws)
+	./scripts/car-replay.sh $(or $(OUT),replay) $(or $(REF),$(HOME)/Téléchargements/generated-view) $(NAMES)
+
 shape-report: ## 3D shape report: scores + contact sheet → test-results/shape-report/ (/shape-loop)
 	$(need_ws)
 	SHAPE_REPORT=1 SHAPE_REPORT_DIR=$(CURDIR)/test-results/shape-report $(PNPM) --filter $(WEB) exec vitest run src/server/perception/__tests__/shape-report.test.ts -t "make shape-report"

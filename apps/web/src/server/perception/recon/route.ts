@@ -28,6 +28,7 @@ import {
   type ReconReport,
   roofClassOf,
 } from './reconstruct';
+import { measureCarPlan } from '../car/car-measure';
 import { profileProportions, vehicleAspects } from '../car/car-proportions';
 import { bleedPaper, maskAt, shrink, trimPaper } from './texture';
 import {
@@ -379,6 +380,14 @@ export async function reconstructObject(
           ...faces,
           hull: { grid: [...hull.grid], boxes: hull.boxes.map((b) => [...b]) },
         };
+    }
+    // A vehicle: its wheels, track and clearance measured on the drawings (PQ-T76).
+    if (archetype === 'vehicle' && !signal?.aborted) {
+      const car = await measureCarPlan(pngs, recon.aligned);
+      if (car) recipe.car = car;
+      console.info(
+        `${tag}: car ${car ? `${car.wheels.length} axles (${car.wheels.map((w) => `z ${w.z} r ${w.r}`).join(', ')}), clearance ${car.clearance ?? '?'}, track ${car.track ? `${car.track.x0}–${car.track.x1}` : '?'}` : 'not measured'}`
+      );
     }
     // A house or a building: its specialist reads it room by room (volumes, roofs, openings).
     if (deps.readHouse && !signal?.aborted && (archetype === 'house' || archetype === 'building')) {

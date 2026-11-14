@@ -113,6 +113,7 @@ describe.runIf(process.env.VIEWS_3D_FRONT || process.env.VIEWS_3D_PHOTO)('make v
     );
     if (recipe.house)
       await writeFile(join(out, 'house.json'), JSON.stringify(recipe.house, null, 2));
+    if (recipe.car) await writeFile(join(out, 'car.json'), JSON.stringify(recipe.car, null, 2));
     // The drawings as projected on the model (one tile per view, paper bled over).
     if (recipe.faces)
       await writeFile(

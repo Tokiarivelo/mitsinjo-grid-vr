@@ -2,6 +2,7 @@ import { ApplianceCategorySchema } from '@mitsinjo/engine';
 import { z } from 'zod';
 import { ATLAS_VIEWS } from './face-atlas';
 import { HULL_BOXES_MAX, type HullSurface } from './face-hull';
+import { CarPlanSchema } from './car-plan';
 import { HousePlanSchema } from './house-plan';
 import type { ObjectKit } from './object-kit';
 import {
@@ -655,6 +656,11 @@ export const ObjectRecipeSchema = z.object({
    * hull; its walls still wear `faces` drawings where a drawing sees them.
    */
   house: HousePlanSchema.optional(),
+  /**
+   * The car as measured on its drawings (PQ-T76, vehicles of the `views` source): axles, track,
+   * clearance, tyre and rim colours (`lib/car-plan.ts`). Later read by the car specialists too.
+   */
+  car: CarPlanSchema.optional(),
   /**
    * Drawn views projected on the model (PQ-T70, `views` source only): `atlas` is one image (data
    * URL, layout in `lib/face-atlas.ts`) of the validated drawings cut to the object, `views` the

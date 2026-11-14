@@ -364,6 +364,8 @@ make views-3d FRONT=front.png RIGHT=right.png OUT=test-results/views OFFLINE=1 M
 make views-3d FRONT=front.png RIGHT=right.png BACK=back.png LEFT=left.png OUT=test-results/views LABEL='stone house'
 # House zero-regression check, offline (no Meta call, free): replays the reference houses' saved drawings and readings
 make house-regress
+# Car offline replay (no Meta call): rebuilds every saved c-*/ car from its drawings → recipe.json, car.json
+make car-replay OUT=replay
 
 # Real 3D viewer shots of those recipes, dark + light (dev server running, API stubbed)
 make shape-shots

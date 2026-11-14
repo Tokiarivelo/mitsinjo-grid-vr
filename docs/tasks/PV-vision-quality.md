@@ -761,10 +761,14 @@ One task = one commit, with its Vitest test, its `contracts.md` update and its m
       classes merge. (a) Done: a vehicle's proportions come from the elevations (`profileProportions`,
       `vehicleAspects`, `AlignedViews.aspects` unclamped; the plan no longer sets its depth; wing
       mirrors left out by `bodyWidthShare`). Offline replays, w/d · h/d: sedan 0.55 · 0.46 → 0.42 ·
-      0.35, SUV 0.57 · 0.46 → 0.39 · 0.35, truck 0.49 · 0.50 → 0.40 · 0.41. Left: wheels measured on
-      the profile, `CarPlan`, `carMesh`, bench of 10.
-      **Test:** `recon.test.ts`. Houses unchanged: bungalow replay = `house-pq-t72.json`, bungalow and
-      school recipes identical before / after. Captures: `c-*/voiture-3d-t76a.jpg`, `t76a-sheet.jpg`.
+      0.35, SUV 0.57 · 0.46 → 0.39 · 0.35, truck 0.49 · 0.50 → 0.40 · 0.41. (b) Done: `CarPlan`
+      (`lib/car-plan.ts`, `recipe.car`), wheels measured on the profile (`car/car-wheels.ts`: lower
+      arc of each tyre, symmetric round the contact, Muse's ground shadow dropped) and the track on the
+      front. Replays: 2 axles on all three, radii per car within 0.01 (sedan 0.22, SUV 0.22, truck
+      0.16), rims on sedan and truck (black SUV rims: none). Limit: the sedan's front shadow spans the
+      whole width, no track. Left: car specialists, `carMesh`, bench of 10.
+      **Test:** `car-proportions.test.ts`, `car-wheels.test.ts`, `make house-regress`, `make car-replay`. Houses unchanged: bungalow replay = `house-pq-t72.json`, bungalow and
+      school recipes identical before / after. Captures: `c-*/voiture-3d-t76a.jpg`, `t76a-sheet.jpg`, `t76b-wheels.jpg`.
 
 ## Exit criteria
 
