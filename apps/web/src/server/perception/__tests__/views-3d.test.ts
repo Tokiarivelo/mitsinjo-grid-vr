@@ -8,6 +8,8 @@ vi.mock('server-only', () => ({}));
 import { museImage, museImageReady } from '../facade-specialist';
 import { renderFlat, THREE_QUARTER } from '../flat-render';
 import { getPerceptionClient } from '../client';
+import { CAR_SLOTS, carMesh, type CarSlot } from '@/lib/car-mesh';
+import { rasterCar } from '../car/car-raster';
 import { carToolAsk, liveReadCar } from '../car/car-specialist';
 import { CarReadingSchema } from '../car/car-tools';
 import { houseToolAsk } from '../house/house-specialist';
@@ -274,6 +276,105 @@ describe.runIf(
       .composite(turned)
       .png()
       .toFile(join(out, 'model-34.png'));
+    // A car's own mesh (PQ-T78): what the viewer shows, wearing its drawings, then its pieces.
+    const mesh = recipe.car
+      ? carMesh(
+          recipe.car,
+          [recipe.proportions.w, recipe.proportions.h, recipe.proportions.d],
+          recipe.faces
+            ? { views: recipe.faces.views, ...(recipe.faces.underside ? { underside: true } : {}) }
+            : {}
+        )
+      : null;
+    if (mesh && recipe.car) {
+      const look = recipe.car.look ?? {};
+      const paint = look.paint ?? '#8a8f94';
+      const colors = Object.fromEntries(
+        CAR_SLOTS.map((slot) => [
+          slot,
+          slot === 'glass'
+            ? (look.glass ?? '#39424a')
+            : slot === 'tyre'
+              ? (look.tyre ?? '#1d1d1f')
+              : slot === 'rim'
+                ? (look.rim ?? '#b9bcc0')
+                : slot === 'under'
+                  ? '#1c1d1f'
+                  : paint,
+        ])
+      ) as Record<CarSlot, string>;
+      const pieces: Record<CarSlot, string> = {
+        roof: '#d9534f',
+        front: '#f0ad4e',
+        right: '#5bc0de',
+        back: '#9b59b6',
+        left: '#5cb85c',
+        glass: '#1f3a5f',
+        tyre: '#222222',
+        rim: '#c8c8c8',
+        under: '#6b4f2a',
+      };
+      const atlasUrl = recipe.faces?.atlas;
+      const decodedAtlas = atlasUrl
+        ? await sharp(Buffer.from(atlasUrl.slice(atlasUrl.indexOf(',') + 1), 'base64'))
+            .removeAlpha()
+            .raw()
+            .toBuffer({ resolveWithObject: true })
+        : null;
+      const atlas = decodedAtlas
+        ? {
+            rgb: decodedAtlas.data,
+            width: decodedAtlas.info.width,
+            height: decodedAtlas.info.height,
+          }
+        : null;
+      const drawn = new Set<CarSlot>(
+        CAR_SLOTS.filter((slot) => slot !== 'tyre' && (slot !== 'under' || recipe.faces?.underside))
+      );
+      const deg = Math.PI / 180;
+      const side = 440;
+      const cams: Array<{ yaw: number; pitch: number; flat?: boolean }> = [
+        { yaw: 40 * deg, pitch: 18 * deg },
+        { yaw: 220 * deg, pitch: 18 * deg },
+        { yaw: 90 * deg, pitch: 0 },
+        { yaw: 0, pitch: 0 },
+        { yaw: 180 * deg, pitch: 0 },
+        { yaw: 0, pitch: 90 * deg },
+        { yaw: 40 * deg, pitch: 18 * deg, flat: true },
+        { yaw: 140 * deg, pitch: -25 * deg },
+      ];
+      const shots = await Promise.all(
+        cams.map(async (cam, i) => ({
+          input: await sharp(
+            Buffer.from(
+              rasterCar(mesh, {
+                ...cam,
+                size: side,
+                atlas,
+                colors: cam.flat ? pieces : colors,
+                drawn,
+              })
+            ),
+            { raw: { width: side, height: side, channels: 3 } }
+          )
+            .png()
+            .toBuffer(),
+          left: gap + (i % 4) * (side + gap),
+          top: gap + Math.floor(i / 4) * (side + gap),
+        }))
+      );
+      await sharp({
+        create: {
+          width: 4 * side + 5 * gap,
+          height: 2 * side + 3 * gap,
+          channels: 3,
+          background: '#ffffff',
+        },
+      })
+        .composite(shots)
+        .png()
+        .toFile(join(out, 'car-sheet.png'));
+    }
     console.info(`\n${recipe.parts.length} parts — ${reportLine(report)}\n→ ${out}`);
     expect(recipe.parts.length).toBeGreaterThan(0);
   }, 1_800_000);

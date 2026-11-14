@@ -48,6 +48,15 @@ export const PieceEditsSchema = z
   .refine((r) => Object.keys(r).length <= PIECES_MAX, { message: 'too many pieces' });
 export type PieceEdits = z.infer<typeof PieceEditsSchema>;
 
+/**
+ * The slot a piece name belongs to and its number in it (`glass-2` → glass, 2; `roof` → roof): a
+ * slot drawn as several things gives one piece per thing (PQ-T78).
+ */
+export function pieceBase(name: string): { base: string; index: number | null } {
+  const m = /^(.*)-(\d+)$/.exec(name);
+  return m ? { base: m[1]!, index: Number(m[2]) } : { base: name, index: null };
+}
+
 /** The whole box: a new mask starts there (nothing hidden yet). */
 export const FULL_MASK: PieceMask = { box: [0, 1, 0, 1, 0, 1] };
 

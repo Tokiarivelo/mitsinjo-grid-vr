@@ -64,6 +64,16 @@ describe('readProfileWheels (PQ-T76)', () => {
     expect(p.look.rim).toBe('#c8c8cd');
   });
 
+  it('takes the rubber from the darkest wheel: a skirted wheel in the paint colour is not a tyre (PQ-T78)', () => {
+    const GREEN: Rgb = [150, 175, 130];
+    // The rear wheel sits under a fender skirt drawn in the body's green; the front one is bare.
+    const skirted = profile().disc(70, 78, 22, GREEN).disc(70, 78, 12, RIM);
+    expect(readProfileWheels(grid(skirted))!.look.tyre).toBe('#19191c');
+    // Both wheels pale: no rubber colour is kept (the default tyre colour stays).
+    const pale = skirted.disc(230, 78, 22, GREEN).disc(230, 78, 12, RIM);
+    expect(readProfileWheels(grid(pale))!.look.tyre).toBeUndefined();
+  });
+
   it('keeps the circle round when a pipe sticks out beside one tyre', () => {
     const p = readProfileWheels(grid(profile().rect(255, 88, 290, 93, COLORS.tyre)))!;
     expect(p.wheels[1]!.r).toBeCloseTo(0.22, 1);

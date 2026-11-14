@@ -102,6 +102,40 @@ describe('vehicle drawings (PQ-T76): the profile first', () => {
   );
 
   it(
+    'builds the car the way its profile points: front to the right of the drawing = front of the model (PQ-T78)',
+    async () => {
+      // A profile with its cabin over the rear half and a long bonnet toward the image's right.
+      const profile = await sharp(
+        Buffer.from(
+          `<svg xmlns="http://www.w3.org/2000/svg" width="260" height="120">
+            <rect width="260" height="120" fill="#cfe0fa"/>
+            <rect x="20" y="50" width="220" height="40" fill="#c82828"/>
+            <rect x="24" y="22" width="96" height="30" fill="#c82828"/>
+            <circle cx="65" cy="90" r="14" fill="#19191c"/>
+            <circle cx="195" cy="90" r="14" fill="#19191c"/>
+          </svg>`
+        )
+      )
+        .png()
+        .toBuffer();
+      const target: ShapeTarget = {
+        id: 'car',
+        label: 'car',
+        category: 'other',
+        box: { x: 0, y: 0, w: 1, h: 1 },
+        facadeUrl: dataUrl(profile),
+        faceUrls: { front: dataUrl(await png(carViews().front)) },
+      };
+      const built = await reconstructObject({ draw: null }, target, { fourFaces: false });
+      const top = built!.recipe.car!.body!.top;
+      const mean = (a: number[]) => a.reduce((s, v) => s + v, 0) / a.length;
+      // Stations run back → front: the cabin (high) is at the back, the bonnet (low) at the front.
+      expect(mean(top.slice(4, 24))).toBeGreaterThan(mean(top.slice(40, 60)) + 0.2);
+    },
+    RECON_TIMEOUT
+  );
+
+  it(
     'uses the validated faces and draws nothing without a profile',
     async () => {
       const views = carViews();

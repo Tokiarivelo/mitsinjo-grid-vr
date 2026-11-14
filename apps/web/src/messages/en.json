@@ -1444,6 +1444,7 @@
         "locked": "Locked: unlock it to move it.",
         "keys": "Keys: Q select · G move · R rotate · S scale · 1 / 3 / 7 / 5 views · F frame · H hide · / isolate · Ctrl+Z undo · Esc close",
         "kept": "Edits are saved with the model: the village and the Blender export use them (opacity stays in the studio).",
+        "pieceItem": "{piece} {n}",
         "piece": {
           "roof": "Roof",
           "front": "Front",

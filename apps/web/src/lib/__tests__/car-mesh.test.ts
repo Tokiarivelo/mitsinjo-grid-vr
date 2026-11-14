@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { atlasUv, faceSlot } from '../face-atlas';
 import {
+  cabinClimbs,
   CAR_SLOTS,
   carMesh,
+  carShoulder,
+  cutTriangle,
   carSection,
   EDGE_IN,
   floorLine,
@@ -205,5 +208,159 @@ describe('underside: floor, wheel wells and axles', () => {
     }
     expect(low).toBeGreaterThan(0);
     expect(axle).toBeGreaterThan(0);
+  });
+});
+
+/** Triangles of a mesh as { slot, centre (shares of the box), normal of the face }. */
+const faces = (m: NonNullable<ReturnType<typeof carMesh>>) =>
+  Array.from({ length: m.slot.length }, (_, t) => {
+    const p = [0, 1, 2].map((k) =>
+      [0, 1, 2].map((j) => m.position[t * 9 + k * 3 + j]! / dims[j]! + 0.5)
+    ) as [number[], number[], number[]];
+    const e1 = [0, 1, 2].map((j) => (p[1][j]! - p[0][j]!) * dims[j]!);
+    const e2 = [0, 1, 2].map((j) => (p[2][j]! - p[0][j]!) * dims[j]!);
+    const nrm = [
+      e1[1]! * e2[2]! - e1[2]! * e2[1]!,
+      e1[2]! * e2[0]! - e1[0]! * e2[2]!,
+      e1[0]! * e2[1]! - e1[1]! * e2[0]!,
+    ];
+    const l = Math.hypot(...nrm) || 1;
+    return {
+      slot: CAR_SLOTS[m.slot[t]!]!,
+      corners: p,
+      centre: [0, 1, 2].map((j) => (p[0][j]! + p[1][j]! + p[2][j]!) / 3),
+      normal: nrm.map((v) => v / l),
+      area: l / 2,
+    };
+  });
+
+describe('cutTriangle (PQ-T78)', () => {
+  const piece = {
+    vs: [
+      [0, 0, 0],
+      [1, 0, 0],
+      [0, 1, 0],
+    ] as [[number, number, number], [number, number, number], [number, number, number]],
+    ns: [
+      [0, 0, 1],
+      [0, 0, 1],
+      [0, 0, 1],
+    ] as [[number, number, number], [number, number, number], [number, number, number]],
+  };
+  const flat = (p: [number, number, number]): [number, number] => [p[0], p[1]];
+  const area = (t: typeof piece) =>
+    Math.abs(
+      (t.vs[1][0] - t.vs[0][0]) * (t.vs[2][1] - t.vs[0][1]) -
+        (t.vs[2][0] - t.vs[0][0]) * (t.vs[1][1] - t.vs[0][1])
+    ) / 2;
+
+  it('cuts a triangle crossing the line into pieces on each side, the area kept', () => {
+    const out = cutTriangle(piece, [0, 0, 1, 1], [0.5, 0], [0.5, 1], null, flat);
+    expect(out).toHaveLength(3);
+    expect(out.reduce((s, t) => s + area(t), 0)).toBeCloseTo(0.5, 9);
+    for (const t of out) {
+      const xs = t.vs.map((v) => v[0]);
+      expect(Math.min(...xs) >= 0.5 - 1e-9 || Math.max(...xs) <= 0.5 + 1e-9).toBe(true);
+    }
+  });
+
+  it('leaves a triangle whole outside the window bounds or on one side of the line', () => {
+    expect(cutTriangle(piece, [2, 2, 3, 3], [0.5, 0], [0.5, 1], null, flat)).toEqual([piece]);
+    expect(cutTriangle(piece, [0, 0, 1, 1], [1.5, 0], [1.5, 1], null, flat)).toEqual([piece]);
+  });
+});
+
+describe('glass follows the windows the team read (PQ-T78)', () => {
+  it('cuts the flank along the window: every glass triangle lies inside its polygon', () => {
+    const glass = faces(carMesh(plan, dims)!).filter((f) => f.slot === 'glass');
+    expect(glass.length).toBeGreaterThan(0);
+    for (const f of glass)
+      for (const [, y, z] of f.corners) {
+        expect(z!).toBeGreaterThanOrEqual(0.3 - 1e-6);
+        expect(z!).toBeLessThanOrEqual(0.7 + 1e-6);
+        expect(y!).toBeGreaterThanOrEqual(0.55 - 1e-6);
+        expect(y!).toBeLessThanOrEqual(0.8 + 1e-6);
+      }
+    // The whole window is glass on each flank (the other side wears the same windows).
+    const side = glass.filter((f) => f.centre[0]! > 0.5).reduce((s, f) => s + f.area, 0);
+    expect(side).toBeGreaterThan(0.4 * dims[2] * 0.25 * dims[1] * 0.97);
+  });
+
+  const n2 = 32;
+  /** Boot, rear window, roof, a raked windscreen, a bonnet with a small step (a louvre). */
+  const top = Array.from({ length: n2 }, (_, i) =>
+    i < 5
+      ? 0.6
+      : i < 8
+        ? 0.6 + ((i - 4) * 0.35) / 3
+        : i < 16
+          ? 0.95
+          : i < 22
+            ? 0.95 - ((i - 15) * 0.35) / 6
+            : i === 26
+              ? 0.57
+              : 0.6
+  );
+  const half = [0.45, 0.45, 0.45, 0.45, 0.45, 0.45, 0.36, 0.34, 0.33, 0.32];
+  const raked: CarPlan = {
+    ...plan,
+    body: { z0: 0, z1: 1, top, bottom: Array(n2).fill(0.25), half },
+    windows: [
+      {
+        view: 'front',
+        points: [
+          [0.2, 0.55],
+          [0.8, 0.55],
+          [0.8, 0.94],
+          [0.2, 0.94],
+        ],
+      },
+    ],
+  };
+
+  it('finds where the body climbs to the roof: windscreen and rear window, not the decks', () => {
+    const climbs = cabinClimbs(raked.body!);
+    expect(climbs.slice(0, 4).some(Boolean)).toBe(false);
+    expect(climbs.slice(4, 7).every(Boolean)).toBe(true);
+    expect(climbs.slice(8, 15).some(Boolean)).toBe(false);
+    expect(climbs.slice(15, 21).every(Boolean)).toBe(true);
+    expect(climbs.slice(22).some(Boolean)).toBe(false);
+    expect(carShoulder(raked.body!).shoulder).toBeCloseTo(5 / 9, 5);
+  });
+
+  it('glazes a raked windscreen that faces the sky, never the bonnet under it', () => {
+    const m = carMesh(raked, dims, { views: ['front', 'right', 'top'] })!;
+    const glass = faces(m).filter((f) => f.slot === 'glass');
+    expect(glass.length).toBeGreaterThan(0);
+    // Windscreen stations 15 → 21 of 32: z between 0.48 and 0.68; the bonnet (z > 0.7) has none.
+    for (const f of glass) {
+      expect(f.centre[2]!).toBeGreaterThan(0.47);
+      expect(f.centre[2]!).toBeLessThan(0.69);
+    }
+    expect(glass.some((f) => f.normal[1]! > 0.7)).toBe(true);
+  });
+});
+
+describe('ring parts (PQ-T78)', () => {
+  it('reads the bumper under the nose on the front drawing, not on the floor', () => {
+    const bottom = Array.from({ length: n }, (_, i) => (i === n - 1 ? 0.6 : 0.25));
+    const m = carMesh({ ...plan, body: { ...plan.body!, bottom } }, dims)!;
+    const nose = faces(m).filter(
+      (f) => f.centre[2]! > 0.94 && f.normal[2]! > 0.7 && f.centre[1]! < 0.6
+    );
+    expect(nose.length).toBeGreaterThan(0);
+    expect(nose.every((f) => f.slot === 'front')).toBe(true);
+    // Between the wheels the underside stays the floor, whatever way it faces.
+    expect(faces(m).some((f) => f.slot === 'under' && Math.abs(f.centre[2]! - 0.5) < 0.2)).toBe(
+      true
+    );
+  });
+
+  it('keeps a wing or a sill turned up on its flank: the roof is only the top of the ring', () => {
+    const half = [0.45, 0.45, 0.45, 0.45, 0.3, 0.3, 0.3, 0.3];
+    const m = carMesh({ ...plan, windows: undefined, body: { ...plan.body!, half } }, dims)!;
+    const roof = faces(m).filter((f) => f.slot === 'roof');
+    expect(roof.length).toBeGreaterThan(0);
+    for (const f of roof) expect(f.centre[1]!).toBeGreaterThan(0.65);
   });
 });

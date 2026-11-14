@@ -822,4 +822,25 @@ views · tuning a threshold so that one object passes.
       slot or a material (two windows of one slot move together).
       **Test:** `piece-edits.test.ts`, `model-pieces.test.ts`, `use-piece-history.test.ts`,
       `use-stable-except.test.ts`, `object-studio.test.tsx`; shots `SHOT_STUDIO=glass node
-    scripts/object-viewer-shot.mjs …` (1440 + 390, dark + light).
+scripts/object-viewer-shot.mjs …` (1440 + 390, dark + light).
+- [x] **PQ-T78 Cars checked on the bench, built the right way round, layers per window.** User
+      2026-11-14: check the car generation and the 3D Studio layers, test on the cars of
+      `resources/refine-3d`, refine and optimise. Found and fixed: (1) a car drawn from its profile
+      was **built backwards** (the profile, front to the right, was fed as the `right` elevation,
+      whose image left is the object's front): grille on the boot, plan from above off the bonnet
+      (the jeep's open point). The profile is now the `left` elevation, its mirror the `right` one
+      (`recon/route.ts`). (2) The underside ring past the wheels (bumpers) read the floor's drawing
+      in streaks: it now reads the front or back drawing. (3) Glass followed the mesh's triangles
+      (sawtooth): triangles are cut along each window (`cutTriangle`); a raked windscreen facing
+      the sky is glass from the front window (`cabinClimbs`), never the bonnet. (4) Deck → cabin
+      width jumped between two stations (crumpled A-pillars): blended (`CABIN_FULL`). (5) A wing or
+      sill turned up stays its flank's piece, the roof is the top of the ring only. (6) A plan from
+      above laid across the sheet or front up is turned by the colours along the profile's top edge
+      (`car/car-top.ts`). Layers: each window, tyre and wheel face of a car is its own piece
+      (`glass-1`…, `splitPieces` + `connectedTriangles`); a layer mask is baked as a real cut
+      (`maskGeometry`), as the studio's clipping planes show it, not triangle by triangle. Speed:
+      windows prefiltered per triangle, ≈ 40 ms for ≈ 8 000 triangles. Check tool: `car-sheet.png`
+      (the car mesh itself, eight cameras, `car/car-raster.ts`) written by every `make views-3d` /
+      `make car-replay`. Live bench and what is still wrong per car: `PV-car-generation.md` § 6 (g).
+      **Test:** `car-mesh.test.ts`, `car-views.test.ts` (orientation), `car-top.test.ts`,
+      `car-raster.test.ts`, `model-pieces.test.ts`, `piece-edits.test.ts`; `make house-regress`.

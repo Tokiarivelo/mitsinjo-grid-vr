@@ -4,6 +4,9 @@ import { CAR_SLOTS } from '@/lib/car-mesh';
 import { HOUSE_SLOTS } from '@/lib/house-mesh';
 import {
   bakePieceEdits,
+  connectedTriangles,
+  ITEMS_MAX,
+  maskGeometry,
   maskPlanes,
   modelBox,
   modelKind,
@@ -92,5 +95,57 @@ describe('model pieces (3D Studio, PQ-T77)', () => {
     const baked = withPieceEdits(g, { ...house, pieces: { roof: { hidden: true } } });
     expect(baked).not.toBe(g);
     expect(baked.getAttribute('position').count).toBe(n);
+  });
+
+  /** Area of a non-indexed geometry's triangles. */
+  const area = (g: THREE.BufferGeometry) => {
+    const p = g.getAttribute('position');
+    const [a, b, c] = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+    let sum = 0;
+    for (let t = 0; t < p.count / 3; t++) {
+      a.fromBufferAttribute(p, t * 3);
+      b.fromBufferAttribute(p, t * 3 + 1);
+      c.fromBufferAttribute(p, t * 3 + 2);
+      sum += b.sub(a).cross(c.sub(a)).length() / 2;
+    }
+    return sum;
+  };
+
+  it('cuts a piece along its mask like the studio planes, not triangle by triangle (PQ-T78)', () => {
+    const cube = new THREE.BoxGeometry(1, 1, 1).toNonIndexed();
+    const box = modelBox(cube);
+    const mask = { box: [0, 0.25, 0, 1, 0, 1] as [number, number, number, number, number, number] };
+    const cut = maskGeometry(cube, mask, box);
+    cut.computeBoundingBox();
+    // The quarter x ≤ −0.25 of the cube: its end face and a quarter of the four faces round it.
+    expect(cut.boundingBox!.max.x).toBeCloseTo(-0.25, 6);
+    expect(area(cut)).toBeCloseTo(1 + 4 * 0.25, 6);
+    expect(cut.getAttribute('uv').count).toBe(cut.getAttribute('position').count);
+    // Inverted: the rest of the cube, nothing lost and nothing kept twice.
+    const rest = maskGeometry(cube, { ...mask, invert: true }, box);
+    rest.computeBoundingBox();
+    expect(rest.boundingBox!.min.x).toBeCloseTo(-0.25, 6);
+    expect(area(cut) + area(rest)).toBeCloseTo(6, 6);
+  });
+
+  it('gives a car one piece per window, tyre and wheel face (PQ-T78)', () => {
+    const { g, n } = twoBoxes();
+    // Both boxes in the glass slot of a car: two separate things, two pieces.
+    g.clearGroups();
+    g.addGroup(0, 2 * n, CAR_SLOTS.indexOf('glass'));
+    expect(connectedTriangles(g)).toHaveLength(1); // the boxes touch at x = 0
+    g.getAttribute('position').array.forEach((_, i, arr) => {
+      if (i % 3 === 0 && i >= n * 3) (arr as Float32Array)[i]! += 0.5;
+    });
+    const pieces = splitPieces(g, CAR_SLOTS);
+    expect(pieces.map((p) => p.name)).toEqual(['glass-1', 'glass-2']);
+    expect(pieces[0]!.center[0]).toBeCloseTo(-0.5);
+    expect(pieces[1]!.center[0]).toBeCloseTo(1);
+    expect(pieces.every((p) => p.slot === CAR_SLOTS.indexOf('glass'))).toBe(true);
+    // The same slot index of a house is one piece; a moved window is baked alone.
+    expect(splitPieces(g, HOUSE_SLOTS)).toHaveLength(1);
+    const baked = bakePieceEdits(g, CAR_SLOTS, { 'glass-2': { hidden: true } });
+    expect(baked.getAttribute('position').count).toBe(n);
+    expect(ITEMS_MAX).toBeGreaterThanOrEqual(8);
   });
 });

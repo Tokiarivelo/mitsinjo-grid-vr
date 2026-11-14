@@ -1444,6 +1444,7 @@
         "locked": "Verrouillée : déverrouillez-la pour la déplacer.",
         "keys": "Touches : Q sélection · G déplacer · R tourner · S échelle · 1 / 3 / 7 / 5 vues · F cadrer · H masquer · / isoler · Ctrl+Z annuler · Échap fermer",
         "kept": "Les retouches sont gardées avec le modèle : le village et l'export Blender les utilisent (l'opacité reste dans le studio).",
+        "pieceItem": "{piece} {n}",
         "piece": {
           "roof": "Toit",
           "front": "Face",

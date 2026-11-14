@@ -40,6 +40,8 @@ export const SHADOW_TINT_MIN = 15;
 export const SHADOW_K_TINTED = 0.2;
 /** Fewest arc points a fit needs. */
 const ARC_MIN_POINTS = 6;
+/** A tyre colour lighter than this (luma 0–255) is not rubber: the default tyre colour stays. */
+export const TYRE_LUMA_MAX = 90;
 /** A rim is this much lighter (luma) than the tyre round it. */
 export const RIM_CONTRAST = 40;
 
@@ -249,7 +251,11 @@ export function readProfileWheels(
   if (!wheels.length) return null;
   const mid = (xs: number[][]) =>
     xs.length ? toHex([0, 1, 2].map((k) => median(xs.map((x) => x[k]!)))) : undefined;
-  const [tyre, rim] = [mid(tyres), mid(rims)];
+  // Rubber is the darkest wheel read: a wheel under a skirt or a spat samples the body's paint.
+  const luma = (c: number[]) => 0.299 * c[0]! + 0.587 * c[1]! + 0.114 * c[2]!;
+  const darkest = [...tyres].sort((a, b) => luma(a) - luma(b))[0];
+  const tyre = darkest && luma(darkest) <= TYRE_LUMA_MAX ? toHex(darkest) : undefined;
+  const rim = mid(rims);
   return {
     wheels: wheels.map((w) => ({
       ...w,

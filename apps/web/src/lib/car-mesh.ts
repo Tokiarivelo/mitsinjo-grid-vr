@@ -57,10 +57,26 @@ export const RING_ROOF = 10;
 export const WHEEL_SEGMENTS = 28;
 /** A body face whose normal points up past this (y component) is roof. */
 export const ROOF_UP = 0.7;
+/** A station within this share of the cabin's height under the roof is the roof's edge. */
+export const ROOF_EDGE = 0.12;
+/** A windscreen falls at least this share of the cabin's height per station (64-station profile). */
+export const CLIMB_MIN = 0.04;
+const CAR_STATIONS_REF = 64;
+/** Level spans a climb may hold, and how far under the roof its rounded edge may reach. */
+export const CLIMB_GAP = 2;
+export const ROOF_ROUND = 0.4;
+/** A face of the roof leaning this much forward or backward (z of its normal) may be glazed. */
+export const RAKE_MIN = 0.08;
+/** A face turned down past this (y component of its normal) is the underside. */
+export const UNDER_DOWN = -0.6;
+/** Slack of the window cuts (shares of the box): a triangle this close to an edge is not cut. */
+export const CUT_EPS = 1e-5;
 /** The shoulder: the highest level of the front still this share of the body's widest. */
 export const SHOULDER_SHARE = 0.92;
 /** A station whose top is within this share of the cabin's height above the shoulder is a deck. */
 export const DECK_BAND = 0.35;
+/** A station whose top reaches this share of the cabin's height has the cabin's full section. */
+export const CABIN_FULL = 0.85;
 /** The roof keeps the cabin's width this far (share of the height) under the top of the front. */
 export const ROOF_CROWN = 0.05;
 /** Edges of a deck or the roof round in by this share of their half-width over `EDGE_BAND`. */
@@ -125,6 +141,23 @@ const sample = (arr: readonly number[], f: number) => {
 type UvView = AtlasView | 'bottom';
 
 /**
+ * Where the cabin starts on a body: the shoulder (the highest level of the front still as wide
+ * as the body, share of the height), the roof, and how far a station's top rises into the cabin
+ * (0 at the shoulder, 1 at the roof).
+ */
+export function carShoulder(body: Pick<CarBody, 'half' | 'top'>) {
+  const half = body.half;
+  const L = half.length;
+  const max = Math.max(...half);
+  let widest = half.indexOf(max);
+  while (widest + 1 < L && half[widest + 1]! >= SHOULDER_SHARE * max) widest++;
+  const shoulder = widest / (L - 1);
+  const roof = Math.max(...body.top);
+  const cabinHeight = Math.max(1e-6, roof - shoulder);
+  return { widest, shoulder, roof, rise: (t: number) => (t - shoulder) / cabinHeight };
+}
+
+/**
  * Half-width of the body at height `y` on a station whose top is `t` (shares; 0–0.5). Below the
  * shoulder the front's section; above it the cabin, never wider going up and holding its width
  * under the drawing's rounded top; a deck station (bonnet, boot) keeps the shoulder's width up to
@@ -133,26 +166,27 @@ type UvView = AtlasView | 'bottom';
 export function carSection(body: Pick<CarBody, 'half' | 'top'>): (t: number, y: number) => number {
   const half = body.half;
   const L = half.length;
-  const max = Math.max(...half);
-  let widest = half.indexOf(max);
-  while (widest + 1 < L && half[widest + 1]! >= SHOULDER_SHARE * max) widest++;
-  const shoulder = widest / (L - 1);
+  const { widest, shoulder, roof, rise: riseOf } = carShoulder(body);
   const shoulderHalf = half[widest]!;
-  const roof = Math.max(...body.top);
   // At least one and a half levels: a coarse front still loses its rounded top row.
   const crown = Math.max(shoulder, roof - Math.max(ROOF_CROWN, 1.5 / (L - 1)));
   // The cabin, monotone: each level no wider than the one under it.
   const cabin = [...half];
   for (let j = widest + 1; j < L; j++) cabin[j] = Math.min(cabin[j]!, cabin[j - 1]!);
-  const deckTop = shoulder + DECK_BAND * Math.max(0, roof - shoulder);
   const edge = (w: number, t: number, y: number) => {
     const k = (y - (t - EDGE_BAND)) / EDGE_BAND;
     return k > 0 ? w * (1 - EDGE_IN * Math.min(1, k) ** 2) : w;
   };
   return (t, y) => {
     if (y <= shoulder) return edge(sample(half, y), t, y);
-    if (t <= deckTop) return edge(shoulderHalf, t, y);
-    return edge(sample(cabin, Math.min(y, crown)), t, y);
+    // How much of a cabin the station is: a deck under `DECK_BAND`, the full cabin from
+    // `CABIN_FULL`, and between them (the windscreen, the rear window) the pillars lean in
+    // smoothly instead of the width jumping from one station to the next.
+    const rise = riseOf(t);
+    const k = clamp01((rise - DECK_BAND) / (CABIN_FULL - DECK_BAND));
+    const cabinShare = k * k * (3 - 2 * k);
+    const cabinHalf = sample(cabin, Math.min(y, crown));
+    return edge(shoulderHalf + (cabinHalf - shoulderHalf) * cabinShare, t, y);
   };
 }
 
@@ -206,6 +240,118 @@ export function floorLine(
   return out;
 }
 
+/**
+ * The spans between stations where the body climbs to the roof: from each end of the roof, down
+ * the windscreen and the rear window while the top keeps falling by `CLIMB_MIN` of the cabin's
+ * height per station (of a 64-station profile). The bonnet and the boot, nearly level, are not.
+ */
+export function cabinClimbs(body: Pick<CarBody, 'half' | 'top'>): boolean[] {
+  const top = body.top;
+  const N = top.length;
+  const { shoulder, roof } = carShoulder(body);
+  const cabin = Math.max(1e-6, roof - shoulder);
+  const out = Array.from({ length: Math.max(0, N - 1) }, () => false);
+  const high = (i: number) => top[i]! >= roof - ROOF_EDGE * cabin;
+  const step = (CLIMB_MIN * cabin * (CAR_STATIONS_REF - 1)) / Math.max(1, N - 1);
+  /** Walks from the roof's edge `from` toward one end (`dir` +1 = the nose), marking the climb. */
+  const walk = (from: number, dir: 1 | -1) => {
+    let started = false;
+    let pending: number[] = [];
+    for (let i = from; i + dir >= 0 && i + dir < N; i += dir) {
+      const span = dir > 0 ? i : i - 1;
+      if (top[i]! - top[i + dir]! >= step) {
+        // A short level stretch inside the climb (a wiper cowl, a spoiler lip) belongs to it.
+        for (const k of pending) out[k] = true;
+        out[span] = true;
+        pending = [];
+        started = true;
+      } else if (started) {
+        pending.push(span);
+        if (pending.length > CLIMB_GAP) break;
+      } else if (top[i + dir]! < roof - ROOF_ROUND * cabin) break;
+    }
+  };
+  let front = N - 1;
+  while (front > 0 && !high(front)) front--;
+  walk(front, 1);
+  let back = 0;
+  while (back < N - 1 && !high(back)) back++;
+  walk(back, -1);
+  return out;
+}
+
+const SLOT_INDEX = Object.fromEntries(CAR_SLOTS.map((slot, i) => [slot, i])) as Record<
+  CarSlot,
+  number
+>;
+
+type Corners = [V3, V3, V3];
+/** Which part of a body ring a face lies on. */
+type RingPart = 'under' | 'right' | 'roof' | 'left';
+/** A window ready to cut the mesh: its polygon and bounds [min s, min y, max s, max y]. */
+interface WindowCut {
+  points: CarWindow['points'];
+  box: [number, number, number, number];
+}
+
+const mix = (a: V3, b: V3, t: number): V3 => [
+  a[0] + (b[0] - a[0]) * t,
+  a[1] + (b[1] - a[1]) * t,
+  a[2] + (b[2] - a[2]) * t,
+];
+
+/**
+ * A triangle cut along the line p0 → p1 of a drawing (`project` gives a point's place on it): the
+ * pieces on each side, their normals interpolated. Left whole when it lies outside `box` (the
+ * window's bounds) or on one side of the line.
+ */
+export function cutTriangle<View>(
+  piece: { vs: Corners; ns: Corners },
+  box: readonly [number, number, number, number],
+  p0: readonly [number, number],
+  p1: readonly [number, number],
+  view: View,
+  project: (p: V3, view: View) => [number, number]
+): Array<{ vs: Corners; ns: Corners }> {
+  const flat = piece.vs.map((p) => project(p, view));
+  const xs = flat.map((q) => q[0]);
+  const ys = flat.map((q) => q[1]);
+  if (
+    Math.max(...xs) <= box[0] ||
+    Math.min(...xs) >= box[2] ||
+    Math.max(...ys) <= box[1] ||
+    Math.min(...ys) >= box[3]
+  )
+    return [piece];
+  const [dx, dy] = [p1[0] - p0[0], p1[1] - p0[1]];
+  const side = flat.map((q) => dx * (q[1] - p0[1]) - dy * (q[0] - p0[0]));
+  const scale = Math.hypot(dx, dy) || 1;
+  const sign = side.map((v) => (v > CUT_EPS * scale ? 1 : v < -CUT_EPS * scale ? -1 : 0));
+  if (!sign.includes(1) || !sign.includes(-1)) return [piece];
+  // The corner alone on its side of the line (a corner on the line goes with the larger side).
+  const alone = [0, 1, 2].find(
+    (i) => sign[i] !== 0 && sign.filter((v) => v === sign[i]).length === 1
+  )!;
+  const [j, k] = [(alone + 1) % 3, (alone + 2) % 3];
+  const at = (other: number) => side[alone]! / (side[alone]! - side[other]!);
+  const cutAt = (other: number) => {
+    // A corner on the line is its own crossing.
+    const t = sign[other] === 0 ? 1 : at(other);
+    return {
+      v: mix(piece.vs[alone]!, piece.vs[other]!, t),
+      n: mix(piece.ns[alone]!, piece.ns[other]!, t),
+    };
+  };
+  const [pj, pk] = [cutAt(j), cutAt(k)];
+  const out: Array<{ vs: Corners; ns: Corners }> = [
+    { vs: [piece.vs[alone]!, pj.v, pk.v], ns: [piece.ns[alone]!, pj.n, pk.n] },
+  ];
+  if (sign[j] !== 0)
+    out.push({ vs: [pj.v, piece.vs[j]!, piece.vs[k]!], ns: [pj.n, piece.ns[j]!, piece.ns[k]!] });
+  if (sign[k] !== 0) out.push({ vs: [pj.v, piece.vs[k]!, pk.v], ns: [pj.n, piece.ns[k]!, pk.n] });
+  return out;
+}
+
 /** The car as triangles in the model's frame (`dims` = w, h, d); null without a fitted body. */
 export function carMesh(
   plan: CarPlan,
@@ -230,7 +376,6 @@ export function carMesh(
   const nrm: number[] = [];
   const uvs: number[] = [];
   const slots: number[] = [];
-  const slotOf = (s: CarSlot) => CAR_SLOTS.indexOf(s);
 
   const uvOf = (p: V3, view: UvView): [number, number] => {
     const [x, y, z] = shares(p);
@@ -245,26 +390,65 @@ export function carMesh(
     if (ax > az) return n[0] > 0 ? 'right' : 'left';
     return n[2] > 0 ? 'front' : 'back';
   };
-  const windowsOf = (v: CarWindow['view']): CarWindow[] => {
-    const own = (plan.windows ?? []).filter((x) => x.view === v);
-    if (own.length || (v !== 'right' && v !== 'left')) return own;
+  /** The windows of each view with their bounds, read once. */
+  const windowCache = new Map<CarWindow['view'], WindowCut[]>();
+  const windowsOf = (v: CarWindow['view']): WindowCut[] => {
+    const cached = windowCache.get(v);
+    if (cached) return cached;
+    let own = (plan.windows ?? []).filter((x) => x.view === v);
     // A side the team did not read wears the other side's windows (same z, same y).
-    return (plan.windows ?? []).filter((x) => x.view === (v === 'right' ? 'left' : 'right'));
+    if (!own.length && (v === 'right' || v === 'left'))
+      own = (plan.windows ?? []).filter((x) => x.view === (v === 'right' ? 'left' : 'right'));
+    const cuts = own.map(({ points }): WindowCut => {
+      const xs = points.map((q) => q[0]);
+      const ys = points.map((q) => q[1]);
+      return {
+        points,
+        box: [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)],
+      };
+    });
+    windowCache.set(v, cuts);
+    return cuts;
   };
-  const glassAt = (c: V3, view: AtlasView) => {
-    if (view === 'top') return false;
-    const [x, y, z] = shares(c);
-    const pt: [number, number] = view === 'front' || view === 'back' ? [x, y] : [z, y];
-    return windowsOf(view).some((win) => inPolygon(pt, win.points));
+  /** A point on the drawing of an elevation: [x or z, y], shares of the box. */
+  const onView = (p: V3, view: FaceView): [number, number] => {
+    const [x, y, z] = shares(p);
+    return view === 'front' || view === 'back' ? [x, y] : [z, y];
+  };
+  const centreOf = ([a, b, c]: Corners): V3 => [
+    (a[0] + b[0] + c[0]) / 3,
+    (a[1] + b[1] + c[1]) / 3,
+    (a[2] + b[2] + c[2]) / 3,
+  ];
+
+  /** One triangle out: its vertex normals kept except across a crease, its uvs on `view`. */
+  const emit = (vs: Corners, ns: Corners, fn: V3, slot: CarSlot, view: UvView) => {
+    for (let k = 0; k < 3; k++) {
+      const p = vs[k]!;
+      // A normal across a crease takes the face's own: flat panels stay flat.
+      const m = dot(ns[k]!, fn) < CREASE_COS ? fn : ns[k]!;
+      pos.push(p[0], p[1], p[2]);
+      nrm.push(m[0], m[1], m[2]);
+      const uv = uvOf(p, view);
+      uvs.push(uv[0], uv[1]);
+    }
+    slots.push(SLOT_INDEX[slot]);
   };
 
   /**
    * A triangle with its vertex normals, wound to face the mean of them. Its slot: `fixed`, else
-   * the drawing it faces (the glass inside a window, the underside under the car).
+   * the drawing it faces: the underside when turned down, the roof when turned up on the roof's
+   * part of the ring (`part`; a wing or a sill turned up stays its flank), the glass inside a
+   * window. A triangle crossing a window's edge is cut along it: the glass follows the polygon
+   * the team read, not the mesh's own triangles.
    */
-  const tri = (vs: [V3, V3, V3], ns: [V3, V3, V3], fixed?: { slot: CarSlot; view?: UvView }) => {
-    // A normal across a crease takes the face's own: flat panels stay flat.
-    const crease = (n: V3, f: V3): V3 => (dot(n, f) < CREASE_COS ? f : n);
+  const tri = (
+    vs: Corners,
+    ns: Corners,
+    fixed?: { slot: CarSlot; view?: UvView },
+    part: RingPart = 'roof',
+    raked = false
+  ) => {
     const a = vs[0];
     let [b, c] = [vs[1], vs[2]];
     const na = ns[0];
@@ -277,39 +461,74 @@ export function carMesh(
       [nb, nc] = [nc, nb];
       fn = [-fn[0], -fn[1], -fn[2]];
     }
-    let slot: CarSlot;
-    let view: UvView;
-    if (fixed) {
-      slot = fixed.slot;
-      view = fixed.view ?? viewOf(fn);
-    } else if (fn[1] < -0.6) {
-      slot = 'under';
-      view = underside ? 'bottom' : 'front';
-    } else {
-      view = viewOf(fn);
-      const centre: V3 = [
-        (a[0] + b[0] + c[0]) / 3,
-        (a[1] + b[1] + c[1]) / 3,
-        (a[2] + b[2] + c[2]) / 3,
-      ];
-      // A face turned up is the roof even without a drawing from above (its uv reads a flank).
-      slot = glassAt(centre, view)
-        ? 'glass'
-        : view === 'top' || fn[1] > ROOF_UP
-          ? 'roof'
-          : (view as FaceView);
+    const corners: Corners = [a, b, c];
+    const normalsOf: Corners = [na, nb, nc];
+    if (fixed) return emit(corners, normalsOf, fn, fixed.slot, fixed.view ?? viewOf(fn));
+    if (fn[1] < UNDER_DOWN)
+      return emit(corners, normalsOf, fn, 'under', underside ? 'bottom' : 'front');
+    const view = viewOf(fn);
+    // A face turned up is the roof even without a drawing from above (its uv reads a flank).
+    const up = view === 'top' || fn[1] > ROOF_UP;
+    const solid: CarSlot =
+      up && part === 'roof'
+        ? 'roof'
+        : up && part !== 'under'
+          ? part
+          : view === 'top'
+            ? 'roof'
+            : view;
+    // The glass a face may be: its flank's windows; on the roof's part of the ring only where
+    // the body climbs into the cabin (`raked`: a bonnet's small steps are never glass). A raked
+    // windscreen faces the sky more than the road: it still reads the drawing from above, but
+    // its glass is the window the team read on the front or the back.
+    const flank = part === 'right' || part === 'left';
+    const glazed: FaceView | null =
+      view === 'right' || view === 'left'
+        ? view
+        : flank
+          ? view === 'top'
+            ? part
+            : view
+          : part !== 'roof' || !raked
+            ? null
+            : view !== 'top'
+              ? view
+              : fn[2] > RAKE_MIN
+                ? 'front'
+                : fn[2] < -RAKE_MIN
+                  ? 'back'
+                  : null;
+    if (!glazed) return emit(corners, normalsOf, fn, solid, view);
+    const all = windowsOf(glazed);
+    if (!all.length) return emit(corners, normalsOf, fn, solid, view);
+    // Only the windows whose bounds the triangle reaches can cut it or glaze it.
+    const [fa, fb, fc] = [onView(a, glazed), onView(b, glazed), onView(c, glazed)];
+    const [s0, s1] = [Math.min(fa[0], fb[0], fc[0]), Math.max(fa[0], fb[0], fc[0])];
+    const [y0, y1] = [Math.min(fa[1], fb[1], fc[1]), Math.max(fa[1], fb[1], fc[1])];
+    const cuts = all.filter(
+      (cut) => s1 > cut.box[0] && s0 < cut.box[2] && y1 > cut.box[1] && y0 < cut.box[3]
+    );
+    if (!cuts.length) return emit(corners, normalsOf, fn, solid, view);
+    let pieces: Array<{ vs: Corners; ns: Corners }> = [{ vs: corners, ns: normalsOf }];
+    for (const cut of cuts) {
+      const n = cut.points.length;
+      for (let e = 0; e < n; e++) {
+        const [p0, p1] = [cut.points[e]!, cut.points[(e + 1) % n]!];
+        pieces = pieces.flatMap((piece) => cutTriangle(piece, cut.box, p0, p1, glazed, onView));
+      }
     }
-    for (const [p, n] of [
-      [a, na],
-      [b, nb],
-      [c, nc],
-    ] as const) {
-      const m = crease(n, fn);
-      pos.push(p[0], p[1], p[2]);
-      nrm.push(m[0], m[1], m[2]);
-      uvs.push(...uvOf(p, view));
+    for (const piece of pieces) {
+      const at = onView(centreOf(piece.vs), glazed);
+      const glass = cuts.some(
+        (cut) =>
+          at[0] >= cut.box[0] &&
+          at[0] <= cut.box[2] &&
+          at[1] >= cut.box[1] &&
+          at[1] <= cut.box[3] &&
+          inPolygon(at, cut.points)
+      );
+      emit(piece.vs, piece.ns, fn, glass ? 'glass' : solid, view);
     }
-    slots.push(slotOf(slot));
   };
 
   // ---------------------------------------------------------------- body
@@ -356,6 +575,19 @@ export function carMesh(
     centres.push(Y((b + t) / 2));
   }
   const P = rings[0]!.length;
+  /** Ring index of the flank's top on the right: the roof's part runs from it. */
+  const ROOF_FROM = UNDER_POINTS + RING_SIDE - 1;
+  // Spans between two stations that lie past the wheels (the front and rear overhangs).
+  const reach = (wh: CarPlan['wheels'][number]) => wh.r * (h / d) * ARCH_MARGIN;
+  const firstWheel = Math.min(...plan.wheels.map((wh) => wh.z - reach(wh)));
+  const lastWheel = Math.max(...plan.wheels.map((wh) => wh.z + reach(wh)));
+  const overhang = Array.from({ length: N - 1 }, (_, i) => {
+    if (!plan.wheels.length) return false;
+    const z = body.z0 + ((body.z1 - body.z0) * (i + 0.5)) / (N - 1);
+    return z < firstWheel || z > lastWheel;
+  });
+  // Spans that climb into the cabin (windscreen, rear window): only there may the roof be glass.
+  const raked = cabinClimbs(body);
   const floorFace = { slot: 'under' as const, view: (underside ? 'bottom' : 'front') as UvView };
   // Smooth normals: across the ring and along the car, turned outward from the station's axis.
   const normals: V3[][] = rings.map((ring, i) =>
@@ -378,10 +610,20 @@ export function carMesh(
         normals[i + 1]![q]!,
         normals[i]![q]!,
       ];
-      // The underside (floor and wheel wells) is the floor's, whatever way it faces.
-      const under = q < UNDER_POINTS ? floorFace : undefined;
-      tri([A, B, C], [nA, nB, nC], under);
-      tri([A, C, D], [nA, nC, nD], under);
+      // The underside (floor and wheel wells) is the floor's, whatever way it faces, from the
+      // first wheel to the last. Past them (nose, tail) a face of the underside ring that looks
+      // forward or backward is the bumper's: it reads its elevation, not the floor's drawing.
+      const below = q < UNDER_POINTS;
+      const under = below && !overhang[i] ? floorFace : undefined;
+      const part: RingPart = below
+        ? 'under'
+        : q <= ROOF_FROM
+          ? 'right'
+          : q <= ROOF_FROM + RING_ROOF
+            ? 'roof'
+            : 'left';
+      tri([A, B, C], [nA, nB, nC], under, part, raked[i]);
+      tri([A, C, D], [nA, nC, nD], under, part, raked[i]);
     }
   // End caps: the back and the nose, flat, each reading its drawing.
   for (const [i, sz] of [
@@ -395,7 +637,10 @@ export function carMesh(
       ring[0]![2],
     ];
     const n: V3 = [0, 0, sz];
-    for (let k = 0; k < P; k++) tri([c, ring[k]!, ring[(k + 1) % P]!], [n, n, n]);
+    // A flat end that stands into the cabin (a van, a bus) carries its windscreen or rear window.
+    const tall = carShoulder(body).rise(body.top[i]!) > DECK_BAND;
+    for (let k = 0; k < P; k++)
+      tri([c, ring[k]!, ring[(k + 1) % P]!], [n, n, n], undefined, 'roof', tall);
   }
 
   // ---------------------------------------------------------------- wheels

@@ -7,6 +7,7 @@ import {
   maskKeeps,
   PIECES_MAX,
   PieceEditsSchema,
+  pieceBase,
 } from '../piece-edits';
 
 describe('piece edits (3D Studio, PQ-T77)', () => {
@@ -47,5 +48,11 @@ describe('piece edits (3D Studio, PQ-T77)', () => {
     );
     expect(PieceEditsSchema.safeParse(many).success).toBe(false);
     expect(PieceEditsSchema.safeParse({ roof: { opacity: 0 } }).success).toBe(false);
+  });
+
+  it('reads the slot and number of a piece of a split slot (PQ-T78)', () => {
+    expect(pieceBase('glass-2')).toEqual({ base: 'glass', index: 2 });
+    expect(pieceBase('roof')).toEqual({ base: 'roof', index: null });
+    expect(pieceBase('piece-12')).toEqual({ base: 'piece', index: 12 });
   });
 });

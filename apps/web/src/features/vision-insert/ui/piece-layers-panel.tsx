@@ -6,6 +6,7 @@ import { RECIPE_MATERIALS } from '@/lib/object-shape';
 import {
   editPiece,
   FULL_MASK,
+  pieceBase,
   type PieceEdit,
   type PieceEdits,
   type PieceMask,
@@ -34,15 +35,18 @@ const PIECE_KEYS = new Set([
 ]);
 const MATERIALS = new Set<string>(RECIPE_MATERIALS);
 
-/** A piece's name in the page language. */
+/** A piece's name in the page language (`glass-2` = the second window: « Glass 2 »). */
 export function usePieceLabel() {
   const t = useTranslations('features.visionInsert');
-  return (name: string) =>
-    PIECE_KEYS.has(name)
-      ? t(`studio.piece.${name}` as 'studio.piece.roof')
-      : MATERIALS.has(name)
-        ? t(`model3dMaterial.${name}` as 'model3dMaterial.stone')
-        : name;
+  return (name: string) => {
+    const { base, index } = pieceBase(name);
+    const label = PIECE_KEYS.has(base)
+      ? t(`studio.piece.${base}` as 'studio.piece.roof')
+      : MATERIALS.has(base)
+        ? t(`model3dMaterial.${base}` as 'model3dMaterial.stone')
+        : base;
+    return index === null ? label : t('studio.pieceItem', { piece: label, n: index });
+  };
 }
 
 const AXES = ['x', 'y', 'z'] as const;

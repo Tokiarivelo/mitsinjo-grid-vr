@@ -1444,6 +1444,7 @@
         "locked": "Voahidy : sokafy aloha vao afindra.",
         "keys": "Kitendry : Q mifidy · G afindra · R ahodina · S habe · 1 / 3 / 7 / 5 fijery · F ampifanaraho · H afeno · / atokana · Ctrl+Z foano · Esc hidio",
         "kept": "Voatahiry miaraka amin'ny modely ny fanovana : ampiasain'ny tanàna sy ny fanondranana Blender (ao amin'ny studio ihany ny fahitana).",
+        "pieceItem": "{piece} {n}",
         "piece": {
           "roof": "Tafo",
           "front": "Anoloana",

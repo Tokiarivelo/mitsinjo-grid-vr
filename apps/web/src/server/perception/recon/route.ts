@@ -34,6 +34,7 @@ import { measureCarPlan } from '../car/car-measure';
 import { carImages, type ReadCar } from '../car/car-specialist';
 import type { CarReading } from '../car/car-tools';
 import { profileProportions, vehicleAspects } from '../car/car-proportions';
+import { readCarTop } from '../car/car-top';
 import { readUnderside } from '../car/car-underside';
 import { bleedPaper, maskAt, shrink, trimPaper } from './texture';
 import {
@@ -281,10 +282,16 @@ export async function reconstructObject(
         console.info(`${tag}: no profile, skipped`);
         return null;
       }
-      pngs.right = profile;
+      // The profile shows the car's own right side, its front to the RIGHT of the image: in the
+      // model's frame (x to the right as seen from the front) that is the `left` elevation, whose
+      // image right is the object's front. Its mirror is the `right` elevation (front at the image
+      // left). Fed the other way round, the car was built backwards: grille on the boot (PQ-T78).
+      const mirror = await sharp(profile, { failOn: 'none' }).flop().png().toBuffer();
+      pngs.left = profile;
+      pngs.right = mirror;
+      // The operator still sees the profile as validated (« right ») and its mirror.
       onView?.('right', profile);
-      pngs.left = await sharp(profile, { failOn: 'none' }).flop().png().toBuffer();
-      onView?.('left', pngs.left);
+      onView?.('left', mirror);
       const carFace = async (face: CarFace): Promise<Buffer | null> => {
         const provided = target.faceUrls?.[face];
         if (provided) return bytesOf(provided);
@@ -405,8 +412,17 @@ export async function reconstructObject(
       recipe.proportions = profileProportions(vehicleAspects(recon.aligned));
     // The drawings themselves go on the model (never the photo): best effort, flat colours without.
     const { W, D } = recon.aligned;
-    const topImage = top ? await decodeView(top) : null;
-    const topRead = topImage ? alignTop(topImage, W, D) : null;
+    // A vehicle's plan is turned the way its profile runs (PQ-T78): Muse may lay it across the sheet.
+    const carTop =
+      top && archetype === 'vehicle'
+        ? await readCarTop(top, recon.aligned.views.right, W, D, decodeView)
+        : null;
+    if (carTop && top && carTop.turn) {
+      top = carTop.png;
+      onView?.('top', top);
+    }
+    const topImage = top && !carTop ? await decodeView(top) : null;
+    const topRead = carTop ? carTop.read : topImage ? alignTop(topImage, W, D) : null;
     if (top && !topRead)
       console.info(`${tag}: the view from above disagrees with the elevations, not used`);
     // A vehicle's underside (PQ-T76): read like the plan, turned the way the plan is drawn (Muse

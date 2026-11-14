@@ -166,6 +166,35 @@ profil en miroir, jamais dessiné ; le dessous habille le plancher (6ᵉ tuile d
 berline (5 dessins, sans équipe, `NO_CAR=1`) : profil redressé depuis une photo de ¾, vues cohérentes, vue de
 dessus enfin en long, score 0,851 (`c-sedan-p/views-sheet.jpg`, `c-sedan-p/t76e-viewer.jpg`).
 
+**(g) fait (PQ-T78, banc du 2026-11-14)** : contrôle visuel sur le maillage voiture lui-même
+(`car-sheet.png`, huit caméras, écrit par chaque rejeu). Cause du capot du jeep trouvée : une voiture
+dessinée « profil d'abord » était **construite à l'envers** (calandre sur le coffre) ; corrigé dans
+`recon/route.ts` (le profil, avant à droite, est l'élévation `left` ; son miroir la `right`). Les anciens
+dossiers `c-sedan`, `c-suv`, `c-truck-side` (dessins « face d'abord ») ont leur `view-right.png` retourné une
+fois (original gardé : `view-right-house.png`) ; `c-suv-p/car-reading.json` a ses côtés échangés (original :
+`car-reading-t76.json`). Aussi : pare-chocs lisant leur dessin (plus de stries du dessous), vitres découpées
+net le long des polygones lus, pare-brise incliné vitré, montants sans plis, vue de dessus redressée
+(`car/car-top.ts`). Appels live : équipe seule sur le jeep (5 appels Spark, 8 vitres) ; cinq voitures
+dessinées depuis leur photo, une à la fois (Muse Image ×5 + équipe) :
+
+| voiture (`c-…`)               | score | lecture                | reste faux                                                                                       |
+| ----------------------------- | ----- | ---------------------- | ------------------------------------------------------------------------------------------------ |
+| `truck-p` (pick-up + cellule) | 0,800 | pickup, 13 vitres      | vue de dessus dessinée couchée (redressée) ; filets sombres le long de l'épaule de la benne      |
+| `hatchback-p`                 | 0,899 | hatchback, 10 vitres   | rien de notable                                                                                  |
+| `minibus-p`                   | 0,739 | minibus, 13 vitres     | bande « face » sur le montant avant droit                                                        |
+| `cabrio-p`                    | 0,834 | convertible, 1 vitre   | habitacle ouvert dessiné à plat (pas creusé), cadre de pare-brise plein ; roue arrière sous jupe |
+| `beetle-p`                    | 0,809 | lu « coupe », 6 vitres | l'aileron arrière de la photo devient un bloc plein                                              |
+| `jeep-p` (équipe seule)       | 0,908 | offroad, 8 vitres      | pare-buffle et treuil pleins sur toute la largeur                                                |
+
+Non relancés (dessins et lectures du 2026-11-14 rejoués) : `suv-p` (8 vitres), `sedan-p` (sans équipe : pas de
+vitres), anciens `sedan`, `suv`, `truck-side`. Planche photo / 3D : `resources/refine-3d/t78-bench.jpg`.
+Pas encore essayés : `estate`, `coupe`, `sport`, et `bus`, `limo`, `lorry`, `motorhome`, `tractor` de
+`sources/refine-3d/`. Limites connues : la caisse est le profil extrudé (un aileron, un pare-buffle ou une
+capote ouverte ne sont pas détachés), le sens du profil suit la consigne donnée à Muse (avant à droite) sans
+contrôle sur les pixels.
+
+Rejeu gratuit de tout le banc : `make car-replay OUT=r5` (≈ 12 s par voiture).
+
 ## 7. Définition de « fini » pour une étape
 
 - Tests Vitest verts (`pnpm --filter web test -- car`, plus les suites maison), typecheck, lint sans erreur.

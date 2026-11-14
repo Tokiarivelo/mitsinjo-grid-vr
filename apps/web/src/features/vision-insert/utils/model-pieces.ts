@@ -3,7 +3,7 @@ import { CAR_SLOTS } from '@/lib/car-mesh';
 import { HULL_SURFACES } from '@/lib/face-hull';
 import { HOUSE_SLOTS } from '@/lib/house-mesh';
 import type { ObjectRecipe } from '@/lib/object-shape';
-import { maskKeeps, type PieceEdit, type PieceEdits, type PieceMask } from '@/lib/piece-edits';
+import type { PieceEdit, PieceEdits, PieceMask } from '@/lib/piece-edits';
 import { SURFACES } from './surface-look';
 
 /**
@@ -89,28 +89,113 @@ function slice(src: THREE.BufferGeometry, start: number, count: number): THREE.B
 }
 
 /**
+ * Slots of a car drawn as several things of the same kind (PQ-T78): each window, each tyre and
+ * each wheel face is a piece of its own (`glass-1`, `tyre-3`…), so one window moves without the
+ * others. The body's surfaces stay one piece each.
+ */
+export const CAR_ITEM_SLOTS: ReadonlySet<string> = new Set(['glass', 'tyre', 'rim']);
+/** Past this many separate things in a slot it stays one piece (a shattered slot is not a list). */
+export const ITEMS_MAX = 12;
+/** Vertices closer than this (model units) are one: triangles sharing one are the same thing. */
+const WELD = 1e-4;
+
+/** The slots split into their separate things, for a model with these slot names. */
+export const itemSlots = (names: readonly string[]): ReadonlySet<string> =>
+  names === CAR_SLOTS ? CAR_ITEM_SLOTS : NO_ITEMS;
+const NO_ITEMS: ReadonlySet<string> = new Set();
+
+/**
+ * The connected parts of a non-indexed geometry (triangles sharing a vertex), each as the list
+ * of its triangles. Ordered front to back, then left to right, then bottom to top (by centre).
+ */
+export function connectedTriangles(geometry: THREE.BufferGeometry): number[][] {
+  const pos = geometry.getAttribute('position') as THREE.BufferAttribute;
+  const tris = pos.count / 3;
+  const parent = Array.from({ length: tris }, (_, i) => i);
+  const find = (i: number): number => {
+    while (parent[i] !== i) {
+      parent[i] = parent[parent[i]!]!;
+      i = parent[i]!;
+    }
+    return i;
+  };
+  const seen = new Map<string, number>();
+  for (let t = 0; t < tris; t++)
+    for (let k = 0; k < 3; k++) {
+      const v = t * 3 + k;
+      const key = `${Math.round(pos.getX(v) / WELD)},${Math.round(pos.getY(v) / WELD)},${Math.round(pos.getZ(v) / WELD)}`;
+      const other = seen.get(key);
+      if (other === undefined) seen.set(key, t);
+      else parent[find(t)] = find(other);
+    }
+  const byRoot = new Map<number, number[]>();
+  for (let t = 0; t < tris; t++) {
+    const r = find(t);
+    const list = byRoot.get(r);
+    if (list) list.push(t);
+    else byRoot.set(r, [t]);
+  }
+  const centre = (list: number[]) => {
+    const c = [0, 0, 0];
+    for (const t of list)
+      for (let k = 0; k < 3; k++) {
+        c[0]! += pos.getX(t * 3 + k);
+        c[1]! += pos.getY(t * 3 + k);
+        c[2]! += pos.getZ(t * 3 + k);
+      }
+    return c.map((v) => Math.round(v / (list.length * 3) / (WELD * 100)));
+  };
+  return [...byRoot.values()]
+    .map((list) => ({ list, c: centre(list) }))
+    .sort((a, b) => b.c[2]! - a.c[2]! || a.c[0]! - b.c[0]! || a.c[1]! - b.c[1]!)
+    .map((x) => x.list);
+}
+
+/** The triangles `tris` of a non-indexed geometry, every attribute kept. */
+function pickTriangles(src: THREE.BufferGeometry, tris: readonly number[]): THREE.BufferGeometry {
+  const out = new THREE.BufferGeometry();
+  for (const [name, attr] of Object.entries(src.attributes)) {
+    const a = attr as THREE.BufferAttribute;
+    const size = a.itemSize * 3;
+    const arr = new Float32Array(tris.length * size);
+    tris.forEach((t, i) =>
+      arr.set((a.array as Float32Array).subarray(t * size, (t + 1) * size), i * size)
+    );
+    out.setAttribute(name, new THREE.BufferAttribute(arr, a.itemSize, a.normalized));
+  }
+  return out;
+}
+
+/**
  * The model split into its pieces (groups with triangles), each centred on its own pivot so it
- * turns and scales round itself. The caller disposes them.
+ * turns and scales round itself. A slot of `items` (default: `itemSlots(names)`) gives one piece
+ * per separate thing in it (`glass-1`, `glass-2`…). The caller disposes them.
  */
 export function splitPieces(
   geometry: THREE.BufferGeometry,
-  names: readonly string[]
+  names: readonly string[],
+  items: ReadonlySet<string> = itemSlots(names)
 ): ModelPiece[] {
   const { flat, groups } = groupsOf(geometry);
   const out: ModelPiece[] = [];
-  for (const g of groups) {
-    if (!g.count) continue;
-    const piece = slice(flat, g.start, g.count);
+  const add = (piece: THREE.BufferGeometry, slot: number, name: string) => {
     piece.computeBoundingBox();
     const c = piece.boundingBox!.getCenter(new THREE.Vector3());
     piece.translate(-c.x, -c.y, -c.z);
+    out.push({ name, slot, geometry: piece, center: [c.x, c.y, c.z] });
+  };
+  for (const g of groups) {
+    if (!g.count) continue;
     const slot = g.materialIndex ?? 0;
-    out.push({
-      name: names[slot] ?? `piece-${slot}`,
-      slot,
-      geometry: piece,
-      center: [c.x, c.y, c.z],
-    });
+    const name = names[slot] ?? `piece-${slot}`;
+    const whole = slice(flat, g.start, g.count);
+    const things = items.has(name) ? connectedTriangles(whole) : [];
+    if (things.length < 2 || things.length > ITEMS_MAX) {
+      add(whole, slot, name);
+      continue;
+    }
+    things.forEach((tris, i) => add(pickTriangles(whole, tris), slot, `${name}-${i + 1}`));
+    whole.dispose();
   }
   if (flat !== geometry) flat.dispose();
   return out;
@@ -176,10 +261,101 @@ export function maskPlanes(
   return { planes, intersection: Boolean(mask.invert) };
 }
 
+/** A vertex with every attribute of its geometry, one after the other (position first). */
+type Packed = Float32Array;
+
+/**
+ * The part of a convex polygon on the kept side of `axis ≥ limit` (sign +1) or `≤` (−1); `strict`
+ * leaves out what lies exactly on the limit (the other side of a cut keeps it).
+ */
+function clipPolygon(
+  poly: Packed[],
+  axis: number,
+  limit: number,
+  sign: 1 | -1,
+  strict = false
+): Packed[] {
+  const out: Packed[] = [];
+  const keeps = (d: number) => (strict ? d > 0 : d >= 0);
+  for (let i = 0; i < poly.length; i++) {
+    const [a, b] = [poly[i]!, poly[(i + 1) % poly.length]!];
+    const [da, db] = [sign * (a[axis]! - limit), sign * (b[axis]! - limit)];
+    if (keeps(da)) out.push(a);
+    if (keeps(da) !== keeps(db)) {
+      const t = da / (da - db);
+      out.push(a.map((v, k) => v + (b[k]! - v) * t));
+    }
+  }
+  return out;
+}
+
+/**
+ * A geometry cut by a layer mask, as the studio's clipping planes show it: the triangles are cut
+ * along the box (not dropped whole), every attribute interpolated. Kept inside the box, or
+ * outside it when inverted. Non-indexed in, non-indexed out.
+ */
+export function maskGeometry(
+  geometry: THREE.BufferGeometry,
+  mask: PieceMask,
+  box: ModelBox
+): THREE.BufferGeometry {
+  const attrs = Object.entries(geometry.attributes).sort(([a], [b]) =>
+    a === 'position' ? -1 : b === 'position' ? 1 : a.localeCompare(b)
+  ) as Array<[string, THREE.BufferAttribute]>;
+  const stride = attrs.reduce((n, [, a]) => n + a.itemSize, 0);
+  const count = geometry.getAttribute('position').count;
+  const vertex = (v: number): Packed => {
+    const out = new Float32Array(stride);
+    let at = 0;
+    for (const [, a] of attrs) {
+      for (let k = 0; k < a.itemSize; k++) out[at + k] = a.array[v * a.itemSize + k]!;
+      at += a.itemSize;
+    }
+    return out;
+  };
+  const lo = [0, 1, 2].map((i) => box.min[i]! + mask.box[i * 2]! * box.size[i]!);
+  const hi = [0, 1, 2].map((i) => box.min[i]! + mask.box[i * 2 + 1]! * box.size[i]!);
+  /** The six half-spaces of the box: [axis, limit, kept side]. */
+  const sides: Array<[number, number, 1 | -1]> = [0, 1, 2].flatMap((i) => [
+    [i, lo[i]!, 1] as [number, number, 1],
+    [i, hi[i]!, -1] as [number, number, -1],
+  ]);
+  const kept: Packed[] = [];
+  const fan = (poly: Packed[]) => {
+    for (let k = 1; k + 1 < poly.length; k++) {
+      const [a, b, c] = [poly[0]!, poly[k]!, poly[k + 1]!];
+      const [ux, uy, uz] = [b[0]! - a[0]!, b[1]! - a[1]!, b[2]! - a[2]!];
+      const [vx, vy, vz] = [c[0]! - a[0]!, c[1]! - a[1]!, c[2]! - a[2]!];
+      // A sliver left on the box's own face (a vertex exactly on it) is nothing to draw.
+      if (Math.hypot(uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx) > 1e-12)
+        kept.push(a, b, c);
+    }
+  };
+  for (let t = 0; t < count / 3; t++) {
+    let inside: Packed[] = [vertex(t * 3), vertex(t * 3 + 1), vertex(t * 3 + 2)];
+    for (const [axis, limit, sign] of sides) {
+      if (!inside.length) break;
+      // Inverted: what falls outside this side is kept, the rest goes on to the next side.
+      if (mask.invert) fan(clipPolygon(inside, axis, limit, sign === 1 ? -1 : 1, true));
+      inside = clipPolygon(inside, axis, limit, sign);
+    }
+    if (!mask.invert) fan(inside);
+  }
+  const out = new THREE.BufferGeometry();
+  let at = 0;
+  for (const [name, a] of attrs) {
+    const arr = new Float32Array(kept.length * a.itemSize);
+    kept.forEach((v, i) => arr.set(v.subarray(at, at + a.itemSize), i * a.itemSize));
+    out.setAttribute(name, new THREE.BufferAttribute(arr, a.itemSize, a.normalized));
+    at += a.itemSize;
+  }
+  return out;
+}
+
 /**
  * The model with its pieces' edits baked in (village, Blender): hidden pieces dropped, each piece
- * moved / turned / scaled round its pivot, the triangles its mask hides (centre outside the box,
- * after the move) dropped. Groups and every attribute kept. Without edits: the same geometry.
+ * moved / turned / scaled round its pivot, then cut by its mask (`maskGeometry`: the same cut as
+ * the studio's clipping planes). Groups and every attribute kept. Without edits: the same geometry.
  */
 export function bakePieceEdits(
   geometry: THREE.BufferGeometry,
@@ -190,7 +366,6 @@ export function bakePieceEdits(
   if (!edits || !Object.keys(edits).length) return geometry;
   const pieces = splitPieces(geometry, names);
   const chunks: Array<{ slot: number; geometry: THREE.BufferGeometry }> = [];
-  const tri = new THREE.Vector3();
   for (const p of pieces) {
     const edit = edits[p.name];
     if (edit?.hidden) {
@@ -203,33 +378,7 @@ export function bakePieceEdits(
     g.applyMatrix4(pieceMatrix(edit, p.center, box));
     let kept = g;
     if (edit?.mask && !edit.mask.off) {
-      const pos = g.getAttribute('position');
-      const keep: number[] = [];
-      for (let t = 0; t < pos.count / 3; t++) {
-        tri.set(0, 0, 0);
-        for (let k = 0; k < 3; k++)
-          tri.add(new THREE.Vector3().fromBufferAttribute(pos, t * 3 + k));
-        tri.divideScalar(3);
-        const share: [number, number, number] = [
-          (tri.x - box.min[0]) / box.size[0],
-          (tri.y - box.min[1]) / box.size[1],
-          (tri.z - box.min[2]) / box.size[2],
-        ];
-        if (maskKeeps(edit.mask, share)) keep.push(t);
-      }
-      kept = new THREE.BufferGeometry();
-      for (const [name, attr] of Object.entries(g.attributes)) {
-        const a = attr as THREE.BufferAttribute;
-        const size = a.itemSize;
-        const arr = new Float32Array(keep.length * 3 * size);
-        keep.forEach((t, i) =>
-          arr.set(
-            (a.array as Float32Array).subarray(t * 3 * size, (t + 1) * 3 * size),
-            i * 3 * size
-          )
-        );
-        kept.setAttribute(name, new THREE.BufferAttribute(arr, size, a.normalized));
-      }
+      kept = maskGeometry(g, edit.mask, box);
       g.dispose();
     }
     if (kept.getAttribute('position').count) chunks.push({ slot: p.slot, geometry: kept });
