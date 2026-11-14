@@ -40,7 +40,7 @@ import { ObjectDisplayControls } from './object-display-controls';
 import { SurfaceEditor } from './surface-editor';
 import { houseBaseLooks } from '../utils/house-projection';
 import type { HullSurface } from '@/lib/face-hull';
-import type { FaceSurface } from '@/lib/object-shape';
+import { VEHICLE_FACES, type FaceSurface } from '@/lib/object-shape';
 import { Facade2dPanel } from './facade-2d-panel';
 import { FacadeFacesPanel } from './facade-faces-panel';
 import { BlenderExportButton } from './blender-export-button';
@@ -243,6 +243,8 @@ export function ObjectShapePanel({
     ready || (loading && (preview !== undefined || detection.outline !== undefined));
   const seconds = useElapsedSeconds(startedAt, status === 'loading');
   const faceViews = useFacadeFaces(detection, facade.facade);
+  // A vehicle is drawn from its profile (PQ-T76): its 2D view and faces say so.
+  const vehicle = faceViews.names === VEHICLE_FACES;
   const showTabs = ready && Boolean(facade.facade);
   // Tab choice is per object: a new detection restarts on the model tab.
   const [tabState, setTabState] = useState({ id: detection.id, tab: 'model' as ShapeTab });
@@ -314,7 +316,11 @@ export function ObjectShapePanel({
         >
           {[
             { id: 'model' as const, label: t('model3dModelTab'), Icon: Box },
-            { id: 'facade' as const, label: t('facade2dTab'), Icon: ImageIcon },
+            {
+              id: 'facade' as const,
+              label: vehicle ? t('facade2dTabVehicle') : t('facade2dTab'),
+              Icon: ImageIcon,
+            },
           ].map(({ id, label: tabLabel, Icon }) => {
             const selected = activeTab === id;
             return (
@@ -361,9 +367,11 @@ export function ObjectShapePanel({
                 onGenerate?.(validatedFacade(facade.facade, validatedFaces(faceViews.faces)));
               }}
               isValidating3D={loading}
+              vehicle={vehicle}
               faces={
                 <FacadeFacesPanel
                   faces={faceViews.faces}
+                  names={faceViews.names}
                   onGenerate={(face, details) => void faceViews.generate(face, details)}
                   onGenerateAll={() => void faceViews.generateAll()}
                   onDetailsChange={faceViews.setUserPrompt}

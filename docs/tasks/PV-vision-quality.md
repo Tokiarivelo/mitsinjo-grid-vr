@@ -777,9 +777,19 @@ One task = one commit, with its Vitest test, its `contracts.md` update and its m
       colours); `lib/car-mesh.ts` lofts it (≈ 6 k triangles, 9 slots, wheels as cylinders), drawn in
       the object view, the village and the Blender export. Replays: a body on all three; sedan 10
       windows, paint #c5d8c9; SUV and truck no windows yet (no team reading). Front shadow fixed:
-      sedan track 0.098–0.904. Left: team readings for SUV and truck, bench of 10.
-      **Test:** `car-proportions.test.ts`, `car-wheels.test.ts`, `car-tools.test.ts`, `car-fit.test.ts`, `car-mesh.test.ts`, `car-projection.test.ts`, `make house-regress`, `make car-replay`. Houses unchanged: bungalow replay = `house-pq-t72.json`, bungalow and
-      school recipes identical before / after. Captures: `c-*/voiture-3d-t76a.jpg`, `t76a-sheet.jpg`, `t76b-wheels.jpg`, `c-sedan/t76c-reading.jpg`, `t76d-viewer.jpg`.
+      sedan track 0.098–0.904. (e) Done (user 2026-11-14: roof and panels bulged; a car
+      drawn from its profile, left = right mirrored, a view from above and below): `carSection`
+      keeps the bonnet / boot a flat deck at the body's width (they were pinched to the cabin's),
+      the roof at the cabin's width under the drawing's rounded top row (it was 26 % of the
+      width), the plan narrows only the ends (`stationTaper`), creases keep their normals. A
+      vehicle's 2D view is its profile (`car/car-views.ts`, archetype detected), its faces front,
+      back, top, underside (`VEHICLE_FACES`, panel + route + 3D step), the left side mirrored,
+      the underside on the atlas's sixth tile (`faces.underside`). Live once on the sedan from
+      the photo (5 drawings, no team: `NO_CAR=1`): profile straight on from a ¾ photo, the views
+      agree, top view drawn lengthwise (the truck's lay sideways before), overall 0.851.
+      Left: team readings for SUV and truck, the SUV and truck redrawn from their profile, bench of 10.
+      **Test:** `car-proportions.test.ts`, `car-wheels.test.ts`, `car-tools.test.ts`, `car-fit.test.ts`, `car-mesh.test.ts`, `car-projection.test.ts`, `car-views.test.ts`, `make house-regress`, `make car-replay`. Houses unchanged: bungalow replay = `house-pq-t72.json`, bungalow and
+      school recipes identical before / after. Captures: `c-*/voiture-3d-t76a.jpg`, `t76a-sheet.jpg`, `t76b-wheels.jpg`, `c-sedan/t76c-reading.jpg`, `t76d-viewer.jpg`, `c-sedan-p/views-sheet.jpg`, `c-sedan-p/t76e-viewer.jpg` (all in `resources/refine-3d/`).
 
 ## Exit criteria
 

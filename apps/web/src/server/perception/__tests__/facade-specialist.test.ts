@@ -43,11 +43,12 @@ describe('facade-specialist', () => {
       expect(prompt).toContain(DRAWING_BACKGROUND);
     });
 
-    it('builds an orthographic prompt for a vehicle', () => {
+    it('builds a side profile for a vehicle (PQ-T76: a car is drawn from its profile)', () => {
       const prompt = buildFacadePrompt('vehicle', 'solar maintenance van');
-      expect(prompt).toContain('Direct front orthographic elevation');
+      expect(prompt).toContain('Orthographic side elevation (profile)');
       expect(prompt).toContain('solar maintenance van');
-      expect(prompt).toContain('symmetrical headlights');
+      expect(prompt).toContain('front pointing to the RIGHT');
+      expect(prompt).toContain(DRAWING_BACKGROUND);
     });
 
     it('builds a whole-plant elevation for a tree (PG-T19)', () => {

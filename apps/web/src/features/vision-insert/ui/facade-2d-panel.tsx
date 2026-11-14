@@ -20,6 +20,8 @@ export interface Facade2dPanelProps {
   modelsGear?: ReactNode;
   /** The other faces (right, back, left) to draw and validate under the front (PQ-T68). */
   faces?: ReactNode;
+  /** A vehicle (PQ-T76): its main 2D view is its profile, the copy says so. */
+  vehicle?: boolean;
 }
 
 export function Facade2dPanel({
@@ -34,8 +36,13 @@ export function Facade2dPanel({
   isValidating3D = false,
   modelsGear,
   faces,
+  vehicle = false,
 }: Facade2dPanelProps) {
   const t = useTranslations('features.visionInsert');
+  /** The copy of the main 2D view: a vehicle's is its profile. */
+  const v = (
+    key: 'facade2dTitle' | 'facade2dSubtitle' | 'facade2dGenerate' | 'facade2dGenerating'
+  ) => t(vehicle ? `${key}Vehicle` : key);
   const [localPrompt, setLocalPrompt] = useState(userPrompt);
 
   const handlePromptChange = (val: string) => {
@@ -48,10 +55,10 @@ export function Facade2dPanel({
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <ImageIcon className="h-4 w-4 text-ai-violet" aria-hidden="true" />
-          <h4 className="text-xs font-semibold text-text-primary">{t('facade2dTitle')}</h4>
+          <h4 className="text-xs font-semibold text-text-primary">{v('facade2dTitle')}</h4>
         </div>
         <span className="rounded-full border border-ai-violet/30 bg-ai-violet/10 px-2 py-0.5 text-[10px] font-medium text-ai-violet">
-          {t('facade2dSubtitle')}
+          {v('facade2dSubtitle')}
         </span>
       </div>
 
@@ -64,7 +71,7 @@ export function Facade2dPanel({
             className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-ai-violet px-4 text-xs font-semibold text-surface shadow-xs hover:bg-ai-violet/90 cursor-pointer transition-colors"
           >
             <Sparkles className="h-4 w-4" aria-hidden="true" />
-            {t('facade2dGenerate')}
+            {v('facade2dGenerate')}
           </button>
         </div>
       )}
@@ -78,7 +85,7 @@ export function Facade2dPanel({
             className="h-6 w-6 animate-spin text-ai-violet motion-reduce:animate-none"
             aria-hidden="true"
           />
-          <p className="text-xs font-medium text-text-secondary">{t('facade2dGenerating')}</p>
+          <p className="text-xs font-medium text-text-secondary">{v('facade2dGenerating')}</p>
         </div>
       )}
 
@@ -102,7 +109,7 @@ export function Facade2dPanel({
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={facade.imageUrl}
-              alt={t('facade2dTitle')}
+              alt={v('facade2dTitle')}
               className="max-h-72 w-full object-contain bg-canvas"
             />
             <div className="absolute bottom-2 left-2 flex items-center gap-1 rounded bg-canvas-sunken/80 px-1.5 py-0.5 text-[10px] text-text-muted backdrop-blur-xs">

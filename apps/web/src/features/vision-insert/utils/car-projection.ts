@@ -22,23 +22,35 @@ export const CAR_GLASS_ROUGHNESS = 0.08;
 export const CAR_GLASS_METALNESS = 0.25;
 /** Colour of the underside (shadowed rubber and steel). */
 export const CAR_UNDER_COLOR = '#1c1d1f';
+/** The drawn underside: matte. */
+export const CAR_UNDER_ROUGHNESS = 0.85;
 
 export type CarRecipe = Pick<ObjectRecipe, 'proportions' | 'faces'> & { car: CarPlan };
 
 const isSurface = (slot: CarSlot): slot is HullSurface =>
   (HULL_SURFACES as readonly string[]).includes(slot);
 
-/** Whether a slot wears the drawings: a body surface the operator did not give a material, glass and rims. */
+/**
+ * Whether a slot wears the drawings: a body surface the operator did not give a material, glass,
+ * rims, and the floor when the underside was drawn.
+ */
 function drawn(recipe: CarRecipe, slot: CarSlot): boolean {
   if (!recipe.faces) return false;
   if (slot === 'glass' || slot === 'rim') return true;
+  if (slot === 'under') return Boolean(recipe.faces.underside);
   return isSurface(slot) && !recipe.faces.surfaces?.[slot]?.material;
 }
 
 /** The car as a geometry, one group per `CAR_SLOTS` entry; null without a fitted body. */
 export function carGeometry(recipe: CarRecipe): THREE.BufferGeometry | null {
   const { w, h, d } = recipe.proportions;
-  const m = carMesh(recipe.car, [w, h, d], recipe.faces ? { views: recipe.faces.views } : {});
+  const m = carMesh(
+    recipe.car,
+    [w, h, d],
+    recipe.faces
+      ? { views: recipe.faces.views, ...(recipe.faces.underside ? { underside: true } : {}) }
+      : {}
+  );
   if (!m) return null;
   return groupedGeometry(m.position, m.normal, m.uv, m.slot, CAR_SLOTS.length, (index) =>
     drawn(recipe, CAR_SLOTS[index]!) ? null : { slopes: false }
@@ -105,13 +117,14 @@ export function carMaterials(
     if (atlas && slotLook.drawn) {
       if (slotLook.tint) color.multiply(new THREE.Color(slotLook.tint));
       const glass = slot === 'glass';
+      const floor = slot === 'under';
       return new THREE.MeshPhysicalMaterial({
         vertexColors: true,
         color,
         map: atlas,
-        roughness: glass ? CAR_GLASS_ROUGHNESS : CAR_PAINT_ROUGHNESS,
+        roughness: glass ? CAR_GLASS_ROUGHNESS : floor ? CAR_UNDER_ROUGHNESS : CAR_PAINT_ROUGHNESS,
         metalness: glass ? CAR_GLASS_METALNESS : 0,
-        clearcoat: slot === 'rim' ? 0 : CAR_PAINT_CLEARCOAT,
+        clearcoat: slot === 'rim' || floor ? 0 : CAR_PAINT_CLEARCOAT,
         ...glow,
       });
     }

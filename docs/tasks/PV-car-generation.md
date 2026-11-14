@@ -36,7 +36,7 @@ Le modèle de la maison à réutiliser comme patron (ne pas le copier, en extrai
 
 ```bash
 # Live : Muse Image dessine les vues depuis la photo (≈ 7–10 min, réseau Meta instable : une voiture à la fois)
-make views-3d PHOTO=resources/refine-3d/sedan.jpg OUT=~/Téléchargements/generated-view/c-sedan LABEL=car
+make views-3d PHOTO=resources/refine-3d/sedan.jpg OUT=resources/refine-3d/c-sedan LABEL=car
 # Rejeu hors ligne des vues déjà dessinées (gratuit, déterministe)
 make views-3d FRONT=…/view-front.png RIGHT=…/view-right.png BACK=… LEFT=… TOP=… OUT=dir LABEL=car OFFLINE=1 MATERIALS=metal,glass
 # Capture du vrai viewer (serveur de dev lancé : make dev ; port : make port)
@@ -48,7 +48,7 @@ Photos déjà présentes (`resources/refine-3d/`, crédits dans `SOURCES-refine.
 photos Wikimedia Commons (licence libre, crédit dans `SOURCES-refine.md`) pour les types manquants : pick-up,
 voiture ancienne, taxi-brousse, 4L ou 2CV (courantes à Madagascar).
 
-Range chaque essai dans `~/Téléchargements/generated-view/c-<nom>/` avec `photo.jpg`, les `view-*.png`, la
+Range chaque essai dans `resources/refine-3d/c-<nom>/` (ignoré par git) avec `photo.jpg`, les `view-*.png`, la
 lecture sauvegardée et une capture côte à côte photo / 3D (`voiture-3d-t76.jpg`).
 
 ## 4. Règles non négociables
@@ -101,7 +101,7 @@ le maillage, rejoue, garde la capture avant / après.
 ## 6. Constat de l'étape 0 (PQ-T76, 2026-11-14)
 
 Trois runs live sans aucun changement de code (`make views-3d PHOTO=… LABEL=car|truck`) : `sedan` (7,5 min),
-`suv` (2,2 min), `truck-side` (2,8 min), aucun échec réseau. Dossiers `~/Téléchargements/generated-view/c-*/` :
+`suv` (2,2 min), `truck-side` (2,8 min), aucun échec réseau. Dossiers `resources/refine-3d/c-*/` (déplacés le 2026-11-14) :
 `views-sheet.jpg` (les 5 dessins), `viewer/` (vrai viewer), `voiture-3d-t76.jpg` (photo | viewer | coque).
 
 - **Dessins : bons, l'hypothèse « face au lieu du profil » est fausse.** Les 5 vues sont cohérentes entre
@@ -155,6 +155,16 @@ une caisse lissée (≈ 6 k triangles, 9 emplacements, roues cylindriques, flanc
 village et export Blender. Ombre portée retirée aussi sur la face (voie de la berline 0,098–0,904). Rejeu : caisse
 sur les trois ; berline 10 vitres ; SUV et pick-up sans vitres (pas de lecture d'équipe). Capture
 `t76d-viewer.jpg`. Reste : lecture d'équipe SUV / pick-up (5 appels Spark chacun), banc de 10 photos.
+
+**(e) fait (PQ-T76e, demande du 2026-11-14)** : sorties voitures déplacées dans `resources/refine-3d/` (`c-*`,
+`t76*.jpg` ; `make car-replay` y lit par défaut). Caisse : capot et coffre en plateau plat à la largeur de la
+caisse (ils étaient pincés à la largeur de la cabine : bosses), toit à la largeur de la cabine sous la rangée
+arrondie du dessin (il ne faisait que 26 % de la largeur : dôme), effilement de la vue de dessus limité aux
+extrémités, normales cassées aux arêtes. Génération : une voiture (archétype détecté) est dessinée d'abord
+de **profil** (vue 2D à valider « Profil 2D »), puis face, arrière, dessus, **dessous** ; le côté gauche est le
+profil en miroir, jamais dessiné ; le dessous habille le plancher (6ᵉ tuile de l'atlas). Essai live sur la
+berline (5 dessins, sans équipe, `NO_CAR=1`) : profil redressé depuis une photo de ¾, vues cohérentes, vue de
+dessus enfin en long, score 0,851 (`c-sedan-p/views-sheet.jpg`, `c-sedan-p/t76e-viewer.jpg`).
 
 ## 7. Définition de « fini » pour une étape
 

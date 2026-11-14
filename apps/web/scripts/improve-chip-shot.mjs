@@ -130,7 +130,7 @@ for (const theme of ['dark', 'light']) {
       .first()
       .click();
     const direct = page.getByRole('button', { name: /generate the 3d model/i });
-    const imagine = page.getByRole('button', { name: /imagine 2d facade/i });
+    const imagine = page.getByRole('button', { name: /imagine 2d (facade|profile)/i });
     await direct.or(imagine).first().waitFor();
     if (await imagine.isVisible()) {
       await imagine.click();

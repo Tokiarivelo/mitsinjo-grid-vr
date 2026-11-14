@@ -3,11 +3,13 @@
 import { Check, Loader2, RefreshCw, Sparkles } from 'lucide-react';
 import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
-import { FACE_NAMES, type FaceName } from '@/lib/object-shape';
+import { OBJECT_FACES, VEHICLE_FACES, type FaceName } from '@/lib/object-shape';
 import type { FaceState, FacesState } from '../hooks/use-facade-faces';
 
 export interface FacadeFacesPanelProps {
   faces: FacesState;
+  /** The faces this object has, in drawing order (`facesFor`): a vehicle's differ (PQ-T76). */
+  names?: ReadonlyArray<FaceName>;
   onGenerate: (face: FaceName, details?: string) => void;
   onGenerateAll: () => void;
   onDetailsChange: (face: FaceName, details: string) => void;
@@ -23,6 +25,7 @@ export interface FacadeFacesPanelProps {
  */
 export function FacadeFacesPanel({
   faces,
+  names = OBJECT_FACES,
   onGenerate,
   onGenerateAll,
   onDetailsChange,
@@ -31,19 +34,23 @@ export function FacadeFacesPanel({
   disabled = false,
 }: FacadeFacesPanelProps) {
   const t = useTranslations('features.visionInsert');
-  const busy = FACE_NAMES.some((f) => faces[f].status === 'generating');
-  const allReady = FACE_NAMES.every((f) => faces[f].status === 'ready');
-  const allValidated = FACE_NAMES.every((f) => faces[f].validated);
+  const busy = names.some((f) => faces[f].status === 'generating');
+  const allReady = names.every((f) => faces[f].status === 'ready');
+  const allValidated = names.every((f) => faces[f].validated);
+  const vehicle = names === VEHICLE_FACES;
+  const title = vehicle ? t('facesTitleVehicle') : t('facesTitle');
 
   return (
     <section
-      aria-label={t('facesTitle')}
+      aria-label={title}
       className="flex flex-col gap-3 rounded-md border border-border bg-surface p-3"
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h5 className="text-xs font-semibold text-text-primary">{t('facesTitle')}</h5>
-          <p className="text-[11px] text-text-muted">{t('facesHint')}</p>
+          <h5 className="text-xs font-semibold text-text-primary">{title}</h5>
+          <p className="text-[11px] text-text-muted">
+            {vehicle ? t('facesHintVehicle') : t('facesHint')}
+          </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <button
@@ -70,7 +77,7 @@ export function FacadeFacesPanel({
       </div>
 
       <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        {FACE_NAMES.map((face) => (
+        {names.map((face) => (
           <FaceCard
             key={face}
             face={face}

@@ -6,6 +6,7 @@ import {
   CAR_GLASS_ROUGHNESS,
   CAR_PAINT_ROUGHNESS,
   CAR_UNDER_COLOR,
+  CAR_UNDER_ROUGHNESS,
   carGeometry,
   carMaterials,
   carSlotLooks,
@@ -95,5 +96,16 @@ describe('carMaterials', () => {
     expect(glass.roughness).toBe(CAR_GLASS_ROUGHNESS);
     expect(mats[CAR_SLOTS.indexOf('tyre')]!.map).not.toBe(body.map);
     for (const m of mats) m.dispose();
+  });
+
+  it('the floor wears the drawn underside, matte', () => {
+    const recipe = { proportions, car, faces: { ...faces, underside: true } };
+    expect(carSlotLooks(recipe)[CAR_SLOTS.indexOf('under')]!.drawn).toBe(true);
+    expect(carSlotLooks({ proportions, car, faces })[CAR_SLOTS.indexOf('under')]!.drawn).toBe(
+      false
+    );
+    const floor = carMaterials(recipe)[CAR_SLOTS.indexOf('under')] as THREE.MeshPhysicalMaterial;
+    expect(floor.roughness).toBe(CAR_UNDER_ROUGHNESS);
+    expect(floor.clearcoat).toBe(0);
   });
 });

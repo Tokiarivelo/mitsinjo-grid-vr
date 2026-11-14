@@ -2,6 +2,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import sharp from 'sharp';
 import { describe, expect, it, vi } from 'vitest';
+import { archetypeOf } from '@/lib/object-kit';
 import type { ShapeTarget } from '@/lib/object-shape';
 vi.mock('server-only', () => ({}));
 import { museImage, museImageReady } from '../facade-specialist';
@@ -10,9 +11,9 @@ import { getPerceptionClient } from '../client';
 import { carToolAsk, liveReadCar } from '../car/car-specialist';
 import { CarReadingSchema } from '../car/car-tools';
 import { houseToolAsk } from '../house/house-specialist';
-import { reconstructObject, reportLine, type ViewName } from '../recon';
+import { reconstructObject, reportLine } from '../recon';
 import { reconstructFromViews } from '../recon/reconstruct';
-import { decodeView } from '../recon/route';
+import { decodeView, type DrawnView } from '../recon/route';
 import { VIEW_NAMES } from '../recon/views';
 import { VIEW_CAMERA } from '../recon/score';
 
@@ -25,8 +26,13 @@ import { VIEW_CAMERA } from '../recon/score';
  * `model.png` (the model seen from the four cameras, front · right · back · left) and `model-34.png`
  * (the model turned ¾, front right then back left), `classes.png` (the colour classes read on each
  * view, canonical frame, magenta = not the object). `OFFLINE=1` never calls Meta.
+ * A vehicle (`LABEL=car`, PQ-T76) is built from its profile: `RIGHT=` is its main view (else
+ * `PHOTO=` draws it), `FRONT=`, `BACK=`, `TOP=`, `BOTTOM=` (underside) are its other views, its
+ * left side the profile mirrored (`LEFT=` is ignored).
  */
-describe.runIf(process.env.VIEWS_3D_FRONT || process.env.VIEWS_3D_PHOTO)('make views-3d', () => {
+describe.runIf(
+  process.env.VIEWS_3D_FRONT || process.env.VIEWS_3D_RIGHT || process.env.VIEWS_3D_PHOTO
+)('make views-3d', () => {
   it('rebuilds the object from its views', async () => {
     const out = process.env.VIEWS_3D_OUT;
     if (!out) throw new Error('Usage: make views-3d FRONT=front.png [RIGHT= BACK= LEFT=] OUT=dir');
@@ -39,20 +45,31 @@ describe.runIf(process.env.VIEWS_3D_FRONT || process.env.VIEWS_3D_PHOTO)('make v
           ).toString('base64')}`
         : undefined;
     const topPng = process.env.VIEWS_3D_TOP ? await readFile(process.env.VIEWS_3D_TOP) : undefined;
-    const [photoUrl, facadeUrl, side, back, left] = await Promise.all([
+    const [photoUrl, front, side, back, left, bottom] = await Promise.all([
       url(process.env.VIEWS_3D_PHOTO),
       url(process.env.VIEWS_3D_FRONT),
       url(process.env.VIEWS_3D_RIGHT),
       url(process.env.VIEWS_3D_BACK),
       url(process.env.VIEWS_3D_LEFT),
+      url(process.env.VIEWS_3D_BOTTOM),
     ]);
+    const label = process.env.VIEWS_3D_LABEL || 'object';
+    // A vehicle's main view is its profile (PQ-T76); the others are its faces.
+    const vehicle = archetypeOf({ category: 'other', label }) === 'vehicle';
+    const facadeUrl = vehicle ? side : front;
     const target: ShapeTarget = {
       id: 'views-3d',
-      label: process.env.VIEWS_3D_LABEL || 'object',
+      label,
       category: 'other',
       box: { x: 0, y: 0, w: 1, h: 1 },
       ...(facadeUrl ? { facadeUrl } : {}),
-      faceUrls: { ...(side ? { side } : {}), ...(back ? { back } : {}), ...(left ? { left } : {}) },
+      faceUrls: vehicle
+        ? {
+            ...(front ? { front } : {}),
+            ...(back ? { back } : {}),
+            ...(bottom ? { bottom } : {}),
+          }
+        : { ...(side ? { side } : {}), ...(back ? { back } : {}), ...(left ? { left } : {}) },
     };
     const live = !process.env.VIEWS_3D_OFFLINE && museImageReady();
     const perception = live ? getPerceptionClient('views-3d') : null;
@@ -84,7 +101,7 @@ describe.runIf(process.env.VIEWS_3D_FRONT || process.env.VIEWS_3D_PHOTO)('make v
                   JSON.parse(await readFile(process.env.VIEWS_3D_CAR_READING!, 'utf8'))
                 ),
             }
-          : perception
+          : perception && !process.env.VIEWS_3D_NO_CAR
             ? { readCar: liveReadCar(carToolAsk(perception)) }
             : {}),
         // Offline: materials given by hand, largest class first (`MATERIALS=slate,wood,…`).
@@ -108,7 +125,7 @@ describe.runIf(process.env.VIEWS_3D_FRONT || process.env.VIEWS_3D_PHOTO)('make v
         ...(photoUrl ? { cropUrl: photoUrl } : {}),
         // `TOP=`: the view from above, already drawn (front at the bottom of the image).
         ...(topPng ? { topPng } : {}),
-        onView: (view: ViewName | 'top', png) => void writeFile(join(out, `view-${view}.png`), png),
+        onView: (view: DrawnView, png) => void writeFile(join(out, `view-${view}.png`), png),
         onHouseReading: (reading) =>
           void writeFile(join(out, 'house-reading.json'), JSON.stringify(reading, null, 2)),
         onCarReading: (reading) =>

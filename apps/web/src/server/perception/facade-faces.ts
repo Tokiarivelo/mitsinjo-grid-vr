@@ -4,6 +4,7 @@ import sharp from 'sharp';
 import { archetypeOf, type KitArchetype } from '@/lib/object-kit';
 import type { FaceName, ShapeTarget } from '@/lib/object-shape';
 import { isR2Configured, uploadBufferToR2 } from '@/server/storage/r2';
+import { buildCarFacePrompt, CAR_FACES, type CarFace } from './car/car-views';
 import {
   createSyntheticFacadeSvg,
   DRAWING_BACKGROUND,
@@ -14,7 +15,8 @@ import {
 /**
  * The other faces of a validated 2D front (PQ-T68): right side, back, left side, each drawn by
  * Muse Image from the front AND from the faces already drawn, so the four views agree (same
- * width, height, roof, materials, colours). Best effort: the mock draws a placeholder.
+ * width, height, roof, materials, colours). A vehicle (PQ-T76): front, back, view from above and
+ * underside of its validated profile (`car/car-views.ts`). Best effort: the mock draws a placeholder.
  */
 
 const FACE_LABEL: Record<FaceName, string> = {
@@ -22,6 +24,8 @@ const FACE_LABEL: Record<FaceName, string> = {
   back: 'BACK',
   left: 'LEFT SIDE',
   top: 'TOP',
+  front: 'FRONT',
+  bottom: 'UNDERSIDE',
 };
 
 /** What each face shows, in plain words (the prompt names the view and what it must match). */
@@ -30,6 +34,8 @@ const FACE_DETAIL: Record<FaceName, string> = {
   back: 'the wall opposite the front, same width as the front',
   left: 'the wall seen from the left of the front, mirror of the right side in depth',
   top: 'the roof plan seen from directly above, the front at the bottom',
+  front: 'the main face, seen straight on',
+  bottom: 'the underside seen from directly below, the front at the bottom',
 };
 
 /**
@@ -61,6 +67,12 @@ export function buildFacePrompt(
   { known = 1, userPrompt }: { known?: number; userPrompt?: string } = {}
 ): string {
   const details = userPrompt?.trim();
+  // A vehicle is drawn from its profile (PQ-T76): its own prompts, the left side never drawn.
+  if (archetype === 'vehicle' && (CAR_FACES as readonly string[]).includes(face))
+    return buildCarFacePrompt(face as CarFace, label, {
+      known,
+      ...(details ? { userPrompt: details } : {}),
+    });
   // The view from above has its own prompt (the plan, not an elevation).
   if (face === 'top')
     return `${buildTopPrompt(label, known)}${details ? ` Additional required features: ${details}.` : ''}`;

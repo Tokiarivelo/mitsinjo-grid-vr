@@ -7,6 +7,7 @@ import {
   FACE_TILE,
   ATLAS_VIEWS,
   faceSlot,
+  type AtlasTile,
   type AtlasView,
 } from '@/lib/face-atlas';
 import { planContrast, silhouetteHull, type RoofVolume } from '@/lib/face-hull';
@@ -15,6 +16,7 @@ import type { ObjectRecipe, ShapeTarget } from '@/lib/object-shape';
 import type { ClassMaterialsResult } from '../schemas';
 import { FACE_ORDER, buildFacePrompt, buildTopPrompt } from '../facade-faces';
 import { buildFacadePrompt } from '../facade-specialist';
+import { buildCarFacePrompt, type CarFace } from '../car/car-views';
 import { readHousePlan, type AskHouseTool, type ReadHouse } from '../house/house-specialist';
 import { inlineImageUrl } from '../inline-image';
 import { grow, type ViewImage } from './grid';
@@ -58,6 +60,9 @@ export const RECON_MODEL = 'views-reconstruction';
 
 const FACE_VIEW = { side: 'right', back: 'back', left: 'left' } as const;
 
+/** A drawing of the reconstruction: an elevation, the view from above, or a vehicle's underside. */
+export type DrawnView = ViewName | 'top' | 'bottom';
+
 export interface ReconDeps {
   /** One drawing from a prompt and reference images (Muse Image); null = nothing can be drawn. */
   draw: ((prompt: string, references: string[], signal?: AbortSignal) => Promise<Buffer>) | null;
@@ -83,7 +88,7 @@ export interface ReconOptions {
   /** Also draw the back and the left side when they are not validated (default true; 2 more drawings). */
   fourFaces?: boolean;
   /** Each drawing as it is known (validated or just drawn), for captures and evals. */
-  onView?: (view: ViewName | 'top', png: Buffer) => void;
+  onView?: (view: DrawnView, png: Buffer) => void;
   /** A view from above already drawn (the tool's `TOP=`); else drawn with the faces when `fourFaces`. */
   topPng?: Buffer;
   /** The house specialist's raw reading, for captures and evals. */
@@ -96,7 +101,7 @@ export interface ReconOutcome {
   recipe: ObjectRecipe;
   report: ReconReport;
   /** Views Muse Image drew during this call. */
-  drawn: Array<ViewName | 'top'>;
+  drawn: DrawnView[];
 }
 
 const dataUrl = (png: Buffer) => `data:image/png;base64,${png.toString('base64')}`;
@@ -152,18 +157,28 @@ const ATLAS_QUALITY = 82;
 export async function buildFaceAtlas(
   pngs: Partial<Record<ViewName, Buffer>>,
   aligned: AlignedViews,
-  top?: { png: Buffer; view: GridView; frame: ViewFrame }
-): Promise<{ atlas: string; views: AtlasView[] } | null> {
+  top?: { png: Buffer; view: GridView; frame: ViewFrame },
+  bottom?: { png: Buffer; view: GridView; frame: ViewFrame }
+): Promise<{ atlas: string; views: AtlasTile[] } | null> {
   const [aw, ah] = [FACE_ATLAS_COLS * FACE_TILE, FACE_ATLAS_ROWS * FACE_TILE];
   const sheet = new Uint8Array(aw * ah * 3).fill(255);
-  const views: AtlasView[] = [];
+  const views: AtlasTile[] = [];
   for (const view of ATLAS_VIEWS) {
-    const frame = view === 'top' ? top?.frame : aligned.frames[view];
-    const grid = view === 'top' ? top?.view : aligned.views[view];
+    const plan = view === 'top' ? top : view === 'bottom' ? bottom : null;
+    const frame = plan
+      ? plan.frame
+      : view === 'top' || view === 'bottom'
+        ? undefined
+        : aligned.frames[view];
+    const grid = plan
+      ? plan.view
+      : view === 'top' || view === 'bottom'
+        ? undefined
+        : aligned.views[view];
     // The right tile may be the left drawing standing in: its own drawing is then the left one.
     const png =
-      view === 'top'
-        ? top?.png
+      view === 'top' || view === 'bottom'
+        ? plan?.png
         : (pngs[view] ?? (view === 'right' && aligned.rightFromLeft ? pngs.left : undefined));
     if (!frame || !grid || !png) continue;
     try {
@@ -231,8 +246,8 @@ export async function reconstructObject(
   const tag = `[vision] 3D views reconstruction for "${target.label}"`;
   try {
     const archetype = archetypeOf(target);
-    const drawn: Array<ViewName | 'top'> = [];
-    const draw = async (view: ViewName | 'top', prompt: string, references: string[]) => {
+    const drawn: DrawnView[] = [];
+    const draw = async (view: DrawnView, prompt: string, references: string[]) => {
       if (!deps.draw || signal?.aborted) return null;
       try {
         const png = await deps.draw(prompt, references, signal);
@@ -243,53 +258,103 @@ export async function reconstructObject(
         return null;
       }
     };
-    // Front: the validated 2D view, else drawn from the photo crop.
-    const front = target.facadeUrl
-      ? await bytesOf(target.facadeUrl)
-      : cropUrl
-        ? await draw(
-            'front',
-            buildFacadePrompt(archetype, target.label, undefined, { fromPhoto: true }),
-            [cropUrl]
-          )
-        : null;
-    if (!front) {
-      console.info(`${tag}: no front view, skipped`);
-      return null;
-    }
-    onView?.('front', front);
-    const pngs: Partial<Record<ViewName, Buffer>> = { front };
-    /** A face: the operator's validated drawing, else drawn from every view known so far. */
-    const face = async (name: (typeof FACE_ORDER)[number]) => {
-      const view = FACE_VIEW[name];
-      const provided = target.faceUrls?.[name];
-      const known = Object.values(pngs).map(dataUrl);
-      const png = provided
-        ? await bytesOf(provided)
-        : name !== 'side' && !fourFaces
-          ? null
-          : await draw(
-              view,
-              buildFacePrompt(name, target.label, archetype, { known: known.length }),
-              known
-            );
-      if (png) {
-        pngs[view] = png;
-        onView?.(view, png);
-      }
-    };
-    // The right side first (it fixes the depth), then the back and the left side from both.
-    await face('side');
-    // With them the view from above: the footprint and the drawing of what faces the sky.
-    // The operator's validated plan first, then one given by the caller, else drawn here.
+    const pngs: Partial<Record<ViewName, Buffer>> = {};
     let top: Buffer | null =
       topPng ?? (target.faceUrls?.top ? await bytesOf(target.faceUrls.top) : null);
-    const above = async () => {
-      if (top || !fourFaces) return;
-      const known = Object.values(pngs).map(dataUrl);
-      top = await draw('top', buildTopPrompt(target.label, known.length), known);
-    };
-    await Promise.all([face('back'), face('left'), above()]);
+    /** A vehicle's underside (PQ-T76): its tile wears the floor of the car. */
+    let bottom: Buffer | null = null;
+    if (archetype === 'vehicle') {
+      // A vehicle is drawn from its profile (PQ-T76): the validated 2D view, else drawn from the
+      // photo crop. Its left side is the profile mirrored, never drawn; then its front, and with
+      // `fourFaces` its back, view from above and underside, each from the profile and the front.
+      const profile = target.facadeUrl
+        ? await bytesOf(target.facadeUrl)
+        : cropUrl
+          ? await draw(
+              'right',
+              buildFacadePrompt(archetype, target.label, undefined, { fromPhoto: true }),
+              [cropUrl]
+            )
+          : null;
+      if (!profile) {
+        console.info(`${tag}: no profile, skipped`);
+        return null;
+      }
+      pngs.right = profile;
+      onView?.('right', profile);
+      pngs.left = await sharp(profile, { failOn: 'none' }).flop().png().toBuffer();
+      onView?.('left', pngs.left);
+      const carFace = async (face: CarFace): Promise<Buffer | null> => {
+        const provided = target.faceUrls?.[face];
+        if (provided) return bytesOf(provided);
+        if (face !== 'front' && !fourFaces) return null;
+        const refs = [profile, ...(pngs.front ? [pngs.front] : [])].map(dataUrl);
+        return draw(face, buildCarFacePrompt(face, target.label, { known: refs.length }), refs);
+      };
+      const front = await carFace('front');
+      if (front) {
+        pngs.front = front;
+        onView?.('front', front);
+      }
+      const [back, above, below] = await Promise.all([
+        carFace('back'),
+        top ? Promise.resolve(top) : carFace('top'),
+        carFace('bottom'),
+      ]);
+      if (back) {
+        pngs.back = back;
+        onView?.('back', back);
+      }
+      top = above;
+      bottom = below;
+      if (bottom) onView?.('bottom', bottom);
+    } else {
+      // Front: the validated 2D view, else drawn from the photo crop.
+      const front = target.facadeUrl
+        ? await bytesOf(target.facadeUrl)
+        : cropUrl
+          ? await draw(
+              'front',
+              buildFacadePrompt(archetype, target.label, undefined, { fromPhoto: true }),
+              [cropUrl]
+            )
+          : null;
+      if (!front) {
+        console.info(`${tag}: no front view, skipped`);
+        return null;
+      }
+      onView?.('front', front);
+      pngs.front = front;
+      /** A face: the operator's validated drawing, else drawn from every view known so far. */
+      const face = async (name: (typeof FACE_ORDER)[number]) => {
+        const view = FACE_VIEW[name];
+        const provided = target.faceUrls?.[name];
+        const known = Object.values(pngs).map(dataUrl);
+        const png = provided
+          ? await bytesOf(provided)
+          : name !== 'side' && !fourFaces
+            ? null
+            : await draw(
+                view,
+                buildFacePrompt(name, target.label, archetype, { known: known.length }),
+                known
+              );
+        if (png) {
+          pngs[view] = png;
+          onView?.(view, png);
+        }
+      };
+      // The right side first (it fixes the depth), then the back and the left side from both.
+      await face('side');
+      // With them the view from above: the footprint and the drawing of what faces the sky.
+      // The operator's validated plan first, then one given by the caller, else drawn here.
+      const above = async () => {
+        if (top || !fourFaces) return;
+        const known = Object.values(pngs).map(dataUrl);
+        top = await draw('top', buildTopPrompt(target.label, known.length), known);
+      };
+      await Promise.all([face('back'), face('left'), above()]);
+    }
     if (top) onView?.('top', top);
     const images: Partial<Record<ViewName, ViewImage>> = {};
     for (const [view, png] of Object.entries(pngs) as Array<[ViewName, Buffer]>) {
@@ -343,10 +408,19 @@ export async function reconstructObject(
     const topRead = topImage ? alignTop(topImage, W, D) : null;
     if (top && !topRead)
       console.info(`${tag}: the view from above disagrees with the elevations, not used`);
+    // A vehicle's underside (PQ-T76): read like the plan, then mirrored (seen from below, the
+    // sides swap): its tile has the plan's columns.
+    const bottomImage = bottom ? await decodeView(bottom) : null;
+    const bottomRead = bottomImage ? alignTop(bottomImage, W, D) : null;
+    if (bottom && !bottomRead)
+      console.info(`${tag}: the underside disagrees with the elevations, not used`);
     const faces = await buildFaceAtlas(
       pngs,
       recon.aligned,
-      top && topRead ? { png: top, ...topRead } : undefined
+      top && topRead ? { png: top, ...topRead } : undefined,
+      bottom && bottomRead
+        ? { png: bottom, view: bottomRead.view, frame: { ...bottomRead.frame, mirrored: true } }
+        : undefined
     ).catch(() => null);
     if (faces) {
       const { front: frontView, right: sideView } = recon.aligned.views;
@@ -391,7 +465,9 @@ export async function reconstructObject(
         recipe.proportions = depthFromPlan(recipe.proportions, topRead.aspect);
       if (hull.boxes.length)
         recipe.faces = {
-          ...faces,
+          atlas: faces.atlas,
+          views: faces.views.filter((v): v is AtlasView => v !== 'bottom'),
+          ...(faces.views.includes('bottom') ? { underside: true } : {}),
           hull: { grid: [...hull.grid], boxes: hull.boxes.map((b) => [...b]) },
         };
     }

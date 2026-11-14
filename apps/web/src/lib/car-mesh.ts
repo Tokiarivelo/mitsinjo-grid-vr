@@ -1,10 +1,15 @@
-import type { CarPlan, CarWindow } from './car-plan';
+import type { CarBody, CarPlan, CarWindow } from './car-plan';
 import { atlasUv, faceSlot, type AtlasView, type FaceView } from './face-atlas';
 
 /**
  * A car built from its plan (PQ-T76), pure: the body lofted along the car (one ring per station:
- * its height the profile, its width at each height the front section narrowed by the taper), with
- * smooth normals, its underside raised over each wheel; the wheels as cylinders. Every triangle
+ * its height the profile, its width at each height the front section), its underside raised over
+ * each wheel; the wheels as cylinders. The section is read as a car is built: the lower body up
+ * to the shoulder (the widest band of the front), then the cabin, narrowing up to a flat roof.
+ * A station whose top stays near the shoulder (bonnet, boot) is a flat deck at the body's width,
+ * never pinched to the cabin; the roof keeps the cabin's width under the drawing's rounded top
+ * row; the view from above only narrows the nose and the tail. Normals are smooth except across
+ * a crease (windscreen base, roof edge), so flat panels stay flat. Every triangle
  * reads the drawing that faces it (atlas uvs, `lib/face-atlas.ts`), so the model wears its
  * validated drawings; the windows the team read become the glass slot; a wheel's outer face reads
  * the drawn wheel. Shared by the 3D views, the village and the Blender export.
@@ -40,6 +45,8 @@ export interface CarMesh {
 export interface CarMeshOptions {
   /** Drawings the atlas holds (a missing one reads its opposite). */
   views?: ReadonlyArray<AtlasView>;
+  /** The atlas holds the drawn underside (its sixth tile): the floor wears it. */
+  underside?: boolean;
 }
 
 /** Ring segments: across the underside, up each flank, across the roof. */
@@ -50,6 +57,20 @@ export const RING_ROOF = 10;
 export const WHEEL_SEGMENTS = 28;
 /** A body face whose normal points up past this (y component) is roof. */
 export const ROOF_UP = 0.7;
+/** The shoulder: the highest level of the front still this share of the body's widest. */
+export const SHOULDER_SHARE = 0.92;
+/** A station whose top is within this share of the cabin's height above the shoulder is a deck. */
+export const DECK_BAND = 0.35;
+/** The roof keeps the cabin's width this far (share of the height) under the top of the front. */
+export const ROOF_CROWN = 0.05;
+/** Edges of a deck or the roof round in by this share of their half-width over `EDGE_BAND`. */
+export const EDGE_IN = 0.06;
+export const EDGE_BAND = 0.03;
+/** The view from above narrows only this share of the length at each end, never under `TAPER_MIN`. */
+export const TAPER_END = 0.18;
+export const TAPER_MIN = 0.8;
+/** A vertex normal further than this from its face (cosine, ≈ 35°) is a crease: the face's own. */
+export const CREASE_COS = 0.82;
 /** Tyre width (share of the box width) and track when the front gave none. */
 export const DEFAULT_TYRE = 0.1;
 export const DEFAULT_TRACK_SHARE = 0.94;
@@ -90,11 +111,65 @@ const sample = (arr: readonly number[], f: number) => {
   return arr[i]! * (1 - t) + arr[i + 1]! * t;
 };
 
+/** A view a triangle reads: a face's drawing, or the underside's tile. */
+type UvView = AtlasView | 'bottom';
+
+/**
+ * Half-width of the body at height `y` on a station whose top is `t` (shares; 0–0.5). Below the
+ * shoulder the front's section; above it the cabin, never wider going up and holding its width
+ * under the drawing's rounded top; a deck station (bonnet, boot) keeps the shoulder's width up to
+ * its top. Every top edge rounds in a little (`EDGE_IN`).
+ */
+export function carSection(body: Pick<CarBody, 'half' | 'top'>): (t: number, y: number) => number {
+  const half = body.half;
+  const L = half.length;
+  const max = Math.max(...half);
+  let widest = half.indexOf(max);
+  while (widest + 1 < L && half[widest + 1]! >= SHOULDER_SHARE * max) widest++;
+  const shoulder = widest / (L - 1);
+  const shoulderHalf = half[widest]!;
+  const roof = Math.max(...body.top);
+  // At least one and a half levels: a coarse front still loses its rounded top row.
+  const crown = Math.max(shoulder, roof - Math.max(ROOF_CROWN, 1.5 / (L - 1)));
+  // The cabin, monotone: each level no wider than the one under it.
+  const cabin = [...half];
+  for (let j = widest + 1; j < L; j++) cabin[j] = Math.min(cabin[j]!, cabin[j - 1]!);
+  const deckTop = shoulder + DECK_BAND * Math.max(0, roof - shoulder);
+  const edge = (w: number, t: number, y: number) => {
+    const k = (y - (t - EDGE_BAND)) / EDGE_BAND;
+    return k > 0 ? w * (1 - EDGE_IN * Math.min(1, k) ** 2) : w;
+  };
+  return (t, y) => {
+    if (y <= shoulder) return edge(sample(half, y), t, y);
+    if (t <= deckTop) return edge(shoulderHalf, t, y);
+    return edge(sample(cabin, Math.min(y, crown)), t, y);
+  };
+}
+
+/**
+ * Width share per station from the view from above: only the nose and the tail narrow (`TAPER_END`
+ * of the length each), against the width where that end starts, never under `TAPER_MIN`. A plan
+ * drawn with a little perspective no longer shrinks the whole car toward one end.
+ */
+export function stationTaper(body: Pick<CarBody, 'taper' | 'top'>): (i: number) => number {
+  const taper = body.taper;
+  const N = body.top.length;
+  if (!taper) return () => 1;
+  const at = (i: number) => sample(taper, i / Math.max(1, N - 1));
+  const end = Math.max(1, Math.round(TAPER_END * (N - 1)));
+  const [backRef, frontRef] = [at(end), at(N - 1 - end)];
+  return (i) => {
+    const ref = i < end ? backRef : i > N - 1 - end ? frontRef : 0;
+    if (!ref) return 1;
+    return Math.min(1, Math.max(TAPER_MIN, at(i) / ref));
+  };
+}
+
 /** The car as triangles in the model's frame (`dims` = w, h, d); null without a fitted body. */
 export function carMesh(
   plan: CarPlan,
   dims: readonly [number, number, number],
-  { views = ['front'] }: CarMeshOptions = {}
+  { views = ['front'], underside = false }: CarMeshOptions = {}
 ): CarMesh | null {
   const body = plan.body;
   if (!body || body.top.length < 2) return null;
@@ -116,9 +191,9 @@ export function carMesh(
   const slots: number[] = [];
   const slotOf = (s: CarSlot) => CAR_SLOTS.indexOf(s);
 
-  const uvOf = (p: V3, view: AtlasView): [number, number] => {
+  const uvOf = (p: V3, view: UvView): [number, number] => {
     const [x, y, z] = shares(p);
-    if (view === 'top') return atlasUv(faceSlot('top'), clamp01(x), clamp01(z));
+    if (view === 'top' || view === 'bottom') return atlasUv(faceSlot(view), clamp01(x), clamp01(z));
     const s = view === 'front' || view === 'back' ? x : z;
     return atlasUv(faceSlot(tile(view)), clamp01(s), clamp01(1 - y));
   };
@@ -147,6 +222,8 @@ export function carMesh(
    * the drawing it faces (the glass inside a window, the underside under the car).
    */
   const tri = (vs: [V3, V3, V3], ns: [V3, V3, V3], fixed?: { slot: CarSlot; view?: AtlasView }) => {
+    // A normal across a crease takes the face's own: flat panels stay flat.
+    const crease = (n: V3, f: V3): V3 => (dot(n, f) < CREASE_COS ? f : n);
     const a = vs[0];
     let [b, c] = [vs[1], vs[2]];
     const na = ns[0];
@@ -160,13 +237,13 @@ export function carMesh(
       fn = [-fn[0], -fn[1], -fn[2]];
     }
     let slot: CarSlot;
-    let view: AtlasView;
+    let view: UvView;
     if (fixed) {
       slot = fixed.slot;
       view = fixed.view ?? viewOf(fn);
     } else if (fn[1] < -0.6) {
       slot = 'under';
-      view = 'front';
+      view = underside ? 'bottom' : 'front';
     } else {
       view = viewOf(fn);
       const centre: V3 = [
@@ -186,8 +263,9 @@ export function carMesh(
       [b, nb],
       [c, nc],
     ] as const) {
+      const m = crease(n, fn);
       pos.push(p[0], p[1], p[2]);
-      nrm.push(n[0], n[1], n[2]);
+      nrm.push(m[0], m[1], m[2]);
       uvs.push(...uvOf(p, view));
     }
     slots.push(slotOf(slot));
@@ -195,26 +273,28 @@ export function carMesh(
 
   // ---------------------------------------------------------------- body
   const N = body.top.length;
-  const halfAt = (y: number) => sample(body.half, y);
+  const section = carSection(body);
+  const taperAt = stationTaper(body);
   const rings: V3[][] = [];
   const centres: number[] = [];
   for (let i = 0; i < N; i++) {
     const z = body.z0 + ((body.z1 - body.z0) * i) / (N - 1);
     const t = body.top[i]!;
     const b = Math.min(body.bottom[i]!, t);
-    const tp = body.taper ? sample(body.taper, i / (N - 1)) : 1;
+    const tp = taperAt(i);
+    const halfAt = (y: number) => section(t, y) * tp;
     const ring: Array<[number, number]> = [];
-    const hb = halfAt(b) * tp;
-    const ht = halfAt(t) * tp;
+    const hb = halfAt(b);
+    const ht = halfAt(t);
     for (let u = 0; u <= RING_UNDER; u++) ring.push([0.5 + (-1 + (2 * u) / RING_UNDER) * hb, b]);
     for (let k = 1; k <= RING_SIDE; k++) {
       const y = b + ((t - b) * k) / RING_SIDE;
-      ring.push([0.5 + halfAt(y) * tp, y]);
+      ring.push([0.5 + halfAt(y), y]);
     }
     for (let u = 1; u <= RING_ROOF; u++) ring.push([0.5 + (1 - (2 * u) / RING_ROOF) * ht, t]);
     for (let k = RING_SIDE - 1; k >= 1; k--) {
       const y = b + ((t - b) * k) / RING_SIDE;
-      ring.push([0.5 - halfAt(y) * tp, y]);
+      ring.push([0.5 - halfAt(y), y]);
     }
     rings.push(ring.map(([x, y]) => [X(x), Y(y), Z(z)]));
     centres.push(Y((b + t) / 2));

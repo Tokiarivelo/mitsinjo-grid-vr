@@ -10,6 +10,7 @@ import type { PhotoForRegions } from './region';
 import { cropForShape } from './shape-crop';
 import { inlineImageUrl } from './inline-image';
 import { imageCard } from './skills';
+import { buildCarProfilePrompt } from './car/car-views';
 
 /**
  * Sent with the photo crop as reference (user 2026-11-05): without it Muse Image drew a generic
@@ -43,8 +44,8 @@ export function buildFacadePrompt(
       basePrompt = `Architectural orthographic front elevation drawing of a complete rural building facade, ${label}. Perfectly straight-on eye-level view, 0 degree perspective tilt, sharp edges, unoccluded, centered on a ${DRAWING_BACKGROUND}, architectural elevation illustration style, crisp daylight.`;
       break;
     case 'vehicle':
-      basePrompt = `Direct front orthographic elevation view of a complete vehicle, ${label}. Straight-on eye-level view, symmetrical headlights, front grille, windshield, unoccluded, centered on a ${DRAWING_BACKGROUND}.`;
-      break;
+      // A vehicle is drawn from its profile first (PQ-T76): the 2D view to validate is its side.
+      return withUserDetails(buildCarProfilePrompt(label, fromPhoto), userPrompt);
     case 'panel':
       basePrompt = `Direct front elevation view of a complete solar panel installation, ${label}. Clean industrial elevation, mounting frame, photovoltaic cells, unoccluded, ${DRAWING_BACKGROUND}.`;
       break;
@@ -138,25 +139,23 @@ export function createSyntheticFacadeSvg(archetype: KitArchetype, label: string)
 </svg>`;
 
     case 'vehicle':
+      // A profile (PQ-T76): the front to the right, both wheels on the ground line.
       return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <rect width="512" height="512" fill="#f8fafc"/>
-  <line x1="32" y1="460" x2="480" y2="460" stroke="#94a3b8" stroke-width="4"/>
-  <!-- Tires -->
-  <rect x="100" y="380" width="50" height="70" rx="8" fill="#1e293b"/>
-  <rect x="362" y="380" width="50" height="70" rx="8" fill="#1e293b"/>
-  <!-- Cabin Greenhouse -->
-  <polygon points="150,230 180,140 332,140 362,230" fill="#38bdf8" stroke="#0284c7" stroke-width="5"/>
-  <!-- Main Body -->
-  <rect x="110" y="230" width="292" height="160" rx="16" fill="#2563eb" stroke="#1d4ed8" stroke-width="6"/>
-  <!-- Windshield -->
-  <polygon points="160,225 186,150 326,150 352,225" fill="#bae6fd" stroke="#0284c7" stroke-width="3"/>
-  <!-- Grille -->
-  <rect x="180" y="280" width="152" height="60" rx="6" fill="#0f172a"/>
-  <!-- Headlights -->
-  <circle cx="140" cy="270" r="18" fill="#fef08a" stroke="#ca8a04" stroke-width="3"/>
-  <circle cx="372" cy="270" r="18" fill="#fef08a" stroke="#ca8a04" stroke-width="3"/>
-  <!-- Bumper -->
-  <rect x="130" y="355" width="252" height="25" rx="4" fill="#64748b"/>
+  <line x1="16" y1="380" x2="496" y2="380" stroke="#94a3b8" stroke-width="4"/>
+  <!-- Body and cabin -->
+  <path d="M40 330 L40 270 Q44 250 70 246 L150 240 L200 190 Q210 180 230 180 L330 180 Q350 180 362 194 L400 240 L452 248 Q474 254 474 276 L474 330 Z" fill="#2563eb" stroke="#1d4ed8" stroke-width="5"/>
+  <!-- Side windows -->
+  <polygon points="214,196 270,196 270,238 170,240" fill="#bae6fd" stroke="#0284c7" stroke-width="3"/>
+  <polygon points="282,196 330,196 376,238 282,238" fill="#bae6fd" stroke="#0284c7" stroke-width="3"/>
+  <!-- Lamps -->
+  <rect x="456" y="262" width="16" height="14" rx="3" fill="#fef08a"/>
+  <rect x="42" y="262" width="12" height="14" rx="3" fill="#ef4444"/>
+  <!-- Tyres and rims -->
+  <circle cx="128" cy="330" r="48" fill="#1e293b"/>
+  <circle cx="128" cy="330" r="24" fill="#94a3b8"/>
+  <circle cx="390" cy="330" r="48" fill="#1e293b"/>
+  <circle cx="390" cy="330" r="24" fill="#94a3b8"/>
   <text x="256" y="492" text-anchor="middle" font-family="sans-serif" font-size="14" font-weight="bold" fill="#64748b">${cleanLabel}</text>
 </svg>`;
 

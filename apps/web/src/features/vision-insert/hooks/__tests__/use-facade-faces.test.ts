@@ -121,4 +121,41 @@ describe('useFacadeFaces (PQ-T68)', () => {
     rerender({ f: front });
     expect(result.current.faces.side.status).toBe('ready');
   });
+
+  it('a vehicle (PQ-T76): front → back → above → underside of its profile, never a left side', async () => {
+    const calls = stubFetch();
+    const car = { ...target, label: 'car' } as ShapeRequest;
+    const profile: FacadeData = {
+      ...front,
+      imageUrl: 'https://r2/profile.png',
+      archetype: 'vehicle',
+    };
+    const { result } = renderHook(() => useFacadeFaces(car, profile));
+    expect(result.current.names).toEqual(['front', 'back', 'top', 'bottom']);
+    await act(async () => {
+      await result.current.generateAll();
+    });
+    expect(calls.map((c) => c.face)).toEqual(['front', 'back', 'top', 'bottom']);
+    expect(calls[0]!.references).toEqual(['https://r2/profile.png']);
+    // The plans are drawn from the elevations only, never from each other.
+    expect(calls[3]!.references).toEqual([
+      'https://r2/profile.png',
+      'https://r2/front.png',
+      'https://r2/back.png',
+    ]);
+    act(() => result.current.validateAll());
+    expect(Object.keys(validatedFaces(result.current.faces)!.urls).sort()).toEqual([
+      'back',
+      'bottom',
+      'front',
+      'top',
+    ]);
+  });
+
+  it('knows a car before its profile is drawn (archetype from the label)', () => {
+    const { result } = renderHook(() =>
+      useFacadeFaces({ ...target, label: 'pickup truck' } as ShapeRequest, undefined)
+    );
+    expect(result.current.names).toContain('bottom');
+  });
 });
