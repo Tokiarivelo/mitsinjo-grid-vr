@@ -322,6 +322,23 @@ describe('house fit PQ-T73 parts', () => {
     expect(plan.volumes.find((v) => v.kind === 'veranda')!.floor!).toBeLessThanOrEqual(DECK_MAX);
   });
 
+  it('dresses the largest block in the main finishes, whatever the reading says', () => {
+    const base = reading();
+    const plan = fitHouse({
+      reading: {
+        ...base,
+        volumes: [
+          { ...base.volumes[0]!, wallFinish: 'wall2', roofFinish: 'roof2' },
+          base.volumes[1]!,
+        ],
+      },
+      views,
+      mirrored,
+    })!;
+    expect(plan.volumes[0]!.wallFinish).toBeUndefined();
+    expect(plan.volumes[0]!.roofFinish).toBeUndefined();
+  });
+
   it('stands a balcony read without its floor on the veranda under it', () => {
     const base = reading();
     const plan = fitHouse({
@@ -345,8 +362,18 @@ describe('house fit PQ-T73 parts', () => {
       reading: {
         ...base,
         volumes: [
-          { ...base.volumes[0]!, roofFinish: 'roof2', wallFinish: 'stone' },
+          base.volumes[0]!,
           { ...base.volumes[1]!, arcade: 'segment' },
+          {
+            kind: 'wing',
+            plan: [0.6, 0.97, 0.1, 0.4],
+            eave: 0.5,
+            ridge: 0.3,
+            roof: 'shed',
+            ridgeAxis: 'x',
+            roofFinish: 'roof2',
+            wallFinish: 'stone',
+          },
         ],
         openings: [{ ...base.openings[0]!, head: 'arch' }],
         piers: [
@@ -359,7 +386,7 @@ describe('house fit PQ-T73 parts', () => {
       views,
       mirrored,
     })!;
-    expect(plan.volumes[0]).toMatchObject({ roofFinish: 'roof2', wallFinish: 'stone' });
+    expect(plan.volumes[2]).toMatchObject({ roofFinish: 'roof2', wallFinish: 'stone' });
     expect(plan.volumes[1]!.arcade).toBe('segment');
     expect(plan.openings[0]!.head).toBe('arch');
     expect(plan.piers).toEqual([{ plan: [0, 0.04, 0.95, 1], top: 0.55, band: 0.2 }]);

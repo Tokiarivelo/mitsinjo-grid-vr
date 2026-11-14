@@ -445,6 +445,19 @@ export function fitHouse({
     return [volume];
   });
   if (!volumes.some((v) => !isOpenVolume(v))) return null;
+  // PQ-T73: the largest closed block wears the main cladding and roofing by definition (a reading
+  // that names its only block's walls "wall2" painted a white school brown).
+  const area = (v: HouseVolume) => (v.plan[1] - v.plan[0]) * (v.plan[3] - v.plan[2]);
+  const main = volumes
+    .filter((v) => !isOpenVolume(v))
+    .reduce((a, b) => (area(b) > area(a) ? b : a));
+  volumes = volumes.map((v) => {
+    if (v !== main || (!v.wallFinish && !v.roofFinish)) return v;
+    const rest = { ...v };
+    delete rest.wallFinish;
+    delete rest.roofFinish;
+    return rest;
+  });
   // PQ-T73: a balcony read without its floor stands on the veranda under it (same plan, lower).
   volumes = volumes.map((v) => {
     if (v.kind !== 'balcony' || v.floor !== undefined) return v;
