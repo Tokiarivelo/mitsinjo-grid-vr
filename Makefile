@@ -167,6 +167,10 @@ views-3d: ## Views → 3D on your own drawings (PQ-T69): FRONT=front.png (or PHO
 	@test -n "$(FRONT)$(PHOTO)" -a -n "$(OUT)" || { echo "Usage: make views-3d FRONT=front.png | PHOTO=photo.jpg [RIGHT=right.png BACK=back.png LEFT=left.png] OUT=dir [LABEL='stone house']"; exit 1; }
 	eval "$$(make -s env-export)" && $(if $(FRONT),VIEWS_3D_FRONT="$(abspath $(FRONT))") $(if $(PHOTO),VIEWS_3D_PHOTO="$(abspath $(PHOTO))") VIEWS_3D_OUT="$(abspath $(OUT))" $(if $(RIGHT),VIEWS_3D_RIGHT="$(abspath $(RIGHT))") $(if $(BACK),VIEWS_3D_BACK="$(abspath $(BACK))") $(if $(LEFT),VIEWS_3D_LEFT="$(abspath $(LEFT))") $(if $(TOP),VIEWS_3D_TOP="$(abspath $(TOP))") $(if $(ROOF),VIEWS_3D_ROOF="$(ROOF)") $(if $(LABEL),VIEWS_3D_LABEL="$(LABEL)") $(if $(OFFLINE),VIEWS_3D_OFFLINE=1) $(if $(MATERIALS),VIEWS_3D_MATERIALS="$(MATERIALS)") $(if $(READING),VIEWS_3D_READING="$(abspath $(READING))") $(if $(SINGLE),VIEWS_3D_SINGLE=1) $(PNPM) --filter $(WEB) exec vitest run src/server/perception/__tests__/views-3d.test.ts
 
+house-regress: ## House zero-regression check, offline (no Meta call, free): bungalow / school replays vs house-pq-t72.json + mesh hashes [REF=~/Téléchargements/generated-view] — run after any change to shared perception code
+	$(need_ws)
+	./scripts/house-regress.sh $(REF)
+
 shape-report: ## 3D shape report: scores + contact sheet → test-results/shape-report/ (/shape-loop)
 	$(need_ws)
 	SHAPE_REPORT=1 SHAPE_REPORT_DIR=$(CURDIR)/test-results/shape-report $(PNPM) --filter $(WEB) exec vitest run src/server/perception/__tests__/shape-report.test.ts -t "make shape-report"

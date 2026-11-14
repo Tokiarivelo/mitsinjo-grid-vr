@@ -28,12 +28,11 @@ import {
   type ReconReport,
   roofClassOf,
 } from './reconstruct';
+import { profileProportions, vehicleAspects } from '../car/car-proportions';
 import { bleedPaper, maskAt, shrink, trimPaper } from './texture';
 import {
   alignTop,
   depthFromPlan,
-  profileProportions,
-  vehicleAspects,
   type AlignedViews,
   type GridView,
   type ViewFrame,

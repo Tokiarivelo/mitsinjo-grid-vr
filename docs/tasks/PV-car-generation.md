@@ -53,9 +53,13 @@ lecture sauvegardée et une capture côte à côte photo / 3D (`voiture-3d-t76.j
 
 ## 4. Règles non négociables
 
-- **Zéro régression sur les maisons** : empreintes `meshHash` de `house-mesh.test.ts` inchangées ; rejeu
-  `bungalow/house-reading-single.json` = `house-pq-t72.json` octet pour octet (`cmp`) ; rejeu de l'école : seule
-  la ligne `base` diffère. Ne modifie le code maison que pour en extraire une partie commune, tests à l'appui.
+- **Code voiture séparé du code maison** : tout ce qui est propre à la voiture vit dans
+  `server/perception/car/` et `lib/car-*.ts`. Ne modifie ni `server/perception/house/` ni `lib/house-*.ts` ; un
+  changement du code commun (`recon/`) est réservé à `vehicle` (garde sur l'archétype).
+- **Contrôle maison hors ligne uniquement** : `make house-regress` (≈ 30 s, aucun appel Meta, gratuit) rejoue
+  bungalow et école sur leurs dessins et lectures sauvegardés et vérifie les empreintes de `house-mesh.test.ts`.
+  À lancer après tout changement du code commun. Ne relance **jamais** Muse ni Spark sur une maison pendant le
+  travail voiture.
 - Modèles Meta uniquement (Spark, Muse Image). Ne jamais projeter la photo sur le modèle ; les dessins 2D
   validés oui. Code pur sans `Math.random` non seedé.
 - Réutilise avant d'écrire (`rg`) : appels, délais et repli des spécialistes, mesure de couleur

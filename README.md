@@ -362,6 +362,8 @@ make eval-shape PROMPT=1,2
 # TOP=top.png gives your own view from above (footprint + roof plan); without it Muse Image draws one with the four faces.
 make views-3d FRONT=front.png RIGHT=right.png OUT=test-results/views OFFLINE=1 MATERIALS=slate,wood,stone,glass
 make views-3d FRONT=front.png RIGHT=right.png BACK=back.png LEFT=left.png OUT=test-results/views LABEL='stone house'
+# House zero-regression check, offline (no Meta call, free): replays the reference houses' saved drawings and readings
+make house-regress
 
 # Real 3D viewer shots of those recipes, dark + light (dev server running, API stubbed)
 make shape-shots
