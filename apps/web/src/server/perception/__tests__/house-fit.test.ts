@@ -5,6 +5,8 @@ import {
   DECK_MAX,
   dominantColor,
   fitHouse,
+  fitPiers,
+  sampleColor,
   housePatches,
   pickPatch,
   footprintAnnexes,
@@ -289,5 +291,140 @@ describe('house reading', () => {
     expect(q).toContain('image 1 = the FRONT elevation');
     expect(q).toContain('image 2 = the RIGHT side elevation');
     expect(q).toContain('image 3 = the VIEW FROM ABOVE');
+  });
+});
+
+describe('house fit PQ-T73 parts', () => {
+  const views = { front: frontView() };
+  const mirrored = {};
+
+  it('keeps a balcony at its storey while a deck stays low', () => {
+    const plan = fitHouse({
+      reading: reading({
+        volumes: [
+          ...reading().volumes,
+          {
+            kind: 'balcony',
+            plan: [0.5, 0.9, 0.85, 1],
+            eave: 0.45,
+            ridge: 0.45,
+            roof: 'none',
+            ridgeAxis: 'x',
+            open: ['front'],
+            floor: 0.5,
+          },
+        ],
+      }),
+      views,
+      mirrored,
+    })!;
+    expect(plan.volumes.find((v) => v.kind === 'balcony')!.floor).toBeCloseTo(0.5, 3);
+    expect(plan.volumes.find((v) => v.kind === 'veranda')!.floor!).toBeLessThanOrEqual(DECK_MAX);
+  });
+
+  it('stands a balcony read without its floor on the veranda under it', () => {
+    const base = reading();
+    const plan = fitHouse({
+      reading: {
+        ...base,
+        volumes: [
+          base.volumes[0]!,
+          { ...base.volumes[1]!, eave: 0.6 },
+          { ...base.volumes[1]!, kind: 'balcony', eave: 0.5, floor: undefined },
+        ],
+      },
+      views,
+      mirrored,
+    })!;
+    expect(plan.volumes[2]!.floor).toBeCloseTo(0.4, 3);
+  });
+
+  it('keeps finishes, arcades, trusses and heads, and drops a pier read twice', () => {
+    const base = reading();
+    const plan = fitHouse({
+      reading: {
+        ...base,
+        volumes: [
+          { ...base.volumes[0]!, roofFinish: 'roof2', wallFinish: 'stone' },
+          { ...base.volumes[1]!, arcade: 'segment' },
+        ],
+        openings: [{ ...base.openings[0]!, head: 'arch' }],
+        piers: [
+          { plan: [0.0, 0.04, 0.95, 1], top: 0.45, band: 0.8 },
+          { plan: [0.005, 0.04, 0.955, 1], top: 0.45 },
+          { plan: [0.5, 0.501, 0.95, 1], top: 0.45 },
+        ],
+        type: 'villa',
+      },
+      views,
+      mirrored,
+    })!;
+    expect(plan.volumes[0]).toMatchObject({ roofFinish: 'roof2', wallFinish: 'stone' });
+    expect(plan.volumes[1]!.arcade).toBe('segment');
+    expect(plan.openings[0]!.head).toBe('arch');
+    expect(plan.piers).toEqual([{ plan: [0, 0.04, 0.95, 1], top: 0.55, band: 0.2 }]);
+    expect(plan.type).toBe('villa');
+  });
+
+  it('builds the PQ-T72 plan when the reading has none of the new parts', () => {
+    const plan = fitHouse({ reading: reading(), views, mirrored })!;
+    expect(plan.piers).toBeUndefined();
+    expect(plan.type).toBeUndefined();
+    expect(plan.look.stone).toBeUndefined();
+    expect(plan.volumes.some((v) => v.wallFinish || v.roofFinish || v.arcade || v.truss)).toBe(
+      false
+    );
+  });
+
+  it('measures each finish in its sample box, not over the whole facade', () => {
+    const plan = fitHouse({
+      reading: reading({
+        finishes: [
+          // On the brick only, and on the window (its own colour: a second cladding here).
+          { finish: 'wall', material: 'brick', view: 'front', box: [0.05, 0.8, 0.5, 0.95] },
+          { finish: 'wall2', material: 'metal', view: 'front', box: [0.62, 0.57, 0.78, 0.73] },
+          { finish: 'stone', material: 'stone', color: '#887766' },
+        ],
+      }),
+      views,
+      mirrored,
+    })!;
+    expect(plan.look.wall.color).toBe('#a04632');
+    expect(plan.look.wall2).toEqual({ material: 'metal', color: '#3c5064' });
+    // No box: the colour the specialist gave.
+    expect(plan.look.stone).toEqual({ material: 'stone', color: '#887766' });
+  });
+
+  it('reads a sample box backwards on a mirrored drawing', () => {
+    const g = frontView();
+    // Columns 60–79 hold the window: mirrored, the drawing has it at 0.2–0.4.
+    expect(sampleColor(g, [0.22, 0.57, 0.38, 0.73], true)).toEqual([...GLASS]);
+    expect(sampleColor(g, [0.22, 0.57, 0.38, 0.73], false)).toEqual([...BRICK]);
+    expect(sampleColor(g, [0.5, 0.5, 0.501, 0.501], false)).toBeNull();
+  });
+
+  it("cuts each sampled finish's swatch inside its box", () => {
+    const plan = fitHouse({ reading: reading(), views, mirrored })!;
+    const patches = housePatches(plan, views, null, [
+      { finish: 'wall2', material: 'metal', view: 'front', box: [0.6, 0.55, 0.8, 0.75] },
+    ]);
+    const [s0, s1, y0, y1] = patches.wall2!.box;
+    expect(s0).toBeGreaterThanOrEqual(0.6);
+    expect(s1).toBeLessThanOrEqual(0.8);
+    expect(y0).toBeGreaterThanOrEqual(0.25);
+    expect(y1).toBeLessThanOrEqual(0.45);
+    expect(patches.wall).toBeDefined();
+  });
+
+  it('keeps only real piers: too thin or under the ground line are dropped', () => {
+    expect(
+      fitPiers([
+        { plan: [0.1, 0.105, 0.9, 1], top: 0.5 },
+        { plan: [0.2, 0.25, 0.9, 1], top: 0.99 },
+        // A post base (3 % high), not a pier.
+        { plan: [0.4, 0.45, 0.9, 1], top: 0.97 },
+        { plan: [0.3, 0.35, 1, 0.9], top: 0.5 },
+      ])
+    ).toEqual([{ plan: [0.3, 0.35, 0.9, 1], top: 0.5 }]);
   });
 });

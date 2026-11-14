@@ -2,6 +2,7 @@ import { atlasUv, faceSlot, FACE_VIEWS, type AtlasView, type FaceView } from './
 import {
   isOpenVolume,
   shedFall,
+  type HouseHead,
   type HouseOpening,
   type HousePlan,
   type HouseVolume,
@@ -17,7 +18,8 @@ import {
  * Slots: the five editable surfaces first (`HULL_SURFACES` order: roof, then each wall that can
  * wear its drawing), then the plain wall (a wall no drawing sees: behind a veranda, inside a
  * corner, a chimney), the trim (frames, sills, fascias, posts, bands), the glass, the doors and
- * the base (deck, steps).
+ * the base (deck, steps); then the other finishes (PQ-T73): a second cladding, the masonry of the
+ * piers, a second roofing, the timber of posts, brackets and trusses.
  */
 export const HOUSE_SLOTS = [
   'roof',
@@ -30,6 +32,10 @@ export const HOUSE_SLOTS = [
   'glass',
   'door',
   'base',
+  'wall2',
+  'stone',
+  'roof2',
+  'timber',
 ] as const;
 export type HouseSlot = (typeof HOUSE_SLOTS)[number];
 
@@ -84,6 +90,17 @@ export const HEADROOM = 0.04;
 export const RAIL_HEIGHT = 0.07;
 export const RAIL = 0.005;
 export const BALUSTER_SPACING = 0.022;
+/** Points along an arched head (each half). */
+export const ARCH_STEPS = 8;
+/** Rise of a segmental head, share of its half width. */
+export const SEGMENT_RISE = 0.35;
+/** Rise of a bracketed bay (timber knees), share of the bay's width. */
+export const BRACKET_RISE = 0.22;
+/** Pier cap: overhang past the pier and height (share of the model). */
+export const PIER_CAP_OVER = 0.006;
+export const PIER_CAP = 0.012;
+/** Truss member width (share of the model) and how far it stands proud of the gable. */
+export const TRUSS = 0.012;
 /** Plan share a veranda may stick out of the volume it sits under and still count as inside it. */
 export const HOST_SLACK = 0.02;
 
@@ -126,6 +143,12 @@ export function houseMesh(
   const Y = (y: number) => (y - 0.5) * h;
   const Z = (z: number) => (z - 0.5) * d;
   const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
+
+  // Finish slots (PQ-T73): a plan that reads none builds exactly as before.
+  const timber: HouseSlot = plan.look.timber ? 'timber' : 'trim';
+  const roofSlot = (v: HouseVolume): HouseSlot => (v.roofFinish === 'roof2' ? 'roof2' : 'roof');
+  const wallSlot = (v: HouseVolume): HouseSlot | null =>
+    v.wallFinish && v.wallFinish !== 'wall' ? v.wallFinish : null;
 
   const pos: number[] = [];
   const nrm: number[] = [];
@@ -413,9 +436,80 @@ export function houseMesh(
     return [u0, u1, v0, v1];
   };
 
+  /**
+   * Arched head of a rectangle [u0, u1] × [.., v1]: the curve's points from the left spring to the
+   * right one (null for a flat head). A half-round arch springs half its width under the top (a
+   * segment when the opening is too low for it).
+   */
+  const archCurve = (head: HouseHead, u0: number, u1: number, v0: number, v1: number) => {
+    if (head === 'flat') return null;
+    const half = (u1 - u0) / 2;
+    const rise =
+      head === 'arch'
+        ? Math.min(half, (v1 - v0) * 0.6)
+        : head === 'bracket'
+          ? Math.min((u1 - u0) * BRACKET_RISE, (v1 - v0) * 0.5)
+          : Math.min(half * SEGMENT_RISE, (v1 - v0) * 0.4);
+    if (rise < EPS) return null;
+    const spring = v1 - rise;
+    const pts: Array<[number, number]> = [];
+    const n = ARCH_STEPS * 2;
+    for (let i = 0; i <= n; i++) {
+      const t = i / n;
+      const u = u0 + (u1 - u0) * t;
+      // Elliptic for an arch, a flatter circle-like segment, quarter knees for brackets.
+      const k = 2 * t - 1;
+      const lift =
+        head === 'bracket'
+          ? Math.min(1, Math.min(t, 1 - t) * 4) ** 0.5
+          : Math.sqrt(Math.max(0, 1 - k * k));
+      pts.push([u, spring + rise * lift]);
+    }
+    return { spring, pts };
+  };
+
+  /**
+   * Spandrels of an arched head: the wall between the curve and the top of its rectangle, at
+   * depth `d0` (wall plane) back to `d1` (the soffit along the curve), and an arched frame.
+   */
+  const spandrel = (
+    f: WallFrame,
+    curve: NonNullable<ReturnType<typeof archCurve>>,
+    top: number,
+    face: HouseSlot,
+    soffit: HouseSlot,
+    d1: number,
+    frame: HouseSlot | null
+  ) => {
+    const { pts } = curve;
+    const down: V3 = [0, -1, 0];
+    for (let i = 0; i + 1 < pts.length; i++) {
+      const [ua, va] = pts[i]!;
+      const [ub, vb] = pts[i + 1]!;
+      if (top - Math.min(va, vb) > EPS)
+        quad(f.at(ua, va), f.at(ub, vb), f.at(ub, top), f.at(ua, top), f.out, face, f.wall);
+      // The soffit faces down into the opening (the inner side of the arch).
+      quad(f.at(ua, va), f.at(ub, vb), f.at(ub, vb, d1), f.at(ua, va, d1), down, soffit);
+      if (frame) {
+        const fw = FRAME_WIDTH * S;
+        const fo = FRAME_OUT * S;
+        quad(
+          f.at(ua, va, fo),
+          f.at(ub, vb, fo),
+          f.at(ub, vb + fw, fo),
+          f.at(ua, va + fw, fo),
+          f.out,
+          frame,
+          f.wall
+        );
+      }
+    }
+  };
+
   /** Reveal, glass or leaf, frame, sill and glazing bars of one opening. */
-  const opening = (f: WallFrame, r: Rect, o: HouseOpening) => {
+  const opening = (f: WallFrame, r: Rect, o: HouseOpening, face: HouseSlot = 'wall') => {
     const [u0, u1, v0, v1] = r;
+    const curve = archCurve(o.head ?? (o.kind === 'arch' ? 'arch' : 'flat'), u0, u1, v0, v1);
     const rev = REVEAL * S;
     const inward = (u: number, v: number) => f.at(u, v, -rev);
     // Reveal: the four sides of the hole, facing its centre.
@@ -451,9 +545,15 @@ export function houseMesh(
     const fo = FRAME_OUT * S;
     // Frame round the hole (no bottom bar under a door or a garage door).
     const floorLevel = o.kind === 'door' || o.kind === 'garage';
-    bar(u0 - fw, u0, v0, v1 + fw, 0, fo);
-    bar(u1, u1 + fw, v0, v1 + fw, 0, fo);
-    bar(u0, u1, v1, v1 + fw, 0, fo);
+    if (curve) {
+      bar(u0 - fw, u0, v0, curve.spring, 0, fo);
+      bar(u1, u1 + fw, v0, curve.spring, 0, fo);
+      spandrel(f, curve, v1, face, 'wall', -rev, 'trim');
+    } else {
+      bar(u0 - fw, u0, v0, v1 + fw, 0, fo);
+      bar(u1, u1 + fw, v0, v1 + fw, 0, fo);
+      bar(u0, u1, v1, v1 + fw, 0, fo);
+    }
     if (!floorLevel && o.kind !== 'vent') {
       // Sill: wider than the frame, standing out.
       const so = SILL_OVER * S;
@@ -512,6 +612,7 @@ export function houseMesh(
 
   /** The roof of a volume over its walls, with fascias. */
   const roof = (vol: HouseVolume, b: WorldBox) => {
+    const rs = roofSlot(vol);
     const ov = OVERHANG * S;
     const fa = FASCIA * S;
     const rise = b.ridge - b.eave;
@@ -526,7 +627,7 @@ export function houseMesh(
       box(
         [b.x0 - o + fa / 2, b.eave + fa, b.z0 - o + fa / 2],
         [b.x1 + o - fa / 2, Math.max(b.ridge, b.eave + fa * 1.2), b.z1 + o - fa / 2],
-        'roof',
+        rs,
         ['bottom']
       );
       return;
@@ -554,7 +655,7 @@ export function houseMesh(
         })[fall];
       const c = ([x, z]: [number, number]): V3 => [x, height(x, z), z];
       const [c00, c10, c11, c01] = [c([x0, z0]), c([x1, z0]), c([x1, z1]), c([x0, z1])];
-      quad(c00, c10, c11, c01, up, 'roof', 'top');
+      quad(c00, c10, c11, c01, up, rs, 'top');
       fascia(c01, c11, [0, 0, 1]);
       fascia(c10, c00, [0, 0, -1]);
       fascia(c11, c10, [1, 0, 0]);
@@ -572,15 +673,15 @@ export function houseMesh(
       if (alongX) {
         const ra: V3 = [x0, r, cz];
         const rb: V3 = [x1, r, cz];
-        quad([x0, e, z1], [x1, e, z1], rb, ra, [0, 1, 1], 'roof', 'top');
-        quad([x1, e, z0], [x0, e, z0], ra, rb, [0, 1, -1], 'roof', 'top');
+        quad([x0, e, z1], [x1, e, z1], rb, ra, [0, 1, 1], rs, 'top');
+        quad([x1, e, z0], [x0, e, z0], ra, rb, [0, 1, -1], rs, 'top');
         fascia([x0, e, z1], [x1, e, z1], [0, 0, 1]);
         fascia([x1, e, z0], [x0, e, z0], [0, 0, -1]);
       } else {
         const ra: V3 = [cx, r, z0];
         const rb: V3 = [cx, r, z1];
-        quad([x1, e, z0], [x1, e, z1], rb, ra, [1, 1, 0], 'roof', 'top');
-        quad([x0, e, z1], [x0, e, z0], ra, rb, [-1, 1, 0], 'roof', 'top');
+        quad([x1, e, z0], [x1, e, z1], rb, ra, [1, 1, 0], rs, 'top');
+        quad([x0, e, z1], [x0, e, z0], ra, rb, [-1, 1, 0], rs, 'top');
         fascia([x1, e, z0], [x1, e, z1], [1, 0, 0]);
         fascia([x0, e, z1], [x0, e, z0], [-1, 0, 0]);
       }
@@ -604,15 +705,15 @@ export function houseMesh(
     const c11: V3 = [x1, e, z1];
     const c01: V3 = [x0, e, z1];
     if (alongX) {
-      quad(c01, c11, rb, ra, [0, 1, 1], 'roof', 'top');
-      quad(c10, c00, ra, rb, [0, 1, -1], 'roof', 'top');
-      tri(c00, c01, ra, [-1, 1, 0], 'roof', 'top');
-      tri(c11, c10, rb, [1, 1, 0], 'roof', 'top');
+      quad(c01, c11, rb, ra, [0, 1, 1], rs, 'top');
+      quad(c10, c00, ra, rb, [0, 1, -1], rs, 'top');
+      tri(c00, c01, ra, [-1, 1, 0], rs, 'top');
+      tri(c11, c10, rb, [1, 1, 0], rs, 'top');
     } else {
-      quad(c10, c11, rb, ra, [1, 1, 0], 'roof', 'top');
-      quad(c01, c00, ra, rb, [-1, 1, 0], 'roof', 'top');
-      tri(c00, c10, ra, [0, 1, -1], 'roof', 'top');
-      tri(c11, c01, rb, [0, 1, 1], 'roof', 'top');
+      quad(c10, c11, rb, ra, [1, 1, 0], rs, 'top');
+      quad(c01, c00, ra, rb, [-1, 1, 0], rs, 'top');
+      tri(c00, c10, ra, [0, 1, -1], rs, 'top');
+      tri(c11, c01, rb, [0, 1, 1], rs, 'top');
     }
     fascia(c01, c11, [0, 0, 1]);
     fascia(c10, c00, [0, 0, -1]);
@@ -638,6 +739,80 @@ export function houseMesh(
     );
   };
 
+  /**
+   * Spans of the piers standing on a side of a box (their plan crosses the side's line, within a
+   * pier's depth), along that side's axis.
+   */
+  const piersOn = (b: WorldBox, wall: HouseWall, beam: number): Array<[number, number]> => {
+    const plane = planeOf(b, wall);
+    const [s0, s1] = spanOf(b, wall);
+    return (plan.piers ?? []).flatMap((pier) => {
+      const [x0, x1, z0, z1] = [X(pier.plan[0]), X(pier.plan[1]), Z(pier.plan[2]), Z(pier.plan[3])];
+      const along = wall === 'front' || wall === 'back';
+      const [a0, a1] = along ? [x0, x1] : [z0, z1];
+      const [c0, c1] = along ? [z0, z1] : [x0, x1];
+      const depth = c1 - c0;
+      if (plane < c0 - depth || plane > c1 + depth) return [];
+      if (a1 < s0 - EPS || a0 > s1 + EPS) return [];
+      // A pier carries the side when it rises at least half way to its beam (a post base does not).
+      if (Y(pier.top) - Y(0) < (beam - Y(0)) / 2) return [];
+      return [[Math.max(a0, s0), Math.min(a1, s1)] as [number, number]];
+    });
+  };
+
+  /**
+   * A timber truss in both gable ends of a gable roof: tie beam at the eave, king post to the
+   * ridge, two struts, rafters under the rake, standing proud of the gable wall.
+   */
+  const truss = (vol: HouseVolume, b: WorldBox) => {
+    const ends: HouseWall[] = vol.ridgeAxis === 'z' ? ['front', 'back'] : ['left', 'right'];
+    const t = TRUSS * S;
+    for (const wall of ends) {
+      const f = frameOf(wall, planeOf(b, wall));
+      const [s0, s1] = spanOf(b, wall);
+      const mid = (s0 + s1) / 2;
+      const [e, r] = [b.eave, b.ridge];
+      const d0 = OVERHANG * S * 0.5;
+      const member = (ua: number, va: number, ub: number, vb: number) => {
+        // A bar of width t between two points of the gable plane, from d0 to d0 + t.
+        const len = Math.hypot(ub - ua, vb - va);
+        if (len < EPS) return;
+        const [nu, nv] = [(-(vb - va) / len) * (t / 2), ((ub - ua) / len) * (t / 2)];
+        const corners = (d: number): V3[] => [
+          f.at(ua - nu, va - nv, d),
+          f.at(ub - nu, vb - nv, d),
+          f.at(ub + nu, vb + nv, d),
+          f.at(ua + nu, va + nv, d),
+        ];
+        const [a, c] = [corners(d0 + t), corners(d0)];
+        const o = f.at(0, 0);
+        const side = f.at(nu, nv);
+        const n: V3 = [side[0] - o[0], side[1] - o[1], side[2] - o[2]];
+        quad(a[0]!, a[1]!, a[2]!, a[3]!, f.out, timber);
+        quad(a[0]!, a[1]!, c[1]!, c[0]!, [-n[0], -n[1], -n[2]], timber);
+        quad(a[3]!, a[2]!, c[2]!, c[3]!, n, timber);
+      };
+      member(s0, e, s1, e);
+      member(mid, e, mid, r - t);
+      member(s0, e + t / 2, mid, r);
+      member(s1, e + t / 2, mid, r);
+      const q = (s1 - s0) / 4;
+      const h = (r - e) / 2;
+      member(mid, e + h * 0.3, mid - q, e + h);
+      member(mid, e + h * 0.3, mid + q, e + h);
+    }
+  };
+
+  /**
+   * A gallery (PQ-T73): a balcony with no roof of its own but posts read and its eave well over
+   * its slab (a storey of a two-level veranda, under the main eave).
+   */
+  const isGallery = (vol: HouseVolume, b: WorldBox) =>
+    vol.kind === 'balcony' &&
+    vol.roof === 'none' &&
+    (vol.columns ?? 0) >= 2 &&
+    b.eave - Math.max(Y(vol.floor ?? 0), Y(0) + DECK_MIN * S) > HEADROOM * S;
+
   /** Deck or slab, posts, beam, railing and steps of an open volume. */
   const openVolume = (vol: HouseVolume, b: WorldBox) => {
     const balcony = vol.kind === 'balcony';
@@ -648,27 +823,68 @@ export function houseMesh(
     else box([b.x0, Y(0), b.z0], [b.x1, deck, b.z1], 'base', ['bottom']);
     const p = POST * S;
     const beam = BEAM * S;
-    // A terrace (its eave at its deck) has no posts and no beam; a balcony only under a roof.
-    const covered = balcony ? vol.roof !== 'none' : b.eave - deck > HEADROOM * S;
+    // A terrace (its eave at its deck) has no posts and no beam; a balcony only under a roof,
+    // or (PQ-T73) as a gallery.
+    const gallery = isGallery(vol, b);
+    const covered = balcony ? vol.roof !== 'none' || gallery : b.eave - deck > HEADROOM * S;
     for (const wall of vol.open ?? []) {
       const [s0, s1] = spanOf(b, wall);
       const f = frameOf(wall, planeOf(b, wall));
+      // Piers standing on this side (PQ-T73) carry it: no posts, the bays run between them.
+      const onSide = piersOn(b, wall, b.eave - beam);
       // Posts: up from the deck to the beam; under a balcony, from the ground to its slab.
       const posts = vol.columns ?? 0;
-      const n =
-        posts >= 2
+      const n = onSide.length
+        ? 0
+        : posts >= 2
           ? posts
           : balcony
             ? 0
             : Math.max(2, Math.round((s1 - s0) / (POST_SPACING * S)) + 1);
+      const supports: Array<[number, number]> = onSide.length ? [...onSide] : [];
       for (let i = 0; i < n; i++) {
         const u = s0 + p / 2 + ((s1 - s0 - p) * i) / (n - 1);
         const [lo, hi] = balcony
-          ? [Y(0), covered ? b.eave - beam : deck - slab]
+          ? [gallery ? deck : Y(0), covered ? b.eave - beam : deck - slab]
           : [deck, b.eave - beam];
-        frameBox(f, [u - p / 2, lo, -p], [u + p / 2, hi, 0], 'trim', ['bottom']);
+        frameBox(f, [u - p / 2, lo, -p], [u + p / 2, hi, 0], timber, ['bottom']);
+        supports.push([u - p / 2, u + p / 2]);
       }
-      if (covered) frameBox(f, [s0, b.eave - beam, -p], [s1, b.eave, 0], 'trim');
+      if (covered) frameBox(f, [s0, b.eave - beam, -p], [s1, b.eave, 0], timber);
+      // Arcade: each bay between two supports gets an arched or bracketed head under the beam.
+      if (covered && vol.arcade && vol.arcade !== 'flat') {
+        const sorted = supports.sort((m, q) => m[0] - q[0]);
+        const gaps: Array<[number, number]> = [];
+        if (sorted.length && sorted[0]![0] - s0 > p) gaps.push([s0, sorted[0]![0]]);
+        for (let i = 0; i + 1 < sorted.length; i++) gaps.push([sorted[i]![1], sorted[i + 1]![0]]);
+        if (sorted.length && s1 - sorted[sorted.length - 1]![1] > p)
+          gaps.push([sorted[sorted.length - 1]![1], s1]);
+        if (!sorted.length) gaps.push([s0, s1]);
+        const top = b.eave - beam;
+        const low = deck;
+        const face: HouseSlot = vol.arcade === 'bracket' ? timber : (wallSlot(vol) ?? 'wall');
+        for (const [g0, g1] of gaps) {
+          if (g1 - g0 < 2 * p) continue;
+          const curve = archCurve(vol.arcade, g0, g1, low, top);
+          if (!curve) continue;
+          // Front face, then the back face of the same spandrel (seen from inside the veranda).
+          spandrel(f, curve, top, face, face, -p, null);
+          const back = frameOf(OPPOSITE[wall], planeOf(b, wall) - f.out[0] * p - f.out[2] * p);
+          for (let i = 0; i + 1 < curve.pts.length; i++) {
+            const [ua, va] = curve.pts[i]!;
+            const [ub, vb] = curve.pts[i + 1]!;
+            if (top - Math.min(va, vb) > EPS)
+              quad(
+                back.at(ua, va),
+                back.at(ub, vb),
+                back.at(ub, top),
+                back.at(ua, top),
+                back.out,
+                face
+              );
+          }
+        }
+      }
       if (balcony || vol.rail) {
         // Railing: top rail, bottom rail, balusters.
         const top = deck + RAIL_HEIGHT * S;
@@ -717,13 +933,14 @@ export function houseMesh(
         cover,
         shadow,
         // A veranda's own wall is seen through its posts: never its drawing.
-        isOpenVolume(vol) ? 'wall' : wall
+        isOpenVolume(vol) ? 'wall' : (wallSlot(vol) ?? wall)
       );
+      const face: HouseSlot = isOpenVolume(vol) ? 'wall' : (wallSlot(vol) ?? wall);
       for (const x of mine) {
         const um = (x.r[0] + x.r[1]) / 2;
         const vm = (x.r[2] + x.r[3]) / 2;
         if (cover.some((c) => um > c[0] && um < c[1] && vm > c[2] && vm < c[3])) continue;
-        opening(f, x.r, x.o);
+        opening(f, x.r, x.o, face);
       }
       for (const band of vol.bands ?? []) {
         const v = Y(band);
@@ -758,6 +975,49 @@ export function houseMesh(
     }
   };
 
+  /** Some closed block's roof reaches over this volume's plan, above its eave. */
+  const roofedOver = (index: number) => {
+    const b = boxes[index]!;
+    return boxes.some(
+      (a, i) =>
+        i !== index &&
+        !isOpenVolume(plan.volumes[i]!) &&
+        a.eave >= b.eave - EPS &&
+        a.x0 <= b.x0 + EPS &&
+        a.x1 >= b.x1 - EPS &&
+        a.z0 <= b.z0 + EPS &&
+        a.z1 >= b.z1 - EPS
+    );
+  };
+
+  plan.volumes.forEach((vol, index) => {
+    if (vol.truss && vol.roof === 'gable' && !isOpenVolume(vol)) truss(vol, boxes[index]!);
+  });
+
+  // Piers (PQ-T73): masonry pillars from the ground to their top, a course band and a cap.
+  for (const pier of plan.piers ?? []) {
+    const [x0, x1, z0, z1] = [X(pier.plan[0]), X(pier.plan[1]), Z(pier.plan[2]), Z(pier.plan[3])];
+    // A pier under a pitched veranda roof stops at its beam (never through it); under a deck
+    // (a flat roof, a balcony on top) it rises through, carrying the railing above.
+    const [cx, cz] = [(x0 + x1) / 2, (z0 + z1) / 2];
+    const carried = plan.volumes.flatMap((v, i) => {
+      const b = boxes[i]!;
+      const inside = cx >= b.x0 - EPS && cx <= b.x1 + EPS && cz >= b.z0 - EPS && cz <= b.z1 + EPS;
+      const pitched = v.roof === 'hip' || v.roof === 'gable' || v.roof === 'shed';
+      return isOpenVolume(v) && pitched && inside && b.eave > Y(0) ? [b.eave - BEAM * S] : [];
+    });
+    const top = Math.min(Y(pier.top), ...carried);
+    const cap = PIER_CAP * S;
+    const o = PIER_CAP_OVER * S;
+    if (top - Y(0) < cap * 2) continue;
+    box([x0, Y(0), z0], [x1, top - cap, z1], 'stone', ['bottom']);
+    box([x0 - o, top - cap, z0 - o], [x1 + o, top, z1 + o], 'stone');
+    if (pier.band !== undefined && Y(pier.band) > Y(0) + cap && Y(pier.band) < top - cap * 2) {
+      const v = Y(pier.band);
+      box([x0 - o / 2, v - cap / 3, z0 - o / 2], [x1 + o / 2, v + cap / 3, z1 + o / 2], timber);
+    }
+  }
+
   plan.volumes.forEach((vol, index) => {
     const b = boxes[index]!;
     const host = hosts[index]!;
@@ -769,6 +1029,8 @@ export function houseMesh(
     }
     if (vol.kind === 'balcony') {
       if (vol.roof !== 'none') roof(vol, b);
+      // A gallery under no other roof is covered by a flat roof skirt at its eave.
+      else if (isGallery(vol, b) && !roofedOver(index)) roof({ ...vol, roof: 'flat' }, b);
       return;
     }
     // A bare deck (terrace): nothing stands on it but its railing.

@@ -124,6 +124,19 @@ export interface PerceptionBackend {
     signal?: AbortSignal
   ): Promise<PerceptionCall<HouseReadResult>>;
   /**
+   * One call of the piloted house reading (PQ-T73): the pilot or a part specialist, with its own
+   * system prompt and JSON schema; the raw answer. Optional: without it the single reading runs.
+   */
+  askHouseTool?(
+    tool: string,
+    system: string,
+    schema: { name: string; schema: object },
+    imageUrl: string,
+    question: string,
+    references: ReadonlyArray<string>,
+    signal?: AbortSignal
+  ): Promise<PerceptionCall<{ content: string | null }>>;
+  /**
    * Rubric judge (PQ-T4): `imageUrl` is photo | model | model ¾, `question` names the object.
    * Asked of `META_JUDGE_MODEL` (Muse Wonder); offline and background only.
    */

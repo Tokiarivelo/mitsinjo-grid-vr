@@ -1,17 +1,20 @@
 import {
   HOUSE_CHIMNEYS_MAX,
   HOUSE_OPENINGS_MAX,
+  HOUSE_PIERS_MAX,
   HOUSE_VOLUMES_MAX,
   HousePlanSchema,
   isOpenVolume,
+  type HouseFinish,
   type HouseMaterial,
   type HouseOpening,
+  type HousePier,
   type HousePlan,
   type HouseVolume,
   type HouseWall,
 } from '@/lib/house-plan';
 import type { GridView } from '../recon/views';
-import type { HouseReading, ReadOpening } from './house-prompt';
+import type { HouseReading, ReadFinish, ReadOpening } from './house-prompt';
 
 /**
  * The house specialist's reading brought to the model (PQ-T72): every measure turned from its
@@ -404,7 +407,13 @@ export function fitHouse({
     if (r.roof === 'flat' || r.roof === 'none')
       ridge = r.roof === 'flat' ? Math.max(eave, ridge) : eave;
     const open = r.open?.length ? [...new Set(r.open)] : undefined;
-    const floor = r.floor !== undefined ? Math.min(DECK_MAX, clamp01(1 - r.floor)) : undefined;
+    // A deck stays low; a balcony's slab is at its storey (PQ-T73: it was pinned to the deck).
+    const floor =
+      r.floor !== undefined
+        ? r.kind === 'balcony'
+          ? clamp01(1 - r.floor)
+          : Math.min(DECK_MAX, clamp01(1 - r.floor))
+        : undefined;
     const volume: HouseVolume = {
       kind: r.kind,
       plan: [round3(x0), round3(x1), round3(z0), round3(z1)],
@@ -426,11 +435,32 @@ export function fitHouse({
         : {}),
     };
     if (volume.bands && !volume.bands.length) delete volume.bands;
+    // PQ-T73: its finishes, the head of its bays, its gable trusses.
+    if (r.wallFinish && r.wallFinish !== 'wall') volume.wallFinish = r.wallFinish;
+    if (r.roofFinish === 'roof2') volume.roofFinish = 'roof2';
+    if (open && r.arcade && r.arcade !== 'flat') volume.arcade = r.arcade;
+    if (r.truss && r.roof === 'gable') volume.truss = true;
     // A balcony is open by nature: on its free sides at least the front.
     if (volume.kind === 'balcony' && !volume.open) volume.open = ['front'];
     return [volume];
   });
   if (!volumes.some((v) => !isOpenVolume(v))) return null;
+  // PQ-T73: a balcony read without its floor stands on the veranda under it (same plan, lower).
+  volumes = volumes.map((v) => {
+    if (v.kind !== 'balcony' || v.floor !== undefined) return v;
+    const under = volumes.find(
+      (u) =>
+        u !== v &&
+        isOpenVolume(u) &&
+        u.kind !== 'balcony' &&
+        u.eave < v.eave &&
+        iou(
+          [u.plan[0], u.plan[2], u.plan[1], u.plan[3]],
+          [v.plan[0], v.plan[2], v.plan[1], v.plan[3]]
+        ) > OPENING_DUPLICATE
+    );
+    return under ? { ...v, floor: under.eave } : v;
+  });
 
   // Outer edges on the box: the house fills its drawings.
   const solids = volumes.filter((v) => !isOpenVolume(v));
@@ -499,6 +529,7 @@ export function fitHouse({
       along: [round3(s0), round3(s1)],
       rise: [round3(y0), round3(y1)],
       ...(o.panes ? { panes: [o.panes[0]!, o.panes[1]!] as [number, number] } : {}),
+      ...(o.head && o.head !== 'flat' && o.head !== 'bracket' ? { head: o.head } : {}),
     });
   }
 
@@ -514,15 +545,91 @@ export function fitHouse({
     return [{ plan, top: round3(clamp01(1 - c.top)) }];
   });
 
+  const piers = fitPiers(reading.piers ?? []);
+
   const plan: HousePlan = {
     volumes,
     openings,
     chimneys,
-    look: measureLook(reading, volumes, openings, views, top, fallback),
+    ...(piers.length ? { piers } : {}),
+    look: measureLook(reading, volumes, openings, views, top, fallback, mirrored),
+    ...(reading.type ? { type: reading.type } : {}),
   };
   const valid = HousePlanSchema.safeParse(plan);
   return valid.success ? valid.data : null;
 }
+
+/** Smallest pier side kept, share of the plan. */
+export const PIER_MIN = 0.008;
+/** Lowest pier top kept, share of the height (lower: a post base, not a pier). */
+export const PIER_MIN_TOP = 0.08;
+
+/**
+ * Piers (PQ-T73) in the model's frame (y up), one per square: a pier read twice (front and side)
+ * overlapping another by half is dropped.
+ */
+export function fitPiers(read: NonNullable<HouseReading['piers']>): HousePier[] {
+  const out: HousePier[] = [];
+  for (const p of read) {
+    if (out.length >= HOUSE_PIERS_MAX) break;
+    const [a0, a1, b0, b1] = p.plan.map(clamp01) as [number, number, number, number];
+    const plan: HousePier['plan'] = [
+      round3(Math.min(a0, a1)),
+      round3(Math.max(a0, a1)),
+      round3(Math.min(b0, b1)),
+      round3(Math.max(b0, b1)),
+    ];
+    if (plan[1] - plan[0] < PIER_MIN || plan[3] - plan[2] < PIER_MIN) continue;
+    const top = round3(clamp01(1 - p.top));
+    if (top < PIER_MIN_TOP) continue;
+    const box = [plan[0], plan[2], plan[1], plan[3]];
+    if (out.some((q) => iou([q.plan[0], q.plan[2], q.plan[1], q.plan[3]], box) > OPENING_DUPLICATE))
+      continue;
+    const band = p.band !== undefined ? round3(clamp01(1 - p.band)) : undefined;
+    out.push({ plan, top, ...(band !== undefined && band > 0.02 && band < top ? { band } : {}) });
+  }
+  return out;
+}
+
+/** Fewest drawn cells a finish's sample box must hold to be measured. */
+export const SAMPLE_MIN_CELLS = 6;
+
+/**
+ * Median colour of a finish's sample box (PQ-T73), read on its view's grid: the box is in the
+ * drawing's own shares (y down), the grid canonical (mirrored back), the view from above as drawn.
+ * Null when the box holds too few drawn cells.
+ */
+export function sampleColor(
+  g: GridView,
+  box: ReadonlyArray<number>,
+  mirrored: boolean
+): [number, number, number] | null {
+  const [u0, v0, u1, v1] = box.map(clamp01) as [number, number, number, number];
+  const [a, b] = [canonical(u0, mirrored), canonical(u1, mirrored)];
+  const [c0, c1] = [Math.min(a, b) * g.cols, Math.max(a, b) * g.cols];
+  const [r0, r1] = [Math.min(v0, v1) * g.rows, Math.max(v0, v1) * g.rows];
+  const px: Array<[number, number, number]> = [];
+  for (let r = Math.floor(r0); r < Math.ceil(r1); r++)
+    for (let c = Math.floor(c0); c < Math.ceil(c1); c++) {
+      if (r < 0 || c < 0 || r >= g.rows || c >= g.cols) continue;
+      const i = r * g.cols + c;
+      if (g.mask[i]) px.push(rgbAt(g, i));
+    }
+  return px.length >= SAMPLE_MIN_CELLS ? median3(px) : null;
+}
+
+/** The grid a finish's sample is on, and whether it is mirrored; null without that view. */
+const sampleGrid = (
+  f: ReadFinish,
+  views: HouseFitInput['views'],
+  top: GridView | null,
+  mirrored: Partial<Record<HouseWall, boolean>>
+): { g: GridView; mirrored: boolean } | null => {
+  if (!f.view || !f.box) return null;
+  if (f.view === 'top') return top ? { g: top, mirrored: false } : null;
+  const g = views[f.view];
+  return g ? { g, mirrored: mirrored[f.view] ?? MIRRORED_DEFAULT[f.view] } : null;
+};
 
 /** An opening in the model's frame: [s0, s1, y0, y1], snapped on its drawing; null when empty. */
 function fitOpening(
@@ -551,7 +658,8 @@ function measureLook(
   openings: ReadonlyArray<HouseOpening>,
   views: HouseFitInput['views'],
   top: GridView | null,
-  fallback: NonNullable<HouseFitInput['fallback']>
+  fallback: NonNullable<HouseFitInput['fallback']>,
+  mirrored: Partial<Record<HouseWall, boolean>> = {}
 ): HousePlan['look'] {
   const front = views.front;
   const main = volumes
@@ -593,15 +701,33 @@ function measureLook(
     const m = median3(px);
     return m ? toHex(m) : null;
   };
+  // PQ-T73: a finish with a sample box is measured there (the wall median mixed piers, posts
+  // and shadows; the roof median mixed shingles and metal).
+  const sampled = (finish: HouseFinish) => {
+    const f = reading.finishes?.find((x) => x.finish === finish);
+    if (!f) return null;
+    const grid = sampleGrid(f, views, top, mirrored);
+    const c = grid ? sampleColor(grid.g, f.box!, grid.mirrored) : null;
+    return { material: f.material, color: c ? toHex(c) : (f.color?.toLowerCase() ?? null) };
+  };
+  const extra = Object.fromEntries(
+    (['wall2', 'stone', 'roof2', 'timber'] as const).flatMap((k) => {
+      const s = sampled(k);
+      return s?.color ? [[k, { material: s.material, color: s.color }]] : [];
+    })
+  ) as Partial<Pick<HousePlan['look'], 'wall2' | 'stone' | 'roof2' | 'timber'>>;
+  const wallS = sampled('wall');
+  const roofS = sampled('roof');
   return {
     wall: {
       material: reading.walls?.material ?? fallback.wall ?? 'plaster',
-      color: measured(wallPx) ?? reading.walls?.color ?? '#d8cfc0',
+      color: wallS?.color ?? measured(wallPx) ?? reading.walls?.color ?? '#d8cfc0',
     },
     roof: {
       material: reading.roof?.material ?? fallback.roof ?? 'tile',
-      color: measured(roofPx) ?? reading.roof?.color ?? '#8a4b38',
+      color: roofS?.color ?? measured(roofPx) ?? reading.roof?.color ?? '#8a4b38',
     },
+    ...extra,
     trim: reading.trim ?? '#f2efe8',
     glass: (glassPx.length ? measured(dark) : null) ?? reading.glass ?? '#4d6475',
     door: reading.door ?? '#5a3d2b',
@@ -757,9 +883,11 @@ const hexRgb = (hex: string) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2
 export function housePatches(
   plan: HousePlan,
   views: HouseFitInput['views'],
-  top: GridView | null
-): Partial<Record<'wall' | 'roof', HousePatch>> {
-  const out: Partial<Record<'wall' | 'roof', HousePatch>> = {};
+  top: GridView | null,
+  finishes: ReadonlyArray<ReadFinish> = [],
+  mirrored: Partial<Record<HouseWall, boolean>> = {}
+): Partial<Record<HouseFinish, HousePatch>> {
+  const out: Partial<Record<HouseFinish, HousePatch>> = {};
   const front = views.front;
   if (front) {
     const m = SWATCH_MARGIN;
@@ -787,6 +915,21 @@ export function housePatches(
     const target = dominantColor(top, () => true) ?? hexRgb(plan.look.roof.color);
     const box = firstPatch(top, target, () => true);
     if (box) out.roof = { view: 'top', box };
+  }
+  // PQ-T73: each finish the specialist sampled gets the cleanest square inside its sample box,
+  // in place of the guess above (a wall square caught on a pier, a roof square on the metal).
+  for (const f of finishes) {
+    const grid = sampleGrid(f, views, top, mirrored);
+    if (!grid) continue;
+    const [u0, v0, u1, v1] = f.box!.map(clamp01) as [number, number, number, number];
+    const [a, b] = [canonical(u0, grid.mirrored), canonical(u1, grid.mirrored)];
+    const [s0, s1] = [Math.min(a, b), Math.max(a, b)];
+    const [y0, y1] = [1 - Math.max(v0, v1), 1 - Math.min(v0, v1)];
+    const inside = (s: number, y: number) => s >= s0 && s <= s1 && y >= y0 && y <= y1;
+    const target = sampleColor(grid.g, f.box!, grid.mirrored);
+    if (!target) continue;
+    const box = firstPatch(grid.g, target, inside);
+    if (box) out[f.finish] = { view: f.view!, box };
   }
   return out;
 }

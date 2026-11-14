@@ -109,6 +109,26 @@ describe('house projection (PQ-T72)', () => {
     expect(back.bumpMap).toBe(back.map);
   });
 
+  it('dresses the PQ-T73 finishes: their own look, else the one they fall back on', () => {
+    const swatches = { wall: { image: ATLAS, size: 0.05 }, roof: { image: ATLAS, size: 0.1 } };
+    const look = {
+      ...plan.look,
+      swatches,
+      stone: { material: 'stone' as const, color: '#8a7360' },
+      timber: { material: 'wood' as const, color: '#5a3b26' },
+    };
+    const ms = houseMaterials({ ...recipe, house: { ...plan, look } });
+    const at = (s: (typeof HOUSE_SLOTS)[number]) => ms[HOUSE_SLOTS.indexOf(s)]!;
+    // No second roofing read: the main roofing's swatch, both sides like a roof.
+    expect(at('roof2').map).toBe(at('roof').map);
+    expect(at('roof2').side).toBe(THREE.DoubleSide);
+    // No second cladding read: the wall's swatch; stone read without a swatch: its own colour.
+    expect(at('wall2').map).toBe(at('wall').map);
+    expect(at('stone').map).not.toBe(at('wall').map);
+    expect(at('stone').color.getHexString()).not.toBe(at('wall').color.getHexString());
+    expect(at('timber').map).not.toBe(at('wall').map);
+  });
+
   it('gives the editor the roof covering as base look, and the walls too without drawings', () => {
     expect(houseBaseLooks(plan, true)).toEqual({
       roof: { material: 'metal', color: '#212325' },

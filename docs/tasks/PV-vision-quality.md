@@ -702,6 +702,20 @@ One task = one commit, with its Vitest test, its `contracts.md` update and its m
       lodge, bungalow, detached, rural, school, small apartments, lodge, shop). Open: curved / arched heads
       and dormers are rectangles; a glazed gable is clipped to its rake.
 
+- [x] **PQ-T73 Part specialists, piloted.** The single house reading missed what it was not asked
+      about closely (user's stone lodge: no arcades, one roof material, dark walls and white frames).
+      Now a pilot (`housePilot`) briefs the house type, its parts and a focus note per specialist, then the
+      tools it calls run in parallel (`askHouseTool`, `house-tools.ts`): `massing` (blocks, roof layout,
+      roof / wall finish, arcades, trusses), `openings` (heads), `structure` (masonry piers, chimneys),
+      `finishes` (material, colour and a sample box per finish). New plan parts built by `houseMesh`:
+      stone piers with cap and course, arched / segmental heads with spandrels and arched frames, arcade
+      bays (arch, segment, timber knees) between posts or piers, gable trusses, a second cladding, a
+      second roofing, timber. Colours and swatches measured in each finish's sample box. Balconies stay
+      at their storey. Fallback: no massing → the PQ-T72 single reading (`SINGLE=1` forces it).
+      **Test:** `house-tools.test.ts`, `house-fit.test.ts`, `house-mesh.test.ts` (PQ-T72 hashes kept
+      byte for byte on a real lodge plan), `house-projection.test.ts`. Bungalow replayed on PQ-T72 and
+      PQ-T73 code: same `house.json` and render.
+
 ## Exit criteria
 
 Every real object meets methodology §9 · every prompt has a version and an eval behind it · the report, the

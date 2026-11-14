@@ -195,6 +195,23 @@ export class PerceptionClient {
     );
   }
 
+  /** Pilot or part specialist of a house (PQ-T73); null content without it (single reading). */
+  askHouseTool(
+    tool: string,
+    system: string,
+    schema: { name: string; schema: object },
+    imageUrl: string,
+    question: string,
+    references: ReadonlyArray<string>,
+    signal?: AbortSignal
+  ): Promise<{ content: string | null } & PerceptionSource> {
+    return this.run('askHouseTool', (b) =>
+      b.askHouseTool
+        ? b.askHouseTool(tool, system, schema, imageUrl, question, references, signal)
+        : Promise.resolve({ model: b.name, usage: {}, result: { content: null } })
+    );
+  }
+
   judgeShape(imageUrl: string, question: string, signal?: AbortSignal): Promise<JudgeResult> {
     return this.run('judgeShape', (b) => b.judgeShape(imageUrl, question, signal));
   }

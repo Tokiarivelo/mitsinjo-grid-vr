@@ -46,6 +46,7 @@ import {
   sampleObjectPixels,
   sampleObjectRgb,
 } from './shape-colors';
+import { houseToolAsk } from './house/house-specialist';
 import { conceptOf, fetchOutlineForBox, samRetries, type OutlineCrop } from './outline';
 import { applyConstraints, buildGraph, notBuilt, partCoverage, repairGraph } from './object-graph';
 import { deduceHiddenSides } from './hidden-sides';
@@ -234,7 +235,12 @@ export async function runObjectShape(
     Partial<
       Pick<
         PerceptionClient,
-        'segmentImage' | 'checkViews' | 'writeBuildCode' | 'nameClasses' | 'readHouse'
+        | 'segmentImage'
+        | 'checkViews'
+        | 'writeBuildCode'
+        | 'nameClasses'
+        | 'readHouse'
+        | 'askHouseTool'
       >
     >,
   photo: PhotoForRegions | null,
@@ -414,6 +420,13 @@ export async function runObjectShape(
                 ? { nameClasses: perception.nameClasses.bind(perception) }
                 : {}),
               ...(perception.readHouse ? { readHouse: perception.readHouse.bind(perception) } : {}),
+              ...(perception.askHouseTool
+                ? {
+                    askHouseTool: houseToolAsk({
+                      askHouseTool: perception.askHouseTool.bind(perception),
+                    }),
+                  }
+                : {}),
             }
           : null;
     if (reconDeps && (target.facadeUrl || (photo && imageUrl !== fullImageUrl))) {

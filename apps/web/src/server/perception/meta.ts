@@ -55,6 +55,7 @@ import {
   HOUSE_SYSTEM_PROMPT,
   parseHouseReading,
 } from './house/house-prompt';
+import { HOUSE_TOOLS_PROMPT_VERSION } from './house/house-tools';
 import {
   LABEL_JSON_SCHEMA,
   LABEL_SYSTEM_PROMPT,
@@ -613,6 +614,34 @@ export class MetaPerceptionBackend implements PerceptionBackend {
       `[vision] 3D house reading from ${model}: ${reading ? `${reading.volumes.length} volumes (${reading.volumes.map((v) => v.kind).join(', ')}), ${reading.openings.length} openings, ${reading.chimneys.length} chimneys` : 'unusable'}`
     );
     return { model, usage, result: { reading } };
+  }
+
+  async askHouseTool(
+    tool: string,
+    system: string,
+    schema: { name: string; schema: object },
+    imageUrl: string,
+    question: string,
+    references: ReadonlyArray<string>,
+    signal?: AbortSignal
+  ): Promise<PerceptionCall<{ content: string | null }>> {
+    // PQ-T73: the pilot and each part specialist, on the seeing model of the parts step.
+    const kind = tool === 'pilot' ? 'housePilot' : 'houseTool';
+    const { content, model, usage } = await this.visionJson(
+      system,
+      question,
+      imageUrl,
+      schema,
+      signal,
+      true,
+      { kind, params: { tool, promptVersion: HOUSE_TOOLS_PROMPT_VERSION } },
+      references,
+      this.modelFor('parts')
+    );
+    console.info(
+      `[vision] 3D house ${tool} from ${model}: ${content ? `${content.length} chars` : 'empty'}`
+    );
+    return { model, usage, result: { content: content || null } };
   }
 
   async judgeShape(

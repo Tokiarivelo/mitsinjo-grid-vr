@@ -1,9 +1,13 @@
 import { z } from 'zod';
 import {
+  HOUSE_FINISHES,
+  HOUSE_HEADS,
   HOUSE_MATERIALS,
   HOUSE_OPENINGS,
+  HOUSE_ROOF_FINISHES,
   HOUSE_ROOFS,
   HOUSE_VOLUMES,
+  HOUSE_WALL_FINISHES,
   HOUSE_WALLS,
 } from '@/lib/house-plan';
 
@@ -137,10 +141,14 @@ export const HouseReadingSchema = z.object({
   chimneys: z.array(z.unknown()).default([]),
   walls: z.unknown().optional(),
   roof: z.unknown().optional(),
-  trim: z.string().optional(),
-  glass: z.string().optional(),
-  door: z.string().optional(),
-  base: z.string().optional(),
+  trim: z.string().nullish(),
+  glass: z.string().nullish(),
+  door: z.string().nullish(),
+  base: z.string().nullish(),
+  // PQ-T73, from the part specialists (absent from a single reading).
+  piers: z.array(z.unknown()).default([]),
+  finishes: z.array(z.unknown()).default([]),
+  type: z.string().nullish(),
 });
 
 export const ReadVolumeSchema = z.object({
@@ -155,6 +163,10 @@ export const ReadVolumeSchema = z.object({
   floor: shareIn.optional().catch(undefined),
   rail: z.boolean().optional().catch(undefined),
   bands: z.array(shareIn).optional().catch(undefined),
+  wallFinish: z.enum(HOUSE_WALL_FINISHES).optional().catch(undefined),
+  roofFinish: z.enum(HOUSE_ROOF_FINISHES).optional().catch(undefined),
+  arcade: z.enum(HOUSE_HEADS).optional().catch(undefined),
+  truss: z.boolean().optional().catch(undefined),
 });
 export type ReadVolume = z.infer<typeof ReadVolumeSchema>;
 
@@ -163,11 +175,40 @@ export const ReadOpeningSchema = z.object({
   kind: z.enum(HOUSE_OPENINGS).catch('window'),
   box: quadIn,
   panes: z.array(z.number().int().min(1).max(8)).length(2).optional().catch(undefined),
+  head: z.enum(HOUSE_HEADS).optional().catch(undefined),
 });
 export type ReadOpening = z.infer<typeof ReadOpeningSchema>;
 
 export const ReadChimneySchema = z.object({ plan: quadIn, top: shareIn });
 export type ReadChimney = z.infer<typeof ReadChimneySchema>;
+
+/** A masonry pier (PQ-T73): plan on the view from above, top and stone course on an elevation. */
+export const ReadPierSchema = z.object({
+  plan: quadIn,
+  top: shareIn,
+  band: shareIn.optional().catch(undefined),
+});
+export type ReadPier = z.infer<typeof ReadPierSchema>;
+
+/**
+ * A finish (PQ-T73): its material and colour, and a sample box on one drawing that shows only
+ * that finish (where its colour is measured and its swatch cut).
+ */
+export const ReadFinishSchema = z.object({
+  finish: z.enum(HOUSE_FINISHES),
+  material: z.enum(HOUSE_MATERIALS).catch('wood'),
+  color: z
+    .string()
+    .regex(/^#[0-9a-f]{6}$/i)
+    .optional()
+    .catch(undefined),
+  view: z
+    .enum([...HOUSE_WALLS, 'top'])
+    .optional()
+    .catch(undefined),
+  box: quadIn.optional().catch(undefined),
+});
+export type ReadFinish = z.infer<typeof ReadFinishSchema>;
 
 const LookSchema = z.object({
   material: z.enum(HOUSE_MATERIALS),
@@ -185,10 +226,14 @@ export interface HouseReading {
   glass: string | null;
   door: string | null;
   base: string | null;
+  /** PQ-T73 (empty from a single reading). */
+  piers?: ReadPier[];
+  finishes?: ReadFinish[];
+  type?: string | null;
 }
 
 const HEX = /^#[0-9a-f]{6}$/i;
-const hexOr = (v: string | undefined) => (v && HEX.test(v) ? v.toLowerCase() : null);
+const hexOr = (v: string | null | undefined) => (v && HEX.test(v) ? v.toLowerCase() : null);
 
 /** Parse the answer (JSON, possibly fenced); null when it holds no usable volume. */
 export function parseHouseReading(content: string): HouseReading | null {
@@ -229,5 +274,8 @@ export function parseHouseReading(content: string): HouseReading | null {
     glass: hexOr(raw.data.glass),
     door: hexOr(raw.data.door),
     base: hexOr(raw.data.base),
+    piers: each(raw.data.piers, ReadPierSchema),
+    finishes: each(raw.data.finishes, ReadFinishSchema),
+    type: raw.data.type?.trim().slice(0, 60) || null,
   };
 }

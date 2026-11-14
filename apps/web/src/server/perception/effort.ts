@@ -25,6 +25,12 @@ export const CALL_EFFORT: Readonly<Record<string, ReasoningEffort>> = {
    * drops a call after 300 s without headers or without a body chunk).
    */
   readHouse: 'high',
+  /**
+   * Piloted house reading (PQ-T73): the pilot only briefs (type, parts, notes): `medium`; each
+   * part specialist measures its part on every drawing: `high`, streamed like `readHouse`.
+   */
+  housePilot: 'medium',
+  houseTool: 'high',
 };
 
 export const DEFAULT_EFFORT: ReasoningEffort = 'high';

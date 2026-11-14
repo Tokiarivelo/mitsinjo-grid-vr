@@ -3,14 +3,29 @@ import 'server-only';
 import sharp from 'sharp';
 import {
   HOUSE_MATERIALS,
+  type HouseFinish,
   type HouseMaterial,
   type HousePlan,
+  type HouseWall,
   type HouseSwatch,
 } from '@/lib/house-plan';
+import type { PerceptionClient } from '../client';
 import type { HouseReadResult } from '../schemas';
 import type { AlignedViews, GridView, ViewFrame, ViewName } from '../recon/views';
 import { cleanSwatch, fitHouse, housePatches, type HousePatch } from './house-fit';
-import { buildHouseQuestion } from './house-prompt';
+import { buildHouseQuestion, type HouseReading } from './house-prompt';
+import {
+  HOUSE_TOOL_SPECS,
+  HOUSE_TOOLS_ALWAYS,
+  mergeToolAnswers,
+  parseBrief,
+  PILOT_JSON_SCHEMA,
+  PILOT_SYSTEM_PROMPT,
+  pilotQuestion,
+  toolQuestion,
+  type HouseBrief,
+  type HouseTool,
+} from './house-tools';
 
 /**
  * The house specialist (PQ-T72), the part that talks to the model: each validated drawing cut to
@@ -29,6 +44,139 @@ export type ReadHouse = (
   references: ReadonlyArray<string>,
   signal?: AbortSignal
 ) => Promise<Pick<HouseReadResult, 'reading'>>;
+
+/**
+ * One call of the piloted house reading (PQ-T73): the pilot or a part specialist, its own system
+ * prompt and schema, the same images. Answers the raw content; null when the call fails.
+ */
+export type AskHouseTool = (
+  tool: HouseTool | 'pilot',
+  system: string,
+  schema: { name: string; schema: object },
+  imageUrl: string,
+  question: string,
+  references: ReadonlyArray<string>,
+  signal?: AbortSignal
+) => Promise<string | null>;
+
+/** The client's tool call as an `AskHouseTool` (a mock answer counts as none). */
+export const houseToolAsk =
+  (p: Pick<PerceptionClient, 'askHouseTool'>): AskHouseTool =>
+  async (...args) => {
+    const r = await p.askHouseTool(...args);
+    return r.source === 'meta' ? r.content : null;
+  };
+
+/**
+ * Longest wait for one pilot or specialist call (PQ-T73). The stream has no timer of its own
+ * (`longFetch`): a call the provider leaves hanging would hold the whole house; the slowest
+ * specialist seen answered in ~6 min. Past this, its answer counts as none.
+ */
+export const HOUSE_TOOL_TIMEOUT_MS = 12 * 60_000;
+
+/**
+ * The piloted reading (PQ-T73): the pilot's brief, then the specialists it calls, in parallel,
+ * merged. Null when the massing specialist gives nothing usable (the caller falls back).
+ */
+export async function readHouseParts(
+  rawAsk: AskHouseTool,
+  label: string,
+  order: ReadonlyArray<'front' | 'right' | 'back' | 'left' | 'top'>,
+  images: ReadonlyArray<string>,
+  signal?: AbortSignal,
+  timeoutMs = HOUSE_TOOL_TIMEOUT_MS
+): Promise<{ reading: HouseReading | null; brief: HouseBrief | null }> {
+  // Each call ends with the request or at its own deadline, whichever comes first.
+  const ask: AskHouseTool = (tool, system, schema, img, question, refs, outer) => {
+    const deadline = AbortSignal.timeout(timeoutMs);
+    const both = outer ? AbortSignal.any([outer, deadline]) : deadline;
+    return new Promise<string | null>((resolve, reject) => {
+      const stop = () =>
+        reject(new Error(`${tool}: no answer in ${Math.round(timeoutMs / 1000)} s`));
+      if (both.aborted) return stop();
+      both.addEventListener('abort', stop, { once: true });
+      rawAsk(tool, system, schema, img, question, refs, both).then(resolve, reject);
+    });
+  };
+  const tag = `[vision] house pilot for "${label}"`;
+  const [main, ...refs] = images;
+  if (!main) return { reading: null, brief: null };
+  const safe = async (p: Promise<string | null>) => {
+    try {
+      return await p;
+    } catch (err) {
+      console.warn(`${tag}: a call failed:`, err instanceof Error ? err.message : err);
+      return null;
+    }
+  };
+  const briefText = await safe(
+    ask(
+      'pilot',
+      PILOT_SYSTEM_PROMPT,
+      PILOT_JSON_SCHEMA,
+      main,
+      pilotQuestion(label, order),
+      refs,
+      signal
+    )
+  );
+  const brief = briefText ? parseBrief(briefText) : null;
+  const tools: HouseTool[] = brief
+    ? brief.calls.map((c) => c.tool)
+    : [...HOUSE_TOOLS_ALWAYS, 'structure'];
+  console.info(
+    `${tag}: ${
+      brief
+        ? `${brief.type}, parts ${
+            Object.keys(brief.parts)
+              .filter((k) => brief.parts[k as keyof typeof brief.parts])
+              .join(', ') || 'none'
+          }`
+        : 'no brief'
+    } → ${tools.join(', ')}`
+  );
+  const answers = await Promise.all(
+    tools.map(async (tool) => {
+      const spec = HOUSE_TOOL_SPECS[tool];
+      return [
+        tool,
+        await safe(
+          ask(
+            tool,
+            spec.system,
+            spec.schema,
+            main,
+            toolQuestion(tool, label, order, brief),
+            refs,
+            signal
+          )
+        ),
+      ] as const;
+    })
+  );
+  const byTool: Partial<Record<HouseTool, string | null>> = Object.fromEntries(answers);
+  // The massing carries the house: a call cut by the network is asked once more, alone.
+  if (!mergeToolAnswers({ massing: byTool.massing ?? null }, brief) && !signal?.aborted) {
+    console.info(`${tag}: massing unusable, asked again`);
+    const spec = HOUSE_TOOL_SPECS.massing;
+    byTool.massing = await safe(
+      ask(
+        'massing',
+        spec.system,
+        spec.schema,
+        main,
+        toolQuestion('massing', label, order, brief),
+        refs,
+        signal
+      )
+    );
+  }
+  const reading = mergeToolAnswers(byTool, brief);
+  console.info(
+    `${tag}: ${reading ? `${reading.volumes.length} volumes, ${reading.openings.length} openings, ${reading.piers?.length ?? 0} piers, ${reading.chimneys.length} chimneys, finishes ${reading.finishes?.map((f) => f.finish).join(', ') || 'none'}` : 'no usable massing'}`
+  );
+  return { reading, brief };
+}
 
 /** A drawing cut to its object box, as drawn (not mirrored), JPEG data URL; null when it fails. */
 export async function cropToObject(png: Buffer, frame: ViewFrame): Promise<string | null> {
@@ -145,7 +293,9 @@ export async function sharpView(
 async function withSwatches(
   plan: HousePlan,
   views: Parameters<typeof housePatches>[1],
-  sources: Partial<Record<HousePatch['view'], { png: Buffer; frame: ViewFrame; view: GridView }>>
+  sources: Partial<Record<HousePatch['view'], { png: Buffer; frame: ViewFrame; view: GridView }>>,
+  finishes: Parameters<typeof housePatches>[3] = [],
+  mirrored: Parameters<typeof housePatches>[4] = {}
 ): Promise<HousePlan> {
   // Looked for on sharp grids of the drawings, the reading grids standing in when that fails.
   const sharpOf = async (v: HousePatch['view']) => {
@@ -154,13 +304,26 @@ async function withSwatches(
   };
   const front = await sharpOf('front');
   const top = await sharpOf('top');
-  const swatches: Partial<Record<'wall' | 'roof', HouseSwatch>> = {};
-  const patches = housePatches(plan, { ...views, ...(front ? { front } : {}) }, top);
+  // PQ-T73: the sides and the back are sharp too when a finish is sampled on them.
+  const sharp: Partial<Record<HouseWall, GridView>> = {};
+  for (const v of ['right', 'back', 'left'] as const)
+    if (finishes.some((f) => f.view === v)) {
+      const g = await sharpOf(v);
+      if (g) sharp[v] = g;
+    }
+  const swatches: Partial<Record<HouseFinish, HouseSwatch>> = {};
+  const patches = housePatches(
+    plan,
+    { ...views, ...sharp, ...(front ? { front } : {}) },
+    top,
+    finishes,
+    mirrored
+  );
   for (const [slot, patch] of Object.entries(patches)) {
     const src = sources[patch.view];
     if (!src) continue;
     const image = await cropPatch(src.png, src.frame, patch.box);
-    if (image) swatches[slot as 'wall' | 'roof'] = { image, size: patch.box[1] - patch.box[0] };
+    if (image) swatches[slot as HouseFinish] = { image, size: patch.box[1] - patch.box[0] };
   }
   return Object.keys(swatches).length ? { ...plan, look: { ...plan.look, swatches } } : plan;
 }
@@ -178,12 +341,14 @@ export interface HouseSpecialistInput {
   signal?: AbortSignal;
   /** Called with the raw reading (captures, evals). */
   onReading?: (reading: unknown) => void;
+  /** The piloted part specialists (PQ-T73); the single reading `read` is the fallback. */
+  ask?: AskHouseTool;
 }
 
 /** The house plan read on the drawings; null when the specialist cannot read them. */
 export async function readHousePlan(
   read: ReadHouse,
-  { label, pngs, aligned, top, fallback = {}, signal, onReading }: HouseSpecialistInput
+  { label, pngs, aligned, top, fallback = {}, signal, onReading, ask }: HouseSpecialistInput
 ): Promise<HousePlan | null> {
   const tag = `[vision] house specialist for "${label}"`;
   try {
@@ -211,12 +376,10 @@ export async function readHousePlan(
       console.info(`${tag}: no front drawing, skipped`);
       return null;
     }
-    const answer = await read(
-      images[0]!,
-      buildHouseQuestion(label, order),
-      images.slice(1),
-      signal
-    );
+    const piloted = ask ? await readHouseParts(ask, label, order, images, signal) : null;
+    const answer = piloted?.reading
+      ? { reading: piloted.reading }
+      : await read(images[0]!, buildHouseQuestion(label, order), images.slice(1), signal);
     onReading?.(answer.reading);
     if (!answer.reading) return null;
     const views = {
@@ -241,16 +404,31 @@ export async function readHousePlan(
     });
     const front = pngs.front && aligned.frames.front;
     const sampled = plan
-      ? await withSwatches(plan, views, {
-          ...(front
-            ? { front: { png: pngs.front!, frame: front, view: aligned.views.front } }
-            : {}),
-          ...(top ? { top } : {}),
-        })
+      ? await withSwatches(
+          plan,
+          views,
+          {
+            ...(front
+              ? { front: { png: pngs.front!, frame: front, view: aligned.views.front } }
+              : {}),
+            ...Object.fromEntries(
+              (['right', 'back', 'left'] as const).flatMap((v) => {
+                const png = pngs[v];
+                const frame =
+                  v === 'right' && aligned.rightFromLeft ? undefined : aligned.frames[v];
+                const view = aligned.views[v];
+                return png && frame && view ? [[v, { png, frame, view }]] : [];
+              })
+            ),
+            ...(top ? { top } : {}),
+          },
+          answer.reading.finishes ?? [],
+          mirrored
+        )
       : null;
     console.info(
       sampled
-        ? `${tag}: ${sampled.volumes.length} volumes (${sampled.volumes.map((v) => `${v.kind} ${v.roof}`).join(', ')}), ${sampled.openings.length} openings, ${sampled.chimneys.length} chimneys, swatches: ${Object.keys(sampled.look.swatches ?? {}).join(', ') || 'none'}`
+        ? `${tag}: ${sampled.volumes.length} volumes (${sampled.volumes.map((v) => `${v.kind} ${v.roof}`).join(', ')}), ${sampled.openings.length} openings, ${sampled.chimneys.length} chimneys, ${sampled.piers?.length ?? 0} piers, swatches: ${Object.keys(sampled.look.swatches ?? {}).join(', ') || 'none'}`
         : `${tag}: the reading does not fit the drawings`
     );
     return sampled;

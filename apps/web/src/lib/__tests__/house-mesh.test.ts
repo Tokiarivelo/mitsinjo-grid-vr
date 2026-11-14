@@ -1,6 +1,12 @@
+import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { HOUSE_SLOTS, houseMesh, REVEAL } from '../house-mesh';
 import { HousePlanSchema, type HousePlan } from '../house-plan';
+import lodgePlan from './fixtures/lodge-plan.json';
+
+const LODGE_HASH = '87a1a7aa0355a2fe';
+const LODGE_HASH_FRONT = '0aa134d3ec743b45';
+const PLAN_HASH = '0996203857c864db';
 
 const look: HousePlan['look'] = {
   wall: { material: 'brick', color: '#a04a35' },
@@ -169,5 +175,208 @@ describe('houseMesh', () => {
     // The balcony slab sits at its floor, off the ground (past the body's plinth).
     const base = points(gable, slot('base')).filter((p) => p[2] > 0.3 + 0.01);
     expect(Math.min(...base.map((p) => p[1]))).toBeGreaterThan(-0.5 + 0.3);
+  });
+});
+
+// PQ-T73: a plan that reads none of the new parts builds exactly what PQ-T72 built.
+const meshHash = (m: ReturnType<typeof houseMesh>) => {
+  const h = createHash('sha256');
+  for (const a of [m.position, m.normal, m.uv, m.slot])
+    h.update(Buffer.from(a.buffer, a.byteOffset, a.byteLength));
+  return h.digest('hex').slice(0, 16);
+};
+
+describe('houseMesh without the PQ-T73 parts (regression)', () => {
+  // Hashes of the PQ-T72 builder (commit 5a129af) on the same plans.
+  it('builds the PQ-T72 mesh of a real lodge reading, byte for byte', () => {
+    const lodge = HousePlanSchema.parse(lodgePlan);
+    const views = ['front', 'right', 'back', 'left', 'top'] as const;
+    expect(meshHash(houseMesh(lodge, [1, 0.5, 0.8], { views }))).toBe(LODGE_HASH);
+    expect(meshHash(houseMesh(lodge, [1, 0.6, 0.7]))).toBe(LODGE_HASH_FRONT);
+  });
+
+  it('builds the PQ-T72 mesh of the veranda plan, byte for byte', () => {
+    expect(meshHash(houseMesh(plan, dims))).toBe(PLAN_HASH);
+  });
+});
+
+describe('houseMesh PQ-T73 parts', () => {
+  const count = (m: ReturnType<typeof houseMesh>, s: (typeof HOUSE_SLOTS)[number]) =>
+    m.slot.filter((v) => v === slot(s)).length;
+
+  it('builds stone piers with a cap from the ground', () => {
+    const m = houseMesh({ ...plan, piers: [{ plan: [0.02, 0.06, 0.94, 0.99], top: 0.55 }] }, dims);
+    const pts = points(m, slot('stone'));
+    expect(pts.length).toBeGreaterThan(0);
+    const ys = pts.map((p) => p[1]);
+    expect(Math.min(...ys)).toBeCloseTo(-dims[1] / 2, 5);
+    expect(Math.max(...ys)).toBeCloseTo((0.55 - 0.5) * dims[1], 5);
+    expect(count(houseMesh(plan, dims), 'stone')).toBe(0);
+  });
+
+  it('stops a pier at the beam of the veranda it carries', () => {
+    const veranda = {
+      ...plan,
+      volumes: plan.volumes.map((v, i) =>
+        i === 1 ? { ...v, plan: [0, 0.4, 0.8, 1] as never, roof: 'shed' as const, ridge: 0.65 } : v
+      ),
+      piers: [{ plan: [0.02, 0.06, 0.94, 0.99] as never, top: 0.9 }],
+    };
+    const top = (p: HousePlan) =>
+      Math.max(...points(houseMesh(p, dims), slot('stone')).map((q) => q[1]));
+    expect(top(veranda)).toBeLessThan((0.6 - 0.5) * dims[1]);
+    // Under a deck (flat roof, a balcony on top) the pier rises through to its own top.
+    const deck = {
+      ...veranda,
+      volumes: veranda.volumes.map((v, i) =>
+        i === 1 ? { ...v, roof: 'flat' as const, ridge: 0.6 } : v
+      ),
+    };
+    expect(top(deck)).toBeCloseTo((0.9 - 0.5) * dims[1], 5);
+  });
+
+  it('puts a roof on its second roofing', () => {
+    const vols = plan.volumes.map((v, i) => (i === 0 ? { ...v, roofFinish: 'roof2' as const } : v));
+    const m = houseMesh({ ...plan, volumes: vols }, dims);
+    expect(count(m, 'roof2')).toBeGreaterThan(0);
+    expect(count(m, 'roof')).toBe(0);
+  });
+
+  it('dresses a block in its second cladding', () => {
+    const vols = plan.volumes.map((v, i) => (i === 0 ? { ...v, wallFinish: 'wall2' as const } : v));
+    const m = houseMesh({ ...plan, volumes: vols }, dims);
+    expect(count(m, 'wall2')).toBeGreaterThan(0);
+    expect(count(m, 'front')).toBe(0);
+  });
+
+  it('fills the spandrels of an arched window up to its top', () => {
+    const arched = {
+      ...plan,
+      openings: plan.openings.map((o, i) => (i === 1 ? { ...o, head: 'arch' as const } : o)),
+    };
+    const flat = houseMesh(plan, dims);
+    const m = houseMesh(arched, dims);
+    expect(count(m, 'front')).toBeGreaterThan(count(flat, 'front'));
+    // The spandrels stand on the wall plane, between the spring and the window's top.
+    const front = points(m, slot('front')).filter((p) => Math.abs(p[2] - dims[2] / 2) < 1e-6);
+    const inWindow = front.filter(
+      (p) => p[0] > (0.62 - 0.5) * dims[0] && p[0] < (0.78 - 0.5) * dims[0] && p[1] > 0.0
+    );
+    expect(inWindow.length).toBeGreaterThan(0);
+  });
+
+  it('arches the bays of an arcade and bolts timber knees on a bracketed one', () => {
+    const withArcade = (arcade: 'arch' | 'bracket') => ({
+      ...plan,
+      look: { ...plan.look, timber: { material: 'wood' as const, color: '#5a3b26' } },
+      volumes: plan.volumes.map((v, i) =>
+        i === 1 ? { ...v, roof: 'flat' as const, ridge: 0.62, arcade } : v
+      ),
+    });
+    const free = (p: HousePlan) => ({
+      ...p,
+      // A veranda standing out of the body: its own posts and beam.
+      volumes: p.volumes.map((v, i) => (i === 1 ? { ...v, plan: [0, 0.4, 1, 1] as never } : v)),
+    });
+    const base = houseMesh(free(withArcade('arch')), dims);
+    expect(count(base, 'timber')).toBeGreaterThan(0);
+    const bracket = houseMesh(free(withArcade('bracket')), dims);
+    expect(count(bracket, 'timber')).toBeGreaterThan(count(base, 'timber'));
+  });
+
+  it('raises a gallery on its slab: posts, beam and arches under the main eave', () => {
+    const galleryPlan = HousePlanSchema.parse({
+      ...plan,
+      volumes: [
+        {
+          kind: 'body',
+          plan: [0.1, 0.9, 0.1, 0.9],
+          eave: 0.7,
+          ridge: 1,
+          roof: 'hip',
+          ridgeAxis: 'x',
+        },
+        {
+          kind: 'balcony',
+          plan: [0, 1, 0.9, 1],
+          eave: 0.7,
+          ridge: 0.7,
+          roof: 'none',
+          ridgeAxis: 'x',
+          open: ['front'],
+          columns: 5,
+          floor: 0.4,
+          rail: true,
+          arcade: 'arch',
+        },
+      ],
+      openings: [],
+      chimneys: [],
+    });
+    const trim = points(houseMesh(galleryPlan, dims), slot('trim'));
+    // Posts stand on the slab (none reach the ground) up to the beam under the eave.
+    expect(Math.min(...trim.map((p) => p[1]))).toBeGreaterThan(-dims[1] / 2 + 0.3 * dims[1]);
+    expect(Math.max(...trim.map((p) => p[1]))).toBeGreaterThan((0.7 - 0.5) * dims[1] - 1e-6);
+    // Out of the body's roof: a flat roof skirt covers it, past the body's overhang.
+    const roofed = points(houseMesh(galleryPlan, dims), slot('roof'));
+    expect(roofed.some((p) => p[2] > (0.9 - 0.5) * dims[2] + 0.04)).toBe(true);
+    // The same balcony without posts stays a railed slab (PQ-T72).
+    const bare = HousePlanSchema.parse({
+      ...galleryPlan,
+      volumes: galleryPlan.volumes.map((v, i) => (i === 1 ? { ...v, columns: 0 } : v)),
+    });
+    // No post and no beam in front of the facade above the rail.
+    const front = (m: ReturnType<typeof houseMesh>) =>
+      points(m, slot('trim')).filter(
+        // Past the body's fascia (its overhang), above the balcony's rail.
+        (p) => p[2] > (0.9 - 0.5) * dims[2] + 0.04 && p[1] > 0.05
+      );
+    expect(front(houseMesh(bare, dims))).toHaveLength(0);
+    expect(front(houseMesh(galleryPlan, dims)).length).toBeGreaterThan(0);
+  });
+
+  it('keeps the posts of a side where only post bases stand', () => {
+    const veranda = {
+      ...plan,
+      volumes: plan.volumes.map((v, i) => (i === 1 ? { ...v, plan: [0, 0.4, 1, 1] as never } : v)),
+    };
+    const base = count(houseMesh(veranda, dims), 'trim');
+    const withBases = houseMesh(
+      { ...veranda, piers: [{ plan: [0.1, 0.12, 0.98, 1], top: 0.1 }] },
+      dims
+    );
+    expect(count(withBases, 'trim')).toBe(base);
+    const withPier = houseMesh(
+      { ...veranda, piers: [{ plan: [0.1, 0.14, 0.97, 1], top: 0.6 }] },
+      dims
+    );
+    expect(count(withPier, 'trim')).toBeLessThan(base);
+  });
+
+  it('keeps posts in the trim colour until a timber finish is read', () => {
+    expect(count(houseMesh(plan, dims), 'timber')).toBe(0);
+  });
+
+  it('frames both gable ends with a timber truss', () => {
+    const gable = HousePlanSchema.parse({
+      ...plan,
+      look: { ...plan.look, timber: { material: 'wood', color: '#5a3b26' } },
+      volumes: [
+        {
+          kind: 'body',
+          plan: [0, 1, 0, 1],
+          eave: 0.6,
+          ridge: 1,
+          roof: 'gable',
+          ridgeAxis: 'z',
+          truss: true,
+        },
+      ],
+      openings: [],
+    });
+    const m = houseMesh(gable, dims);
+    const pts = points(m, slot('timber'));
+    expect(pts.some((p) => p[2] > dims[2] / 2)).toBe(true);
+    expect(pts.some((p) => p[2] < -dims[2] / 2)).toBe(true);
   });
 });
