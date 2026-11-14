@@ -844,3 +844,44 @@ scripts/object-viewer-shot.mjs …` (1440 + 390, dark + light).
       `make car-replay`. Live bench and what is still wrong per car: `PV-car-generation.md` § 6 (g).
       **Test:** `car-mesh.test.ts`, `car-views.test.ts` (orientation), `car-top.test.ts`,
       `car-raster.test.ts`, `model-pieces.test.ts`, `piece-edits.test.ts`; `make house-regress`.
+- [x] **PQ-T79 Trees, palms and bushes read on their drawings, no more stacked slabs.** User
+      2026-11-14: check and refine the photo → 3D generation of trees, the way it was done for cars.
+      Step 0 (live, acacia, palm, pine, nothing changed): the drawings are good species-wise (a pine,
+      a fan palm, a twig-web acacia) but carry **roots, soil, dead fronds**; the model was a stack of
+      boxes (palm: crown a green hip roof, trunk a column of black slabs not touching it, dead fronds
+      a brown box; pine: sky-coloured « foliage » slabs; acacia: dropped, score 0.39 < 0.5, no views model). Cause: the carving solver (`recon/carve.ts`) knows boxes, a tree is one
+      crown on one trunk. Fix, all gated on `tree` / `bush` (`recon/route.ts` branches before the
+      materials question): `tree/tree-fit.ts` `fitTree` measures the crown on leaf-coloured pixels
+      (closed over the gaps), the trunk (the run that rises from the ground, low-quantile width over
+      ±20 rows so fallen fronds and roots do not count, foot cut above the roots, `TRUNK_REACH` into
+      the crown so they meet), leaf colours per tier and bark colour (`barkColour`: darker half of the
+      trunk's own pixels); `tree/tree-crown.ts` `packCrown` packs the volume of the two silhouettes
+      (rows cut to ellipses, chamfer clearance) with ≤ 24 clumps, biggest first; `tree/tree-parts.ts`
+      `treeRecipe` writes the trunk and two crown tiers as `sdf` parts (`wood` / `foliage`, kinds
+      `trunk` / `crown`: drawn like any `sdf` part; the real viewer was shot, village and Blender not run);
+      `tree/tree-recon.ts` scores on the four elevations (mean silhouette IoU, `TREE_MIN_IOU` 0.4,
+      else the generic solver stays). No Meta call besides the drawings (no material naming).
+      Prompts: `PLANT_CLEAN` added to the tree and bush elevations (no roots, soil, dead or hanging
+      leaves, nothing beside the plant): the palm re-drawn with it came back clean (mean silhouette IoU 0.60 → 0.71).
+      `object-kit.ts` takes species names (baobab, acacia, eucalyptus, oak, mango, banana, coconut…)
+      as trees. Two tries dropped after looking at the images: saucer lobes stacked per row (a
+      pancake stack), and a palm frond skirt (floating discs): a palm is a clean trunk + a lumpy crown.
+      Cost: 4 `sdf` parts, 7.8–8.9 k triangles, ≈ 0.3 s to mesh (more than the 5 k recipe budget,
+      like houses and cars). Bench (`resources/refine-3d/t79-bench.jpg`, `make tree-replay`):
+      table below. **Still wrong:** a palm is a round crown (no fronds, no fan), a fork or
+      lean of the trunk is one column, white flowers and bare twigs count as « not leaf » inside the
+      closed crown, the sheet's blue can still tint a teal frond, a sparse flat crown (baobab) is
+      made of round clumps thicker than the real foliage layer. **Test:** `tree-fit.test.ts`,
+      `tree-crown.test.ts`, `tree-parts.test.ts`, `tree-recon.test.ts`, `object-kit.test.ts`,
+      `facade-specialist.test.ts`; `make house-regress`; `make car-replay` (jeep-p, suv-p).
+
+  | tree (`t-…`)           | run (prompt) | IoU front · side | what is right                                 | what is still wrong                                    |
+  | ---------------------- | ------------ | ---------------- | --------------------------------------------- | ------------------------------------------------------ |
+  | `acacia` (twig web)    | live, old    | 0.52 · 0.50      | wide flat dome, thin brown trunk              | twig web = lumpy mass; drawing had roots (cut)         |
+  | `palm` (first drawing) | live, old    | 0.61 · 0.59      | dark trunk, crown on top, dead fronds ignored | crown is a ball, not a fan                             |
+  | `palm2` (new prompt)   | live, new    | 0.70 · 0.71      | clean drawing, teal crown, dark slender trunk | crown is a ball, not a fan                             |
+  | `pine`                 | live, old    | 0.68 · 0.71      | conifer-ish lumps, trunk meets the crown      | no cone tiers; one big top clump                       |
+  | `baobab`               | live, new    | 0.62 · 0.59      | fat brown trunk, flat sparse crown on top     | crown clumps rounder and thicker than the real foliage |
+  | `gardenia` (bush)      | live, new    | 0.82 · 0.85      | low wide mass, dark green, stems stub         | flowers and leaf detail lost (flat colour)             |
+
+  Not run: `oak`, `eucalyptus`, `mango`, `banana` (budget of 6 live runs used: 3 step-0 + 3 re-drawn).

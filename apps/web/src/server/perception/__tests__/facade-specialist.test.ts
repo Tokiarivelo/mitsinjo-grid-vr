@@ -56,12 +56,16 @@ describe('facade-specialist', () => {
       expect(prompt).toContain('mango tree');
       expect(prompt).toContain('from the ground to its top');
       expect(prompt).toContain(DRAWING_BACKGROUND);
+      // PQ-T79: roots and dead leaves came back drawn and were built into the model.
+      expect(prompt).toContain('no roots');
+      expect(prompt).toContain('dense, leafy crown');
     });
 
     it('draws a bush or flower bed low and without a trunk (before: a flowering tree)', () => {
       const prompt = buildFacadePrompt('bush', 'flowering plants');
       expect(prompt).toContain('as wide and as low as it grows');
       expect(prompt).not.toContain('the trunk');
+      expect(prompt).toContain('no roots');
     });
 
     it('incorporates additional user prompt details', () => {

@@ -36,6 +36,7 @@ import type { CarReading } from '../car/car-tools';
 import { profileProportions, vehicleAspects } from '../car/car-proportions';
 import { readCarTop } from '../car/car-top';
 import { readUnderside } from '../car/car-underside';
+import { reconstructTree } from '../tree/tree-recon';
 import { bleedPaper, maskAt, shrink, trimPaper } from './texture';
 import {
   alignTop,
@@ -375,6 +376,17 @@ export async function reconstructObject(
         `${tag}: unreadable (views ${Object.keys(images).join(', ') || 'none'}; the front and one side are needed)`
       );
       return null;
+    }
+    // A tree or a bush is one crown on one trunk (PQ-T79): read on the drawings, not carved into boxes.
+    if (archetype === 'tree' || archetype === 'bush') {
+      const tree = reconstructTree(reading.aligned, reading.palette);
+      if (tree) {
+        console.info(
+          `${tag}: ${tree.recipe.parts.length} parts (${tree.plan.bush ? 'no trunk' : `trunk ${tree.plan.trunk.length} lobes`}, crown ${tree.plan.crown.length} lobes)${drawn.length ? `, drawn here: ${drawn.join(', ')}` : ''}; ${reportLine(tree.report)}`
+        );
+        return { recipe: tree.recipe, report: tree.report, drawn };
+      }
+      console.info(`${tag}: no crown found on the drawings, generic reconstruction`);
     }
     // The one model question, asked before the solver: what each colour class is made of. Best effort.
     let materials: NonNullable<ClassMaterialsResult['materials']> = [];

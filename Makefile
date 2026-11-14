@@ -175,6 +175,10 @@ car-replay: ## Car offline replay (PQ-T76, no Meta call): rebuilds every c-*/ ca
 	$(need_ws)
 	./scripts/car-replay.sh $(or $(OUT),replay) $(or $(REF),$(CURDIR)/resources/refine-3d) $(NAMES)
 
+tree-replay: ## Tree offline replay (PQ-T79, no Meta call): rebuilds every t-*/ tree from its saved drawings [OUT=replay REF=resources/refine-3d NAMES="acacia palm"] → <dir>/<OUT>/recipe.json, report.txt, model.png
+	$(need_ws)
+	./scripts/tree-replay.sh $(or $(OUT),replay) $(or $(REF),$(CURDIR)/resources/refine-3d) $(NAMES)
+
 shape-report: ## 3D shape report: scores + contact sheet → test-results/shape-report/ (/shape-loop)
 	$(need_ws)
 	SHAPE_REPORT=1 SHAPE_REPORT_DIR=$(CURDIR)/test-results/shape-report $(PNPM) --filter $(WEB) exec vitest run src/server/perception/__tests__/shape-report.test.ts -t "make shape-report"
@@ -365,5 +369,5 @@ clean: ## Remove build/test output (keeps node_modules)
 clean-all: clean ## Also remove node_modules
 	rm -rf node_modules apps/*/node_modules packages/*/node_modules
 
-.PHONY: code-dump blender-render help install env setup-claude browsers dev port dev-mock build start test test-engine test-web test-shape family-photos shape-capture shape-judge sam-probe part-probe views-3d eval-code shape-report shape-shots improve-shot test-watch coverage e2e \
+.PHONY: code-dump blender-render help install env setup-claude browsers dev port dev-mock build start test test-engine test-web test-shape family-photos shape-capture shape-judge sam-probe part-probe views-3d tree-replay eval-code shape-report shape-shots improve-shot test-watch coverage e2e \
         typecheck lint bridge bridge-sim test-bridge format format-check format-changed git-hooks check ci shots mockups scenarios-publish analyze scene-audit scene-audit-gpu lighthouse claude env-export mcp status todo deploy-link deploy clean clean-all video-tts-setup video-voice video-sfx video-capture video-canvas video-build video-thumbnail hf-dataset hf-publish

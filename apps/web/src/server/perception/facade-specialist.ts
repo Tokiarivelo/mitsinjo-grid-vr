@@ -23,6 +23,10 @@ import { buildCarProfilePrompt } from './car/car-views';
 export const DRAWING_BACKGROUND =
   'plain flat pale blue background (one uniform colour, no gradient, no ground, no shadow; walls, even white ones, stay clearly different from it)';
 
+/** What a drawn plant must leave out (PQ-T79): the model would otherwise build the roots and the dead leaves. */
+export const PLANT_CLEAN =
+  'Nothing below the ground line: no roots, no soil, no grass. No dead, dry, fallen or hanging leaves, no fruit on the ground, no other plant beside it.';
+
 export const FACADE_FROM_PHOTO =
   'Draw exactly the object inside the clear rectangle of the reference photo: same type, shape, proportions, colours, materials and details, with the same number and placement of doors, windows, wings, gables, chimneys and roof slopes, even when the object is not symmetrical (never mirror one half onto the other). Complete the parts hidden by people, plants or other objects. The photo may be taken from an angle: redraw the object straight on all the same, as a flat elevation of its main face only, with every horizontal line of the object perfectly horizontal in the image, no vanishing point and no second face receding to the side. Do not draw the background or anything else from the photo.';
 
@@ -54,11 +58,12 @@ export function buildFacadePrompt(
       basePrompt = `Direct front elevation view of a complete utility pole or lamp post, ${label}. Straight-on vertical elevation, unoccluded, ${DRAWING_BACKGROUND}.`;
       break;
     case 'tree':
-      basePrompt = `Direct front elevation view of a complete ${label}, botanical illustration. Straight-on eye-level view of the whole plant from the ground to its top, clear silhouette of the crown and the trunk, unoccluded, centered on a ${DRAWING_BACKGROUND}.`;
+      // PQ-T79: roots, dead leaves and bare twigs came back drawn, and were read as part of the model.
+      basePrompt = `Direct front elevation view of a complete ${label}, botanical illustration. Straight-on eye-level view of the whole plant from the ground to its top, clear silhouette of one full, dense, leafy crown and the trunk standing on the ground line, unoccluded, centered on a ${DRAWING_BACKGROUND}. ${PLANT_CLEAN}`;
       break;
     case 'bush':
       // No trunk asked (user 2026-11-05: a low flower bed came back as a flowering tree).
-      basePrompt = `Direct front elevation view of a complete ${label}, botanical illustration. Straight-on eye-level view of the whole low plant from the ground to its top, as wide and as low as it grows, no trunk unless one is visible, unoccluded, centered on a ${DRAWING_BACKGROUND}.`;
+      basePrompt = `Direct front elevation view of a complete ${label}, botanical illustration. Straight-on eye-level view of the whole low plant from the ground to its top, as wide and as low as it grows, no trunk unless one is visible, unoccluded, centered on a ${DRAWING_BACKGROUND}. ${PLANT_CLEAN}`;
       break;
     case 'cabinet':
     case 'machine':
