@@ -24,6 +24,8 @@ Live runs from photos (`resources/refine-3d/h-{thatch,fachwerk,stilt,logcabin,af
 - PQ-T75: `gableEnds` (hip → gable where windows sit in a peaked gable end), lower cladding behind
   verandas and in recesses (`maison-3d-t75.jpg` for fachwerk and stilt).
 
+Next subject after the PR: cars, brief in `docs/tasks/PV-car-generation.md` (PQ-T76, start with its step 0).
+
 ## Decisions
 
 - Zero-regression rule: `house-mesh.test.ts` hashes unchanged; bungalow single replay = `house-pq-t72.json`
