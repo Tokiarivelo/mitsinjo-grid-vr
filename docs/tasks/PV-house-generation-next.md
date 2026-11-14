@@ -129,10 +129,13 @@ revêtement : `HouseVolume.lower`), 4 en partie (bande d'emprise absorbée par l
 partie (repli complété par les spécialistes qui ont répondu). Nouveau : murs à motif (`figured`, colombages), échantillon
 oblique écarté, cheminées en maçonnerie, modèle conservé au-delà de 96 pièces.
 
-Restent ouverts, vus sur les nouvelles maisons : toit en croupe lu à la place d'un pignon (colombages), vues Muse
-incohérentes entre elles (cabane : pignon dessiné sur les quatre faces ; chaumière : ailes arrière inventées sur la vue de
-dessus), porte élargie par l'accroche sur des plaques voisines (cabane), mur du fond d'une varangue sous le toit principal
-qui garde la finition principale (pilotis), demi-croupes et lucarnes « sourcil » du chaume.
+PQ-T75 : pignon déduit des fenêtres dessinées au-dessus de l'égout (`gableEnds`, colombages) ; revêtement bas aussi
+derrière une varangue et dans un renfoncement (pilotis).
+
+Restent ouverts : vues Muse incohérentes entre elles (cabane : pignon dessiné sur les quatre faces ; chaumière : ailes
+arrière inventées sur la vue de dessus) — il faudrait un contrôle des vues avant la lecture et un redessin ; porte élargie
+par l'accroche sur des plaques voisines (cabane) — borner `snapOpening` change les fenêtres du bungalow de référence,
+à reprendre avec une nouvelle référence validée ; demi-croupes et lucarnes « sourcil » du chaume.
 
 ## 5. Pistes d'amélioration, par priorité
 

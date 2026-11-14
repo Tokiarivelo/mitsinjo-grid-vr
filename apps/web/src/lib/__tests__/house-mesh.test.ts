@@ -465,4 +465,27 @@ describe('houseMesh PQ-T73 parts', () => {
     expect(Math.min(...upper.map((p) => p[1]))).toBeCloseTo(y, 5);
     expect(Math.max(...upper.map((p) => p[1]))).toBeCloseTo(dims[1] / 2, 5);
   });
+
+  it('keeps the lower cladding on the walls of a recess under the block (PQ-T75)', () => {
+    // The fixture's veranda sits inside the body, under its roof: its recess walls are the body's.
+    const split = HousePlanSchema.parse({
+      ...plan,
+      volumes: [{ ...plan.volumes[0]!, lower: { finish: 'wall2', top: 0.3 } }, plan.volumes[1]!],
+      openings: [],
+      chimneys: [],
+    });
+    const whole = HousePlanSchema.parse({ ...plan, openings: [], chimneys: [] });
+    const [a, b] = [houseMesh(whole, dims), houseMesh(split, dims)];
+    // Inside the recess (behind the front plane, at the veranda's x), under the split height.
+    const inRecess = (m: ReturnType<typeof houseMesh>, s: number) =>
+      points(m, s).filter(
+        (p) =>
+          p[2] < dims[2] / 2 - 0.01 &&
+          p[2] > 0.1 &&
+          p[0] < -0.05 &&
+          p[1] < (0.3 - 0.5) * dims[1] + 1e-6
+      ).length;
+    expect(inRecess(a, slot('wall2'))).toBe(0);
+    expect(inRecess(b, slot('wall2'))).toBeGreaterThan(0);
+  });
 });

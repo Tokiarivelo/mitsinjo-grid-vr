@@ -13,6 +13,7 @@ import {
   pickPatch,
   ANNEX_PITCH,
   footprintAnnexes,
+  gableEnds,
   growToFootprint,
   outlineHeights,
   ownerOf,
@@ -651,5 +652,39 @@ describe('house fit PQ-T73 parts', () => {
     const porch: HouseVolume = { ...body, kind: 'annex', plan: [0, 1, 1, 1], eave: 0.3, bands: [] };
     const hidden = lowerFinishes([{ ...body, plan: [0, 1, 0, 0.9] }, porch], look, { front: view });
     expect(hidden[0]!.lower).toBeUndefined();
+  });
+
+  it('turns a hip into a gable where windows are drawn in a peaked gable end (PQ-T75)', () => {
+    const body: HouseVolume = {
+      kind: 'body',
+      plan: [0, 1, 0, 1],
+      eave: 0.5,
+      ridge: 1,
+      roof: 'hip',
+      ridgeAxis: 'x',
+    };
+    // Outline rising to a peak in the middle (a gable end), or level (the long side of a roof).
+    const peak = Array.from({ length: 100 }, (_, i) => 0.5 + 0.5 * (1 - Math.abs(i - 49.5) / 50));
+    const level = Array.from({ length: 100 }, () => 1);
+    const win = (wall: 'front' | 'back' | 'right', y0: number) => ({
+      wall,
+      box: [0.45, 0.55, y0, y0 + 0.1],
+    });
+    const gable = [win('front', 0.6), win('back', 0.6)];
+    expect(gableEnds([body], gable, peak, level)[0]).toMatchObject({
+      roof: 'gable',
+      ridgeAxis: 'z',
+    });
+    // Windows above the eave under a level outline (dormers on the long slope): still a hip.
+    expect(gableEnds([body], gable, level, peak)[0]).toBe(body);
+    // One window only, or windows under the eave: still a hip.
+    expect(gableEnds([body], [win('front', 0.6)], peak, level)[0]).toBe(body);
+    expect(gableEnds([body], [win('front', 0.2), win('back', 0.2)], peak, level)[0]).toBe(body);
+    // On the side walls: the ridge runs along x.
+    const sides = [win('right', 0.6), win('right', 0.75)];
+    expect(gableEnds([body], sides, level, peak)[0]).toMatchObject({
+      roof: 'gable',
+      ridgeAxis: 'x',
+    });
   });
 });

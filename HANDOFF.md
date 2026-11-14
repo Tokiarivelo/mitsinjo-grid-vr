@@ -3,7 +3,7 @@
 **Updated:** 2026-11-14 · **By:** Claude Code · **Branch:** `feat/pq-t74-house-quality`
 (from `feat/pq-t73-house-parts`; PQ-T67–T74 not on `main` yet; rebase before the PR)
 
-## NEXT: try V335–V341 on `/village`, then open the phase PR (PQ-T67 → PQ-T74)
+## NEXT: try V335–V343 on `/village`, then open the phase PR (PQ-T67 → PQ-T75)
 
 Brief and open limits: `docs/tasks/PV-house-generation-next.md` (§ « Traité en PQ-T74 » + what is left).
 Offline replay: `make views-3d FRONT=… RIGHT=… BACK=… LEFT=… TOP=… OUT=… LABEL=house OFFLINE=1 READING=… MATERIALS=wood,slate`.
@@ -21,6 +21,8 @@ Live runs from photos (`resources/refine-3d/h-{thatch,fachwerk,stilt,logcabin,af
 - `house-tools.ts`: prompt v2 (`figured`, `base`), `patchReading` (single reading completed by the
   specialists that answered), garbled colour keys read by their start. `recon/recipe.ts`: parts cut at 96.
 - Results: `~/Téléchargements/generated-view/h-*/maison-3d-t74.jpg`, sheet `t74-sheet.jpg`.
+- PQ-T75: `gableEnds` (hip → gable where windows sit in a peaked gable end), lower cladding behind
+  verandas and in recesses (`maison-3d-t75.jpg` for fachwerk and stilt).
 
 ## Decisions
 
@@ -33,4 +35,5 @@ Live runs from photos (`resources/refine-3d/h-{thatch,fachwerk,stilt,logcabin,af
 ## Open
 
 - `figured` and the v2 prompt were not run live yet (fachwerk replayed with the flag set by hand).
-- Left: hip read for a gable, Muse views that disagree, door snapped too wide, veranda back wall finish.
+- Left: Muse views that disagree (needs a views check + redraw), door snapped too wide (bounding the
+  snap changes the bungalow reference: dropped).

@@ -741,6 +741,18 @@ One task = one commit, with its Vitest test, its `contracts.md` update and its m
       single replay differs by `look.base` only (grey default → measured `#8a584b`, intended).
       Captures: `~/Téléchargements/generated-view/h-*/maison-3d-t74.jpg`.
 
+- [x] **PQ-T75 Gable ends and lower cladding behind verandas.** Defects left on the PQ-T74 houses.
+      (1) A block read with a hip roof whose drawings put ≥ 2 windows above its eave on two opposite
+      walls, under an outline peaked there, gets gable ends on those walls (`gableEnds`: the
+      half-timbered house lost its gable and the three windows in it to a hip). (2) The lower
+      cladding of a block also covers its wall behind a veranda and the walls of a recess under it
+      (stilt house: plaster behind the lean-to, no longer dark boards). Not done: bounding the
+      opening snap where a neighbour is caught (log cabin door) changed the bungalow's windows, so
+      it was dropped; Muse views that disagree with each other are still taken as drawn.
+      **Test:** `house-fit.test.ts`, `house-mesh.test.ts` (hashes unchanged). Bungalow single replay
+      byte-identical; the rule fires on the half-timbered house only across the 12 bench houses.
+      Captures: `h-fachwerk/maison-3d-t75.jpg`, `h-stilt/maison-3d-t75.jpg`.
+
 ## Exit criteria
 
 Every real object meets methodology §9 · every prompt has a version and an eval behind it · the report, the

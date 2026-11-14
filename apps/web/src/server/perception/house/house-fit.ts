@@ -610,9 +610,19 @@ export function fitHouse({
   // Openings: canonical shares, snapped on the drawing, owned by the block whose wall holds them.
   const kept: Array<{ wall: HouseWall; box: number[] }> = [];
   const openings: HouseOpening[] = [];
-  for (const o of reading.openings) {
+  const fittedAll = reading.openings.map((o) => ({
+    o,
+    fitted: fitOpening(o, views[o.view], mirrored[o.view] ?? MIRRORED_DEFAULT[o.view]),
+  }));
+  // PQ-T75: windows drawn above the eave under a peaked outline are in a gable end, not a hip.
+  volumes = gableEnds(
+    volumes,
+    fittedAll.flatMap((x) => (x.fitted ? [{ wall: x.o.view, box: x.fitted }] : [])),
+    frontHeights,
+    sideHeights
+  );
+  for (const { o, fitted } of fittedAll) {
     if (openings.length >= HOUSE_OPENINGS_MAX) break;
-    const fitted = fitOpening(o, views[o.view], mirrored[o.view] ?? MIRRORED_DEFAULT[o.view]);
     if (!fitted) continue;
     const [s0, s1, y0, y1] = fitted;
     if (kept.some((k) => k.wall === o.view && iou(k.box, fitted) > OPENING_DUPLICATE)) continue;
@@ -663,6 +673,47 @@ export function fitHouse({
   };
   const valid = HousePlanSchema.safeParse(plan);
   return valid.success ? valid.data : null;
+}
+
+/** Openings above the eave, on two opposite walls together, that make those walls gable ends. */
+export const GABLE_OPENINGS = 2;
+/** Share of a block's width still under the roof half way up it, at most, for a peaked outline. */
+export const GABLE_PEAKED = 0.65;
+
+/**
+ * Hip roofs turned into gables where the drawings show gable ends (PQ-T75): a block read with a
+ * hip roof whose drawings put windows above its eave on two opposite walls, under an outline that
+ * narrows to a peak there, has gable ends on those walls (the windows of a half-timbered gable
+ * were lost in a hip's slope). `front` / `side` = the outline heights of those drawings.
+ */
+export function gableEnds(
+  volumes: HouseVolume[],
+  openings: ReadonlyArray<{ wall: HouseWall; box: readonly number[] }>,
+  front: ReadonlyArray<number> | null,
+  side: ReadonlyArray<number> | null
+): HouseVolume[] {
+  return volumes.map((v) => {
+    if (isOpenVolume(v) || v.roof !== 'hip' || v.ridge - v.eave < 0.08) return v;
+    const inGable = (wall: HouseWall) => {
+      const [a, b] = alongX(wall) ? [v.plan[0], v.plan[1]] : [v.plan[2], v.plan[3]];
+      return openings.filter(({ wall: w, box: [s0, s1, y0, y1] }) => {
+        const [s, y] = [(s0! + s1!) / 2, (y0! + y1!) / 2];
+        return w === wall && s > a && s < b && y > v.eave + 0.02 && y1! <= v.ridge;
+      }).length;
+    };
+    const peaked = (heights: ReadonlyArray<number> | null, a: number, b: number) => {
+      if (!heights) return false;
+      const span = heights.slice(Math.floor(a * heights.length), Math.ceil(b * heights.length));
+      const level = (v.eave + v.ridge) / 2;
+      return span.length > 0 && span.filter((h) => h >= level).length <= GABLE_PEAKED * span.length;
+    };
+    const [fb, lr] = [inGable('front') + inGable('back'), inGable('right') + inGable('left')];
+    if (fb >= GABLE_OPENINGS && fb > lr && peaked(front, v.plan[0], v.plan[1]))
+      return { ...v, roof: 'gable' as const, ridgeAxis: 'z' as const };
+    if (lr >= GABLE_OPENINGS && lr > fb && peaked(side, v.plan[2], v.plan[3]))
+      return { ...v, roof: 'gable' as const, ridgeAxis: 'x' as const };
+    return v;
+  });
 }
 
 /** Colour distance (rgb) past which the two storeys of a wall are two claddings. */

@@ -403,7 +403,10 @@ export function houseMesh(
       holes.some((r) => inside(r, u, v)) || cover.some((r) => inside(r, u, v))
         ? null
         : shadow.some((r) => inside(r, u, v))
-          ? 'wall'
+          ? // PQ-T75: behind a veranda too, the lower storey keeps its own cladding.
+            lower && v < lower.v
+            ? lower.slot
+            : 'wall'
           : lower && v < lower.v
             ? lower.slot
             : drawn;
@@ -1032,7 +1035,13 @@ export function houseMesh(
   };
 
   /** Walls at the back and sides of a veranda under its host's roof, facing into the recess. */
-  const recessWalls = (vol: HouseVolume, b: WorldBox, index: number, host: WorldBox) => {
+  const recessWalls = (
+    vol: HouseVolume,
+    b: WorldBox,
+    index: number,
+    host: WorldBox,
+    hostLower?: HouseVolume['lower']
+  ) => {
     for (const side of FACE_VIEWS as ReadonlyArray<HouseWall>) {
       if (vol.open?.includes(side)) continue;
       // A closed side on the host's own wall is that wall.
@@ -1049,7 +1058,11 @@ export function houseMesh(
         mine.map((x) => x.r),
         [],
         [],
-        'wall'
+        'wall',
+        // PQ-T75: the recess of a block with a lower cladding is in that cladding too.
+        hostLower && Y(hostLower.top) > Y(vol.floor ?? 0) + EPS
+          ? { v: Y(hostLower.top), slot: hostLower.finish }
+          : undefined
       );
       for (const x of mine) opening(f, x.r, x.o);
     }
@@ -1104,7 +1117,7 @@ export function houseMesh(
     if (isOpenVolume(vol)) openVolume(vol, b);
     if (host >= 0) {
       // Under its host's roof: the recess walls only.
-      recessWalls(vol, b, index, boxes[host]!);
+      recessWalls(vol, b, index, boxes[host]!, plan.volumes[host]!.lower);
       return;
     }
     if (vol.kind === 'balcony') {
