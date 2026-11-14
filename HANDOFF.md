@@ -37,5 +37,4 @@ Next subject after the PR: cars, brief in `docs/tasks/PV-car-generation.md` (PQ-
 ## Open
 
 - `figured` and the v2 prompt were not run live yet (fachwerk replayed with the flag set by hand).
-- Left: Muse views that disagree (needs a views check + redraw), door snapped too wide (bounding the
-  snap changes the bungalow reference: dropped).
+- Left: Muse views that disagree (views check + redraw), door snapped too wide (fix moves the bungalow reference).
