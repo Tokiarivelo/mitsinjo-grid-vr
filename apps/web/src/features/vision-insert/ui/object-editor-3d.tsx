@@ -26,6 +26,7 @@ import { cn } from '@/lib/utils';
 import type { ShapeImprove } from '../hooks/use-object-shape';
 import { HULL_SURFACES, type HullSurface } from '@/lib/face-hull';
 import { faceMaterials, facesMesh } from '../utils/face-projection';
+import { carGeometry, carMaterials } from '../utils/car-projection';
 import { houseGeometry, houseMaterials } from '../utils/house-projection';
 import { recipeMesh, silhouetteDepth, silhouetteMesh } from '../utils/object-geometry';
 import { surfaceMaterial, SURFACES } from '../utils/surface-look';
@@ -136,23 +137,28 @@ function ObjectModel({
   const faces = activeRecipe?.faces && !activeRecipe.yaw ? activeRecipe.faces : null;
   // A house read by its specialist (PQ-T72): built volume by volume, its walls wearing the drawings.
   const house = activeRecipe?.house && !activeRecipe.yaw ? activeRecipe : null;
-  const pickable = Boolean(faces || house);
-  const mesh = useMemo(
-    () =>
-      house?.house
-        ? houseGeometry({ ...house, house: house.house })
-        : faces && activeRecipe
-          ? facesMesh({ proportions: activeRecipe.proportions, faces })
-          : activeRecipe
-            ? recipeMesh(activeRecipe)
-            : silhouetteMesh(
-                silhouetteRings(detection),
-                detection.box,
-                photoAspect,
-                silhouetteDepth(detection)
-              ),
-    [activeRecipe, faces, house, detection, photoAspect]
+  // A car fitted on its drawings (PQ-T76): lofted body, real wheels, glass, wearing the drawings.
+  const carPlan = !house && activeRecipe?.car?.body && !activeRecipe.yaw ? activeRecipe.car : null;
+  const car = useMemo(
+    () => (carPlan && activeRecipe ? { ...activeRecipe, car: carPlan } : null),
+    [carPlan, activeRecipe]
   );
+  const pickable = Boolean(faces || house || car);
+  const mesh = useMemo(() => {
+    if (house?.house) return houseGeometry({ ...house, house: house.house });
+    const carMesh = car ? carGeometry(car) : null;
+    if (carMesh) return carMesh;
+    return faces && activeRecipe
+      ? facesMesh({ proportions: activeRecipe.proportions, faces })
+      : activeRecipe
+        ? recipeMesh(activeRecipe)
+        : silhouetteMesh(
+            silhouetteRings(detection),
+            detection.box,
+            photoAspect,
+            silhouetteDepth(detection)
+          );
+  }, [activeRecipe, faces, house, car, detection, photoAspect]);
   useEffect(() => () => mesh.dispose(), [mesh]);
   const invalidate = useThree((s) => s.invalidate);
   const vertexColors = Boolean(activeRecipe);
@@ -172,6 +178,14 @@ function ObjectModel({
           onLoad: invalidate,
         }
       );
+    if (car)
+      return carMaterials(car, {
+        tint,
+        selected: selectedSurface
+          ? { surface: selectedSurface, color: TOKEN_HEX.energyCyan }
+          : null,
+        onLoad: invalidate,
+      });
     if (faces)
       return faceMaterials(faces, {
         tint,
@@ -194,7 +208,7 @@ function ObjectModel({
         ...(map ? { map } : {}),
       });
     });
-  }, [mesh, vertexColors, swatches, tint, invalidate, faces, house, selectedSurface]);
+  }, [mesh, vertexColors, swatches, tint, invalidate, faces, house, car, selectedSurface]);
   useEffect(() => () => surfaces.forEach((m) => m.dispose()), [surfaces]);
   // Plain silhouette material, memo'd like the surfaces (so the print wipe can clip it too).
   const silhouetteMaterial = useMemo(

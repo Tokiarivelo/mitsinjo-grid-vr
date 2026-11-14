@@ -21,7 +21,7 @@ for n in "${names[@]}"; do
   reading=()
   [ -f "$D/car-reading.json" ] && reading=(CAR_READING="$D/car-reading.json")
   if make -s views-3d "${views[@]}" "${reading[@]}" OUT="$D/$OUT" LABEL="$label" OFFLINE=1 MATERIALS="$mats" >"$D/$OUT.log" 2>&1; then
-    echo "✓ $n: $(grep -oE 'car (not measured|[0-9]+ axles.*)' "$D/$OUT.log" | head -1)"
+    echo "✓ $n: $(grep -oE 'car (not measured|.*, body .*)' "$D/$OUT.log" | head -1)"
   else
     echo "✗ $n: replay failed ($D/$OUT.log)"
   fi

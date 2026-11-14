@@ -43,6 +43,43 @@ export const CarWheelSchema = z.object({
 });
 export type CarWheel = z.infer<typeof CarWheelSchema>;
 
+/** Stations of the body's profile along the car, and levels of its cross-section. */
+export const CAR_STATIONS = 64;
+export const CAR_LEVELS = 32;
+
+/**
+ * The body measured on the drawings (PQ-T76): its profile on the side (top and underside per
+ * station, back → front, the wheel arches cut out), its cross-section on the front (half-width per
+ * level, ground → top, the mirrors left out) and, from the view from above, how the width narrows
+ * toward the nose and the tail (1 = full width).
+ */
+export const CarBodySchema = z.object({
+  /** Where the profile starts and ends along the car. */
+  z0: share,
+  z1: share,
+  top: z.array(share).min(2).max(256),
+  bottom: z.array(share).min(2).max(256),
+  /** Half-width per level, share of the box width (0–0.5). */
+  half: z.array(z.number().min(0).max(0.5)).min(2).max(256),
+  taper: z.array(share).min(2).max(256).optional(),
+});
+export type CarBody = z.infer<typeof CarBodySchema>;
+
+export const CAR_WINDOW_VIEWS = ['front', 'right', 'back', 'left'] as const;
+
+/**
+ * A window in the model's frame: on a side its points are [z, y], on the front or the back [x, y]
+ * (shares of the box, y ground → top).
+ */
+export const CarWindowSchema = z.object({
+  view: z.enum(CAR_WINDOW_VIEWS),
+  points: z
+    .array(z.tuple([share, share]))
+    .min(3)
+    .max(8),
+});
+export type CarWindow = z.infer<typeof CarWindowSchema>;
+
 export const CarPlanSchema = z.object({
   kind: z.enum(CAR_KINDS).optional(),
   /** Axles back → front, as measured on the profile. */
@@ -51,7 +88,18 @@ export const CarPlanSchema = z.object({
   track: z.object({ x0: share, x1: share, tyre: share }).optional(),
   /** Height of the body's underside between the wheels. */
   clearance: share.optional(),
+  /** The body measured on the drawings; without it the model stays the drawn hull. */
+  body: CarBodySchema.optional(),
+  /** Windows read by the car team, in the model's frame (glass slot). */
+  windows: z.array(CarWindowSchema).max(24).optional(),
   /** Colours measured on the drawings. */
-  look: z.object({ tyre: hex.optional(), rim: hex.optional() }).optional(),
+  look: z
+    .object({
+      tyre: hex.optional(),
+      rim: hex.optional(),
+      paint: hex.optional(),
+      glass: hex.optional(),
+    })
+    .optional(),
 });
 export type CarPlan = z.infer<typeof CarPlanSchema>;

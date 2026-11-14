@@ -3,6 +3,7 @@
 import { memo, useEffect, useMemo } from 'react';
 import { useThree } from '@react-three/fiber';
 import { faceMaterials, facesMesh } from '@/features/vision-insert/utils/face-projection';
+import { carGeometry, carMaterials } from '@/features/vision-insert/utils/car-projection';
 import { houseGeometry, houseMaterials } from '@/features/vision-insert/utils/house-projection';
 import type { PlacedDrawnModel } from '../utils/placed-models-geometry';
 import { TOKEN_HEX } from '../utils/scene-palette';
@@ -15,7 +16,7 @@ const STATE_TINT: Record<PlacedDrawnModel['state'], string | null> = {
 };
 
 /**
- * A placed model wearing its validated drawings (PQ-T71), or built from its house plan (PQ-T72), with the operator's surface looks: the
+ * A placed model wearing its validated drawings (PQ-T71), or built from its house plan (PQ-T72) or its car plan (PQ-T76), with the operator's surface looks: the
  * same hull and materials as the 3D object view (`facesMesh`, `faceMaterials`). One draw call per
  * surface kind in use; the atlas texture is shared with the object view (cached by URL).
  */
@@ -30,7 +31,8 @@ export const PlacedDrawnModelMesh = memo(function PlacedDrawnModelMesh({
     () =>
       recipe.house
         ? houseGeometry({ ...recipe, house: recipe.house })
-        : facesMesh({ proportions: recipe.proportions, faces: recipe.faces! }),
+        : ((recipe.car?.body ? carGeometry({ ...recipe, car: recipe.car }) : null) ??
+          facesMesh({ proportions: recipe.proportions, faces: recipe.faces! })),
     [recipe]
   );
   useEffect(() => () => geometry.dispose(), [geometry]);
@@ -38,7 +40,9 @@ export const PlacedDrawnModelMesh = memo(function PlacedDrawnModelMesh({
     const options = { tint: STATE_TINT[model.state], onLoad: invalidate };
     return recipe.house
       ? houseMaterials({ ...recipe, house: recipe.house }, options)
-      : faceMaterials(recipe.faces!, options);
+      : recipe.car?.body
+        ? carMaterials({ ...recipe, car: recipe.car }, options)
+        : faceMaterials(recipe.faces!, options);
   }, [recipe, model.state, invalidate]);
   useEffect(() => () => materials.forEach((m) => m.dispose()), [materials]);
   return (

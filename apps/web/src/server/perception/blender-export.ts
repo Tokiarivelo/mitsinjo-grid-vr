@@ -2,6 +2,11 @@ import 'server-only';
 import type * as THREE from 'three';
 
 import { facesMesh, surfaceColor } from '@/features/vision-insert/utils/face-projection';
+import {
+  carGeometry,
+  carSlotLooks,
+  type CarRecipe,
+} from '@/features/vision-insert/utils/car-projection';
 import { houseGeometry, houseSlotLooks } from '@/features/vision-insert/utils/house-projection';
 import { recipeMesh } from '@/features/vision-insert/utils/object-geometry';
 import { HULL_SURFACES } from '@/lib/face-hull';
@@ -77,9 +82,39 @@ function houseGroups(recipe: ObjectRecipe & { house: NonNullable<ObjectRecipe['h
   return out;
 }
 
+/**
+ * A car (PQ-T76) by slot, as the 3D view draws it: body, glass and wheel faces wearing the drawings
+ * keep their atlas uvs; tyres and the underside are their material in their colour. Null without a
+ * fitted body.
+ */
+function carGroups(recipe: CarRecipe): DrawnGroup[] | null {
+  const geo = carGeometry(recipe);
+  if (!geo) return null;
+  const looks = carSlotLooks(recipe);
+  const out = geo.groups
+    .filter((g) => g.count > 0)
+    .map((g): DrawnGroup => {
+      const look = looks[g.materialIndex ?? 0]!;
+      const drawnSlot = look.drawn && Boolean(recipe.faces);
+      return {
+        surface: look.slot,
+        ...groupVertices(geo, g.start, g.count),
+        ...(drawnSlot
+          ? look.tint
+            ? { color: look.tint }
+            : {}
+          : { color: look.color, material: look.surface }),
+      };
+    });
+  geo.dispose();
+  return out;
+}
+
 /** The drawn hull of a recipe by surface, as the 3D view draws it; empty without drawn faces. */
 export function drawnGroups(recipe: ObjectRecipe): DrawnGroup[] {
   if (recipe.house) return houseGroups({ ...recipe, house: recipe.house });
+  const car = recipe.car?.body ? carGroups({ ...recipe, car: recipe.car }) : null;
+  if (car) return car;
   if (!recipe.faces) return [];
   const geo = facesMesh({ proportions: recipe.proportions, faces: recipe.faces });
   const out = geo.groups.map((g): DrawnGroup => {
@@ -351,7 +386,7 @@ export function recipeToBlender(
     ...meta,
     groups: recipeGroups(recipe),
     recipe,
-    ...(recipe.faces || recipe.house
+    ...(recipe.faces || recipe.house || recipe.car?.body
       ? { drawn: drawnGroups(recipe), ...(recipe.faces ? { atlas: recipe.faces.atlas } : {}) }
       : {}),
   });

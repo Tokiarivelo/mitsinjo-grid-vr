@@ -148,6 +148,14 @@ séparé de la maison). Essai live sur la berline seule (5 appels Spark) : berli
 devra accrocher ces lectures sur les pixels. Lecture rangée dans `c-sedan/car-reading.json`, rejouée par
 `make car-replay`. Suite : `fitCar` puis `carMesh`.
 
+**(d) fait (PQ-T76d)** : `car/car-fit.ts` ajuste la caisse sur les silhouettes (profil du flanc, passages de
+roue au-dessus des roues mesurées ; section de face, rétroviseurs écrêtés ; effilement vu de dessus) et applique
+la lecture de l'équipe (vitres dans le repère du modèle, teinte caisse et vitrage). `lib/car-mesh.ts` en tire
+une caisse lissée (≈ 6 k triangles, 9 emplacements, roues cylindriques, flanc des jantes = dessin), vue 3D,
+village et export Blender. Ombre portée retirée aussi sur la face (voie de la berline 0,098–0,904). Rejeu : caisse
+sur les trois ; berline 10 vitres ; SUV et pick-up sans vitres (pas de lecture d'équipe). Capture
+`t76d-viewer.jpg`. Reste : lecture d'équipe SUV / pick-up (5 appels Spark chacun), banc de 10 photos.
+
 ## 7. Définition de « fini » pour une étape
 
 - Tests Vitest verts (`pnpm --filter web test -- car`, plus les suites maison), typecheck, lint sans erreur.

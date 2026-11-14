@@ -30,6 +30,7 @@ import {
 } from './reconstruct';
 import { measureCarPlan } from '../car/car-measure';
 import { carImages, type ReadCar } from '../car/car-specialist';
+import type { CarReading } from '../car/car-tools';
 import { profileProportions, vehicleAspects } from '../car/car-proportions';
 import { bleedPaper, maskAt, shrink, trimPaper } from './texture';
 import {
@@ -396,29 +397,31 @@ export async function reconstructObject(
     }
     // A vehicle: its wheels, track and clearance measured on the drawings (PQ-T76).
     if (archetype === 'vehicle' && !signal?.aborted) {
-      let car = await measureCarPlan(pngs, recon.aligned);
       // The car team reads what pixels cannot name: kind, body stations, windows, lamps, finishes.
+      let reading: CarReading | null = null;
       if (deps.readCar && !signal?.aborted) {
         const { order, images } = await carImages(
           pngs,
           recon.aligned,
           top && topRead ? { png: top, frame: topRead.frame } : null
         );
-        const reading =
+        reading =
           order[0] === 'front'
             ? await deps.readCar(target.label, order, images, signal).catch((err) => {
                 console.warn(`${tag}: car team failed:`, err instanceof Error ? err.message : err);
                 return null;
               })
             : null;
-        if (reading) {
-          onCarReading?.(reading);
-          car = { ...(car ?? { wheels: [] }), ...(reading.kind ? { kind: reading.kind } : {}) };
-        }
+        if (reading) onCarReading?.(reading);
       }
+      // Then the pixels: wheels, body profile and section, the reading's windows fitted on them.
+      const car = await measureCarPlan(pngs, recon.aligned, {
+        top: topRead?.view ?? null,
+        reading,
+      });
       if (car) recipe.car = car;
       console.info(
-        `${tag}: car ${car ? `${car.wheels.length} axles (${car.wheels.map((w) => `z ${w.z} r ${w.r}`).join(', ')}), clearance ${car.clearance ?? '?'}, track ${car.track ? `${car.track.x0}–${car.track.x1}` : '?'}` : 'not measured'}`
+        `${tag}: car ${car ? `${car.kind ?? 'kind ?'}, body ${car.body ? car.body.top.length : 0} stations, ${car.windows?.length ?? 0} windows, ${car.wheels.length} axles (${car.wheels.map((w) => `z ${w.z} r ${w.r}`).join(', ')}), clearance ${car.clearance ?? '?'}, track ${car.track ? `${car.track.x0}–${car.track.x1}` : '?'}` : 'not measured'}`
       );
     }
     // A house or a building: its specialist reads it room by room (volumes, roofs, openings).

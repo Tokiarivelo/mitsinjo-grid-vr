@@ -4,6 +4,7 @@ import type { SectorId } from '@mitsinjo/engine';
 import type { KitArchetype } from '@/lib/object-kit';
 import type { ObjectRecipe } from '@/lib/object-shape';
 import { facesMesh } from '@/features/vision-insert/utils/face-projection';
+import { carGeometry } from '@/features/vision-insert/utils/car-projection';
 import { houseGeometry } from '@/features/vision-insert/utils/house-projection';
 import { recipeMesh, triangleCount } from '@/features/vision-insert/utils/object-geometry';
 import { terrainHeight } from './landscape';
@@ -150,11 +151,16 @@ export function buildPlacedModelsGeometry(
     const faces = own ? item.recipe.faces : undefined;
     // A house read by its specialist is built volume by volume (PQ-T72).
     const house = own ? item.recipe.house : undefined;
+    // A car fitted on its drawings (PQ-T76): lofted body and wheels.
+    const carPlan = own && !house && item.recipe.car?.body ? item.recipe.car : undefined;
+    const carMesh = carPlan ? carGeometry({ ...item.recipe, car: carPlan }) : null;
     let g = house
       ? houseGeometry({ ...item.recipe, house }).rotateY(effYaw)
-      : faces
-        ? facesMesh({ proportions: item.recipe.proportions, faces }).rotateY(effYaw)
-        : recipeMesh(recipeWithYaw, tier === 'low' ? 'low' : 'full');
+      : carMesh
+        ? carMesh.rotateY(effYaw)
+        : faces
+          ? facesMesh({ proportions: item.recipe.proportions, faces }).rotateY(effYaw)
+          : recipeMesh(recipeWithYaw, tier === 'low' ? 'low' : 'full');
     if (tier === 'low') {
       const tris = triangleCount(g);
       if (lowTriangles + tris > PLACED_LOW_TRIANGLES) {
@@ -180,7 +186,7 @@ export function buildPlacedModelsGeometry(
     // Dimmed when the sector is unserved or the appliance draws nothing now (same as the box markers).
     const unserved = (sec?.unserved ?? false) || !item.running;
 
-    if (faces || house) {
+    if (faces || house || carMesh) {
       // Wears its drawings: its own mesh and texture, same place, same bounds.
       drawn.push({
         id: item.id,

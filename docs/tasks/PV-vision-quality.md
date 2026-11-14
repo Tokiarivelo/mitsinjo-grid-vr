@@ -771,9 +771,15 @@ One task = one commit, with its Vitest test, its `contracts.md` update and its m
       reading saved and replayed (`CAR_READING=`, `make car-replay`); it sets `CarPlan.kind`. Live
       once on the sedan (5 Spark calls): sedan, 4 doors, two-tone, chrome; 11 windows, 34 details,
       6 finishes; front parts well placed, side stations / windows 0.02–0.05 off (to snap on the
-      pixels). House code untouched. Left: `fitCar`, `carMesh`, bench of 10.
-      **Test:** `car-proportions.test.ts`, `car-wheels.test.ts`, `car-tools.test.ts`, `make house-regress`, `make car-replay`. Houses unchanged: bungalow replay = `house-pq-t72.json`, bungalow and
-      school recipes identical before / after. Captures: `c-*/voiture-3d-t76a.jpg`, `t76a-sheet.jpg`, `t76b-wheels.jpg`, `c-sedan/t76c-reading.jpg`.
+      pixels). House code untouched. (d) Done: `car/car-fit.ts` fits the body on the silhouettes
+      (profile on the side, arches over the measured wheels; section on the front, mirrors capped;
+      taper from above) and applies the reading (windows in the model frame, paint and glass
+      colours); `lib/car-mesh.ts` lofts it (≈ 6 k triangles, 9 slots, wheels as cylinders), drawn in
+      the object view, the village and the Blender export. Replays: a body on all three; sedan 10
+      windows, paint #c5d8c9; SUV and truck no windows yet (no team reading). Front shadow fixed:
+      sedan track 0.098–0.904. Left: team readings for SUV and truck, bench of 10.
+      **Test:** `car-proportions.test.ts`, `car-wheels.test.ts`, `car-tools.test.ts`, `car-fit.test.ts`, `car-mesh.test.ts`, `car-projection.test.ts`, `make house-regress`, `make car-replay`. Houses unchanged: bungalow replay = `house-pq-t72.json`, bungalow and
+      school recipes identical before / after. Captures: `c-*/voiture-3d-t76a.jpg`, `t76a-sheet.jpg`, `t76b-wheels.jpg`, `c-sedan/t76c-reading.jpg`, `t76d-viewer.jpg`.
 
 ## Exit criteria
 

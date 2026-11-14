@@ -3,7 +3,7 @@
 **Updated:** 2026-11-14 · **By:** Claude Code · **Branch:** `feat/pq-t76-cars`
 (from `feat/pq-t74-house-quality`; PQ-T67–T75 not on `main` yet; rebase before the PR)
 
-## NEXT: PQ-T76 (d) — `fitCar`: snap the team reading on the pixels, then `carMesh`
+## NEXT: PQ-T76 — team readings for SUV + truck (5 Spark calls each, ask first), then bench of 10
 
 Brief: `docs/tasks/PV-car-generation.md` (§ 4 rules, § 6 findings + done steps). Task: `PV-vision-quality.md` PQ-T76.
 
@@ -16,21 +16,23 @@ Brief: `docs/tasks/PV-car-generation.md` (§ 4 rules, § 6 findings + done steps
 
 ## Done this session (PQ-T76)
 
-- Step 0 findings (three cars live). (a) proportions from the elevations (`car/car-proportions.ts`).
-- (b) `CarPlan` (`lib/car-plan.ts`, `recipe.car`), wheels measured on the profile (`car/car-wheels.ts`,
-  `car-measure.ts`: Muse ground shadow dropped, symmetric arc fit), track on the front.
-- (c) Car team: `car/car-tools.ts` (prompts, schemas, merge), `car/car-specialist.ts` (pilot + 4 specialists,
-  retry, deadline), `askCarTool` (backend, client, meta; kinds `carPilot`/`carTool` streamed). Live once on
-  the sedan: `c-sedan/car-reading.json` (side stations 0.02–0.05 off: fit must snap them).
-- Captures in `~/Téléchargements/generated-view/`: `t76a-sheet.jpg`, `t76b-wheels.jpg`, `c-sedan/t76c-reading.jpg`.
+- Step 0 findings; (a) proportions from the elevations; (b) `CarPlan` + wheels measured on the profile;
+  (c) car team (`car-tools.ts`, `car-specialist.ts`, `askCarTool`), live once on the sedan.
+- (d) `car/car-fit.ts`: body fitted on the silhouettes (profile, arches, section without mirrors, taper),
+  reading applied (windows in model frame, paint/glass colours). `lib/car-mesh.ts`: lofted body ≈ 6 k
+  triangles, 9 slots, wheel cylinders. `car-projection.ts` materials; wired in object view, village
+  (`placed-drawn-model`, `placed-models-geometry`) and Blender export. Front shadow dropped (sedan track read).
+- Captures in `~/Téléchargements/generated-view/`: `t76a-sheet.jpg`, `t76b-wheels.jpg`,
+  `c-sedan/t76c-reading.jpg`, `t76d-viewer.jpg`.
 
 ## Decisions
 
-- Wheels are measured, never asked. Reading sets only `CarPlan.kind` until `fitCar` exists.
+- Wheels and body are measured on pixels; the team only adds windows, kind and where to sample colours.
+- Faces turned up are `roof` even without a top drawing (`ROOF_UP` 0.7).
 - Car team orchestration is its own code (not shared with the house team) to leave house code untouched.
 
 ## Open
 
-- Sedan front shadow spans the width: no track. SUV black rims: no rim found.
+- SUV/truck: no windows (no team reading yet). SUV black rims: no rim found.
 - `recon.test.ts` "time budget" can exceed 900 ms under full parallel load (passes alone).
 - Houses: V335–V343 not played; phase PR PQ-T67 → T75 not opened; door snap + views check pending.
