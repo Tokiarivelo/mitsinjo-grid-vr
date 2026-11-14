@@ -28,7 +28,7 @@ import { parseHouseReading, type HouseReading } from './house-prompt';
  * by `fitHouse` like a single reading. Pure: prompts, schemas, parsers, the merge.
  */
 
-export const HOUSE_TOOLS_PROMPT_VERSION = 1;
+export const HOUSE_TOOLS_PROMPT_VERSION = 2;
 
 export const HOUSE_TOOLS = ['massing', 'openings', 'structure', 'finishes'] as const;
 export type HouseTool = (typeof HOUSE_TOOLS)[number];
@@ -266,7 +266,8 @@ const FINISHES_PROMPT = [
   FRAME,
   `Finishes: wall (the main cladding of the walls), wall2 (a second cladding, if any), stone (masonry of piers, plinths, chimneys, if any), roof (the main roofing), roof2 (a second roofing, such as metal sheets next to shingles, if any), timber (posts, beams, brackets, trusses, if any). Materials: ${HOUSE_MATERIALS.join(', ')}.`,
   'For each finish present: material, color (hex of its average colour in plain light, not in shadow), view (front, right, back, left or top for a roofing) and box = [x0, y0, x1, y1] of a sample on that drawing that shows ONLY this finish: no window, no frame, no post, no shadow, no edge, as large as possible (a roofing is best sampled on the view from above).',
-  'Also: trim (frames, fascias), glass, door, base (deck, plinth) as hex colours.',
+  'figured = true on the wall finish ONLY when the walls carry a large figure that a small sample cannot show: half-timbering (dark timber frame over light infill), a mural, panels of several colours. Plain brick, boards, plaster or stone are not figured.',
+  'Also: trim (frames, fascias), glass, door, base (the plinth or the deck at the foot of the walls: give it whenever its colour differs from the walls) as hex colours.',
 ].join('\n');
 
 const lookItem = {
@@ -277,6 +278,7 @@ const lookItem = {
     color: hex,
     view: { type: 'string', enum: [...views] },
     box: quad,
+    figured: { type: 'boolean' },
   },
   required: ['finish', 'material', 'color', 'view', 'box'],
 } as const;
@@ -458,11 +460,48 @@ export function mergeToolAnswers(
     walls: lookOf('wall'),
     roof: lookOf('roof'),
     ...Object.fromEntries(
-      (['trim', 'glass', 'door', 'base'] as const).flatMap((k) =>
-        typeof finishes[k] === 'string' ? [[k, finishes[k]]] : []
-      )
+      (['trim', 'glass', 'door', 'base'] as const).flatMap((k) => {
+        // PQ-T74: the model sometimes garbles a key ("door_facade", "baseweld"): its start counts.
+        const key =
+          typeof finishes[k] === 'string'
+            ? k
+            : Object.keys(finishes).find((x) => x.startsWith(k) && typeof finishes[x] === 'string');
+        return key ? [[k, finishes[key]]] : [];
+      })
     ),
     ...(brief ? { type: brief.type } : {}),
   };
   return parseHouseReading(JSON.stringify(merged));
+}
+
+/**
+ * A single reading completed by the specialists that did answer (PQ-T74). When the massing or
+ * the openings specialist fails twice (the network cut), the single reading takes over; what the
+ * other specialists read (finishes with their sample boxes, piers, chimneys, arched heads) was
+ * thrown away with it. Here each part comes from its specialist when it answered, else from the
+ * single reading.
+ */
+export function patchReading(
+  single: HouseReading,
+  answers: Partial<Record<HouseTool, string | null>>,
+  brief: HouseBrief | null
+): HouseReading {
+  const ok = (t: HouseTool) => toolAnswered(t, answers[t]);
+  if (!HOUSE_TOOLS.some(ok)) return single;
+  const merged = mergeToolAnswers(
+    { ...answers, massing: ok('massing') ? answers.massing : JSON.stringify(single) },
+    brief
+  );
+  if (!merged) return single;
+  return {
+    ...merged,
+    openings: ok('openings') ? merged.openings : single.openings,
+    chimneys: ok('structure') ? merged.chimneys : single.chimneys,
+    walls: merged.walls ?? single.walls,
+    roof: merged.roof ?? single.roof,
+    trim: merged.trim ?? single.trim,
+    glass: merged.glass ?? single.glass,
+    door: merged.door ?? single.door,
+    base: merged.base ?? single.base,
+  };
 }

@@ -43,9 +43,13 @@ function swatchOf(recipe: HouseRecipe, slot: HouseSlot): HouseSwatch | null {
   const swatches = recipe.house.look.swatches;
   const set = isSurface(slot) ? recipe.faces?.surfaces?.[slot] : undefined;
   if (set?.material || set?.drawing) return null;
+  const { look } = recipe.house;
+  // PQ-T74: thatch wears its own strand pattern; a drawn square of it, cleaned and repeated,
+  // read as grey boards.
+  if ((slot === 'roof' || slot === 'roof2') && finishLook(look, slot).material === 'thatch')
+    return null;
   if (slot === 'roof') return swatches?.roof ?? null;
   // The other finishes (PQ-T73): their own swatch, else the one of the finish they fall back on.
-  const { look } = recipe.house;
   if (slot === 'roof2') return swatches?.roof2 ?? (look.roof2 ? null : (swatches?.roof ?? null));
   if (slot === 'wall2' || slot === 'stone')
     return swatches?.[slot] ?? (look[slot] ? null : (swatches?.wall ?? null));

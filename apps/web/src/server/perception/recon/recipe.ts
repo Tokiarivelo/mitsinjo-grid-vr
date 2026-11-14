@@ -1,5 +1,6 @@
 import {
   EXTRUDE_POINTS_MAX,
+  MAX_VIEW_PARTS,
   MIN_EXTENT,
   ObjectRecipeSchema,
   RECIPE_BOUND,
@@ -198,6 +199,10 @@ export function solidsToRecipe(
       },
     ];
   });
+  // A gable gives two parts: past the recipe's limit the last (smallest) ones are left out, the
+  // whole model is not lost (PQ-T74: a half-timbered house came back with no model at all).
+  parts.length = Math.min(parts.length, MAX_VIEW_PARTS);
+  classOf.length = parts.length;
   const recipe = ObjectRecipeSchema.parse({
     proportions: { w: extent(W / max), h: extent(H / max), d: extent(D / max) },
     parts,

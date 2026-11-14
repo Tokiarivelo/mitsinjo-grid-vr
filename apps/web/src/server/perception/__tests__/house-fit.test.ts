@@ -6,15 +6,20 @@ import {
   dominantColor,
   fitHouse,
   fitPiers,
+  measuredBase,
   sampleColor,
   housePatches,
+  lowerFinishes,
   pickPatch,
+  ANNEX_PITCH,
   footprintAnnexes,
+  growToFootprint,
   outlineHeights,
   ownerOf,
   profileSteps,
   shedFallOf,
   snapOpening,
+  swatchOblique,
 } from '../house/house-fit';
 import { buildHouseQuestion, parseHouseReading, type HouseReading } from '../house/house-prompt';
 import type { HouseVolume } from '@/lib/house-plan';
@@ -443,6 +448,14 @@ describe('house fit PQ-T73 parts', () => {
     expect(patches.wall).toBeDefined();
   });
 
+  it('cuts no wall swatch for figured walls: they keep their drawing (PQ-T74)', () => {
+    const plan = fitHouse({ reading: reading(), views, mirrored })!;
+    const box = [0.1, 0.65, 0.3, 0.85];
+    const wall = { finish: 'wall' as const, material: 'plaster' as const, view: 'front' as const };
+    expect(housePatches(plan, views, null, [{ ...wall, box }]).wall).toBeDefined();
+    expect(housePatches(plan, views, null, [{ ...wall, box, figured: true }]).wall).toBeUndefined();
+  });
+
   it('keeps only real piers: too thin or under the ground line are dropped', () => {
     expect(
       fitPiers([
@@ -453,5 +466,190 @@ describe('house fit PQ-T73 parts', () => {
         { plan: [0.3, 0.35, 1, 0.9], top: 0.5 },
       ])
     ).toEqual([{ plan: [0.3, 0.35, 0.9, 1], top: 0.5 }]);
+  });
+
+  it('measures the base at the foot of the front walls when the reading gives none (PQ-T74)', () => {
+    // A red plinth over the lowest 3 rows, a door standing in it.
+    const view = frontView();
+    for (let y = 97; y < 100; y++)
+      for (let x = 0; x < 100; x++)
+        view.rgb.set(x >= 10 && x < 20 ? [20, 20, 20] : [150, 30, 30], (y * 100 + x) * 3);
+    const door = [{ view: 'front' as const, kind: 'door' as const, box: [0.1, 0.7, 0.2, 1] }];
+    const plan = fitHouse({
+      reading: reading({ openings: door }),
+      views: { front: view },
+      mirrored: {},
+    })!;
+    expect(plan.look.base).toBe('#961e1e');
+    // A base the reading gives is kept as read.
+    const given = fitHouse({
+      reading: reading({ openings: door, base: '#112233' }),
+      views: { front: view },
+      mirrored: {},
+    })!;
+    expect(given.look.base).toBe('#112233');
+    expect(measuredBase(undefined, plan.volumes, [])).toBeNull();
+  });
+
+  it('grows a block over the strip of footprint along it instead of adding an annex (PQ-T74)', () => {
+    // View from above drawn everywhere; the body read stops short of the front (z 0.86).
+    const [cols, rows] = [100, 100];
+    const top: GridView = {
+      cols,
+      rows,
+      rgb: new Uint8Array(cols * rows * 3),
+      mask: new Uint8Array(cols * rows).fill(1),
+    };
+    const body: HouseVolume = {
+      kind: 'body',
+      plan: [0, 1, 0, 0.86],
+      eave: 0.5,
+      ridge: 1,
+      roof: 'hip',
+      ridgeAxis: 'x',
+    };
+    const grown = growToFootprint([body], top);
+    expect(grown[0]!.plan).toEqual([0, 1, 0, 1]);
+    expect(footprintAnnexes(grown, top)).toEqual([]);
+    // A deep part left out is another block, not the same one deeper.
+    const short = { ...body, plan: [0, 1, 0, 0.7] as HouseVolume['plan'] };
+    expect(growToFootprint([short], top)[0]!.plan).toEqual(short.plan);
+    // A strip along a small share of the block's side stays an annex.
+    const mask = new Uint8Array(cols * rows).fill(1);
+    for (let r = 86; r < 100; r++) for (let c = 40; c < 100; c++) mask[r * cols + c] = 0;
+    expect(growToFootprint([body], { ...top, mask })[0]!.plan).toEqual(body.plan);
+  });
+
+  it('keeps the roof of a narrow annex no steeper than ANNEX_PITCH (PQ-T74)', () => {
+    const [cols, rows] = [100, 100];
+    const mask = new Uint8Array(cols * rows).fill(1);
+    const top: GridView = { cols, rows, rgb: new Uint8Array(cols * rows * 3), mask };
+    const body: HouseVolume = {
+      kind: 'body',
+      plan: [0, 1, 0.2, 1],
+      eave: 0.4,
+      ridge: 0.9,
+      roof: 'hip',
+      ridgeAxis: 'x',
+    };
+    // A small back wing 0.2 wide and deep, the house half as high as wide.
+    for (let r = 0; r < 20; r++) for (let c = 0; c < 80; c++) mask[r * cols + c] = 0;
+    const [annex] = footprintAnnexes([body], top, [0.8], [], 0.5);
+    expect(annex!.plan).toEqual([0.8, 1, 0, 0.2]);
+    expect(annex!.ridge).toBeCloseTo(0.4 + (ANNEX_PITCH * 0.1) / 0.5, 3);
+    // Without the house's height (no front drawing), the block's ridge as before.
+    expect(footprintAnnexes([body], top, [0.8])[0]!.ridge).toBe(0.9);
+  });
+
+  it('gives the chimneys the masonry finish when one is read (PQ-T74)', () => {
+    const view = frontView();
+    const plain = fitHouse({ reading: reading(), views: { front: view }, mirrored: {} })!;
+    expect(plain.chimneys[0]).not.toHaveProperty('finish');
+    const brick = fitHouse({
+      reading: reading({ finishes: [{ finish: 'stone', material: 'brick', color: '#7b4a3b' }] }),
+      views: { front: view },
+      mirrored: {},
+    })!;
+    expect(brick.chimneys[0]!.finish).toBe('stone');
+  });
+
+  it('tells a swatch whose pattern runs oblique (PQ-T74)', () => {
+    const [w, h] = [64, 64];
+    const stripes = (f: (x: number, y: number) => number) => {
+      const rgb = new Uint8Array(w * h * 3);
+      for (let y = 0; y < h; y++)
+        for (let x = 0; x < w; x++)
+          rgb.fill(
+            Math.round(128 + 100 * Math.sin(f(x, y) / 2)),
+            (y * w + x) * 3,
+            (y * w + x) * 3 + 3
+          );
+      return rgb;
+    };
+    // Courses level or boards upright repeat cleanly; rows at 35° do not.
+    expect(
+      swatchOblique(
+        stripes((_, y) => y),
+        w,
+        h
+      )
+    ).toBe(false);
+    expect(
+      swatchOblique(
+        stripes((x) => x),
+        w,
+        h
+      )
+    ).toBe(false);
+    const a = (35 * Math.PI) / 180;
+    expect(
+      swatchOblique(
+        stripes((x, y) => x * Math.sin(a) + y * Math.cos(a)),
+        w,
+        h
+      )
+    ).toBe(true);
+    // No direction at all (plain plaster): kept.
+    expect(swatchOblique(new Uint8Array(w * h * 3).fill(200), w, h)).toBe(false);
+    let seed = 7;
+    const noise = new Uint8Array(w * h * 3).map(
+      () => (seed = (seed * 1103515245 + 12345) >>> 0) >>> 24
+    );
+    expect(swatchOblique(noise, w, h)).toBe(false);
+  });
+
+  it('gives a block the cladding of its lower storey when it is drawn another one (PQ-T74)', () => {
+    // Front: dark boards above the floor band (y 0.3), cream plaster under it.
+    const view = frontView();
+    for (let y = 70; y < 100; y++)
+      for (let x = 0; x < 100; x++) view.rgb.set([230, 215, 180], (y * 100 + x) * 3);
+    const body: HouseVolume = {
+      kind: 'body',
+      plan: [0, 1, 0, 1],
+      eave: 0.6,
+      ridge: 1,
+      roof: 'hip',
+      ridgeAxis: 'x',
+      bands: [0.3],
+    };
+    const look = {
+      wall: { material: 'brick' as const, color: '#a04632' },
+      roof: { material: 'slate' as const, color: '#5a5a60' },
+      trim: '#ffffff',
+      glass: '#4d6475',
+      door: '#5a3d2b',
+      base: '#8f8a80',
+      wall2: { material: 'plaster' as const, color: '#e7d8b4' },
+    };
+    expect(lowerFinishes([body], look, { front: view })[0]!.lower).toEqual({
+      finish: 'wall2',
+      top: 0.3,
+    });
+    // No second cladding read, no floor band, or one cladding all the way down: unchanged.
+    expect(lowerFinishes([body], { ...look, wall2: undefined }, { front: view })[0]).toBe(body);
+    const noBand = { ...body, bands: undefined };
+    expect(lowerFinishes([noBand], look, { front: view })[0]).toBe(noBand);
+    expect(lowerFinishes([body], look, { front: frontView() })[0]).toBe(body);
+    // Figured walls, or a lower storey of many colours (timbers over infill): no plain cladding.
+    expect(lowerFinishes([body], look, { front: view }, true)[0]).toBe(body);
+    const framed = frontView();
+    for (let y = 70; y < 100; y++)
+      for (let x = 0; x < 100; x++)
+        framed.rgb.set(
+          [
+            [230, 215, 180],
+            [120, 30, 30],
+            [250, 250, 250],
+          ][(x + y) % 3]!,
+          (y * 100 + x) * 3
+        );
+    expect(lowerFinishes([body], look, { front: framed })[0]).toBe(body);
+    // A gable end (A-frame: no eave wall) is read up to its ridge.
+    const aframe: HouseVolume = { ...body, eave: 0, roof: 'gable', ridgeAxis: 'z' };
+    expect(lowerFinishes([aframe], look, { front: view })[0]!.lower?.finish).toBe('wall2');
+    // A block standing in front hides the lower storey: nothing is read through it.
+    const porch: HouseVolume = { ...body, kind: 'annex', plan: [0, 1, 1, 1], eave: 0.3, bands: [] };
+    const hidden = lowerFinishes([{ ...body, plan: [0, 1, 0, 0.9] }, porch], look, { front: view });
+    expect(hidden[0]!.lower).toBeUndefined();
   });
 });

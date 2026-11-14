@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { HOUSE_SLOTS, houseMesh, REVEAL } from '../house-mesh';
+import { FASCIA, HOUSE_SLOTS, houseMesh, REVEAL, THATCH_EDGE } from '../house-mesh';
 import { HousePlanSchema, type HousePlan } from '../house-plan';
 import lodgePlan from './fixtures/lodge-plan.json';
 
@@ -378,5 +378,91 @@ describe('houseMesh PQ-T73 parts', () => {
     const pts = points(m, slot('timber'));
     expect(pts.some((p) => p[2] > dims[2] / 2)).toBe(true);
     expect(pts.some((p) => p[2] < -dims[2] / 2)).toBe(true);
+  });
+
+  it('gives a thatched roof a thick edge of thatch at its eaves and verges (PQ-T74)', () => {
+    const gable = (material: 'thatch' | 'tile') =>
+      HousePlanSchema.parse({
+        ...plan,
+        volumes: [
+          { kind: 'body', plan: [0, 1, 0, 1], eave: 0.6, ridge: 1, roof: 'gable', ridgeAxis: 'x' },
+        ],
+        openings: [],
+        chimneys: [],
+        look: { ...look, roof: { material, color: '#8a7a5a' } },
+      });
+    const lowest = (m: ReturnType<typeof houseMesh>, s: number) =>
+      Math.min(...points(m, s).map((p) => p[1]));
+    const tiled = houseMesh(gable('tile'), dims);
+    const thatched = houseMesh(gable('thatch'), dims);
+    // The thatch itself hangs down by its thickness; a tiled roof ends on a thin trim fascia.
+    const S = Math.max(...dims);
+    expect(lowest(tiled, slot('roof')) - lowest(thatched, slot('roof'))).toBeCloseTo(
+      THATCH_EDGE * S,
+      5
+    );
+    expect(THATCH_EDGE).toBeGreaterThan(FASCIA * 2);
+    // Eaves (2 quads) and verges (4 quads) more in the roof slot, none left in the trim.
+    const count = (m: ReturnType<typeof houseMesh>, s: number) => points(m, s).length / 3;
+    expect(count(thatched, slot('roof')) - count(tiled, slot('roof'))).toBe(12);
+    expect(count(tiled, slot('trim')) - count(thatched, slot('trim'))).toBe(4);
+  });
+
+  it('builds a chimney of its own masonry in the stone slot (PQ-T74)', () => {
+    const own = HousePlanSchema.parse({
+      ...plan,
+      chimneys: [{ ...plan.chimneys[0]!, finish: 'stone' }],
+    });
+    const count = (m: ReturnType<typeof houseMesh>, s: number) => points(m, s).length / 3;
+    const [a, b] = [houseMesh(plan, dims), houseMesh(own, dims)];
+    expect(count(a, slot('stone'))).toBe(0);
+    // Shaft (5 faces) and cap (6 faces) leave the wall and the trim for the stone.
+    expect(count(b, slot('stone'))).toBe(22);
+    expect(count(a, slot('wall')) - count(b, slot('wall'))).toBe(10);
+    expect(count(a, slot('trim')) - count(b, slot('trim'))).toBe(12);
+  });
+
+  it('clads the lower storey of a block in its own finish (PQ-T74)', () => {
+    const split = HousePlanSchema.parse({
+      ...plan,
+      volumes: [{ ...plan.volumes[0]!, lower: { finish: 'wall2', top: 0.3 } }],
+      openings: [],
+      chimneys: [],
+    });
+    const m = houseMesh(split, dims);
+    const lower = points(m, slot('wall2'));
+    expect(lower.length).toBeGreaterThan(0);
+    // The second cladding stops at the split height; the drawn wall starts there.
+    const y = (0.3 - 0.5) * dims[1];
+    expect(Math.max(...lower.map((p) => p[1]))).toBeCloseTo(y, 5);
+    expect(Math.min(...points(m, slot('front')).map((p) => p[1]))).toBeCloseTo(y, 5);
+  });
+
+  it('cuts a gable wall level where its lower cladding ends (PQ-T74)', () => {
+    // An A-frame: no eave wall, the gable ends rise from the ground to the ridge.
+    const aframe = HousePlanSchema.parse({
+      ...plan,
+      volumes: [
+        {
+          kind: 'body',
+          plan: [0, 1, 0, 1],
+          eave: 0,
+          ridge: 1,
+          roof: 'gable',
+          ridgeAxis: 'z',
+          lower: { finish: 'wall2', top: 0.25 },
+        },
+      ],
+      openings: [],
+      chimneys: [],
+    });
+    const m = houseMesh(aframe, dims);
+    const y = (0.25 - 0.5) * dims[1];
+    const lower = points(m, slot('wall2'));
+    expect(lower.length).toBeGreaterThan(0);
+    expect(Math.max(...lower.map((p) => p[1]))).toBeCloseTo(y, 5);
+    const upper = points(m, slot('front'));
+    expect(Math.min(...upper.map((p) => p[1]))).toBeCloseTo(y, 5);
+    expect(Math.max(...upper.map((p) => p[1]))).toBeCloseTo(dims[1] / 2, 5);
   });
 });

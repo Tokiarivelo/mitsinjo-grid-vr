@@ -54,6 +54,11 @@ pas le toit). Tests ciblés : `house-mesh.test.ts`, `house-fit.test.ts`, `house-
 | `mg-balcony`                                                                                            | maison 2 niveaux, galerie + bloc blanc          | idem                                                                    | résultat le plus faible             |
 | `mg-earth`                                                                                              | maison en terre, chaume                         | idem                                                                    |                                     |
 
+Ajoutées en PQ-T74 (photos `resources/refine-3d/h-*.jpg`, dossiers `h-*` avec `house-reading.json`, `t74/house.json`,
+`maison-3d-t74.jpg` ; planche d'ensemble `t74-sheet.jpg`) : `h-thatch` (chaumière), `h-fachwerk` (colombages ; rejouer
+`house-reading-figured.json`), `h-stilt` (bois sur rez-de-chaussée enduit), `h-logcabin` (rondins ; rejouer
+`house-reading-patched.json`), `h-aframe`.
+
 `bungalow/house-pq-t72.json` et `school/house-pq-t72.json` = plans produits par le code PQ-T72 sur la lecture
 unique : un rejeu `READING=house-reading-single.json` doit redonner **exactement** ce fichier.
 
@@ -116,6 +121,18 @@ unique : un rejeu `READING=house-reading-single.json` doit redonner **exactement
 
 18. Muse Image peut ne pas dessiner une vue (réseau) : `mg-arcades` sans vue gauche ni dessus → profondeur et
     toits moins sûrs. Des vues qui se contredisent (face vs dessus) déplacent des blocs (`house-detached`).
+
+### Traité en PQ-T74 (2026-11-14)
+
+Limites 12 (chaume : bord épais + motif de brins), 17 (soubassement mesuré), une partie de 15 (rez-de-chaussée d'un autre
+revêtement : `HouseVolume.lower`), 4 en partie (bande d'emprise absorbée par le bloc, pente d'annexe bornée) et 18 en
+partie (repli complété par les spécialistes qui ont répondu). Nouveau : murs à motif (`figured`, colombages), échantillon
+oblique écarté, cheminées en maçonnerie, modèle conservé au-delà de 96 pièces.
+
+Restent ouverts, vus sur les nouvelles maisons : toit en croupe lu à la place d'un pignon (colombages), vues Muse
+incohérentes entre elles (cabane : pignon dessiné sur les quatre faces ; chaumière : ailes arrière inventées sur la vue de
+dessus), porte élargie par l'accroche sur des plaques voisines (cabane), mur du fond d'une varangue sous le toit principal
+qui garde la finition principale (pilotis), demi-croupes et lucarnes « sourcil » du chaume.
 
 ## 5. Pistes d'amélioration, par priorité
 

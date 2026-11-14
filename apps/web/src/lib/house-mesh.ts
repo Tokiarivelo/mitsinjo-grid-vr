@@ -1,5 +1,6 @@
 import { atlasUv, faceSlot, FACE_VIEWS, type AtlasView, type FaceView } from './face-atlas';
 import {
+  finishLook,
   isOpenVolume,
   shedFall,
   type HouseHead,
@@ -63,6 +64,10 @@ export const MUNTIN = 0.0035;
 /** Roof overhang past the walls, fascia height. */
 export const OVERHANG = 0.03;
 export const FASCIA = 0.012;
+/** Most a steep roof's eave drops below the top of the walls, share of their height (PQ-T74). */
+export const EAVE_DROP_MAX = 0.3;
+/** Thickness of a thatched roof at its eaves and verges (PQ-T74), share of the model. */
+export const THATCH_EDGE = 0.04;
 /** Side of a veranda post, height of the beam it carries. */
 export const POST = 0.018;
 export const BEAM = 0.016;
@@ -124,6 +129,25 @@ export interface HouseMeshOptions {
   views?: ReadonlyArray<AtlasView>;
 }
 
+/** A convex ring (u, v) cut by the level `h`: the part above it, or the part under it. */
+function clipLevel(
+  ring: ReadonlyArray<[number, number]>,
+  h: number,
+  above: boolean
+): Array<[number, number]> {
+  const keep = (p: [number, number]) => (above ? p[1] >= h : p[1] <= h);
+  const out: Array<[number, number]> = [];
+  ring.forEach((p, i) => {
+    const q = ring[(i + 1) % ring.length]!;
+    if (keep(p)) out.push(p);
+    if (keep(p) !== keep(q)) {
+      const t = (h - p[1]) / (q[1] - p[1]);
+      out.push([p[0] + (q[0] - p[0]) * t, h]);
+    }
+  });
+  return out;
+}
+
 /** The house plan as triangles, in the model's frame (centred, `dims` = w, h, d). */
 export function houseMesh(
   plan: HousePlan,
@@ -146,7 +170,8 @@ export function houseMesh(
 
   // Finish slots (PQ-T73): a plan that reads none builds exactly as before.
   const timber: HouseSlot = plan.look.timber ? 'timber' : 'trim';
-  const roofSlot = (v: HouseVolume): HouseSlot => (v.roofFinish === 'roof2' ? 'roof2' : 'roof');
+  const roofSlot = (v: HouseVolume): 'roof' | 'roof2' =>
+    v.roofFinish === 'roof2' ? 'roof2' : 'roof';
   const wallSlot = (v: HouseVolume): HouseSlot | null =>
     v.wallFinish && v.wallFinish !== 'wall' ? v.wallFinish : null;
 
@@ -360,11 +385,14 @@ export function houseMesh(
     holes: Rect[],
     cover: Rect[],
     shadow: Rect[],
-    drawn: HouseSlot
+    drawn: HouseSlot,
+    /** PQ-T74: under `v`, the wall wears `slot` (a lower storey of another cladding). */
+    lower?: { v: number; slot: HouseSlot }
   ) => {
     const [u0, u1] = span;
     if (u1 - u0 < EPS) return;
     const all = [...holes, ...cover, ...shadow];
+    if (lower) all.push([u0, u1, floor, lower.v]);
     const cut = (lo: number, hi: number, vals: number[]) =>
       [...new Set([lo, hi, ...vals.filter((x) => x > lo + EPS && x < hi - EPS)])].sort(
         (p, q) => p - q
@@ -376,7 +404,9 @@ export function houseMesh(
         ? null
         : shadow.some((r) => inside(r, u, v))
           ? 'wall'
-          : drawn;
+          : lower && v < lower.v
+            ? lower.slot
+            : drawn;
     for (let i = 0; i + 1 < us.length; i++) {
       const [ua, ub] = [us[i]!, us[i + 1]!];
       const [ta, tb] = [line.at(ua), line.at(ub)];
@@ -406,6 +436,32 @@ export function houseMesh(
       if (Math.max(ta, tb) - base > EPS) {
         const slot = slotAt(cu, (base + (ta + tb) / 2) / 2);
         if (!slot) continue;
+        // PQ-T74: a lower cladding ending inside the sloped piece (a gable wall) cuts it level.
+        if (lower && lower.v > base + EPS && lower.v < Math.max(ta, tb) - EPS) {
+          const ring: Array<[number, number]> = [
+            [ua, base],
+            [ub, base],
+            [ub, tb],
+            [ua, ta],
+          ];
+          for (const above of [false, true]) {
+            const part = clipLevel(ring, lower.v, above);
+            const partSlot = above
+              ? slotAt(cu, lower.v + EPS * 10)
+              : slotAt(cu, lower.v - EPS * 10);
+            if (!partSlot) continue;
+            for (let k = 1; k + 1 < part.length; k++)
+              tri(
+                f.at(part[0]![0], part[0]![1]),
+                f.at(part[k]![0], part[k]![1]),
+                f.at(part[k + 1]![0], part[k + 1]![1]),
+                f.out,
+                partSlot,
+                f.wall
+              );
+          }
+          continue;
+        }
         const [a, b2, c, e] = [f.at(ua, base), f.at(ub, base), f.at(ub, tb), f.at(ua, ta)];
         if (ta - base > EPS && tb - base > EPS) quad(a, b2, c, e, f.out, slot, f.wall);
         else if (ta - base > EPS) tri(a, b2, e, f.out, slot, f.wall);
@@ -635,9 +691,12 @@ export function houseMesh(
     const alongX = vol.ridgeAxis === 'x';
     const [lx, lz] = [b.x1 - b.x0, b.z1 - b.z0];
     const up: V3 = [0, 1, 0];
+    // PQ-T74: thatch is a thick layer; its edge shows the roofing itself, not a fascia board.
+    const thatched = finishLook(plan.look, rs).material === 'thatch';
+    const edge = thatched ? THATCH_EDGE * S : fa;
     /** Fascia under an eave line from p to q (world, at eave height). */
     const fascia = (p: V3, q: V3, out: V3) =>
-      quad([p[0], p[1] - fa, p[2]], [q[0], q[1] - fa, q[2]], q, p, out, 'trim');
+      quad([p[0], p[1] - edge, p[2]], [q[0], q[1] - edge, q[2]], q, p, out, thatched ? rs : 'trim');
     if (kind === 'shed') {
       // One slope, high on the side opposite its fall.
       const fall = shedFall(vol);
@@ -664,7 +723,9 @@ export function houseMesh(
     }
     // Gable and hip: two slopes meeting at a ridge along `alongX`.
     const half = (alongX ? lz : lx) / 2;
-    const drop = (ov * rise) / Math.max(half, EPS);
+    // The eave drops along the slope over the overhang, never by more than `EAVE_DROP_MAX` of the
+    // walls (PQ-T74: a steep roof on a narrow block came down over its windows).
+    const drop = Math.min((ov * rise) / Math.max(half, EPS), EAVE_DROP_MAX * (b.eave - Y(0)));
     const [x0, x1, z0, z1] = [b.x0 - ov, b.x1 + ov, b.z0 - ov, b.z1 + ov];
     const e = b.eave - drop;
     const r = b.ridge;
@@ -677,6 +738,14 @@ export function houseMesh(
         quad([x1, e, z0], [x0, e, z0], ra, rb, [0, 1, -1], rs, 'top');
         fascia([x0, e, z1], [x1, e, z1], [0, 0, 1]);
         fascia([x1, e, z0], [x0, e, z0], [0, 0, -1]);
+        if (thatched)
+          for (const [x, out] of [
+            [x0, [-1, 0, 0]],
+            [x1, [1, 0, 0]],
+          ] as Array<[number, V3]>) {
+            fascia([x, e, z1], [x, r, cz], out);
+            fascia([x, r, cz], [x, e, z0], out);
+          }
       } else {
         const ra: V3 = [cx, r, z0];
         const rb: V3 = [cx, r, z1];
@@ -684,6 +753,14 @@ export function houseMesh(
         quad([x0, e, z1], [x0, e, z0], ra, rb, [-1, 1, 0], rs, 'top');
         fascia([x1, e, z0], [x1, e, z1], [1, 0, 0]);
         fascia([x0, e, z1], [x0, e, z0], [-1, 0, 0]);
+        if (thatched)
+          for (const [z, out] of [
+            [z0, [0, 0, -1]],
+            [z1, [0, 0, 1]],
+          ] as Array<[number, V3]>) {
+            fascia([x0, e, z], [cx, r, z], out);
+            fascia([cx, r, z], [x1, e, z], out);
+          }
       }
       return;
     }
@@ -933,7 +1010,10 @@ export function houseMesh(
         cover,
         shadow,
         // A veranda's own wall is seen through its posts: never its drawing.
-        isOpenVolume(vol) ? 'wall' : (wallSlot(vol) ?? wall)
+        isOpenVolume(vol) ? 'wall' : (wallSlot(vol) ?? wall),
+        vol.lower && !isOpenVolume(vol) && Y(vol.lower.top) > floor + EPS
+          ? { v: Y(vol.lower.top), slot: vol.lower.finish }
+          : undefined
       );
       const face: HouseSlot = isOpenVolume(vol) ? 'wall' : (wallSlot(vol) ?? wall);
       for (const x of mine) {
@@ -1049,9 +1129,10 @@ export function houseMesh(
     const under = boxes.filter((b) => cx >= b.x0 && cx <= b.x1 && cz >= b.z0 && cz <= b.z1);
     const base = under.length ? Math.min(...under.map((b) => b.eave)) : Y(0);
     const top = Math.max(Y(c.top), base + CAP_HEIGHT * S * 3);
-    box([x0, base, z0], [x1, top - CAP_HEIGHT * S, z1], 'wall', ['bottom']);
+    // PQ-T74: a stack of its own masonry (brick on a plastered house), cap included.
+    box([x0, base, z0], [x1, top - CAP_HEIGHT * S, z1], c.finish ?? 'wall', ['bottom']);
     const o = CAP_OVER * S;
-    box([x0 - o, top - CAP_HEIGHT * S, z0 - o], [x1 + o, top, z1 + o], 'trim');
+    box([x0 - o, top - CAP_HEIGHT * S, z0 - o], [x1 + o, top, z1 + o], c.finish ?? 'trim');
   }
 
   return {

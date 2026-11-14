@@ -1,38 +1,36 @@
 # HANDOFF — read first, overwrite at end of session (≤40 lines)
 
-**Updated:** 2026-11-14 · **By:** Claude Code · **Branch:** `feat/pq-t73-house-parts`
-(from `feat/pq-t67-step-models` @ `5a129af`, PQ-T67–T72 not on `main` yet; rebase before the PR)
+**Updated:** 2026-11-14 · **By:** Claude Code · **Branch:** `feat/pq-t74-house-quality`
+(from `feat/pq-t73-house-parts`; PQ-T67–T74 not on `main` yet; rebase before the PR)
 
-## NEXT: try PQ-T73 on `/village` (V328–V333), then open the phase PR (PQ-T67 → PQ-T73)
+## NEXT: try V335–V341 on `/village`, then open the phase PR (PQ-T67 → PQ-T74)
 
-`make dev` + `LLM_PROVIDER=meta` → `/village` → validate a house's 2D faces → 3D.
-Offline: `make views-3d FRONT=… RIGHT=… BACK=… LEFT=… TOP=… OUT=… [READING=…] [SINGLE=1]`.
+Brief and open limits: `docs/tasks/PV-house-generation-next.md` (§ « Traité en PQ-T74 » + what is left).
+Offline replay: `make views-3d FRONT=… RIGHT=… BACK=… LEFT=… TOP=… OUT=… LABEL=house OFFLINE=1 READING=… MATERIALS=wood,slate`.
 
-## PQ-T73 — piloted part specialists (2026-11-14)
+## PQ-T74 — house quality on five new house types (2026-11-14)
 
-- `house/house-tools.ts`: pilot (`housePilot`, medium) → `HouseBrief` (type, parts, focus note per tool);
-  tools `massing` / `openings` / `structure` / `finishes` (`houseTool`, high, streamed) in parallel,
-  merged into one `HouseReading` (replayable). Massing retried once; 12 min deadline per call
-  (`HOUSE_TOOL_TIMEOUT_MS`: a hung stream held a whole house 18 min). No massing → PQ-T72 single reading.
-- Plan parts: piers (stone, cap, course; replace posts on their side when ≥ half the beam height),
-  heads arch / segment / bracket + arcade bays, gable trusses, galleries (balcony with posts under the
-  main eave; flat skirt when no roof covers it), `wallFinish` / `roofFinish`, finishes wall2 / stone /
-  roof2 / timber with colour + swatch measured in the specialist's sample box. New slots appended.
-- Fit: balcony keeps its storey (DECK_MAX was pinning it to the deck), a balcony without floor stands on
-  the veranda under it, post bases (< 8 % high) are not piers.
-- Results: `~/Téléchargements/generated-view/{lodge-stone-t73, mg-arcades, mg-varangue, mg-balcony, mg-earth}`
-  (Malagasy photos in `resources/refine-3d/mg-*.jpg`, credits in `SOURCES-refine.md`).
+Live runs from photos (`resources/refine-3d/h-{thatch,fachwerk,stilt,logcabin,aframe}.jpg`, credits in
+`SOURCES-refine.md`), each failure fixed in the pure fit / mesh, then replayed:
+
+- `house-fit.ts`: `measuredBase` (base colour at the foot of the walls), `growToFootprint` (a strip along a
+  block grows it), `ANNEX_PITCH`, chimney `finish: 'stone'`, `swatchOblique`, `lowerFinishes`
+  (`HouseVolume.lower`), figured walls cut no wall swatch, bands of gable walls kept up to the ridge.
+- `house-mesh.ts`: `THATCH_EDGE` (thick thatch eaves and verges), `EAVE_DROP_MAX`, lower cladding (gable
+  walls cut level), chimney in the stone slot. `house-projection.ts`: thatch never wears the drawn swatch.
+- `house-tools.ts`: prompt v2 (`figured`, `base`), `patchReading` (single reading completed by the
+  specialists that answered), garbled colour keys read by their start. `recon/recipe.ts`: parts cut at 96.
+- Results: `~/Téléchargements/generated-view/h-*/maison-3d-t74.jpg`, sheet `t74-sheet.jpg`.
 
 ## Decisions
 
-- New parts optional: a plan without them builds byte for byte as PQ-T72 (`house-mesh.test.ts` hashes);
-  bungalow and school readings replayed on old and new code → identical `house.json` and render.
-- Specialists as structured-output tools (one call each), not a multi-turn tool loop: images sent once
-  per call, parallel, each answer validated alone.
-- No Neon migration (recipes not stored). No HF republish (bench unchanged).
+- Zero-regression rule: `house-mesh.test.ts` hashes unchanged; bungalow single replay = `house-pq-t72.json`
+  byte for byte. School single replay differs by `look.base` only (grey default → measured `#8a584b`):
+  intended (limit 17), the brief's "red plinth" came from the reading being null there.
+- `STRIP_MAX` 0.16 and `ANNEX_PITCH` 2 chosen so the bungalow's annexes stay as they were.
+- New plan fields optional (`chimney.finish`, `volume.lower`). No Neon migration, no HF republish.
 
 ## Open
 
-- Timber knees read as `arcade: bracket` only; a stone arcade wears the wall / stone swatch.
-- Dormers and bellcast eaves are still blocks; a structure specialist may list timber posts as piers.
-- Meta network was flaky this session (socket hang up, header timeouts): a run can lose a view.
+- `figured` and the v2 prompt were not run live yet (fachwerk replayed with the flag set by hand).
+- Left: hip read for a gable, Muse views that disagree, door snapped too wide, veranda back wall finish.

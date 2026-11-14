@@ -207,6 +207,11 @@ export const ReadFinishSchema = z.object({
     .optional()
     .catch(undefined),
   box: quadIn.optional().catch(undefined),
+  /**
+   * PQ-T74: the finish carries a large figure a small sample cannot show (half-timbering, a
+   * mural, mixed panels): the walls then wear their whole drawing, not a repeated swatch.
+   */
+  figured: z.boolean().optional().catch(undefined),
 });
 export type ReadFinish = z.infer<typeof ReadFinishSchema>;
 

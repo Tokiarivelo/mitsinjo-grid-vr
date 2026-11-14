@@ -716,6 +716,31 @@ One task = one commit, with its Vitest test, its `contracts.md` update and its m
       byte for byte on a real lodge plan), `house-projection.test.ts`. Bungalow replayed on PQ-T72 and
       PQ-T73 code: same `house.json` and render.
 
+- [x] **PQ-T74 House quality on new house types.** Five new photos (thatched cottage, half-timbered
+      house, stilt house, log cabin, A-frame: `resources/refine-3d/h-*.jpg`) run live, each failure
+      fixed in the pure fit / mesh. (1) Base colour measured at the foot of the front walls when the
+      reading gives none (`measuredBase`: school plinth brown-red, cottage plinth black, not the grey
+      default). (2) A strip of footprint along a block grows that block (`growToFootprint`) instead of
+      an annex whose steep roof hid the cottage's walls; a narrow annex roof is no steeper than
+      `ANNEX_PITCH`; the eave drop of a steep roof is capped (`EAVE_DROP_MAX`). (3) Thatch: thick
+      edge of thatch at eaves and verges (`THATCH_EDGE`), its own strand pattern instead of the drawn
+      swatch (read as grey boards). (4) Chimneys wear the masonry finish when one is read
+      (`HouseChimney.finish`). (5) Figured walls (`ReadFinish.figured`, half-timbering): no wall
+      swatch, the walls keep their validated drawing. (6) A reconstruction past 96 parts is cut to
+      the limit instead of losing the whole model. Prompt version 2 (`figured`, `base` asked).
+      (7) A swatch whose pattern runs oblique (`swatchOblique`: tile rows drawn at an angle, a
+      kaleidoscope once mirrored) is not cut: the finish keeps its material's pattern in the measured
+      colour. (8) A lower storey of another cladding (`HouseVolume.lower`, found by `lowerFinishes`
+      under the floor band, gable ends read and cut up to the ridge: plaster under dark boards on the
+      stilt house, green panels at the foot of the A-frame). (9) When massing or
+      openings fail twice, the single reading is completed by the specialists that answered
+      (`patchReading`: the log cabin lost its finishes to two socket hang-ups); a garbled colour key
+      (`door_facade`) is read by its start.
+      **Test:** `house-fit.test.ts`, `house-mesh.test.ts` (hashes unchanged), `house-projection.test.ts`,
+      `recon-recipe.test.ts`. Bungalow single replay = `house-pq-t72.json` byte for byte; school
+      single replay differs by `look.base` only (grey default → measured `#8a584b`, intended).
+      Captures: `~/Téléchargements/generated-view/h-*/maison-3d-t74.jpg`.
+
 ## Exit criteria
 
 Every real object meets methodology §9 · every prompt has a version and an eval behind it · the report, the

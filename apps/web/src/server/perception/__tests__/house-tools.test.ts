@@ -2,7 +2,13 @@ import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
-import { HOUSE_TOOL_SPECS, mergeToolAnswers, parseBrief, toolQuestion } from '../house/house-tools';
+import {
+  HOUSE_TOOL_SPECS,
+  mergeToolAnswers,
+  parseBrief,
+  patchReading,
+  toolQuestion,
+} from '../house/house-tools';
 import { parseHouseReading } from '../house/house-prompt';
 import { readHouseParts, type AskHouseTool } from '../house/house-specialist';
 
@@ -251,5 +257,65 @@ describe('readHouseParts', () => {
   it('answers no reading when the massing fails (the single reading takes over)', async () => {
     const ask: AskHouseTool = async () => null;
     expect((await readHouseParts(ask, 'house', ['front'], ['a'])).reading).toBeNull();
+  });
+
+  it('hands back the answers of the specialists when the massing fails (PQ-T74)', async () => {
+    const ask: AskHouseTool = async (tool) => (tool === 'finishes' ? finishes : null);
+    const out = await readHouseParts(ask, 'house', ['front'], ['a']);
+    expect(out.reading).toBeNull();
+    expect(out.answers?.finishes).toBe(finishes);
+  });
+});
+
+describe('patchReading (PQ-T74)', () => {
+  const single = parseHouseReading(
+    JSON.stringify({
+      volumes: [
+        { kind: 'body', plan: [0, 1, 0, 1], eave: 0.4, ridge: 0.1, roof: 'gable', ridgeAxis: 'x' },
+      ],
+      openings: [{ view: 'front', kind: 'door', box: [0.6, 0.5, 0.8, 0.95] }],
+      chimneys: [{ plan: [0, 0.1, 0.8, 0.9], top: 0 }],
+      walls: { material: 'plaster', color: '#a9a49b' },
+      roof: { material: 'slate', color: '#6b5f52' },
+      trim: '#5b4d3d',
+      base: '#6e7373',
+    })
+  )!;
+
+  it('completes a single reading with the finishes the specialist read', () => {
+    const patched = patchReading(single, { massing: null, finishes }, null);
+    // Blocks, openings and chimneys of the single reading; finishes and looks of the specialist.
+    expect(patched.volumes).toEqual(single.volumes);
+    expect(patched.openings).toEqual(single.openings);
+    expect(patched.chimneys).toEqual(single.chimneys);
+    expect(patched.finishes?.map((f) => f.finish)).toEqual(['wall', 'stone', 'roof2']);
+    expect(patched.walls).toEqual({ material: 'wood', color: '#7a4e30' });
+    expect(patched.trim).toBe('#3b2a20');
+    // What the specialist did not give stays as the single reading had it.
+    expect(patched.roof).toEqual(single.roof);
+    expect(patched.base).toBe('#6e7373');
+  });
+
+  it('keeps the blocks of the massing specialist when only the openings failed', () => {
+    const patched = patchReading(single, { massing, openings: null }, null);
+    expect(patched.volumes).toHaveLength(3);
+    expect(patched.openings).toEqual(single.openings);
+  });
+
+  it('reads a colour under a garbled key by its start', () => {
+    const garbled = JSON.stringify({
+      finishes: [],
+      trim: '#111111',
+      door_facade: '#59432E',
+      baseweld: '#8A8A82',
+    });
+    const merged = mergeToolAnswers({ massing, finishes: garbled }, null)!;
+    expect(merged.door).toBe('#59432e');
+    expect(merged.base).toBe('#8a8a82');
+    expect(merged.trim).toBe('#111111');
+  });
+
+  it('is the single reading when no specialist answered', () => {
+    expect(patchReading(single, { massing: null, finishes: 'no json' }, null)).toBe(single);
   });
 });

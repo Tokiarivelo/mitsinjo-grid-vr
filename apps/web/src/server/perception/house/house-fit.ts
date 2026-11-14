@@ -3,7 +3,10 @@ import {
   HOUSE_OPENINGS_MAX,
   HOUSE_PIERS_MAX,
   HOUSE_VOLUMES_MAX,
+  HOUSE_WALL_FINISHES,
+  HOUSE_WALLS,
   HousePlanSchema,
+  finishLook,
   isOpenVolume,
   type HouseFinish,
   type HouseMaterial,
@@ -64,19 +67,22 @@ export interface HouseFitInput {
   fallback?: { wall?: HouseMaterial; roof?: HouseMaterial };
 }
 
+/** Thickest strip of footprint along a block's side taken as that block being deeper (PQ-T74). */
+export const STRIP_MAX = 0.16;
+/** Share of the block's side such a strip runs along, at least. */
+export const STRIP_ALONG = 0.7;
+
 /**
- * Blocks for the footprint no volume covers: the plan cut on every block edge and outline step,
- * each cell drawn as roof on the view from above (≥ `FOOTPRINT_FILL`) and under no block becomes
- * part of an annex (cells merged along x, then equal runs along z), at the lowest solid's heights.
+ * Rectangles of the footprint no volume covers: the plan cut on every block edge and outline
+ * step, each cell drawn as roof on the view from above (≥ `FOOTPRINT_FILL`) and under no block,
+ * merged along x, then equal runs along z.
  */
-export function footprintAnnexes(
-  volumes: HouseVolume[],
+function footprintGaps(
+  volumes: ReadonlyArray<HouseVolume>,
   top: GridView,
-  xSteps: number[] = [],
-  zSteps: number[] = []
-): HouseVolume[] {
-  const solids = volumes.filter((v) => !isOpenVolume(v));
-  if (!solids.length) return [];
+  xSteps: number[],
+  zSteps: number[]
+): Array<[number, number, number, number]> {
   const cuts = (extra: number[], i: 0 | 2) =>
     [...new Set([0, 1, ...extra, ...volumes.flatMap((v) => [v.plan[i], v.plan[i + 1]!])])]
       .map(round3)
@@ -122,6 +128,67 @@ export function footprintAnnexes(
     if (prev) prev[3] = r[3];
     else merged.push([...r]);
   }
+  return merged;
+}
+
+/**
+ * Blocks grown over the strips of footprint running along them (PQ-T74): a strip the reading
+ * left out along most of a block's front or back (a body read shorter than its roof on the view
+ * from above) is that block being deeper, not a new block. As an annex it got its own steep roof
+ * in front of the walls and took the facade's windows.
+ */
+export function growToFootprint(
+  volumes: HouseVolume[],
+  top: GridView,
+  xSteps: number[] = [],
+  zSteps: number[] = []
+): HouseVolume[] {
+  const out = volumes.map((v) => ({ ...v, plan: [...v.plan] as HouseVolume['plan'] }));
+  for (const [x0, x1, z0, z1] of footprintGaps(volumes, top, xSteps, zSteps)) {
+    const [dx, dz] = [x1 - x0, z1 - z0];
+    // Along x (a strip in front of or behind a block), then along z (beside it).
+    for (const [i, thick, long] of [
+      [2, dz, dx],
+      [0, dx, dz],
+    ] as const) {
+      if (thick < FOOTPRINT_MIN_SIDE || thick > STRIP_MAX || long <= thick) continue;
+      const j = i === 2 ? 0 : 2;
+      const [g0, g1, a0, a1] = i === 2 ? [z0, z1, x0, x1] : [x0, x1, z0, z1];
+      const host = out.find((v) => {
+        if (isOpenVolume(v)) return false;
+        const side = v.plan[j + 1]! - v.plan[j]!;
+        const shared = Math.min(a1, v.plan[j + 1]!) - Math.max(a0, v.plan[j]!);
+        const touches = Math.abs(v.plan[i]! - g1) < 1e-6 || Math.abs(v.plan[i + 1]! - g0) < 1e-6;
+        return touches && shared >= STRIP_ALONG * side && shared >= STRIP_ALONG * (a1 - a0);
+      });
+      if (!host) continue;
+      if (Math.abs(host.plan[i]! - g1) < 1e-6) host.plan[i] = g0;
+      else host.plan[i + 1] = g1;
+      break;
+    }
+  }
+  return out;
+}
+
+/** Steepest roof given to an annex: rise over half its span (PQ-T74; 2 ≈ 63°). */
+export const ANNEX_PITCH = 2;
+
+/**
+ * Blocks for the footprint no volume covers (`footprintGaps`), at the lowest solid's heights. A
+ * narrow annex does not reach that block's ridge: its roof is no steeper than `ANNEX_PITCH`
+ * (PQ-T74: two spires stood on the small back wings of a cottage). `height` = the house's height
+ * as a share of its width (the front drawing's), the depth being the view from above's.
+ */
+export function footprintAnnexes(
+  volumes: HouseVolume[],
+  top: GridView,
+  xSteps: number[] = [],
+  zSteps: number[] = [],
+  height: number | null = null
+): HouseVolume[] {
+  const solids = volumes.filter((v) => !isOpenVolume(v));
+  if (!solids.length) return [];
+  const merged = footprintGaps(volumes, top, xSteps, zSteps);
   const low = solids.reduce((a, b) => (b.eave < a.eave ? b : a));
   return (
     merged
@@ -135,7 +202,20 @@ export function footprintAnnexes(
         kind: 'annex' as const,
         plan: [x0, x1, z0, z1] as HouseVolume['plan'],
         eave: low.eave,
-        ridge: low.roof === 'flat' || low.roof === 'none' ? low.eave : low.ridge,
+        ridge:
+          low.roof === 'flat' || low.roof === 'none'
+            ? low.eave
+            : height
+              ? round3(
+                  Math.min(
+                    low.ridge,
+                    low.eave +
+                      (ANNEX_PITCH * Math.min(x1 - x0, ((z1 - z0) * top.rows) / top.cols)) /
+                        2 /
+                        height
+                  )
+                )
+              : low.ridge,
         roof: low.roof === 'none' ? ('flat' as const) : low.roof,
         ridgeAxis: x1 - x0 >= z1 - z0 ? ('x' as const) : ('z' as const),
         ...(low.roof === 'shed' && low.fall ? { fall: low.fall } : {}),
@@ -429,7 +509,8 @@ export function fitHouse({
         ? {
             bands: r.bands
               .map((b) => round3(clamp01(1 - b)))
-              .filter((b) => b > 0.02 && b < eave)
+              // PQ-T74: a gable end's wall rises to the ridge (an A-frame has no eave wall).
+              .filter((b) => b > 0.02 && b < (r.roof === 'gable' ? ridge : eave))
               .slice(0, 4),
           }
         : {}),
@@ -494,11 +575,13 @@ export function fitHouse({
 
   // A part of the footprint the reading left out (a back annex hidden on the front): the walls
   // behind it would wear its roof's drawing. Filled at the height of the lowest block.
-  if (top)
-    volumes = [...volumes, ...footprintAnnexes(volumes, top, xSteps, zSteps)].slice(
-      0,
-      HOUSE_VOLUMES_MAX
-    );
+  if (top) {
+    volumes = growToFootprint(volumes, top, xSteps, zSteps);
+    volumes = [
+      ...volumes,
+      ...footprintAnnexes(volumes, top, xSteps, zSteps, front ? front.rows / front.cols : null),
+    ].slice(0, HOUSE_VOLUMES_MAX);
+  }
 
   // Ridges on the drawn roof line (the front outline over the block's width).
   if (frontHeights) {
@@ -546,6 +629,7 @@ export function fitHouse({
     });
   }
 
+  const stoneRead = Boolean(reading.finishes?.some((f) => f.finish === 'stone'));
   const chimneys = reading.chimneys.slice(0, HOUSE_CHIMNEYS_MAX).flatMap((c) => {
     const [a0, a1, b0, b1] = c.plan.map(clamp01) as [number, number, number, number];
     const plan: [number, number, number, number] = [
@@ -555,21 +639,105 @@ export function fitHouse({
       round3(Math.max(b0, b1)),
     ];
     if (plan[1] - plan[0] < 0.005 || plan[3] - plan[2] < 0.005) return [];
-    return [{ plan, top: round3(clamp01(1 - c.top)) }];
+    // PQ-T74: with a masonry finish read (brick or stone), the stacks wear it, not the walls.
+    return [
+      { plan, top: round3(clamp01(1 - c.top)), ...(stoneRead ? { finish: 'stone' as const } : {}) },
+    ];
   });
 
   const piers = fitPiers(reading.piers ?? []);
 
+  const look = measureLook(reading, volumes, openings, views, top, fallback, mirrored);
   const plan: HousePlan = {
-    volumes,
+    volumes: lowerFinishes(
+      volumes,
+      look,
+      views,
+      Boolean(reading.finishes?.some((f) => f.finish === 'wall' && f.figured))
+    ),
     openings,
     chimneys,
     ...(piers.length ? { piers } : {}),
-    look: measureLook(reading, volumes, openings, views, top, fallback, mirrored),
+    look,
     ...(reading.type ? { type: reading.type } : {}),
   };
   const valid = HousePlanSchema.safeParse(plan);
   return valid.success ? valid.data : null;
+}
+
+/** Colour distance (rgb) past which the two storeys of a wall are two claddings. */
+export const LOWER_CONTRAST = 30;
+/** A cell this near (rgb) a finish's colour is of that finish. */
+export const LOWER_NEAR = 60;
+/** Fewest drawn cells of a storey's wall read before its colour counts. */
+export const LOWER_MIN_CELLS = 24;
+/** Share of the lower storey's wall cells near the finish's colour for it to be its cladding. */
+export const LOWER_SHARE = 0.5;
+
+/**
+ * Blocks whose lower storey wears another cladding (PQ-T74): under a block's floor band, the wall
+ * drawn in a colour far from its own cladding and near another finish read on the house (a
+ * plastered ground storey under dark boards) gets that finish as `lower`. Read on the first
+ * elevation that shows both storeys of the block; the blocks standing in front are left out.
+ */
+export function lowerFinishes(
+  volumes: HouseVolume[],
+  look: HousePlan['look'],
+  views: HouseFitInput['views'],
+  figured = false
+): HouseVolume[] {
+  // Figured walls (half-timbering) keep their drawing: no storey of theirs is a plain cladding.
+  if (figured) return volumes;
+  const others = (own: HouseFinish) =>
+    HOUSE_WALL_FINISHES.filter((f) => f !== own && (f === 'wall' || look[f])).map((f) => ({
+      finish: f,
+      rgb: hexRgb(finishLook(look, f).color),
+    }));
+  return volumes.map((v) => {
+    if (isOpenVolume(v) || v.lower || !v.bands?.length) return v;
+    const own = v.wallFinish ?? 'wall';
+    const candidates = others(own);
+    if (!candidates.length) return v;
+    const ownRgb = hexRgb(finishLook(look, own).color);
+    for (const wall of HOUSE_WALLS) {
+      const g = views[wall];
+      if (!g) continue;
+      const span = (b: HouseVolume) =>
+        alongX(wall) ? [b.plan[0], b.plan[1]] : [b.plan[2], b.plan[3]];
+      const [a0, a1] = span(v) as [number, number];
+      const ahead = volumes.filter((b) => b !== v && outerness(b, wall) > outerness(v, wall));
+      const free = (s: number, y: number) =>
+        s > a0 && s < a1 && !ahead.some((b) => s >= span(b)[0]! && s <= span(b)[1]! && y <= b.eave);
+      // A gable end rises to the ridge (an A-frame has no other wall).
+      const wallTop =
+        v.roof === 'gable' && (v.ridgeAxis === 'x') !== alongX(wall) ? v.ridge : v.eave;
+      for (const top of [...v.bands].sort((p, q) => q - p)) {
+        const up = dominantBin(g, (s, y) => y > top + 0.02 && y < wallTop - 0.02 && free(s, y));
+        const lowAt = (s: number, y: number) => y > BASE_BAND && y < top - 0.02 && free(s, y);
+        const low = dominantBin(g, lowAt);
+        if (!up || !low || up.cells < LOWER_MIN_CELLS || low.cells < LOWER_MIN_CELLS) continue;
+        if (dist(up.rgb, low.rgb) < LOWER_CONTRAST) continue;
+        const best = candidates.reduce((p, q) =>
+          dist(low.rgb, q.rgb) < dist(low.rgb, p.rgb) ? q : p
+        );
+        // Clearly that finish, not the block's own: twice nearer to it.
+        if (dist(low.rgb, best.rgb) * 2 >= dist(low.rgb, ownRgb)) continue;
+        // One plain cladding down there: most of the storey is nearer that finish's colour (the
+        // timbers of a half-timbered wall are a third of it, not a cladding).
+        let [n, near] = [0, 0];
+        for (let r = 0; r < g.rows; r++)
+          for (let c = 0; c < g.cols; c++) {
+            const [s, y] = [(c + 0.5) / g.cols, 1 - (r + 0.5) / g.rows];
+            if (!g.mask[r * g.cols + c] || !lowAt(s, y)) continue;
+            n++;
+            const px = rgbAt(g, r * g.cols + c);
+            if (dist(px, best.rgb) < LOWER_NEAR && dist(px, best.rgb) < dist(px, ownRgb)) near++;
+          }
+        if (near >= LOWER_SHARE * n) return { ...v, lower: { finish: best.finish, top } };
+      }
+    }
+    return v;
+  });
 }
 
 /** Smallest pier side kept, share of the plan. */
@@ -744,8 +912,34 @@ function measureLook(
     trim: reading.trim ?? '#f2efe8',
     glass: (glassPx.length ? measured(dark) : null) ?? reading.glass ?? '#4d6475',
     door: reading.door ?? '#5a3d2b',
-    base: reading.base ?? '#8f8a80',
+    // PQ-T74: a base the reading does not give is measured at the foot of the front walls.
+    base: reading.base ?? measuredBase(front, volumes, fronts) ?? '#8f8a80',
   };
+}
+
+/** Height of the band at the foot of the front walls where the base is measured, share of height. */
+export const BASE_BAND = 0.04;
+
+/**
+ * Colour of the base (plinth, deck) when the reading gives none (PQ-T74: the finishes specialist
+ * may omit it, and a grey default replaced a red brick plinth): the most common colour at the
+ * foot of the front walls, doors left out. A house without a plinth gets its wall colour there.
+ */
+export function measuredBase(
+  front: GridView | undefined,
+  volumes: ReadonlyArray<HouseVolume>,
+  fronts: ReadonlyArray<HouseOpening>
+): string | null {
+  if (!front) return null;
+  const solids = volumes.filter((v) => !isOpenVolume(v) && v.kind !== 'balcony');
+  const c = dominantColor(
+    front,
+    (s, y) =>
+      y < BASE_BAND &&
+      solids.some((v) => s > v.plan[0] && s < v.plan[1]) &&
+      !fronts.some((o) => s >= o.along[0] && s <= o.along[1] && o.rise[0] < BASE_BAND)
+  );
+  return c ? toHex(c) : null;
 }
 
 /** Side of a swatch square, share of the view width (a few boards, bricks or tile rows). */
@@ -869,6 +1063,14 @@ export function dominantColor(
   view: GridView,
   accept: (s: number, y: number) => boolean
 ): [number, number, number] | null {
+  return dominantBin(view, accept)?.rgb ?? null;
+}
+
+/** `dominantColor` with the cells read and the share of them in that colour's bin. */
+function dominantBin(
+  view: GridView,
+  accept: (s: number, y: number) => boolean
+): { rgb: [number, number, number]; cells: number; share: number } | null {
   const bins = new Map<number, [number, number, number, number]>();
   const step = 256 / DOMINANT_BINS;
   for (let r = 0; r < view.rows; r++)
@@ -883,8 +1085,18 @@ export function dominantColor(
       bins.set(key, [bin[0] + R, bin[1] + G, bin[2] + B, bin[3] + 1]);
     }
   let best: [number, number, number, number] | null = null;
-  for (const bin of bins.values()) if (!best || bin[3] > best[3]) best = bin;
-  return best ? [best[0] / best[3], best[1] / best[3], best[2] / best[3]] : null;
+  let cells = 0;
+  for (const bin of bins.values()) {
+    cells += bin[3];
+    if (!best || bin[3] > best[3]) best = bin;
+  }
+  return best
+    ? {
+        rgb: [best[0] / best[3], best[1] / best[3], best[2] / best[3]],
+        cells,
+        share: best[3] / cells,
+      }
+    : null;
 }
 
 const hexRgb = (hex: string) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
@@ -944,6 +1156,8 @@ export function housePatches(
     const box = firstPatch(grid.g, target, inside);
     if (box) out[f.finish] = { view: f.view!, box };
   }
+  // PQ-T74: figured walls (half-timbering) keep their whole drawing: no swatch to repeat.
+  if (finishes.some((f) => f.finish === 'wall' && f.figured)) delete out.wall;
   return out;
 }
 
@@ -1014,6 +1228,38 @@ export function cleanSwatch(rgb: Uint8Array, w: number, h: number): Uint8Array {
   for (let line = 0; line < lines; line++)
     for (let k = 0; k < length; k++) out.set(profile[line]!, at(line, k) * 3);
   return out;
+}
+
+/** Coherence (0–1) of a swatch's line direction past which it has one direction. */
+export const SWATCH_COHERENCE = 0.3;
+/** Degrees off the horizontal or the vertical past which that direction is oblique. */
+export const SWATCH_OBLIQUE = 15;
+
+/**
+ * Whether a swatch's pattern runs oblique (PQ-T74): rows of tiles drawn at an angle on the view
+ * from above, repeated mirrored, turn into a kaleidoscope of diamonds. Read on the structure
+ * tensor of the luminance: one clear direction (`SWATCH_COHERENCE`), neither level nor upright.
+ */
+export function swatchOblique(rgb: Uint8Array, w: number, h: number): boolean {
+  const lum = (x: number, y: number) => {
+    const i = (y * w + x) * 3;
+    return rgb[i]! + rgb[i + 1]! + rgb[i + 2]!;
+  };
+  let [xx, yy, xy] = [0, 0, 0];
+  for (let y = 1; y + 1 < h; y++)
+    for (let x = 1; x + 1 < w; x++) {
+      const gx = lum(x + 1, y) - lum(x - 1, y);
+      const gy = lum(x, y + 1) - lum(x, y - 1);
+      xx += gx * gx;
+      yy += gy * gy;
+      xy += gx * gy;
+    }
+  if (xx + yy < 1e-6) return false;
+  const coherence = Math.hypot(xx - yy, 2 * xy) / (xx + yy);
+  if (coherence < SWATCH_COHERENCE) return false;
+  // Direction of the strongest change, 0–90° from the horizontal.
+  const angle = Math.abs((Math.atan2(2 * xy, xx - yy) / 2) * (180 / Math.PI));
+  return Math.min(angle, 90 - angle) > SWATCH_OBLIQUE;
 }
 
 /** Standard deviation of line sums of `k` values each, as means. */

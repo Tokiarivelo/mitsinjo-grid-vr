@@ -112,6 +112,11 @@ export const HouseVolumeSchema = z.object({
   arcade: z.enum(HOUSE_HEADS).optional(),
   /** A timber truss in the gable ends of its roof (king post, collar, struts). */
   truss: z.boolean().optional(),
+  /**
+   * Another cladding on the lower part of its walls (PQ-T74: a plastered ground storey under a
+   * timber upper storey): the walls wear `finish` from the ground up to `top`.
+   */
+  lower: z.object({ finish: z.enum(HOUSE_WALL_FINISHES), top: share }).optional(),
 });
 export type HouseVolume = z.infer<typeof HouseVolumeSchema>;
 
@@ -152,6 +157,8 @@ export const HouseChimneySchema = z.object({
     .tuple([share, share, share, share])
     .refine(([x0, x1, z0, z1]) => x1 > x0 && z1 > z0, 'empty plan'),
   top: share,
+  /** Its masonry when it is not the walls' (PQ-T74: a brick stack on a plastered house). */
+  finish: z.literal('stone').optional(),
 });
 export type HouseChimney = z.infer<typeof HouseChimneySchema>;
 
