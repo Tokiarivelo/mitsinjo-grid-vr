@@ -3,7 +3,7 @@
 **Updated:** 2026-11-14 · **By:** Claude Code · **Branch:** `feat/pq-t76-cars`
 (from `feat/pq-t74-house-quality`; PQ-T67–T75 not on `main` yet; rebase before the PR)
 
-## NEXT: PQ-T76 — SUV + truck redrawn from their profile and read by the team (ask first: Muse + Spark cost), then bench of 10
+## NEXT: PQ-T76 — jeep top view on the bonnet (align the plan along z), truck redrawn (ask first: Muse + Spark cost), bench of 10
 
 Brief: `docs/tasks/PV-car-generation.md` (§ 4 rules, § 6 findings + done steps). Task: `PV-vision-quality.md` PQ-T76.
 
@@ -16,16 +16,15 @@ Brief: `docs/tasks/PV-car-generation.md` (§ 4 rules, § 6 findings + done steps
 
 ## Done this session (PQ-T76)
 
-- Step 0 findings; (a) proportions from the elevations; (b) `CarPlan` + wheels measured on the profile;
-  (c) car team (`car-tools.ts`, `car-specialist.ts`, `askCarTool`), live once on the sedan.
-- (d) `car/car-fit.ts`: body fitted on the silhouettes (profile, arches, section without mirrors, taper),
-  reading applied (windows in model frame, paint/glass colours). `lib/car-mesh.ts`: lofted body ≈ 6 k
-  triangles, 9 slots, wheel cylinders. `car-projection.ts` materials; wired in object view, village
-  (`placed-drawn-model`, `placed-models-geometry`) and Blender export. Front shadow dropped (sedan track read).
+- (a)–(d) proportions, `CarPlan` + measured wheels, car team (`askCarTool`), body fitted (`car-fit.ts`) and
+  built (`lib/car-mesh.ts`, 9 slots) in object view, village and Blender export.
 - (e) Body without bulges (`carSection` deck/cabin/roof, `stationTaper` ends only, crease normals). A car is
   drawn from its profile (`car/car-views.ts`, `VEHICLE_FACES` front/back/top/bottom, left = profile
   mirrored, underside on atlas tile 6 `faces.underside`); panel « 2D Profile ». Live once: `c-sedan-p`.
-- Car outputs moved to `resources/refine-3d/` (`c-*`, `t76*.jpg`; `make car-replay` reads there).
+- (f) Floor continuous between the wells (`floorLine`), axle tubes, rounded tyres; underside read turned
+  (`car/car-underside.ts`). Live SUV (team, 0.935) + jeep (0.908) from their profile; replays `t77`.
+- PQ-T77 3D Studio: « Open in 3D Studio » → `object-studio.tsx` (gizmo, views, cameras, undo), Layers +
+  box masks (`piece-layers-panel.tsx`); edits in `recipe.pieces`, baked by `withPieceEdits` (village, Blender).
 
 ## Decisions
 
@@ -33,9 +32,10 @@ Brief: `docs/tasks/PV-car-generation.md` (§ 4 rules, § 6 findings + done steps
 - Faces turned up are `roof` even without a top drawing (`ROOF_UP` 0.7). `NO_CAR=1` skips the car team.
 - `AtlasView` stays 5 views (house code untouched); the underside is `AtlasTile` + `faces.underside`.
 - Car team orchestration is its own code (not shared with the house team) to leave house code untouched.
+- A studio piece = a geometry group (slot / material), not each window; opacity is studio-only.
 
 ## Open
 
-- SUV/truck: old front-first drawings, no windows (no team reading). SUV black rims: no rim found.
+- Truck: old front-first drawings. Jeep: no windows read (`NO_CAR=1` run); bonnet top-view mismatch.
 - Flaky under full parallel load only: `recon.test.ts` time budget (passes alone).
 - Houses: V335–V343 not played; phase PR PQ-T67 → T75 not opened; door snap + views check pending.

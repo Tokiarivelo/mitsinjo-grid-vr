@@ -807,3 +807,19 @@ loop log and the docs agree · mock mode and the offline tests need no API key.
 Non-Meta image-to-3D models · Muse-written code run outside the §8bis sandbox (`eval`, Node `vm` and networked
 workers stay forbidden) · dense meshes or GLB export · projecting the photo on the model · generated top-down
 views · tuning a threshold so that one object passes.
+
+- [x] **PQ-T77 3D Studio: edit every generated model piece by piece.** User 2026-11-14: a
+      full-screen view of the generated 3D with Blender-like tools and Photoshop-like masks per
+      piece, for every model type. Done: « Open in 3D Studio » (top right of the viewer) →
+      `ui/object-studio.tsx` (full-viewport dialog, browser full screen when allowed): tools
+      Q / G / R / S with a gizmo (drei `TransformControls`), Textured / Solid / Wireframe / X-ray,
+      camera presets 1 / 3 / 7 / 5 + back / left / bottom + F frame, H / Alt+H / `/` isolate, undo
+      / redo (`usePieceHistory`, 50 steps), grid + axes. « Layers » (`piece-layers-panel.tsx`):
+      eye, lock, opacity, a box layer mask (on, invert, six sliders), numeric transform. A piece
+      is a geometry group (`utils/model-pieces.ts`: house slots, car slots, hull surfaces, recipe
+      materials); edits in `recipe.pieces` (`lib/piece-edits.ts`), drawn per piece with clipping
+      planes, baked (`withPieceEdits`) in the village and the Blender export. Limit: a piece is a
+      slot or a material (two windows of one slot move together).
+      **Test:** `piece-edits.test.ts`, `model-pieces.test.ts`, `use-piece-history.test.ts`,
+      `use-stable-except.test.ts`, `object-studio.test.tsx`; shots `SHOT_STUDIO=glass node
+    scripts/object-viewer-shot.mjs …` (1440 + 390, dark + light).

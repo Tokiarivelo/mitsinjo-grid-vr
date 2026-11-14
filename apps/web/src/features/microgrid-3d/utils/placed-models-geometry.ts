@@ -6,6 +6,7 @@ import type { ObjectRecipe } from '@/lib/object-shape';
 import { facesMesh } from '@/features/vision-insert/utils/face-projection';
 import { carGeometry } from '@/features/vision-insert/utils/car-projection';
 import { houseGeometry } from '@/features/vision-insert/utils/house-projection';
+import { withPieceEdits } from '@/features/vision-insert/utils/model-pieces';
 import { recipeMesh, triangleCount } from '@/features/vision-insert/utils/object-geometry';
 import { terrainHeight } from './landscape';
 import { TOKEN_HEX } from './scene-palette';
@@ -154,13 +155,18 @@ export function buildPlacedModelsGeometry(
     // A car fitted on its drawings (PQ-T76): lofted body and wheels.
     const carPlan = own && !house && item.recipe.car?.body ? item.recipe.car : undefined;
     const carMesh = carPlan ? carGeometry({ ...item.recipe, car: carPlan }) : null;
+    // The operator's piece edits from the 3D Studio (PQ-T77) are baked in before the turn.
+    const edited = (geo: THREE.BufferGeometry) => withPieceEdits(geo, item.recipe);
     let g = house
-      ? houseGeometry({ ...item.recipe, house }).rotateY(effYaw)
+      ? edited(houseGeometry({ ...item.recipe, house })).rotateY(effYaw)
       : carMesh
-        ? carMesh.rotateY(effYaw)
+        ? edited(carMesh).rotateY(effYaw)
         : faces
-          ? facesMesh({ proportions: item.recipe.proportions, faces }).rotateY(effYaw)
-          : recipeMesh(recipeWithYaw, tier === 'low' ? 'low' : 'full');
+          ? edited(facesMesh({ proportions: item.recipe.proportions, faces })).rotateY(effYaw)
+          : withPieceEdits(
+              recipeMesh(recipeWithYaw, tier === 'low' ? 'low' : 'full'),
+              recipeWithYaw
+            );
     if (tier === 'low') {
       const tris = triangleCount(g);
       if (lowTriangles + tris > PLACED_LOW_TRIANGLES) {

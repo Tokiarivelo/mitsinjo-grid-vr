@@ -10,6 +10,7 @@ import {
   Image as ImageIcon,
   Layers,
   Loader2,
+  Maximize2,
   Move3d,
   RotateCcw,
   Ruler,
@@ -47,16 +48,13 @@ import { BlenderExportButton } from './blender-export-button';
 import { StepModelsGear } from './step-models-gear';
 import { useFacade2d, validatedFacade, type ValidatedFacade } from '../hooks/use-facade-2d';
 import { useFacadeFaces, validatedFaces } from '../hooks/use-facade-faces';
+import { LazyObjectEditor3d, ViewerSkeleton } from './lazy-object-editor-3d';
+import type { PieceEdits } from '@/lib/piece-edits';
 
-/** Placeholder while the viewer chunk loads or Spark builds the recipe. */
-function ViewerSkeleton() {
-  return <div className="h-full w-full animate-pulse rounded-control bg-surface-hover/60" />;
-}
-
-export const LazyObjectEditor3d = dynamic(
-  () => import('./object-editor-3d').then((m) => m.ObjectEditor3d),
-  { ssr: false, loading: () => <ViewerSkeleton /> }
-);
+/** The 3D Studio (PQ-T77), loaded when opened. */
+const LazyObjectStudio = dynamic(() => import('./object-studio').then((m) => m.ObjectStudio), {
+  ssr: false,
+});
 
 /** Note under an outline fallback: says why the AI shape is missing. */
 const NOTE_KEY: Record<NonNullable<ObjectShape['reason']>, string> = {
@@ -201,6 +199,8 @@ export interface ObjectShapePanelProps extends ObjectShapeState {
   onStepModelsSaved?: () => void;
   /** The operator restyles a surface of a drawn model (PQ-T71); null = back to its drawing. */
   onRestyle?: (surface: HullSurface, look: FaceSurface | null) => void;
+  /** The operator edited the model's pieces in the 3D Studio (PQ-T77). */
+  onEditPieces?: (pieces: PieceEdits) => void;
 }
 
 type ShapeTab = 'model' | 'facade';
@@ -230,9 +230,11 @@ export function ObjectShapePanel({
   scope,
   onStepModelsSaved,
   onRestyle,
+  onEditPieces,
 }: ObjectShapePanelProps) {
   const t = useTranslations('features.visionInsert');
   const webgl = useWebGLAvailable();
+  const [studioOpen, setStudioOpen] = useState(false);
   const facade = useFacade2d(imageUrl ?? null, detection, sessionId, scope);
   const ready = status === 'ready' && shape?.detectionId === detection.id;
   const materials = ready && shape?.recipe ? recipeMaterials(shape.recipe) : [];
@@ -406,6 +408,27 @@ export function ObjectShapePanel({
                   <ViewerSkeleton />
                 )}
               </div>
+              {liveViewer && ready && shape?.recipe && onEditPieces && (
+                <button
+                  type="button"
+                  onClick={() => setStudioOpen(true)}
+                  aria-label={t('studio.open')}
+                  title={t('studio.open')}
+                  className="absolute right-2 top-2 grid h-11 w-11 place-items-center rounded-control border border-border bg-canvas-raised/90 text-text-primary shadow-sm hover:bg-surface-hover"
+                >
+                  <Maximize2 className="h-4 w-4" aria-hidden="true" />
+                </button>
+              )}
+              {studioOpen && ready && shape && onEditPieces && (
+                <LazyObjectStudio
+                  shape={shape}
+                  detection={detection}
+                  label={label}
+                  imageUrl={imageUrl}
+                  onChange={onEditPieces}
+                  onClose={() => setStudioOpen(false)}
+                />
+              )}
               {/* Staged build (PG-T18): live progress while it prints, then it keeps improving.
                   No Cancel while loading: it would abort the whole generation, not just the rest. */}
               {(ready || loading) && improve && (

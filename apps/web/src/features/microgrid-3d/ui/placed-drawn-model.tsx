@@ -5,6 +5,7 @@ import { useThree } from '@react-three/fiber';
 import { faceMaterials, facesMesh } from '@/features/vision-insert/utils/face-projection';
 import { carGeometry, carMaterials } from '@/features/vision-insert/utils/car-projection';
 import { houseGeometry, houseMaterials } from '@/features/vision-insert/utils/house-projection';
+import { withPieceEdits } from '@/features/vision-insert/utils/model-pieces';
 import type { PlacedDrawnModel } from '../utils/placed-models-geometry';
 import { TOKEN_HEX } from '../utils/scene-palette';
 
@@ -29,10 +30,14 @@ export const PlacedDrawnModelMesh = memo(function PlacedDrawnModelMesh({
   const { recipe } = model;
   const geometry = useMemo(
     () =>
-      recipe.house
-        ? houseGeometry({ ...recipe, house: recipe.house })
-        : ((recipe.car?.body ? carGeometry({ ...recipe, car: recipe.car }) : null) ??
-          facesMesh({ proportions: recipe.proportions, faces: recipe.faces! })),
+      // The operator's piece edits from the 3D Studio (PQ-T77) are baked in.
+      withPieceEdits(
+        recipe.house
+          ? houseGeometry({ ...recipe, house: recipe.house })
+          : ((recipe.car?.body ? carGeometry({ ...recipe, car: recipe.car }) : null) ??
+              facesMesh({ proportions: recipe.proportions, faces: recipe.faces! })),
+        recipe
+      ),
     [recipe]
   );
   useEffect(() => () => geometry.dispose(), [geometry]);

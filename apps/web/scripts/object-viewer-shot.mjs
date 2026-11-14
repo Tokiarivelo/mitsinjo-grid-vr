@@ -5,6 +5,7 @@
 // Env: SHOT_SCALE=3 → sharper shots (device pixel ratio). SHOT_DRAG=110,-40 → orbit by that many pixels
 // first (x then y; a negative y lowers the camera), the shot gets a `-turned` suffix. SHOT_PANEL=roof → that
 // surface is picked and given a material in the surface editor, and the whole 3D block is shot. SHOT_GL=gpu → real GPU (default SwiftShader software GL). SHOT_SUFFIX=before → name-before-dark.png.
+// SHOT_STUDIO=glass → opens the 3D Studio (PQ-T77), selects that piece, gives it a mask, fades the roof and shoots the whole page.
 import { chromium } from '@playwright/test';
 import { mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -140,7 +141,26 @@ for (const theme of ['dark', 'light']) {
     // SHOT_PANEL=roof: pick that surface in the surface editor, give it a material, and shoot the
     // whole « 3D model » block (viewer + editor) instead of the viewer alone.
     const surface = process.env.SHOT_PANEL;
-    if (surface) {
+    const studioPiece = process.env.SHOT_STUDIO;
+    if (studioPiece) {
+      await page.getByRole('button', { name: /open in 3d studio/i }).click();
+      const studio = page.getByRole('dialog', { name: /3d studio/i });
+      await studio.locator('canvas').waitFor({ timeout: 30_000 });
+      await studio
+        .getByRole('button', { name: new RegExp(`^${studioPiece}`, 'i') })
+        .first()
+        .click();
+      await studio.getByRole('button', { name: /add mask/i }).click();
+      const to = studio.getByRole('slider', { name: /^X \(left → right\) to/i });
+      await to.focus();
+      for (let i = 0; i < (Number(process.env.SHOT_MASK_STEPS) || 40); i++)
+        await page.keyboard.press('ArrowLeft');
+      await studio.getByRole('button', { name: /^wireframe/i }).waitFor();
+      await page.waitForTimeout(1200);
+      await page.screenshot({ path: file.replace(/\.png$/, '-studio.png') });
+      console.log(`✓ ${file.replace(/\.png$/, '-studio.png')}`);
+      await page.keyboard.press('Escape');
+    } else if (surface) {
       await page.getByRole('radio', { name: new RegExp(`^${surface}`, 'i') }).click();
       await page.getByRole('button', { name: /^material$/i }).click();
       await page.waitForTimeout(600);

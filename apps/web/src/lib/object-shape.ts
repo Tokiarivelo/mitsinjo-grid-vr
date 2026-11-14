@@ -4,6 +4,7 @@ import { MODEL_VIEWS } from './face-atlas';
 import { HULL_BOXES_MAX, type HullSurface } from './face-hull';
 import { CarPlanSchema } from './car-plan';
 import { HousePlanSchema } from './house-plan';
+import { PieceEditsSchema } from './piece-edits';
 import type { ObjectKit } from './object-kit';
 import {
   boxPath,
@@ -661,6 +662,11 @@ export const ObjectRecipeSchema = z.object({
    * clearance, tyre and rim colours (`lib/car-plan.ts`). Later read by the car specialists too.
    */
   car: CarPlanSchema.optional(),
+  /**
+   * The operator's edits of the model's pieces in the 3D Studio (PQ-T77, `lib/piece-edits.ts`):
+   * hidden, locked, opacity, move / turn / scale, layer mask, per slot name. Never set by a model.
+   */
+  pieces: PieceEditsSchema.optional(),
   /**
    * Drawn views projected on the model (PQ-T70, `views` source only): `atlas` is one image (data
    * URL, layout in `lib/face-atlas.ts`) of the validated drawings cut to the object, `views` the

@@ -58,4 +58,17 @@ the engine catalog gives power (never the AI). Sidebar + MobileNav entry « Vill
 - Photo zoom (− / 100 % / +, pan by scrolling or the hand toggle while drawing) and « Adjust the box » on the selected object
   (AI box moved / resized, then saved) — `components.md` § DetectionCanvas.
 - States: loading / refining / ready / empty / error + retry (states-copy.md « vision »). Mobile: one column, `pb-20`.
+- 3D Studio (PQ-T77, every model: house, car, drawn hull, parts recipe; built without mockup): « Full screen »
+  (maximize icon, top right of the 3D viewer, ready model only) opens a full-viewport overlay (`fixed inset-0`, `bg-canvas`,
+  browser full screen when allowed, Esc closes). Top toolbar (scrolls sideways on mobile, 44 px targets, icon + label ≥ md,
+  `aria-label` always): tools Select (Q) · Move (G) · Rotate (R) · Scale (S); view Textured · Solid · Wireframe · X-ray;
+  camera Front (1) · Right (3) · Top (7) · Back · Left · Bottom · Perspective (5) · Frame selected (F); Hide (H) · Show all
+  (Alt+H) · Isolate (/); Undo (Ctrl+Z) · Redo (Ctrl+Shift+Z) · Reset all; Close. Canvas: grid floor + axes, orbit + pan,
+  gizmo (Move / Rotate / Scale) on the selected piece; a click selects a piece, empty space deselects. Right panel
+  (lg 320 px; under the canvas on mobile, max 45 vh, scrolls) « Layers »: one row per piece of the model (slot or material,
+  translated name) — eye (visible), lock (no select / no gizmo), name, opacity 5–100 %; selected row = cyan border. Under the
+  selected row: « Mask » (Photoshop-style layer mask, a box in model shares): Add mask · enabled toggle · Invert (hide inside)
+  · six range sliders X / Y / Z min–max · Delete mask; « Transform »: numeric move / rotate / scale + reset. Edits are kept in
+  the recipe (`recipe.pieces`): they follow the model to the village (baked: transforms, hidden pieces, masks; opacity is
+  studio-only) and the Blender export. States: no piece → hint; locked piece → gizmo hidden. Dark + light tokens only.
 - Surface editor (PQ-T71, drawn models only), under the 3D display tweaks: chips Roof / Front / Right side / Back / Left side (or a click on the model), « Drawing | Material », material select, colour (tint of the drawing, or colour of the material), « Undo my changes ». A house read by its specialist (PQ-T72) wears swatches of its drawings repeated on the walls and the roof (« Material » active, the whole drawing never painted on its walls); « Drawing » brings the whole drawing back on a surface. Touch targets 44 px, chips scroll sideways on mobile. The look is kept with the model when it is added to the simulation. 2D faces panel: four cards (right, back, left, top view). A vehicle (PQ-T76, detected from its archetype) is drawn from its profile: the 2D view is « 2D Profile » (« Imagine 2D profile »), its four cards are front, back, top view and underside, and the hint says the left side is the right one mirrored.

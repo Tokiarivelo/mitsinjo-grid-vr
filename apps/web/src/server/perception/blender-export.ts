@@ -9,6 +9,7 @@ import {
 } from '@/features/vision-insert/utils/car-projection';
 import { houseGeometry, houseSlotLooks } from '@/features/vision-insert/utils/house-projection';
 import { recipeMesh } from '@/features/vision-insert/utils/object-geometry';
+import { withPieceEdits } from '@/features/vision-insert/utils/model-pieces';
 import { HULL_SURFACES } from '@/lib/face-hull';
 import { SURFACES } from '@/features/vision-insert/utils/surface-look';
 import type { ObjectRecipe } from '@/lib/object-shape';
@@ -61,7 +62,7 @@ function groupVertices(geo: THREE.BufferGeometry, start: number, count: number) 
  * uvs; roof, frames, glass, doors and decks are their material in their colour.
  */
 function houseGroups(recipe: ObjectRecipe & { house: NonNullable<ObjectRecipe['house']> }) {
-  const geo = houseGeometry(recipe);
+  const geo = withPieceEdits(houseGeometry(recipe), recipe);
   const looks = houseSlotLooks(recipe);
   const out = geo.groups
     .filter((g) => g.count > 0)
@@ -88,8 +89,9 @@ function houseGroups(recipe: ObjectRecipe & { house: NonNullable<ObjectRecipe['h
  * fitted body.
  */
 function carGroups(recipe: CarRecipe): DrawnGroup[] | null {
-  const geo = carGeometry(recipe);
-  if (!geo) return null;
+  const built = carGeometry(recipe);
+  if (!built) return null;
+  const geo = withPieceEdits(built, recipe);
   const looks = carSlotLooks(recipe);
   const out = geo.groups
     .filter((g) => g.count > 0)
@@ -116,7 +118,10 @@ export function drawnGroups(recipe: ObjectRecipe): DrawnGroup[] {
   const car = recipe.car?.body ? carGroups({ ...recipe, car: recipe.car }) : null;
   if (car) return car;
   if (!recipe.faces) return [];
-  const geo = facesMesh({ proportions: recipe.proportions, faces: recipe.faces });
+  const geo = withPieceEdits(
+    facesMesh({ proportions: recipe.proportions, faces: recipe.faces }),
+    recipe
+  );
   const out = geo.groups.map((g): DrawnGroup => {
     const surface = HULL_SURFACES[g.materialIndex ?? 0]!;
     const look = recipe.faces!.surfaces?.[surface];
@@ -151,7 +156,7 @@ const r4 = (n: number) => Number(n.toFixed(4));
 
 /** Mesh groups of a recipe, as the viewer builds it. */
 export function recipeGroups(recipe: ObjectRecipe): MeshGroup[] {
-  const geo = recipeMesh(recipe);
+  const geo = withPieceEdits(recipeMesh(recipe), recipe);
   const pos = geo.getAttribute('position');
   const col = geo.getAttribute('color');
   const index = geo.getIndex();
