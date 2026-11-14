@@ -787,8 +787,14 @@ One task = one commit, with its Vitest test, its `contracts.md` update and its m
       the underside on the atlas's sixth tile (`faces.underside`). Live once on the sedan from
       the photo (5 drawings, no team: `NO_CAR=1`): profile straight on from a ¾ photo, the views
       agree, top view drawn lengthwise (the truck's lay sideways before), overall 0.851.
-      Left: team readings for SUV and truck, the SUV and truck redrawn from their profile, bench of 10.
-      **Test:** `car-proportions.test.ts`, `car-wheels.test.ts`, `car-tools.test.ts`, `car-fit.test.ts`, `car-mesh.test.ts`, `car-projection.test.ts`, `car-views.test.ts`, `make house-regress`, `make car-replay`. Houses unchanged: bungalow replay = `house-pq-t72.json`, bungalow and
+      (f) Done (user 2026-11-14: tyres and underside « pas bon du tout »): the floor ran at the
+      arch top across the whole car at each axle (a slot under it); now `floorLine` keeps it at its
+      own height between the wells, the arch only over the tyres, an axle tube per pair, rounded
+      tyre shoulders. The SUV underside was drawn lying across the sheet and rejected: it is now
+      read turned (`readUnderside`). Live SUV (team, overall 0.935) and jeep (0.908) from their
+      profile; replays `t77` (`c-suv-p`, `c-jeep-p`, `c-sedan-p`).
+      Left: the jeep's top view on the bonnet (z alignment of the plan), truck redrawn, bench of 10.
+      **Test:** `car-proportions.test.ts`, `car-wheels.test.ts`, `car-tools.test.ts`, `car-fit.test.ts`, `car-mesh.test.ts`, `car-projection.test.ts`, `car-views.test.ts`, `car-underside.test.ts`, `make house-regress`, `make car-replay`. Houses unchanged: bungalow replay = `house-pq-t72.json`, bungalow and
       school recipes identical before / after. Captures: `c-*/voiture-3d-t76a.jpg`, `t76a-sheet.jpg`, `t76b-wheels.jpg`, `c-sedan/t76c-reading.jpg`, `t76d-viewer.jpg`, `c-sedan-p/views-sheet.jpg`, `c-sedan-p/t76e-viewer.jpg` (all in `resources/refine-3d/`).
 
 ## Exit criteria

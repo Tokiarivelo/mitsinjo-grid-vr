@@ -34,6 +34,7 @@ import { measureCarPlan } from '../car/car-measure';
 import { carImages, type ReadCar } from '../car/car-specialist';
 import type { CarReading } from '../car/car-tools';
 import { profileProportions, vehicleAspects } from '../car/car-proportions';
+import { readUnderside } from '../car/car-underside';
 import { bleedPaper, maskAt, shrink, trimPaper } from './texture';
 import {
   alignTop,
@@ -408,18 +409,19 @@ export async function reconstructObject(
     const topRead = topImage ? alignTop(topImage, W, D) : null;
     if (top && !topRead)
       console.info(`${tag}: the view from above disagrees with the elevations, not used`);
-    // A vehicle's underside (PQ-T76): read like the plan, then mirrored (seen from below, the
-    // sides swap): its tile has the plan's columns.
-    const bottomImage = bottom ? await decodeView(bottom) : null;
-    const bottomRead = bottomImage ? alignTop(bottomImage, W, D) : null;
-    if (bottom && !bottomRead)
+    // A vehicle's underside (PQ-T76): read like the plan, turned the way the plan is drawn (Muse
+    // may lay it across the sheet), then mirrored (seen from below, the sides swap).
+    const under = bottom
+      ? await readUnderside(bottom, topRead?.view ?? null, W, D, decodeView)
+      : null;
+    if (bottom && !under)
       console.info(`${tag}: the underside disagrees with the elevations, not used`);
     const faces = await buildFaceAtlas(
       pngs,
       recon.aligned,
       top && topRead ? { png: top, ...topRead } : undefined,
-      bottom && bottomRead
-        ? { png: bottom, view: bottomRead.view, frame: { ...bottomRead.frame, mirrored: true } }
+      under
+        ? { png: under.png, view: under.read.view, frame: { ...under.read.frame, mirrored: true } }
         : undefined
     ).catch(() => null);
     if (faces) {

@@ -73,6 +73,16 @@ export const TAPER_MIN = 0.8;
 export const CREASE_COS = 0.82;
 /** Tyre width (share of the box width) and track when the front gave none. */
 export const DEFAULT_TYRE = 0.1;
+/** Gap between a tyre's inner face and its wheel well's wall (share of the width). */
+export const WELL_GAP = 0.012;
+/** A tyre's sidewall radius (share of the wheel's) and its tread's share of the tyre width. */
+export const TYRE_SHOULDER = 0.9;
+export const TYRE_TREAD = 0.7;
+/** An axle tube's radius, share of its wheels' radius; segments round it. */
+export const AXLE_SHARE = 0.14;
+export const AXLE_SEGMENTS = 12;
+/** A station this close to a wheel's span (share of its radius) is over the wheel. */
+export const ARCH_MARGIN = 1.08;
 export const DEFAULT_TRACK_SHARE = 0.94;
 
 type V3 = [number, number, number];
@@ -165,6 +175,37 @@ export function stationTaper(body: Pick<CarBody, 'taper' | 'top'>): (i: number) 
   };
 }
 
+/**
+ * The floor's height at each station: the body's underside with the wheel arches taken out (over
+ * a wheel, the line between the stations just before and after it). `hOverD` turns a wheel's
+ * radius (share of the height) into a share of the length.
+ */
+export function floorLine(
+  body: Pick<CarBody, 'bottom' | 'z0' | 'z1'>,
+  wheels: CarPlan['wheels'],
+  hOverD: number
+): number[] {
+  const N = body.bottom.length;
+  const zAt = (i: number) => body.z0 + ((body.z1 - body.z0) * i) / Math.max(1, N - 1);
+  const over = (i: number) =>
+    wheels.some((w) => Math.abs(zAt(i) - w.z) < w.r * hOverD * ARCH_MARGIN);
+  const out = [...body.bottom];
+  for (let i = 0; i < N; i++) {
+    if (!over(i)) continue;
+    let a = i;
+    while (a >= 0 && over(a)) a--;
+    let b = i;
+    while (b < N && over(b)) b++;
+    const [ya, yb] = [a >= 0 ? body.bottom[a] : undefined, b < N ? body.bottom[b] : undefined];
+    const y =
+      ya !== undefined && yb !== undefined
+        ? ya + ((yb - ya) * (i - a)) / (b - a)
+        : (ya ?? yb ?? body.bottom[i]!);
+    out[i] = Math.min(body.bottom[i]!, y);
+  }
+  return out;
+}
+
 /** The car as triangles in the model's frame (`dims` = w, h, d); null without a fitted body. */
 export function carMesh(
   plan: CarPlan,
@@ -221,7 +262,7 @@ export function carMesh(
    * A triangle with its vertex normals, wound to face the mean of them. Its slot: `fixed`, else
    * the drawing it faces (the glass inside a window, the underside under the car).
    */
-  const tri = (vs: [V3, V3, V3], ns: [V3, V3, V3], fixed?: { slot: CarSlot; view?: AtlasView }) => {
+  const tri = (vs: [V3, V3, V3], ns: [V3, V3, V3], fixed?: { slot: CarSlot; view?: UvView }) => {
     // A normal across a crease takes the face's own: flat panels stay flat.
     const crease = (n: V3, f: V3): V3 => (dot(n, f) < CREASE_COS ? f : n);
     const a = vs[0];
@@ -275,18 +316,33 @@ export function carMesh(
   const N = body.top.length;
   const section = carSection(body);
   const taperAt = stationTaper(body);
+  const track = plan.track;
+  const tyre = track?.tyre ?? DEFAULT_TYRE;
+  const cx = track ? (track.x0 + track.x1) / 2 : 0.5;
+  const outer = track ? (track.x1 - track.x0) / 2 : Math.max(...body.half) * DEFAULT_TRACK_SHARE;
+  /** Half the gap between the wheel wells: the floor runs at its own height across it. */
+  const wellHalf = Math.max(0, outer - tyre - WELL_GAP);
+  const floor = floorLine(body, plan.wheels, h / d);
   const rings: V3[][] = [];
   const centres: number[] = [];
+  /** Ring points of the underside (both edges, both well walls, the floor between). */
+  const UNDER_POINTS = RING_UNDER + 5;
   for (let i = 0; i < N; i++) {
     const z = body.z0 + ((body.z1 - body.z0) * i) / (N - 1);
     const t = body.top[i]!;
     const b = Math.min(body.bottom[i]!, t);
+    const f = Math.min(floor[i]!, b);
     const tp = taperAt(i);
     const halfAt = (y: number) => section(t, y) * tp;
     const ring: Array<[number, number]> = [];
     const hb = halfAt(b);
     const ht = halfAt(t);
-    for (let u = 0; u <= RING_UNDER; u++) ring.push([0.5 + (-1 + (2 * u) / RING_UNDER) * hb, b]);
+    // Over a wheel the body's underside is the arch only above the tyres: between the wells the
+    // floor stays at its own line (no slot across the car at each axle).
+    const xi = Math.min(wellHalf, hb * 0.98);
+    ring.push([0.5 - hb, b], [0.5 - xi, b], [0.5 - xi, f]);
+    for (let u = 1; u < RING_UNDER; u++) ring.push([0.5 + (-1 + (2 * u) / RING_UNDER) * xi, f]);
+    ring.push([0.5 + xi, f], [0.5 + xi, b], [0.5 + hb, b]);
     for (let k = 1; k <= RING_SIDE; k++) {
       const y = b + ((t - b) * k) / RING_SIDE;
       ring.push([0.5 + halfAt(y), y]);
@@ -300,6 +356,7 @@ export function carMesh(
     centres.push(Y((b + t) / 2));
   }
   const P = rings[0]!.length;
+  const floorFace = { slot: 'under' as const, view: (underside ? 'bottom' : 'front') as UvView };
   // Smooth normals: across the ring and along the car, turned outward from the station's axis.
   const normals: V3[][] = rings.map((ring, i) =>
     ring.map((p, k) => {
@@ -321,8 +378,10 @@ export function carMesh(
         normals[i + 1]![q]!,
         normals[i]![q]!,
       ];
-      tri([A, B, C], [nA, nB, nC]);
-      tri([A, C, D], [nA, nC, nD]);
+      // The underside (floor and wheel wells) is the floor's, whatever way it faces.
+      const under = q < UNDER_POINTS ? floorFace : undefined;
+      tri([A, B, C], [nA, nB, nC], under);
+      tri([A, C, D], [nA, nC, nD], under);
     }
   // End caps: the back and the nose, flat, each reading its drawing.
   for (const [i, sz] of [
@@ -340,31 +399,63 @@ export function carMesh(
   }
 
   // ---------------------------------------------------------------- wheels
-  const track = plan.track;
-  const tyre = track?.tyre ?? DEFAULT_TYRE;
-  const cx = track ? (track.x0 + track.x1) / 2 : 0.5;
-  const outer = track ? (track.x1 - track.x0) / 2 : Math.max(...body.half) * DEFAULT_TRACK_SHARE;
+  for (const wh of plan.wheels) {
+    // The axle: a tube from one tyre's inner face to the other's, under the floor's colour.
+    const ar = wh.r * h * AXLE_SHARE;
+    const [ay, az] = [Y(wh.y), Z(wh.z)];
+    const [x0, x1] = [X(cx - (outer - tyre)), X(cx + (outer - tyre))];
+    for (let s = 0; s < AXLE_SEGMENTS; s++) {
+      const a0 = (2 * Math.PI * s) / AXLE_SEGMENTS;
+      const a1 = (2 * Math.PI * (s + 1)) / AXLE_SEGMENTS;
+      const n0: V3 = [0, Math.cos(a0), Math.sin(a0)];
+      const n1: V3 = [0, Math.cos(a1), Math.sin(a1)];
+      const at = (x: number, n: V3): V3 => [x, ay + ar * n[1], az + ar * n[2]];
+      tri([at(x0, n0), at(x1, n0), at(x1, n1)], [n0, n0, n1], floorFace);
+      tri([at(x0, n0), at(x1, n1), at(x0, n1)], [n0, n1, n1], floorFace);
+    }
+  }
   for (const wh of plan.wheels)
     for (const sx of [1, -1] as const) {
       const xc = X(cx + sx * (outer - tyre / 2));
       const [yc, zc] = [Y(wh.y), Z(wh.z)];
       const R = wh.r * h;
       const half = (tyre * w) / 2;
-      const ring = (x: number): V3[] =>
+      const ring = (x: number, r = R): V3[] =>
         Array.from({ length: WHEEL_SEGMENTS }, (_, s) => {
           const a = (2 * Math.PI * s) / WHEEL_SEGMENTS;
-          return [x, yc + R * Math.cos(a), zc + R * Math.sin(a)];
+          return [x, yc + r * Math.cos(a), zc + r * Math.sin(a)];
         });
-      const [o, inn] = [ring(xc + sx * half), ring(xc - sx * half)];
+      // A tyre with rounded shoulders: sidewall at `TYRE_SHOULDER` × R, tread over the middle.
+      const rs = R * TYRE_SHOULDER;
+      const bands = [
+        ring(xc + sx * half, rs),
+        ring(xc + sx * half * TYRE_TREAD),
+        ring(xc - sx * half * TYRE_TREAD),
+        ring(xc - sx * half, rs),
+      ];
       const side: FaceView = sx > 0 ? 'right' : 'left';
       const out: V3 = [sx, 0, 0];
       const back: V3 = [-sx, 0, 0];
+      /** A band's normal at segment s: radial, leaning out on the shoulders. */
+      const lean = [sx * 0.6, 0, 0, -sx * 0.6];
+      const nAt = (b: number, s: number): V3 => {
+        const p = bands[b]![s]!;
+        return unit([lean[b]!, (p[1] - yc) / R, (p[2] - zc) / R]);
+      };
       for (let s = 0; s < WHEEL_SEGMENTS; s++) {
         const t = (s + 1) % WHEEL_SEGMENTS;
-        const r0 = unit([0, o[s]![1] - yc, o[s]![2] - zc]);
-        const r1 = unit([0, o[t]![1] - yc, o[t]![2] - zc]);
-        tri([o[s]!, inn[s]!, inn[t]!], [r0, r0, r1], { slot: 'tyre', view: side });
-        tri([o[s]!, inn[t]!, o[t]!], [r0, r1, r1], { slot: 'tyre', view: side });
+        for (let b = 0; b < 3; b++) {
+          const [p, q] = [bands[b]!, bands[b + 1]!];
+          tri([p[s]!, q[s]!, q[t]!], [nAt(b, s), nAt(b + 1, s), nAt(b + 1, t)], {
+            slot: 'tyre',
+            view: side,
+          });
+          tri([p[s]!, q[t]!, p[t]!], [nAt(b, s), nAt(b + 1, t), nAt(b, t)], {
+            slot: 'tyre',
+            view: side,
+          });
+        }
+        const [o, inn] = [bands[0]!, bands[3]!];
         tri([[xc + sx * half, yc, zc], o[s]!, o[t]!], [out, out, out], { slot: 'rim', view: side });
         tri([[xc - sx * half, yc, zc], inn[t]!, inn[s]!], [back, back, back], {
           slot: 'tyre',

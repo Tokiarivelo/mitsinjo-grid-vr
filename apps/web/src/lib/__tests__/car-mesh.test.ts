@@ -5,6 +5,7 @@ import {
   carMesh,
   carSection,
   EDGE_IN,
+  floorLine,
   inPolygon,
   stationTaper,
   TAPER_MIN,
@@ -161,5 +162,48 @@ describe('carMesh look', () => {
             expect(m.normal[t * 9 + k * 3 + 1]!).toBeGreaterThan(0.95);
           }
     expect(n).toBeGreaterThan(0);
+  });
+});
+
+describe('underside: floor, wheel wells and axles', () => {
+  const arched = Array.from({ length: n }, (_, i) => {
+    const z = i / (n - 1);
+    return Math.abs(z - 0.2) < 0.13 || Math.abs(z - 0.8) < 0.13 ? 0.42 : 0.15;
+  });
+
+  it('takes the wheel arches out of the floor line', () => {
+    const f = floorLine({ z0: 0, z1: 1, bottom: arched }, plan.wheels, dims[1] / dims[2]);
+    for (const y of f) expect(y).toBeCloseTo(0.15, 5);
+    // No wheel: the body's own underside.
+    expect(floorLine({ z0: 0, z1: 1, bottom: arched }, [], 0.3)).toEqual(arched);
+  });
+
+  it('keeps the floor low between the wheels and joins each pair with an axle', () => {
+    const m = carMesh({ ...plan, body: { ...plan.body!, bottom: arched } }, dims)!;
+    const under = CAR_SLOTS.indexOf('under');
+    const floorY = (0.15 - 0.5) * dims[1];
+    const axleY = (0.2 - 0.5) * dims[1];
+    let low = 0;
+    let axle = 0;
+    for (let t = 0; t < m.slot.length; t++) {
+      if (m.slot[t] !== under) continue;
+      for (let k = 0; k < 3; k++) {
+        const [x, y, z] = [0, 1, 2].map((j) => m.position[t * 9 + k * 3 + j]!) as [
+          number,
+          number,
+          number,
+        ];
+        // At an axle station, on the centre line: the floor (not the arch top).
+        if (
+          Math.abs(z - (0.2 - 0.5) * dims[2]) < 0.05 &&
+          Math.abs(x) < 0.2 &&
+          Math.abs(y - floorY) < 1e-3
+        )
+          low++;
+        if (Math.abs(y - axleY) < 0.2 * 0.2 * dims[1] && Math.abs(x) > 0.5) axle++;
+      }
+    }
+    expect(low).toBeGreaterThan(0);
+    expect(axle).toBeGreaterThan(0);
   });
 });
