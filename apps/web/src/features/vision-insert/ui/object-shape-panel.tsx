@@ -38,6 +38,7 @@ import { recipeMaterials } from '../utils/surface-look';
 import { ImproveChip } from './improve-chip';
 import { ObjectDisplayControls } from './object-display-controls';
 import { SurfaceEditor } from './surface-editor';
+import { houseBaseLooks } from '../utils/house-projection';
 import type { HullSurface } from '@/lib/face-hull';
 import type { FaceSurface } from '@/lib/object-shape';
 import { Facade2dPanel } from './facade-2d-panel';
@@ -267,6 +268,11 @@ export function ObjectShapePanel({
     shape?.mode === 'recipe' && shape.recipe?.faces && !shape.recipe.yaw
       ? shape.recipe.faces
       : null;
+  // A house read by its specialist: the roof starts as its covering, not as the drawing.
+  const houseBase =
+    shape?.mode === 'recipe' && shape.recipe?.house && !shape.recipe.yaw
+      ? houseBaseLooks(shape.recipe.house, Boolean(drawnFaces))
+      : undefined;
   const activeTab: ShapeTab = ready ? userTab : 'model';
 
   return (
@@ -419,6 +425,7 @@ export function ObjectShapePanel({
           {webgl && drawnFaces && onRestyle && (
             <SurfaceEditor
               surfaces={drawnFaces.surfaces ?? {}}
+              {...(houseBase ? { base: houseBase } : {})}
               selected={surface}
               onSelect={pickSurface}
               onChange={onRestyle}

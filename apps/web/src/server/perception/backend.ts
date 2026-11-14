@@ -7,6 +7,7 @@ import type {
   CriticResult,
   JudgeResult,
   ClassMaterialsResult,
+  HouseReadResult,
   PartAskResult,
   ViewsCheckResult,
   DetectionResult,
@@ -111,6 +112,17 @@ export interface PerceptionBackend {
     classes: number,
     signal?: AbortSignal
   ): Promise<PerceptionCall<ClassMaterialsResult>>;
+  /**
+   * House specialist (PQ-T72): `imageUrl` is the first drawing, `references` the next ones, in
+   * the order `question` names them (each cropped to the house). One Spark call at `high` effort;
+   * null reading when unusable. Optional: the model keeps its drawn hull without it.
+   */
+  readHouse?(
+    imageUrl: string,
+    question: string,
+    references: ReadonlyArray<string>,
+    signal?: AbortSignal
+  ): Promise<PerceptionCall<HouseReadResult>>;
   /**
    * Rubric judge (PQ-T4): `imageUrl` is photo | model | model ¾, `question` names the object.
    * Asked of `META_JUDGE_MODEL` (Muse Wonder); offline and background only.

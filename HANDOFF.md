@@ -3,37 +3,36 @@
 **Updated:** 2026-11-14 · **By:** Claude Code · **Branch:** `feat/pq-t67-step-models`
 (from `d61ee81`, not re-branched from `main`; rebase before the PR)
 
-## NEXT: look at PQ-T70 on `/village` in the browser, then village / VR texturing
+## NEXT: try PQ-T72 on `/village` in the browser, then open the phase PR
 
-`make dev` + `LLM_PROVIDER=meta` → `/village` → validate a 2D front (and faces) → 3D
-(scenarios V296–V313). Offline: `make views-3d FRONT=… | PHOTO=… [RIGHT= BACK= LEFT= TOP=] OUT=…`.
+`make dev` + `LLM_PROVIDER=meta` → `/village` → validate a house's 2D faces → 3D (scenarios V314–V327).
+Offline: `make views-3d FRONT=… RIGHT=… BACK=… LEFT=… TOP=… OUT=… [READING=house-reading.json]`.
 
-## PQ-T70 — the model wears its drawings (2026-11-13 / 14)
+## PQ-T72 — house specialist (2026-11-14)
 
-- `recipe.faces = { atlas, views, hull }` (`views` source only, `docs/contracts.md`): atlas = the
-  validated drawings (never the photo) cut to the object (`recon/texture.ts`, `buildFaceAtlas`);
-  hull = every front run × every side run per row, stacked into boxes (`lib/face-hull.ts`).
-  The 3D object view draws the hull wearing the atlas (`facesMesh`, `face-projection.ts`).
-- Refined on eight photos of `resources/refine-3d`: view from above (footprint, top texture,
-  depth), roof ended at the eave (`eaveRow`), `ROOF_AGREEMENT`, pale blue paper.
+- `readHouse` (Spark, high effort, streamed, sent through `longFetch` = `node:https`: fetch drops a
+  silent call after 300 s) reads the validated drawings → `HouseReading` → `fitHouse` snaps it on the
+  pixels (outline steps, ridge, shed fall front first, openings on their frames, owner block, footprint
+  annexes from the view from above, low decks) → `recipe.house` (`lib/house-plan.ts`).
+- `lib/house-mesh.ts`: openings with reveal / frame / sill / bars, one roof per volume, walls up to
+  their roof line, verandas (hosted = recess), balconies, chimneys, a plinth under every closed block.
+- Look: a clean swatch of wall (front) and of roof (top) cut on the drawings (`housePatches` on a
+  480-col grid, `cropPatch`, `cleanSwatch` = boards to their median profile), mirrored-repeated; the whole
+  drawing only when the operator picks « Dessin ». Viewer / village / Blender share `houseSlotLooks`.
+- Boards: `~/Téléchargements/generated-view/<name>/maison-3d.jpg` (8 houses).
 
-## PQ-T71 — edit the surfaces, plan in the UI, drawings in the village (2026-11-14)
+## Three.js duplicate fix
 
-- Surface editor under the 3D view (`ui/surface-editor.tsx`, `faces.surfaces`, `restyleSurface`,
-  `useObjectShape().restyle`); `hullMesh().surface` + `facesMesh` groups + `faceMaterials`.
-- « Top view » is a 4th card of the 2D faces panel (`FACE_NAMES` + `top`, `faceUrls.top`).
-- Village: `PlacedDrawnModelMesh` (cap 8, high tier); Blender: `drawnGroups` + embedded atlas.
-- `dropGhosts` (plan contrast), bump relief, `roofClassOf` (geometry before the naming model).
+`@iwer/devui` brings its own three 0.184: the DevUI loads only on « enter VR » (`installDevXRPanels`).
 
 ## Decisions
 
-- The hull uses the front and right silhouettes only (back / left drawings often disagree).
-- The parts recipe stays for the flat render, the score, the low tier and models past the cap.
-- No Neon migration (shapes not stored). No HF republish (bench unchanged).
+- One reading for the whole house (not per room): coherent volumes, openings owned by block.
+- One wall swatch per house (the front's dominant cladding); mixed claddings become one.
+- No Neon migration (recipes not stored). No HF republish (bench unchanged).
 
 ## Open
 
-- A chimney seen on one elevation only makes a thin fin; openings are lit relief, not geometry.
-- VR spatial-shoot miniature = generic kit; the recipe `hip` and the score still read the class.
-- Not committed (GPG passphrase needed): PQ-T69 rework, PQ-T70, PQ-T71. Shots:
-  `~/Téléchargements/generated-view/<name>/planche.jpg`.
+- Arched heads, dormers and glazed gables are rectangles.
+- Generated views that disagree (house-detached: front vs top) still misplace blocks.
+- Blender export colours swatch slots (no swatch image).

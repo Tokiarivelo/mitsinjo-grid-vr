@@ -47,6 +47,14 @@ import {
 } from './rubric-judge';
 import { CODE_JSON_SCHEMA, CODE_PROMPT_VERSION, codePrompt, parseBuildCode } from './shape-code';
 import { logStepModelsOnce, stepModel } from './step-models';
+import { readCompletion, STREAMED_KINDS } from './chat-stream';
+import { longFetch } from './long-fetch';
+import {
+  HOUSE_JSON_SCHEMA,
+  HOUSE_PROMPT_VERSION,
+  HOUSE_SYSTEM_PROMPT,
+  parseHouseReading,
+} from './house/house-prompt';
 import {
   LABEL_JSON_SCHEMA,
   LABEL_SYSTEM_PROMPT,
@@ -92,6 +100,7 @@ import {
   type CriticResult,
   type JudgeResult,
   type ClassMaterialsResult,
+  type HouseReadResult,
   type PartAskResult,
   type ViewsCheckResult,
   type DetectionResult,
@@ -207,19 +216,29 @@ export class MetaPerceptionBackend implements PerceptionBackend {
     baseModel: string,
     init: HeadersInit,
     signal?: AbortSignal,
-    allowContributor = true
+    allowContributor = true,
+    /** A long reasoning call: sent through `longFetch` (no 300 s header / body timers). */
+    long = false
   ): Promise<{ data: unknown; model: string }> {
     if (!this.apiKey) throw new Error('META_API_KEY is not configured in environment');
     const { res, model } = await fetchPreferringContributor(
       baseModel,
       Boolean(baseModel) && this.preferContributor && allowContributor,
-      (m) =>
-        fetch(`${this.baseUrl}${path}`, {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${this.apiKey}`, ...init },
-          body: makeBody(m),
-          signal,
-        })
+      (m) => {
+        const body = makeBody(m);
+        const headers = { Authorization: `Bearer ${this.apiKey}`, ...init } as Record<
+          string,
+          string
+        >;
+        return long && typeof body === 'string'
+          ? longFetch(`${this.baseUrl}${path}`, {
+              method: 'POST',
+              headers,
+              body,
+              ...(signal ? { signal } : {}),
+            })
+          : fetch(`${this.baseUrl}${path}`, { method: 'POST', headers, body, signal });
+      }
     );
     if (!res.ok) {
       const text = await res.text().catch(() => '');
@@ -227,7 +246,8 @@ export class MetaPerceptionBackend implements PerceptionBackend {
         `Meta perception API error (${res.status}) on ${path}: ${text.slice(0, 300)}`
       );
     }
-    return { data: (await res.json()) as unknown, model };
+    // A streamed call (`STREAMED_KINDS`) answers in server-sent events: put back into one completion.
+    return { data: await readCompletion(res), model };
   }
 
   async transcribe(
@@ -308,6 +328,10 @@ export class MetaPerceptionBackend implements PerceptionBackend {
         },
       ],
       response_format: { type: 'json_schema', json_schema: jsonSchema },
+      // Long reasoning calls stream: headers at once, no 300 s wait for the first byte.
+      ...(log && STREAMED_KINDS.has(log.kind)
+        ? { stream: true, stream_options: { include_usage: true } }
+        : {}),
     });
     const sent = await this.postWithModel(
       '/chat/completions',
@@ -315,7 +339,8 @@ export class MetaPerceptionBackend implements PerceptionBackend {
       baseModel,
       { 'Content-Type': 'application/json' },
       timeoutSignal(VISION_CALL_MAX_MS, signal),
-      allowContributor
+      allowContributor,
+      Boolean(log && STREAMED_KINDS.has(log.kind))
     );
     const data = sent.data as {
       choices?: Array<{ message?: { content?: string | null } }>;
@@ -563,6 +588,31 @@ export class MetaPerceptionBackend implements PerceptionBackend {
       `[vision] 3D class materials from ${model}: ${materials ? materials.map((m, i) => `${i + 1}=${m ?? '?'}`).join(' ') : 'unusable'}${roof !== null ? `, roof = ${roof + 1}` : ''}`
     );
     return { model, usage, result: { materials, ...(roof !== null ? { roof } : {}) } };
+  }
+
+  async readHouse(
+    imageUrl: string,
+    question: string,
+    references: ReadonlyArray<string>,
+    signal?: AbortSignal
+  ): Promise<PerceptionCall<HouseReadResult>> {
+    // The seeing model of the parts step (contributor allowed): a wrong reading keeps the hull.
+    const { content, model, usage } = await this.visionJson(
+      HOUSE_SYSTEM_PROMPT,
+      question,
+      imageUrl,
+      HOUSE_JSON_SCHEMA,
+      signal,
+      true,
+      { kind: 'readHouse', params: { promptVersion: HOUSE_PROMPT_VERSION } },
+      references,
+      this.modelFor('parts')
+    );
+    const reading = parseHouseReading(content);
+    console.info(
+      `[vision] 3D house reading from ${model}: ${reading ? `${reading.volumes.length} volumes (${reading.volumes.map((v) => v.kind).join(', ')}), ${reading.openings.length} openings, ${reading.chimneys.length} chimneys` : 'unusable'}`
+    );
+    return { model, usage, result: { reading } };
   }
 
   async judgeShape(

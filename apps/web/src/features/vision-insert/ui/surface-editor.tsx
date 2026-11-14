@@ -12,8 +12,23 @@ export interface SurfaceEditorProps {
   surfaces: Partial<Record<HullSurface, FaceSurface>>;
   selected: HullSurface | null;
   onSelect: (surface: HullSurface | null) => void;
-  /** `look` null gives the surface back to its drawing. */
+  /** `look` null gives the surface back to its drawing (or to its `base` look). */
   onChange: (surface: HullSurface, look: FaceSurface | null) => void;
+  /**
+   * Look a surface has before the operator touches it, when it is not its drawing (PQ-T72: a
+   * house's roof shows its specialist's covering). « Drawing » then asks for the drawing explicitly.
+   */
+  base?: Partial<Record<HullSurface, { material: RecipeMaterial; color: string }>>;
+}
+
+/** The look a surface shows: the operator's, else its base one (unless asked for the drawing). */
+function shownLook(
+  look: FaceSurface | undefined,
+  base: { material: RecipeMaterial; color: string } | undefined
+): FaceSurface | undefined {
+  if (look?.drawing) return look.color ? { color: look.color } : undefined;
+  if (look?.material || !base) return look;
+  return { material: base.material, color: look?.color ?? base.color };
 }
 
 const FIELD =
@@ -24,9 +39,16 @@ const FIELD =
  * by clicking the model), then keep its drawing, tint it, or replace it by a material in a colour.
  * Display of the model only: no energy value, no model call.
  */
-export function SurfaceEditor({ surfaces, selected, onSelect, onChange }: SurfaceEditorProps) {
+export function SurfaceEditor({
+  surfaces,
+  selected,
+  onSelect,
+  onChange,
+  base = {},
+}: SurfaceEditorProps) {
   const t = useTranslations('features.visionInsert');
-  const look = selected ? surfaces[selected] : undefined;
+  const own = selected ? surfaces[selected] : undefined;
+  const look = selected ? shownLook(own, base[selected]) : undefined;
   const material = look?.material;
   const shown = surfaceColor(look);
 
@@ -50,7 +72,7 @@ export function SurfaceEditor({ surfaces, selected, onSelect, onChange }: Surfac
       >
         {HULL_SURFACES.map((name) => {
           const active = selected === name;
-          const dot = surfaceColor(surfaces[name]);
+          const dot = surfaceColor(shownLook(surfaces[name], base[name]));
           return (
             <button
               key={name}
@@ -100,7 +122,9 @@ export function SurfaceEditor({ surfaces, selected, onSelect, onChange }: Surfac
                       selected,
                       mode === 'material'
                         ? { material: material ?? DEFAULT_MATERIAL[selected] }
-                        : null
+                        : base[selected]
+                          ? { drawing: true }
+                          : null
                     )
                   }
                   className={cn(
@@ -152,7 +176,7 @@ export function SurfaceEditor({ surfaces, selected, onSelect, onChange }: Surfac
                 className="h-8 w-11 cursor-pointer rounded-control border border-border bg-surface-elevated p-0.5"
               />
             </label>
-            {look && (
+            {own && (
               <button
                 type="button"
                 onClick={() => onChange(selected, null)}

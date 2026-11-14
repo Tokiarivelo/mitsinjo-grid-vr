@@ -19,6 +19,7 @@ import type {
   JudgeResult,
   DetectionResult,
   ClassMaterialsResult,
+  HouseReadResult,
   PartAskResult,
   PerceptionSource,
   SegmentResult,
@@ -177,6 +178,20 @@ export class PerceptionClient {
       b.nameClasses
         ? b.nameClasses(imageUrl, question, classes, signal)
         : Promise.resolve({ model: b.name, usage: {}, result: { materials: null } })
+    );
+  }
+
+  /** House specialist (PQ-T72); a backend without it answers null (the drawn hull stays). */
+  readHouse(
+    imageUrl: string,
+    question: string,
+    references: ReadonlyArray<string>,
+    signal?: AbortSignal
+  ): Promise<HouseReadResult> {
+    return this.run('readHouse', (b) =>
+      b.readHouse
+        ? b.readHouse(imageUrl, question, references, signal)
+        : Promise.resolve({ model: b.name, usage: {}, result: { reading: null } })
     );
   }
 

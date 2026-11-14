@@ -1371,7 +1371,7 @@
       "surfaceMaterial": "Matière",
       "surfaceColor": "Couleur",
       "surfaceTint": "Teinte",
-      "surfaceReset": "Revenir au dessin"
+      "surfaceReset": "Annuler mes retouches"
     },
     "dispatch": {
       "modeLabel": "Mode de dispatch",

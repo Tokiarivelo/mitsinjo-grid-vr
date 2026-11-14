@@ -303,3 +303,43 @@ describe('placed models that wear their drawings (PQ-T71)', () => {
     expect(res.drawn).toHaveLength(1);
   });
 });
+
+describe('placed houses read by their specialist (PQ-T72)', () => {
+  const houseRecipe: ObjectRecipe = {
+    ...SAMPLE_RECIPE,
+    house: {
+      volumes: [
+        { kind: 'body', plan: [0, 1, 0, 1], eave: 0.6, ridge: 1, roof: 'hip', ridgeAxis: 'x' },
+      ],
+      openings: [{ volume: 0, wall: 'front', kind: 'door', along: [0.4, 0.6], rise: [0, 0.4] }],
+      chimneys: [],
+      look: {
+        wall: { material: 'plaster', color: '#e0d8c8' },
+        roof: { material: 'tile', color: '#a04a35' },
+        trim: '#ffffff',
+        glass: '#40546a',
+        door: '#5a3d2b',
+        base: '#8f8a80',
+      },
+    },
+  };
+
+  it('builds them volume by volume, even without drawings, outside the merged mesh', () => {
+    const res = buildPlacedModelsGeometry([
+      {
+        id: 'app-h',
+        sector: 'households',
+        running: true,
+        position: [0, 0, 0],
+        recipe: houseRecipe,
+        scale: 1,
+        archetype: 'house',
+      },
+    ]);
+    expect(res.modelsGeometry).toBeNull();
+    expect(res.drawn.map((d) => d.id)).toEqual(['app-h']);
+    expect(res.drawn[0]!.recipe.house?.volumes).toHaveLength(1);
+    // The roof's fascia hangs under the eave: the model still rests on the ground.
+    expect(res.modelBounds['app-h']!.height).toBeGreaterThan(0.5);
+  });
+});

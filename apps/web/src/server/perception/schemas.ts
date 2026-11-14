@@ -144,6 +144,18 @@ export type ClassMaterialsResult = Omit<z.infer<typeof ClassMaterialsResultSchem
   materials: Array<import('@/lib/object-shape').RecipeMaterial | undefined> | null;
 };
 
+/**
+ * The house specialist's reading of a house's drawings (PQ-T72): volumes, openings, chimneys,
+ * colours, in each image's own shares; null when unusable (mock: always null). Parsed in
+ * `parseHouseReading`, fitted in `fitHouse`.
+ */
+export const HouseReadResultSchema = PerceptionSourceSchema.extend({
+  reading: z.record(z.string(), z.unknown()).nullable(),
+});
+export type HouseReadResult = Omit<z.infer<typeof HouseReadResultSchema>, 'reading'> & {
+  reading: import('./house/house-prompt').HouseReading | null;
+};
+
 /** Rubric judge (PQ-T4): six 1–5 grades and notes; null when unusable. Parsed in `parseJudge`. */
 export const JudgeResultSchema = PerceptionSourceSchema.extend({
   judgement: z.record(z.string(), z.unknown()).nullable(),

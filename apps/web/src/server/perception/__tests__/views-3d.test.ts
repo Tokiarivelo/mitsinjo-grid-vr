@@ -58,6 +58,17 @@ describe.runIf(process.env.VIEWS_3D_FRONT || process.env.VIEWS_3D_PHOTO)('make v
       {
         draw: live ? museImage : null,
         ...(perception ? { nameClasses: perception.nameClasses.bind(perception) } : {}),
+        // PQ-T72: a house or a building is read by its specialist (one Spark call).
+        ...(process.env.VIEWS_3D_READING
+          ? {
+              // `READING=house-reading.json`: a reading saved by an earlier run, replayed for free.
+              readHouse: async () => ({
+                reading: JSON.parse(await readFile(process.env.VIEWS_3D_READING!, 'utf8')),
+              }),
+            }
+          : perception && !process.env.VIEWS_3D_NO_HOUSE
+            ? { readHouse: perception.readHouse.bind(perception) }
+            : {}),
         // Offline: materials given by hand, largest class first (`MATERIALS=slate,wood,…`).
         ...(process.env.VIEWS_3D_MATERIALS
           ? {
@@ -80,6 +91,8 @@ describe.runIf(process.env.VIEWS_3D_FRONT || process.env.VIEWS_3D_PHOTO)('make v
         // `TOP=`: the view from above, already drawn (front at the bottom of the image).
         ...(topPng ? { topPng } : {}),
         onView: (view: ViewName | 'top', png) => void writeFile(join(out, `view-${view}.png`), png),
+        onHouseReading: (reading) =>
+          void writeFile(join(out, 'house-reading.json'), JSON.stringify(reading, null, 2)),
       }
     );
     if (!built)
@@ -88,6 +101,13 @@ describe.runIf(process.env.VIEWS_3D_FRONT || process.env.VIEWS_3D_PHOTO)('make v
       );
     const { recipe, report } = built;
     await writeFile(join(out, 'recipe.json'), JSON.stringify(recipe, null, 2));
+    // The viewer shots' input (`scripts/object-viewer-shot.mjs`): this one model.
+    await writeFile(
+      join(out, 'recipes.json'),
+      JSON.stringify([{ name: target.label.replace(/\W+/g, '-'), recipe }])
+    );
+    if (recipe.house)
+      await writeFile(join(out, 'house.json'), JSON.stringify(recipe.house, null, 2));
     // The drawings as projected on the model (one tile per view, paper bled over).
     if (recipe.faces)
       await writeFile(
@@ -218,5 +238,5 @@ describe.runIf(process.env.VIEWS_3D_FRONT || process.env.VIEWS_3D_PHOTO)('make v
       .toFile(join(out, 'model-34.png'));
     console.info(`\n${recipe.parts.length} parts — ${reportLine(report)}\n→ ${out}`);
     expect(recipe.parts.length).toBeGreaterThan(0);
-  }, 600_000);
+  }, 1_800_000);
 });

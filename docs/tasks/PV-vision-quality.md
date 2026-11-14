@@ -689,6 +689,19 @@ One task = one commit, with its Vitest test, its `contracts.md` update and its m
       _Open:_ fidelity is a stylised mass (one colour per band, flat slabs); the contributor's material
       names vary between runs (walls named stone or wood).
 
+- [x] **PQ-T72 House specialist.** One Spark reading of the validated drawings of a house or a building
+      (`readHouse`, streamed) → `recipe.house` (`lib/house-plan.ts`), fitted on the pixels (`house-fit.ts`) and
+      built block by block (`lib/house-mesh.ts`): walls with real openings (reveal, frame, sill, glass, glazing
+      bars, door leaf, garage grooves), one roof per volume (hip, gable, shed in 4 directions, flat), walls
+      that follow their roof line, verandas open on posts (under the main roof: recess walls, openings moved
+      to the back), balconies with railings, chimneys, bands. Walls and roof repeat a clean swatch of their
+      drawing (`housePatches`, `cleanSwatch`), every closed block stands on a plinth; the footprint the reading left out becomes an annex
+      (view from above), decks stay low (`DECK_MAX`), shed falls read on the front first; the surface editor
+      starts walls and roof from the swatches; the village and the Blender export
+      build the same mesh (`houseSlotLooks`, one Blender object per slot). Tried on 8 houses (lakeside
+      lodge, bungalow, detached, rural, school, small apartments, lodge, shop). Open: curved / arched heads
+      and dormers are rectangles; a glazed gable is clipped to its rake.
+
 ## Exit criteria
 
 Every real object meets methodology §9 · every prompt has a version and an eval behind it · the report, the

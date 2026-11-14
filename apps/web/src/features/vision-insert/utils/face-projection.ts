@@ -49,37 +49,57 @@ export function surfaceColor(look: FaceSurface | undefined): string | null {
 export function facesMesh(recipe: FacesRecipe): THREE.BufferGeometry {
   const { w, h, d } = recipe.proportions;
   const m = hullMesh(recipe.faces.hull, [w, h, d], recipe.faces.views);
-  const triangles = m.surface.length;
-  // Triangles sorted by surface, so each surface is one group.
+  return groupedGeometry(m.position, m.normal, m.uv, m.surface, HULL_SURFACES.length, (index) =>
+    recipe.faces.surfaces?.[HULL_SURFACES[index]!]?.material ? { slopes: false } : null
+  );
+}
+
+/**
+ * Triangles sorted by slot into one geometry group per slot (material index = slot), white vertex
+ * colours. `planar(slot)` non-null: that slot's triangles get the planar uvs of the material
+ * patterns (`slopes` = mapped along the fall line, `scale` = pattern repeats per tile) instead of
+ * their atlas uvs.
+ */
+export function groupedGeometry(
+  srcPosition: Float32Array,
+  srcNormal: Float32Array,
+  srcUv: Float32Array,
+  slot: ArrayLike<number>,
+  slots: number,
+  planar: (slot: number) => { slopes: boolean; scale?: number } | null
+): THREE.BufferGeometry {
+  const triangles = slot.length;
   const order = Array.from({ length: triangles }, (_, t) => t).sort(
-    (a, b) => m.surface[a]! - m.surface[b]! || a - b
+    (a, b) => slot[a]! - slot[b]! || a - b
   );
   const position = new Float32Array(triangles * 9);
   const normal = new Float32Array(triangles * 9);
   const uv = new Float32Array(triangles * 6);
   order.forEach((t, i) => {
-    position.set(m.position.subarray(t * 9, t * 9 + 9), i * 9);
-    normal.set(m.normal.subarray(t * 9, t * 9 + 9), i * 9);
-    uv.set(m.uv.subarray(t * 6, t * 6 + 6), i * 6);
+    position.set(srcPosition.subarray(t * 9, t * 9 + 9), i * 9);
+    normal.set(srcNormal.subarray(t * 9, t * 9 + 9), i * 9);
+    uv.set(srcUv.subarray(t * 6, t * 6 + 6), i * 6);
   });
   const g = new THREE.BufferGeometry();
   let start = 0;
-  HULL_SURFACES.forEach((name, index) => {
+  for (let index = 0; index < slots; index++) {
     let count = 0;
-    while (start + count < triangles && m.surface[order[start + count]!] === index) count++;
+    while (start + count < triangles && slot[order[start + count]!] === index) count++;
     if (count) {
       g.addGroup(start * 3, count * 3, index);
-      if (recipe.faces.surfaces?.[name]?.material)
-        uv.set(
-          planarUvs(
-            position.subarray(start * 9, (start + count) * 9),
-            normal.subarray(start * 9, (start + count) * 9)
-          ),
-          start * 6
+      const mapped = planar(index);
+      if (mapped) {
+        const flat = planarUvs(
+          position.subarray(start * 9, (start + count) * 9),
+          normal.subarray(start * 9, (start + count) * 9),
+          mapped.slopes
         );
+        if (mapped.scale) for (let k = 0; k < flat.length; k++) flat[k]! *= mapped.scale;
+        uv.set(flat, start * 6);
+      }
     }
     start += count;
-  });
+  }
   g.setAttribute('position', new THREE.BufferAttribute(position, 3));
   g.setAttribute('normal', new THREE.BufferAttribute(normal, 3));
   g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));

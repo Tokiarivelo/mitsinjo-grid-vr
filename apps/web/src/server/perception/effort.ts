@@ -19,6 +19,12 @@ export const CALL_EFFORT: Readonly<Record<string, ReasoningEffort>> = {
   askPart: 'low',
   /** Class materials (PQ-T69): a closed-list answer per tile, same `low` as the short questions. */
   nameClasses: 'low',
+  /**
+   * House specialist (PQ-T72): a whole house measured view by view, the hardest reading. It
+   * thinks 6–17 k tokens (minutes), silent all along: sent through `longFetch` (Node's fetch
+   * drops a call after 300 s without headers or without a body chunk).
+   */
+  readHouse: 'high',
 };
 
 export const DEFAULT_EFFORT: ReasoningEffort = 'high';

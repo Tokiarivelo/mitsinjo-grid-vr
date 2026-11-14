@@ -139,3 +139,4 @@ them after mount (re-targeting races React root unmounts and can leave a label e
 - Photo de scan (1280×720) calculée sur CPU au tir seulement (pixels de la pièce mis en cache), jamais par image.
 
 - **Placed models that wear their drawings (PQ-T71):** each one is its own mesh (`PlacedDrawnModelMesh`: one atlas texture ≤ 1536 × 1024, one draw call per surface kind in use) instead of joining the merged placed-models mesh. High tier only and at most `PLACED_DRAWN_MAX` = 8; the others and the whole low tier stay in the merged flat-colour mesh (≤ +2 draw calls rule unchanged for them).
+- **Houses built from their plan (PQ-T72):** `houseMesh` is non-indexed triangles (≈ 2–8 k for a house with 20–60 openings; window bars, frames and balusters are small boxes), one draw call per slot in use (≤ 10), built once per recipe (`useMemo`). Same cap and tier as the drawn models above; the low tier keeps the parts recipe.

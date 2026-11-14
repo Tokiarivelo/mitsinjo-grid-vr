@@ -15,6 +15,7 @@ import type { ObjectRecipe, ShapeTarget } from '@/lib/object-shape';
 import type { ClassMaterialsResult } from '../schemas';
 import { FACE_ORDER, buildFacePrompt, buildTopPrompt } from '../facade-faces';
 import { buildFacadePrompt } from '../facade-specialist';
+import { readHousePlan, type ReadHouse } from '../house/house-specialist';
 import { inlineImageUrl } from '../inline-image';
 import { grow, type ViewImage } from './grid';
 import { buildLabelQuestion } from './label-classes';
@@ -63,6 +64,8 @@ export interface ReconDeps {
     classes: number,
     signal?: AbortSignal
   ) => Promise<ClassMaterialsResult>;
+  /** The house specialist (PQ-T72); absent = houses keep their drawn hull. */
+  readHouse?: ReadHouse;
 }
 
 export interface ReconOptions {
@@ -75,6 +78,8 @@ export interface ReconOptions {
   onView?: (view: ViewName | 'top', png: Buffer) => void;
   /** A view from above already drawn (the tool's `TOP=`); else drawn with the faces when `fourFaces`. */
   topPng?: Buffer;
+  /** The house specialist's raw reading, for captures and evals. */
+  onHouseReading?: (reading: unknown) => void;
 }
 
 export interface ReconOutcome {
@@ -203,7 +208,7 @@ export async function buildFaceAtlas(
 export async function reconstructObject(
   deps: ReconDeps,
   target: ShapeTarget,
-  { cropUrl, signal, onView, fourFaces = true, topPng }: ReconOptions = {}
+  { cropUrl, signal, onView, fourFaces = true, topPng, onHouseReading }: ReconOptions = {}
 ): Promise<ReconOutcome | null> {
   const tag = `[vision] 3D views reconstruction for "${target.label}"`;
   try {
@@ -366,6 +371,26 @@ export async function reconstructObject(
           ...faces,
           hull: { grid: [...hull.grid], boxes: hull.boxes.map((b) => [...b]) },
         };
+    }
+    // A house or a building: its specialist reads it room by room (volumes, roofs, openings).
+    if (deps.readHouse && !signal?.aborted && (archetype === 'house' || archetype === 'building')) {
+      const wallPart = recipe.parts
+        .filter((p) => p.shape === 'box')
+        .sort((a, b) => b.size[0] * b.size[1] * b.size[2] - a.size[0] * a.size[1] * a.size[2])[0];
+      const roofPart = recipe.parts.find((p) => p.shape === 'hip' || p.shape === 'prism');
+      const house = await readHousePlan(deps.readHouse, {
+        label: target.label,
+        pngs,
+        aligned: recon.aligned,
+        top: top && topRead ? { png: top, view: topRead.view, frame: topRead.frame } : null,
+        fallback: {
+          ...(wallPart?.material ? { wall: wallPart.material } : {}),
+          ...(roofPart?.material ? { roof: roofPart.material } : {}),
+        },
+        ...(signal ? { signal } : {}),
+        ...(onHouseReading ? { onReading: onHouseReading } : {}),
+      });
+      if (house) recipe.house = house;
     }
     console.info(
       `${tag}: ${recipe.parts.length} parts${drawn.length ? `, drawn here: ${drawn.join(', ')}` : ''}; ${reportLine(report)}`

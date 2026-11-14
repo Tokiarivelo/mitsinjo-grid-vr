@@ -36,7 +36,7 @@ describe('SurfaceEditor (PQ-T71)', () => {
     expect(screen.getByRole('button', { name: 'Drawing' }).getAttribute('aria-pressed')).toBe(
       'true'
     );
-    expect(screen.queryByRole('button', { name: 'Back to the drawing' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Undo my changes' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Material' }));
     expect(h.onChange).toHaveBeenCalledWith('roof', { material: 'tile' });
     fireEvent.change(screen.getByLabelText('Tint'), { target: { value: '#ffddcc' } });
@@ -52,9 +52,37 @@ describe('SurfaceEditor (PQ-T71)', () => {
     expect(h.onChange).toHaveBeenLastCalledWith('roof', { material: 'slate', color: '#aa4422' });
     fireEvent.change(screen.getByLabelText('Colour'), { target: { value: '#112233' } });
     expect(h.onChange).toHaveBeenLastCalledWith('roof', { material: 'tile', color: '#112233' });
-    fireEvent.click(screen.getByRole('button', { name: 'Back to the drawing' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Undo my changes' }));
     expect(h.onChange).toHaveBeenLastCalledWith('roof', null);
     fireEvent.click(screen.getByRole('button', { name: 'Drawing' }));
+    expect(h.onChange).toHaveBeenLastCalledWith('roof', null);
+  });
+
+  it('a house roof starts as its specialist covering; « Drawing » asks for the drawing (PQ-T72)', () => {
+    const base = { roof: { material: 'metal' as const, color: '#212325' } };
+    const h = renderEditor({ selected: 'roof', base });
+    expect(screen.getByRole('button', { name: 'Material' }).getAttribute('aria-pressed')).toBe(
+      'true'
+    );
+    expect((screen.getByLabelText('Material') as HTMLSelectElement).value).toBe('metal');
+    // Nothing of the operator's yet: nothing to undo.
+    expect(screen.queryByRole('button', { name: 'Undo my changes' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Drawing' }));
+    expect(h.onChange).toHaveBeenLastCalledWith('roof', { drawing: true });
+    fireEvent.change(screen.getByLabelText('Colour'), { target: { value: '#335577' } });
+    expect(h.onChange).toHaveBeenLastCalledWith('roof', { material: 'metal', color: '#335577' });
+  });
+
+  it('a house roof set to its drawing shows the drawing mode and can be undone', () => {
+    const h = renderEditor({
+      selected: 'roof',
+      surfaces: { roof: { drawing: true } },
+      base: { roof: { material: 'tile', color: '#aa4422' } },
+    });
+    expect(screen.getByRole('button', { name: 'Drawing' }).getAttribute('aria-pressed')).toBe(
+      'true'
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Undo my changes' }));
     expect(h.onChange).toHaveBeenLastCalledWith('roof', null);
   });
 

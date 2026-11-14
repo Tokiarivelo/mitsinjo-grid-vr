@@ -2,6 +2,7 @@ import { ApplianceCategorySchema } from '@mitsinjo/engine';
 import { z } from 'zod';
 import { ATLAS_VIEWS } from './face-atlas';
 import { HULL_BOXES_MAX, type HullSurface } from './face-hull';
+import { HousePlanSchema } from './house-plan';
 import type { ObjectKit } from './object-kit';
 import {
   boxPath,
@@ -621,6 +622,11 @@ export const FaceSurfaceSchema = z.object({
     .regex(/^#[0-9a-f]{6}$/i)
     .optional(),
   material: RecipeMaterialSchema.optional(),
+  /**
+   * The drawing even where the model's own look is a material (PQ-T72: a house's roof shows its
+   * specialist's material until the operator asks for the view from above).
+   */
+  drawing: z.literal(true).optional(),
 });
 export type FaceSurface = z.infer<typeof FaceSurfaceSchema>;
 /** A hull coordinate, grid cells. */
@@ -642,6 +648,13 @@ export const ObjectRecipeSchema = z.object({
   yaw: z.number().min(-MAX_YAW).max(MAX_YAW).optional(),
   /** One tileable 64 px photo swatch per material (PR-1.5), base64 data URL (≤ 8 kB each). */
   swatches: z.record(RecipeMaterialSchema, z.string()).optional(),
+  /**
+   * The house as its specialist read it (PQ-T72, houses and buildings of the `views` source):
+   * volumes with their own roofs, open verandas and balconies, every opening, the chimneys and
+   * the colours (`lib/house-plan.ts`). The 3D views build it (`lib/house-mesh.ts`) instead of the
+   * hull; its walls still wear `faces` drawings where a drawing sees them.
+   */
+  house: HousePlanSchema.optional(),
   /**
    * Drawn views projected on the model (PQ-T70, `views` source only): `atlas` is one image (data
    * URL, layout in `lib/face-atlas.ts`) of the validated drawings cut to the object, `views` the
@@ -1055,6 +1068,7 @@ export function fitRecipe(recipe: ObjectRecipe, boxAspect: number, yaw = 0): Obj
     ...(recipe.source ? { source: recipe.source } : {}),
     ...(recipe.swatches ? { swatches: recipe.swatches } : {}),
     ...(recipe.faces ? { faces: recipe.faces } : {}),
+    ...(recipe.house ? { house: recipe.house } : {}),
   };
 }
 
@@ -1144,7 +1158,7 @@ export function restyleSurface(
 ): ObjectRecipe {
   if (!recipe.faces) return recipe;
   const surfaces = { ...recipe.faces.surfaces };
-  if (look && (look.color || look.material)) surfaces[surface] = look;
+  if (look && (look.color || look.material || look.drawing)) surfaces[surface] = look;
   else delete surfaces[surface];
   const { surfaces: _dropped, ...faces } = recipe.faces;
   void _dropped;

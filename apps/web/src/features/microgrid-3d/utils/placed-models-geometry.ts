@@ -4,6 +4,7 @@ import type { SectorId } from '@mitsinjo/engine';
 import type { KitArchetype } from '@/lib/object-kit';
 import type { ObjectRecipe } from '@/lib/object-shape';
 import { facesMesh } from '@/features/vision-insert/utils/face-projection';
+import { houseGeometry } from '@/features/vision-insert/utils/house-projection';
 import { recipeMesh, triangleCount } from '@/features/vision-insert/utils/object-geometry';
 import { terrainHeight } from './landscape';
 import { TOKEN_HEX } from './scene-palette';
@@ -36,10 +37,13 @@ export interface PlacedModelsGeometryResult {
   drawn: PlacedDrawnModel[];
 }
 
-/** One model drawn with its own drawings: where it stands and how its feeder state tints it. */
+/**
+ * One model drawn with its own drawings or built from its house plan (PQ-T72): where it stands
+ * and how its feeder state tints it. `recipe` holds `faces`, `house` or both.
+ */
 export interface PlacedDrawnModel {
   id: string;
-  recipe: ObjectRecipe & { faces: NonNullable<ObjectRecipe['faces']> };
+  recipe: ObjectRecipe;
   position: [number, number, number];
   scale: number;
   yaw: number;
@@ -142,11 +146,15 @@ export function buildPlacedModelsGeometry(
         : item.recipe;
     // The model's own shape on both tiers (a lamp post stays a lamp post); the low tier takes the
     // light assemblies and, past its budget, a coloured box for the remaining models.
-    const faces =
-      tier === 'high' && drawn.length < PLACED_DRAWN_MAX ? item.recipe.faces : undefined;
-    let g = faces
-      ? facesMesh({ proportions: item.recipe.proportions, faces }).rotateY(effYaw)
-      : recipeMesh(recipeWithYaw, tier === 'low' ? 'low' : 'full');
+    const own = tier === 'high' && drawn.length < PLACED_DRAWN_MAX;
+    const faces = own ? item.recipe.faces : undefined;
+    // A house read by its specialist is built volume by volume (PQ-T72).
+    const house = own ? item.recipe.house : undefined;
+    let g = house
+      ? houseGeometry({ ...item.recipe, house }).rotateY(effYaw)
+      : faces
+        ? facesMesh({ proportions: item.recipe.proportions, faces }).rotateY(effYaw)
+        : recipeMesh(recipeWithYaw, tier === 'low' ? 'low' : 'full');
     if (tier === 'low') {
       const tris = triangleCount(g);
       if (lowTriangles + tris > PLACED_LOW_TRIANGLES) {
@@ -172,11 +180,11 @@ export function buildPlacedModelsGeometry(
     // Dimmed when the sector is unserved or the appliance draws nothing now (same as the box markers).
     const unserved = (sec?.unserved ?? false) || !item.running;
 
-    if (faces) {
+    if (faces || house) {
       // Wears its drawings: its own mesh and texture, same place, same bounds.
       drawn.push({
         id: item.id,
-        recipe: { ...item.recipe, faces },
+        recipe: item.recipe,
         position: [x, restY - bottomY * effScale, z],
         scale: effScale,
         yaw: effYaw,

@@ -26,6 +26,7 @@ import { cn } from '@/lib/utils';
 import type { ShapeImprove } from '../hooks/use-object-shape';
 import { HULL_SURFACES, type HullSurface } from '@/lib/face-hull';
 import { faceMaterials, facesMesh } from '../utils/face-projection';
+import { houseGeometry, houseMaterials } from '../utils/house-projection';
 import { recipeMesh, silhouetteDepth, silhouetteMesh } from '../utils/object-geometry';
 import { surfaceMaterial, SURFACES } from '../utils/surface-look';
 import { buildStudioScene, STUDIO_SIGMA } from '../utils/studio-env';
@@ -133,19 +134,24 @@ function ObjectModel({
 
   // Model from its drawn views (PQ-T70): the drawings are projected on it (never the photo).
   const faces = activeRecipe?.faces && !activeRecipe.yaw ? activeRecipe.faces : null;
+  // A house read by its specialist (PQ-T72): built volume by volume, its walls wearing the drawings.
+  const house = activeRecipe?.house && !activeRecipe.yaw ? activeRecipe : null;
+  const pickable = Boolean(faces || house);
   const mesh = useMemo(
     () =>
-      faces && activeRecipe
-        ? facesMesh({ proportions: activeRecipe.proportions, faces })
-        : activeRecipe
-          ? recipeMesh(activeRecipe)
-          : silhouetteMesh(
-              silhouetteRings(detection),
-              detection.box,
-              photoAspect,
-              silhouetteDepth(detection)
-            ),
-    [activeRecipe, faces, detection, photoAspect]
+      house?.house
+        ? houseGeometry({ ...house, house: house.house })
+        : faces && activeRecipe
+          ? facesMesh({ proportions: activeRecipe.proportions, faces })
+          : activeRecipe
+            ? recipeMesh(activeRecipe)
+            : silhouetteMesh(
+                silhouetteRings(detection),
+                detection.box,
+                photoAspect,
+                silhouetteDepth(detection)
+              ),
+    [activeRecipe, faces, house, detection, photoAspect]
   );
   useEffect(() => () => mesh.dispose(), [mesh]);
   const invalidate = useThree((s) => s.invalidate);
@@ -155,6 +161,17 @@ function ObjectModel({
   // model uses get their relief maps (PR-1.4: stone blocks, slate rows…) or photo swatches (PR-1.5),
   // tinted by the measured colours and compensated with a brightness gain so surfaces do not darken.
   const surfaces = useMemo(() => {
+    if (house?.house)
+      return houseMaterials(
+        { ...house, house: house.house },
+        {
+          tint,
+          selected: selectedSurface
+            ? { surface: selectedSurface, color: TOKEN_HEX.energyCyan }
+            : null,
+          onLoad: invalidate,
+        }
+      );
     if (faces)
       return faceMaterials(faces, {
         tint,
@@ -177,7 +194,7 @@ function ObjectModel({
         ...(map ? { map } : {}),
       });
     });
-  }, [mesh, vertexColors, swatches, tint, invalidate, faces, selectedSurface]);
+  }, [mesh, vertexColors, swatches, tint, invalidate, faces, house, selectedSurface]);
   useEffect(() => () => surfaces.forEach((m) => m.dispose()), [surfaces]);
   // Plain silhouette material, memo'd like the surfaces (so the print wipe can clip it too).
   const silhouetteMaterial = useMemo(
@@ -222,7 +239,7 @@ function ObjectModel({
           <mesh
             geometry={mesh}
             material={surfaces}
-            {...(faces && onPickSurface
+            {...(pickable && onPickSurface
               ? {
                   onClick: (e: ThreeEvent<MouseEvent>) => {
                     // A drag that orbits the camera is not a pick.
@@ -270,7 +287,7 @@ export function ObjectEditor3d(props: ObjectEditor3dProps) {
   const [warmTarget, setWarmTarget] = useState<WarmupTarget | null>(null);
   const warm = useShaderWarmup(warmTarget);
   const shown = props.shape?.mode === 'recipe' ? props.shape.recipe : props.preview;
-  const projected = Boolean(shown?.faces && !shown.yaw);
+  const projected = Boolean((shown?.faces || shown?.house) && !shown.yaw);
   return (
     <Canvas
       onCreated={({ gl, scene, camera }) => setWarmTarget({ gl, scene, camera })}

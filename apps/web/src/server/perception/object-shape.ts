@@ -232,7 +232,10 @@ function budgetEnd(from: number, budgetMs: number | null | undefined): number {
 export async function runObjectShape(
   perception: Pick<PerceptionClient, 'describeShape' | 'describeParts'> &
     Partial<
-      Pick<PerceptionClient, 'segmentImage' | 'checkViews' | 'writeBuildCode' | 'nameClasses'>
+      Pick<
+        PerceptionClient,
+        'segmentImage' | 'checkViews' | 'writeBuildCode' | 'nameClasses' | 'readHouse'
+      >
     >,
   photo: PhotoForRegions | null,
   fullImageUrl: string,
@@ -410,6 +413,7 @@ export async function runObjectShape(
               ...(perception.nameClasses
                 ? { nameClasses: perception.nameClasses.bind(perception) }
                 : {}),
+              ...(perception.readHouse ? { readHouse: perception.readHouse.bind(perception) } : {}),
             }
           : null;
     if (reconDeps && (target.facadeUrl || (photo && imageUrl !== fullImageUrl))) {

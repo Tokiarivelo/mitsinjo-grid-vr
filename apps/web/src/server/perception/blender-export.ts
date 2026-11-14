@@ -1,6 +1,8 @@
 import 'server-only';
+import type * as THREE from 'three';
 
 import { facesMesh, surfaceColor } from '@/features/vision-insert/utils/face-projection';
+import { houseGeometry, houseSlotLooks } from '@/features/vision-insert/utils/house-projection';
 import { recipeMesh } from '@/features/vision-insert/utils/object-geometry';
 import { HULL_SURFACES } from '@/lib/face-hull';
 import { SURFACES } from '@/features/vision-insert/utils/surface-look';
@@ -36,26 +38,57 @@ export interface DrawnGroup {
   material?: string;
 }
 
-/** The drawn hull of a recipe by surface, as the 3D view draws it; empty without drawn faces. */
-export function drawnGroups(recipe: ObjectRecipe): DrawnGroup[] {
-  if (!recipe.faces) return [];
-  const geo = facesMesh({ proportions: recipe.proportions, faces: recipe.faces });
+/** Flat positions and uvs of the vertices of one geometry group. */
+function groupVertices(geo: THREE.BufferGeometry, start: number, count: number) {
   const pos = geo.getAttribute('position');
   const uv = geo.getAttribute('uv');
+  const positions: number[] = [];
+  const uvs: number[] = [];
+  for (let i = start; i < start + count; i++) {
+    positions.push(r4(pos.getX(i)), r4(pos.getY(i)), r4(pos.getZ(i)));
+    uvs.push(r4(uv.getX(i)), r4(uv.getY(i)));
+  }
+  return { positions, uvs };
+}
+
+/**
+ * A house (PQ-T72) by slot, as the 3D view draws it: walls wearing the drawings keep their atlas
+ * uvs; roof, frames, glass, doors and decks are their material in their colour.
+ */
+function houseGroups(recipe: ObjectRecipe & { house: NonNullable<ObjectRecipe['house']> }) {
+  const geo = houseGeometry(recipe);
+  const looks = houseSlotLooks(recipe);
+  const out = geo.groups
+    .filter((g) => g.count > 0)
+    .map((g): DrawnGroup => {
+      const look = looks[g.materialIndex ?? 0]!;
+      const drawnSlot = look.drawn && Boolean(recipe.faces);
+      return {
+        surface: look.slot,
+        ...groupVertices(geo, g.start, g.count),
+        ...(drawnSlot
+          ? look.tint
+            ? { color: look.tint }
+            : {}
+          : { color: look.color, material: look.surface }),
+      };
+    });
+  geo.dispose();
+  return out;
+}
+
+/** The drawn hull of a recipe by surface, as the 3D view draws it; empty without drawn faces. */
+export function drawnGroups(recipe: ObjectRecipe): DrawnGroup[] {
+  if (recipe.house) return houseGroups({ ...recipe, house: recipe.house });
+  if (!recipe.faces) return [];
+  const geo = facesMesh({ proportions: recipe.proportions, faces: recipe.faces });
   const out = geo.groups.map((g): DrawnGroup => {
     const surface = HULL_SURFACES[g.materialIndex ?? 0]!;
     const look = recipe.faces!.surfaces?.[surface];
-    const positions: number[] = [];
-    const uvs: number[] = [];
-    for (let i = g.start; i < g.start + g.count; i++) {
-      positions.push(r4(pos.getX(i)), r4(pos.getY(i)), r4(pos.getZ(i)));
-      uvs.push(r4(uv.getX(i)), r4(uv.getY(i)));
-    }
     const color = surfaceColor(look);
     return {
       surface,
-      positions,
-      uvs,
+      ...groupVertices(geo, g.start, g.count),
       ...(color ? { color } : {}),
       ...(look?.material ? { material: look.material } : {}),
     };
@@ -207,8 +240,9 @@ def build_drawn(group, image):
     bsdf = tree.nodes["Principled BSDF"]
     bsdf.inputs["Roughness"].default_value = 0.85
     color = hex_rgb(group["color"]) if group.get("color") else None
-    if group.get("material"):
-        # The operator replaced the drawing by a material: its colour, no texture.
+    if group.get("material") or image is None:
+        # A material instead of the drawing (the operator's, or a house's roof, frames,
+        # glass, doors): its colour, no texture.
         bsdf.inputs["Base Color"].default_value = color or (0.7, 0.7, 0.7, 1.0)
     else:
         tex = tree.nodes.new("ShaderNodeTexImage")
@@ -242,7 +276,7 @@ def main():
     clear_scene()
     if DRAWN:
         # The model wears its drawings: the textured hull, as in the 3D view.
-        image = load_atlas()
+        image = load_atlas() if ATLAS_B64 else None
         for group in DRAWN:
             build_drawn(group, image)
     else:
@@ -261,7 +295,9 @@ main()
 /** The Blender script of one model. Pure string building: no three.js, no Blender needed here. */
 export function blenderScript(input: BlenderExportInput): string {
   const { label, notes = [], groups, recipe, jsCode, drawn = [], atlas } = input;
+  // A house without drawings still builds from DRAWN (every slot a material): no atlas then.
   const atlasB64 = drawn.length && atlas ? atlas.slice(atlas.indexOf(',') + 1) : '';
+  const shown = atlasB64 || drawn.every((g) => g.material) ? drawn : [];
   const parts = recipe.parts.map((p) => {
     const { shape, at, size, color, material, kind, ...rest } = p;
     return { shape, at, size, color, material, kind, ...rest };
@@ -289,7 +325,7 @@ export function blenderScript(input: BlenderExportInput): string {
     '# for a model in flat colours. With it, main() builds this instead of GROUPS.',
     `ATLAS_B64 = ${JSON.stringify(atlasB64)}`,
     'DRAWN = [',
-    ...(atlasB64 ? drawn : []).map(
+    ...shown.map(
       (g) =>
         `    {"surface": ${JSON.stringify(g.surface)}, "positions": ${py(g.positions)}, "uvs": ${py(g.uvs)}, "color": ${py(g.color ?? null)}, "material": ${py(g.material ?? null)}},`
     ),
@@ -315,6 +351,8 @@ export function recipeToBlender(
     ...meta,
     groups: recipeGroups(recipe),
     recipe,
-    ...(recipe.faces ? { drawn: drawnGroups(recipe), atlas: recipe.faces.atlas } : {}),
+    ...(recipe.faces || recipe.house
+      ? { drawn: drawnGroups(recipe), ...(recipe.faces ? { atlas: recipe.faces.atlas } : {}) }
+      : {}),
   });
 }

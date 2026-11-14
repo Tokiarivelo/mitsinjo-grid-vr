@@ -1371,7 +1371,7 @@
       "surfaceMaterial": "Material",
       "surfaceColor": "Colour",
       "surfaceTint": "Tint",
-      "surfaceReset": "Back to the drawing"
+      "surfaceReset": "Undo my changes"
     },
     "dispatch": {
       "modeLabel": "Dispatch mode",
