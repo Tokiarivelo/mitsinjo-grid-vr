@@ -27,12 +27,10 @@ Offline replay: `make views-3d FRONT=…/view-front.png RIGHT=… BACK=… LEFT=
   `depthFromPlan` lets a too-wide Muse top view (w/d 0.54–0.57) override the profile (0.43–0.47).
 - No part roles, wheels absent or flat (sedan 2 thin cylinders on one axle, SUV/truck 0), boxy body.
 - Colour classes: dark roof falls into glass (sedan), body ≈ glass on the black SUV; materials mislabelled.
-- Captures: `c-*/views-sheet.jpg`, `c-*/viewer/`, `c-*/voiture-3d-t76.jpg` (photo | viewer | hull).
 
 ## Decisions
 
-- Step 1 of the brief (profile-first prompt) deprioritised: the drawings are fine, the recon is not.
-- Order: (a) done; (b) wheels measured on the profile (`mask-wheels.ts`) then `CarPlan`, (c) glazing / body split.
+- Brief step 1 (profile-first prompt) deprioritised: drawings fine, recon not. Order: (a) done; (b) wheels measured on the profile (`mask-wheels.ts`) then `CarPlan`, (c) glazing / body split.
 - Any change to `views.ts` must leave houses identical (it is shared): check `house-mesh.test.ts` hashes and
   the bungalow replay (`cmp` with `house-pq-t72.json`).
 
