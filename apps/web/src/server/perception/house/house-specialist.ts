@@ -17,11 +17,13 @@ import { buildHouseQuestion, type HouseReading } from './house-prompt';
 import {
   HOUSE_TOOL_SPECS,
   HOUSE_TOOLS_ALWAYS,
+  HOUSE_TOOLS_REQUIRED,
   mergeToolAnswers,
   parseBrief,
   PILOT_JSON_SCHEMA,
   PILOT_SYSTEM_PROMPT,
   pilotQuestion,
+  toolAnswered,
   toolQuestion,
   type HouseBrief,
   type HouseTool,
@@ -155,21 +157,27 @@ export async function readHouseParts(
     })
   );
   const byTool: Partial<Record<HouseTool, string | null>> = Object.fromEntries(answers);
-  // The massing carries the house: a call cut by the network is asked once more, alone.
-  if (!mergeToolAnswers({ massing: byTool.massing ?? null }, brief) && !signal?.aborted) {
-    console.info(`${tag}: massing unusable, asked again`);
-    const spec = HOUSE_TOOL_SPECS.massing;
-    byTool.massing = await safe(
+  // A call cut by the network (or answering nothing usable) is asked once more, alone.
+  for (const tool of tools) {
+    if (toolAnswered(tool, byTool[tool]) || signal?.aborted) continue;
+    console.info(`${tag}: ${tool} unusable, asked again`);
+    const spec = HOUSE_TOOL_SPECS[tool];
+    byTool[tool] = await safe(
       ask(
-        'massing',
+        tool,
         spec.system,
         spec.schema,
         main,
-        toolQuestion('massing', label, order, brief),
+        toolQuestion(tool, label, order, brief),
         refs,
         signal
       )
     );
+  }
+  const missing = HOUSE_TOOLS_REQUIRED.filter((t) => !toolAnswered(t, byTool[t]));
+  if (missing.length) {
+    console.info(`${tag}: no ${missing.join(', ')} after a retry: the single reading takes over`);
+    return { reading: null, brief };
   }
   const reading = mergeToolAnswers(byTool, brief);
   console.info(

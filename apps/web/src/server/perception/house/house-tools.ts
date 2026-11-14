@@ -34,6 +34,19 @@ export const HOUSE_TOOLS = ['massing', 'openings', 'structure', 'finishes'] as c
 export type HouseTool = (typeof HOUSE_TOOLS)[number];
 /** Tools always run: a house needs its blocks, its openings and its colours. */
 export const HOUSE_TOOLS_ALWAYS: ReadonlyArray<HouseTool> = ['massing', 'openings', 'finishes'];
+/**
+ * Tools the piloted reading cannot do without: missing one (after its retry), the house is read
+ * the PQ-T72 way, never with fewer openings than that (a house without windows is a regression).
+ */
+export const HOUSE_TOOLS_REQUIRED: ReadonlyArray<HouseTool> = ['massing', 'openings'];
+
+/** The list each tool answers (an empty list is an answer; no list is none). */
+const TOOL_KEYS: Readonly<Record<HouseTool, string>> = {
+  massing: 'volumes',
+  openings: 'openings',
+  structure: 'piers',
+  finishes: 'finishes',
+};
 
 /** Frame every tool measures in (the PQ-T72 convention). */
 const FRAME = [
@@ -394,6 +407,19 @@ export function toolQuestion(
   ]
     .filter(Boolean)
     .join(' ');
+}
+
+/** Whether a tool answered: JSON holding its list (a massing needs at least one usable block). */
+export function toolAnswered(tool: HouseTool, content: string | null | undefined): boolean {
+  if (!content) return false;
+  const j = answerJson(content);
+  if (
+    !j ||
+    typeof j !== 'object' ||
+    !Array.isArray((j as Record<string, unknown>)[TOOL_KEYS[tool]])
+  )
+    return false;
+  return tool !== 'massing' || mergeToolAnswers({ massing: content }, null) !== null;
 }
 
 /**

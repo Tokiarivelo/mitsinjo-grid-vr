@@ -184,19 +184,26 @@ describe('readHouseParts', () => {
     expect(reading?.volumes).toHaveLength(3);
   });
 
-  it('still runs every specialist when the pilot fails, and survives a failing one', async () => {
+  const noOpenings = JSON.stringify({ openings: [] });
+
+  it('still runs every specialist when the pilot fails, and survives a failing optional one', async () => {
+    const asked: string[] = [];
     const ask: AskHouseTool = async (tool) => {
+      asked.push(tool);
       if (tool === 'pilot') throw new Error('timeout');
-      if (tool === 'openings') throw new Error('http_500');
-      return tool === 'massing' ? massing : null;
+      if (tool === 'structure') throw new Error('http_500');
+      return tool === 'massing' ? massing : tool === 'openings' ? noOpenings : null;
     };
     const { reading, brief } = await readHouseParts(ask, 'house', ['front'], ['a']);
     expect(brief).toBeNull();
     expect(reading?.volumes).toHaveLength(3);
+    // An empty list is an answer: not asked again. A failed call is, once.
     expect(reading?.openings).toEqual([]);
+    expect(asked.filter((t) => t === 'openings')).toHaveLength(1);
+    expect(asked.filter((t) => t === 'structure')).toHaveLength(2);
   });
 
-  it('asks the massing once more when the network cuts it, keeping the other answers', async () => {
+  it('asks a call the network cut once more, alone, keeping the other answers', async () => {
     let tries = 0;
     const ask: AskHouseTool = async (tool) => {
       if (tool === 'massing') {
@@ -204,7 +211,7 @@ describe('readHouseParts', () => {
         if (tries === 1) throw new Error('socket hang up');
         return massing;
       }
-      return tool === 'finishes' ? finishes : null;
+      return tool === 'finishes' ? finishes : tool === 'openings' ? noOpenings : null;
     };
     const { reading } = await readHouseParts(ask, 'house', ['front'], ['a']);
     expect(tries).toBe(2);
@@ -212,16 +219,33 @@ describe('readHouseParts', () => {
     expect(reading?.finishes).toHaveLength(3);
   });
 
+  it('hands over to the single reading when the openings never come (never a house without windows)', async () => {
+    let openings = 0;
+    const ask: AskHouseTool = async (tool) => {
+      if (tool === 'openings') {
+        openings++;
+        throw new Error('socket hang up');
+      }
+      return tool === 'massing' ? massing : tool === 'finishes' ? finishes : null;
+    };
+    const { reading } = await readHouseParts(ask, 'house', ['front'], ['a']);
+    expect(openings).toBe(2);
+    expect(reading).toBeNull();
+  });
+
   it('gives up on a specialist that never answers, at its deadline', async () => {
     let aborted = 0;
     const ask: AskHouseTool = (tool, _s, _sc, _i, _q, _r, signal) => {
       if (tool === 'structure')
         return new Promise(() => signal?.addEventListener('abort', () => aborted++));
-      return Promise.resolve(tool === 'massing' ? massing : null);
+      return Promise.resolve(
+        tool === 'massing' ? massing : tool === 'openings' ? noOpenings : null
+      );
     };
     const { reading } = await readHouseParts(ask, 'house', ['front'], ['a'], undefined, 30);
     expect(reading?.volumes).toHaveLength(3);
-    expect(aborted).toBe(1);
+    // Its first call and its retry, each ended at the deadline.
+    expect(aborted).toBe(2);
   });
 
   it('answers no reading when the massing fails (the single reading takes over)', async () => {
