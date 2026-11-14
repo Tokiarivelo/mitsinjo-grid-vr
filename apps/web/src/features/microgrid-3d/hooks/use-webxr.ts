@@ -3,7 +3,11 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
 import type { WebGLRenderer } from 'three';
 import { isImmersiveVRSupported, startImmersiveVRSession } from '../utils/xr-session';
-import { installDevXREmulator, markEmulatedImmersion } from '../utils/dev-xr-emulator';
+import {
+  installDevXREmulator,
+  installDevXRPanels,
+  markEmulatedImmersion,
+} from '../utils/dev-xr-emulator';
 
 export type WebXRStatus = 'checking' | 'unsupported' | 'supported' | 'active';
 
@@ -18,7 +22,7 @@ export interface UseWebXRResult {
 /**
  * Own the `immersive-vr` session for the renderer's canvas. In development, when
  * no native immersive-vr device exists (desktop without a headset), the Meta IWER
- * emulator is installed first so the session still opens.
+ * emulator is installed first so the session still opens; its DevUI panels load on « enter ».
  */
 export function useWebXR(rendererRef: RefObject<WebGLRenderer | null>): UseWebXRResult {
   const [status, setStatus] = useState<WebXRStatus>('checking');
@@ -55,7 +59,13 @@ export function useWebXR(rendererRef: RefObject<WebGLRenderer | null>): UseWebXR
     if (!renderer || sessionRef.current || isStartingRef.current) return;
     setError(null);
     isStartingRef.current = true;
-    startImmersiveVRSession(renderer).then(
+    // Emulated (dev): the DevUI panels load now, not with the page (their own Three.js). A real
+    // headset asks for its session at once, inside the click (transient user activation).
+    const panels = installDevXRPanels();
+    (panels
+      ? panels.then(() => startImmersiveVRSession(renderer))
+      : startImmersiveVRSession(renderer)
+    ).then(
       (session) => {
         isStartingRef.current = false;
         sessionRef.current = session;
