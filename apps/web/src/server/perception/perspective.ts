@@ -1,3 +1,4 @@
+import { mulberry32 } from '@/lib/seeded-random';
 import type { GrayGrid } from './repetition';
 
 /**
@@ -307,18 +308,6 @@ function smallestEigenvector(m: number[][]): Vec3 {
   return [v[0]![best]!, v[1]![best]!, v[2]![best]!];
 }
 
-/** Seeded PRNG (mulberry32): same photo → same vanishing points. */
-function prng(seed: number) {
-  let s = seed >>> 0;
-  return () => {
-    s = (s + 0x6d2b79f5) >>> 0;
-    let t = s;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
 export interface VanishingPoint {
   /** Homogeneous point (w = 0: at infinity, lines parallel on the photo). */
   v: Vec3;
@@ -357,7 +346,7 @@ export function ransacVanishingPoint(
   const lengths = segments.map((s) => Math.hypot(s.x2 - s.x1, s.y2 - s.y1));
   const tol = (VP_ANGLE_DEG * Math.PI) / 180;
   const inliersOf = (v: Vec3) => segments.flatMap((s, i) => (pointingError(s, v) < tol ? [i] : []));
-  const rnd = prng(seed);
+  const rnd = mulberry32(seed);
   let best: VanishingPoint | null = null;
   for (let round = 0; round < RANSAC_ROUNDS; round++) {
     const i = Math.floor(rnd() * lines.length);

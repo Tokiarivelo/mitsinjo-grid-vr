@@ -405,6 +405,30 @@ describe('assembly details (PQ-T3): the judge sees what the viewer shows', () =>
     expect(mask(stepped)).toBeGreaterThan(mask(plain));
   });
 
+  it('grown generators render in the judge like the viewer expands them (PQ-T50)', () => {
+    const crown = part({
+      size: [0.9, 0.6, 0.9],
+      front: true,
+      kind: 'crown',
+      color: '#3e7a34',
+      generator: {
+        op: 'scatter',
+        seed: 42,
+        volume: { shape: 'ellipsoid', at: [0, 0, 0], size: [0.85, 0.55, 0.85] },
+        count: 48,
+        size: 0.085,
+        orientation: 'random',
+        colors: ['#3e7a34'],
+      },
+    });
+    const solid = renderFlat(recipe([{ ...crown, generator: undefined }]), 1, N, N);
+    const grown = renderFlat(recipe([crown]), 1, N, N);
+    const pixels = (r: ReturnType<typeof renderFlat>) => r.mask.data.reduce((a, b) => a + b, 0);
+    // The judge sees the leaves, not the host box: different pixels, still a visible crown.
+    expect(grown.rgb.reduce((n, v, i) => n + (v !== solid.rgb[i] ? 1 : 0), 0)).toBeGreaterThan(0);
+    expect(pixels(grown)).toBeGreaterThan(0);
+  });
+
   it('the heaviest detailed model (golden facade house) renders within budget', () => {
     const front = measureElevation(GOLDEN_ELEVATIONS[0]!.masks)!;
     const house = fitRecipe(

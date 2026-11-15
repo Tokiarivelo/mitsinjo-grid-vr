@@ -799,3 +799,19 @@ describe('wall tints + pattern seed (PQ-T44 remedy 4)', () => {
     );
   });
 });
+
+describe('grown plant templates (PQ-T50 §7.3)', () => {
+  it('the tree and bush templates build within the triangle budget', async () => {
+    const { kitToRecipe } = await import('@/lib/object-kit');
+    for (const archetype of ['tree', 'bush'] as const) {
+      const recipe = kitToRecipe({
+        archetype,
+        proportions: { w: 1, h: 1, d: 1 },
+        colors: { main: '#3e7a34', secondary: '#6d4a27', accent: '#88aa55' },
+      });
+      const mesh = recipeMesh(recipe);
+      expect(triangleCount(mesh)).toBeLessThanOrEqual(5_000);
+      expect(mesh.getAttribute('position').count).toBeGreaterThan(0);
+    }
+  });
+});

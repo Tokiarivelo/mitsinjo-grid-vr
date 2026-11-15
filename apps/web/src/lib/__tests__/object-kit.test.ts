@@ -9,6 +9,7 @@ import {
   KIT_ARCHETYPES,
   kitToRecipe,
   ObjectKitSchema,
+  resolveGeneratorColors,
   TAIL_LIGHT_COLOR,
   WHEEL_COLOR,
   type ObjectKit,
@@ -452,5 +453,60 @@ describe('archetypeOf (PQ-T41)', () => {
     expect(archetypeOf(fridge)).toBe(hint);
     expect(archetypeOf({ ...fridge, archetype: 'spaceship' })).toBe(hint);
     expect(archetypeOf({ ...fridge, archetype: '' })).toBe(hint);
+  });
+});
+
+describe('plant templates (PQ-T50 §7.3)', () => {
+  it('the tree grows its trunk (sweep), canopy spheres untouched', () => {
+    const recipe = kitToRecipe(kit('tree'));
+    expect(recipe.parts).toHaveLength(5);
+    expect(recipe.parts.map((p) => p.generator?.op ?? 'plain')).toEqual([
+      'plain',
+      'sweep',
+      'plain',
+      'plain',
+      'plain',
+    ]);
+    expect(recipe.parts[1]!.color).toBe('#6e6a62');
+    expect(ObjectRecipeSchema.safeParse(recipe).success).toBe(true);
+  });
+
+  it('the bush template is unchanged (shells await outline-driven volumes)', () => {
+    const recipe = kitToRecipe(kit('bush'));
+    expect(recipe.parts).toHaveLength(2);
+    expect(recipe.parts.every((p) => !p.generator)).toBe(true);
+  });
+
+  it('generator palettes resolve role tokens (never #00000x leaves)', () => {
+    const colors = { main: '#c9a36a', secondary: '#6e6a62', accent: '#ffffff' };
+    const shell = resolveGeneratorColors(
+      {
+        op: 'scatter',
+        seed: 1,
+        volume: { shape: 'box', at: [0, 0, 0], size: [0.5, 0.5, 0.5] },
+        count: 4,
+        size: 0.05,
+        orientation: 'random',
+        colors: ['#000001', '#000003'],
+      },
+      colors
+    );
+    expect(shell.op).toBe('scatter');
+    if (shell.op === 'scatter') expect(shell.colors).toEqual(['#c9a36a', '#ffffff']);
+    const trunk = resolveGeneratorColors(
+      {
+        op: 'sweep',
+        seed: 1,
+        points: [
+          [0, 0, 0],
+          [0, 0.2, 0],
+        ],
+        r0: 0.05,
+        r1: 0.04,
+        color: '#000002',
+      },
+      colors
+    );
+    if (trunk.op === 'sweep') expect(trunk.color).toBe('#6e6a62');
   });
 });

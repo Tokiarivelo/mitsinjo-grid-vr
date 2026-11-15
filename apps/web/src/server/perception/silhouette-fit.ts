@@ -6,6 +6,7 @@
  * Pure and deterministic; geometry only.
  */
 import { hullSamplePoints } from '@/lib/hull';
+import { expandGenerators } from '@/lib/object-generators';
 import { outlineDetails } from '@/features/vision-insert/utils/view-assemblies';
 import { kitToRecipe, uniformRoof, type ObjectKit } from '@/lib/object-kit';
 import {
@@ -211,8 +212,10 @@ export function renderRecipe(
   const { h } = recipe.proportions;
   const frameW = h * aspect;
   const mask = emptyMask(cols, rows);
+  // Grown generators replace their hosts (PQ-T50): the fit sees the same leaves the judge does.
   // Details that stick out (mirrors, feet, gutters, wheel arches) are part of the outline (PQ-T20).
-  for (const p of [...recipe.parts, ...outlineDetails(recipe.parts)]) {
+  const { parts: grown } = expandGenerators(recipe.parts);
+  for (const p of [...grown, ...outlineDetails(grown)]) {
     const tf = partTransform(recipe, p);
     const pts = unitPoints(p).map((u) => {
       const [sx, y] = applyTransform(tf, u);

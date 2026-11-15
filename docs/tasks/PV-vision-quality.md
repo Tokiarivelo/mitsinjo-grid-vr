@@ -543,7 +543,17 @@ One task = one commit, with its Vitest test, its `contracts.md` update and its m
       independent); `make eval-shape` forces `SHAPE_CACHE=false`. E12 audit: parallel first answer
       (kit + outline + measures launched together), staged draft/refine (`onStagesLeft`) and critic
       skips (gates + free/facade/views/code) already held — verified, no change. Contracts + V270.
-- [ ] **PQ-T50 Organic generators + `plant` family** (§12.7, §7.3: `sweep, branch, scatter, drape`).
+- [x] **PQ-T50 Organic generators + `plant` family** (§12.7, §7.3: `sweep, branch, scatter, drape`).
+      _Built 2026-11-12:_ `lib/seeded-random.ts` (shared mulberry32; perspective + sandbox reuse
+      it), `lib/object-generators.ts` (sweep/branch/scatter/drape → plain parts, seeded, bounded,
+      clamped into the host), `RecipePart.generator` + 4 ShapeScript ops (host box measured from
+      the growth), expansion inside `expandAssemblies` (viewer = judge; fit renders grown parts
+      instead of hosts), tree trunk grown live (taper + flare). Shared expander, not §7.3 server
+      twins (identical by construction). Shells tried on the template and reverted: the golden
+      cartoon is saturated at 99 and punishes texture (65 with a shell); leaf shells, outline
+      volumes, measured trunks, Muse branch params, the plant card, prompt ops and
+      palm/conifer/willow need live proof. Scatter ≤ 60 boxes (2-tri cards need `plane`).
+      Contracts + V271.
 - [ ] **PQ-T51 `loft` for vehicles, `inset` for openings** (§12.8, §7.3).
 - [ ] **PQ-T52 Short question per part, anatomy critic, three-view sheet** (§12.9, E9–E11).
 - [ ] **PQ-T53 SDF for smooth shapes** (§12.10, §8), after measuring the triangle budget.

@@ -381,3 +381,91 @@ describe('recipeToScript (PG-T14)', () => {
     expect(s.ops.map((o) => (o as { id: string }).id)).toEqual(['body', 'cylinder']);
   });
 });
+
+describe('generator ops (PQ-T50 §7.3)', () => {
+  const trunk = {
+    op: 'sweep',
+    id: 'trunk',
+    kind: 'trunk',
+    color: '#6d4a27',
+    seed: 7,
+    points: [
+      [0, -0.5, 0],
+      [0, -0.06, 0],
+    ],
+    r0: 0.075,
+    r1: 0.045,
+  } as const;
+
+  it('a sweep op grows a host bounded by what grew', () => {
+    const r = compileScript(script(trunk));
+    expect(r.dropped).toEqual([]);
+    const part = partOf(r, 'trunk')!;
+    expect(part.generator?.op).toBe('sweep');
+    // Host box spans the tube: y from base to tip, thin in x/z.
+    expect(part.at[1]).toBeCloseTo(-0.28, 2);
+    expect(part.size[1]).toBeCloseTo(0.44, 1);
+    expect(part.size[0]).toBeLessThan(0.2);
+    expect(part.color).toBe('#6d4a27');
+  });
+
+  it('scatter and drape ops grow crowns and strands; branch counts its levels', () => {
+    const r = compileScript(
+      script(
+        {
+          op: 'scatter',
+          id: 'crown',
+          kind: 'crown',
+          color: '#3e7a34',
+          seed: 42,
+          volume: { shape: 'ellipsoid', at: [0, 0.2, 0], size: [0.9, 0.56, 0.9] },
+          count: 48,
+          size: 0.085,
+          orientation: 'random',
+          colors: ['#3e7a34'],
+        },
+        {
+          op: 'drape',
+          id: 'fringe',
+          color: '#3e7a34',
+          seed: 5,
+          points: [[0.1, 0.4, 0]],
+          strands: 2,
+          length: 0.3,
+          waviness: 0.1,
+          thickness: 0.01,
+        },
+        {
+          op: 'branch',
+          id: 'limbs',
+          color: '#6d4a27',
+          seed: 21,
+          at: [0, -0.1, 0],
+          dir: [0, 1, 0],
+          length: 0.22,
+          radius: 0.03,
+          levels: 2,
+          count: 3,
+          angle: 0.6,
+          droop: 0.15,
+          decay: 0.7,
+        }
+      )
+    );
+    expect(r.dropped).toEqual([]);
+    expect(r.components).toHaveLength(3);
+    expect(partOf(r, 'crown')!.generator?.op).toBe('scatter');
+    expect(partOf(r, 'fringe')!.generator?.op).toBe('drape');
+    expect(partOf(r, 'limbs')!.generator?.op).toBe('branch');
+  });
+
+  it('bad generator params drop as invalid, duplicates and overflow as usual', () => {
+    const bad = compileScript(
+      script({ ...trunk, id: 't1', points: [[[0, 0, 0]]] }, { ...trunk, id: 't2', r0: 9 })
+    );
+    expect(bad.dropped.map((d) => d.reason)).toEqual(['invalid', 'invalid']);
+    expect(bad.recipe).toBeNull();
+    const dupe = compileScript(script(trunk, trunk));
+    expect(dupe.dropped).toEqual([{ index: 1, reason: 'duplicate_id', id: 'trunk' }]);
+  });
+});

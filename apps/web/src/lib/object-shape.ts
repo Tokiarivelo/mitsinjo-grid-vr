@@ -199,6 +199,101 @@ const unitProfilePoint = z.tuple([z.number().min(0).max(0.5), z.number().min(-0.
 export const DimStatusSchema = z.enum(['measured', 'estimated', 'inferred', 'unknown']);
 export type DimStatus = z.infer<typeof DimStatusSchema>;
 
+/**
+ * Organic generator params (PQ-T50 §7.3): seeded, bounded; same input, same parts. A part that
+ * carries one expands through `expandGenerators`, identically in the viewer and the judge render;
+ * its own box bounds the growth (fit + outline read it). Positions are absolute recipe units.
+ */
+const genCoord = z.number().min(-RECIPE_BOUND).max(RECIPE_BOUND);
+const genVec = z.tuple([genCoord, genCoord, genCoord]);
+/** A direction, normalised by the expansion (components up to 1, unlike positions). */
+const genDir = z.tuple([
+  z.number().min(-1).max(1),
+  z.number().min(-1).max(1),
+  z.number().min(-1).max(1),
+]);
+const genSeed = z.number().int().min(0).max(2147483647);
+const genColor = z
+  .string()
+  .regex(/^#[0-9a-f]{6}$/i)
+  .optional();
+/** Most scatter instances: thin boxes cost 12 triangles, so 60 keeps the ≤ 800 budget (§7.3 counts 2-tri cards, which need the future `plane` shape). */
+export const SCATTER_COUNT_MAX = 60;
+
+export const SweepParamsSchema = z.object({
+  op: z.literal('sweep'),
+  seed: genSeed,
+  /** Centre line, 2–8 points, base first; near-vertical runs become tapered cylinders. */
+  points: z.array(genVec).min(2).max(8),
+  /** Base and tip radius; the tube tapers across its segments. */
+  r0: z.number().min(0.005).max(0.5),
+  r1: z.number().min(0.005).max(0.5),
+  /** Base flare ×(1–3): trunk feet, pipe flanges. */
+  flare: z.number().min(0).max(2).optional(),
+  color: genColor,
+  material: RecipeMaterialSchema.optional(),
+});
+export const BranchParamsSchema = z.object({
+  op: z.literal('branch'),
+  seed: genSeed,
+  /** Stem start, direction (normalised by the expansion), length and radius. */
+  at: genVec,
+  dir: genDir,
+  length: z.number().min(0.05).max(1),
+  radius: z.number().min(0.005).max(0.2),
+  /** Depth 1–3, children per node 2–5: at most 31 segments. */
+  levels: z.number().int().min(1).max(3),
+  count: z.number().int().min(2).max(5),
+  /** Child tilt off the parent (radians), downward pull, shrink per level. */
+  angle: z.number().min(0).max(1.2),
+  droop: z.number().min(0).max(1),
+  decay: z.number().min(0.4).max(0.9),
+  color: genColor,
+  material: RecipeMaterialSchema.optional(),
+});
+export const ScatterParamsSchema = z.object({
+  op: z.literal('scatter'),
+  seed: genSeed,
+  volume: z.object({
+    shape: z.enum(['box', 'ellipsoid']),
+    at: genVec,
+    size: z.tuple([extent, extent, extent]),
+  }),
+  count: z.number().int().min(1).max(SCATTER_COUNT_MAX),
+  /** Card size; each card is jittered 0.7–1.3 by the seed. */
+  size: z.number().min(0.01).max(0.3),
+  orientation: z.enum(['flat', 'upright', 'random']),
+  /** Leaf palette, picked by the seed. */
+  colors: z
+    .array(z.string().regex(/^#[0-9a-f]{6}$/i))
+    .min(1)
+    .max(4),
+});
+export const DrapeParamsSchema = z.object({
+  op: z.literal('drape'),
+  seed: genSeed,
+  /** Hang points, 1–12 (branch tips, eaves, rails). */
+  points: z.array(genVec).min(1).max(12),
+  /** Strands per point (1–4, ≤ 48 strands), each three wavy boxes. */
+  strands: z.number().int().min(1).max(4),
+  length: z.number().min(0.05).max(1),
+  waviness: z.number().min(0).max(0.3),
+  thickness: z.number().min(0.005).max(0.05),
+  color: genColor,
+  material: RecipeMaterialSchema.optional(),
+});
+export const GeneratorParamsSchema = z.discriminatedUnion('op', [
+  SweepParamsSchema,
+  BranchParamsSchema,
+  ScatterParamsSchema,
+  DrapeParamsSchema,
+]);
+export type GeneratorParams = z.infer<typeof GeneratorParamsSchema>;
+export type SweepParams = z.infer<typeof SweepParamsSchema>;
+export type BranchParams = z.infer<typeof BranchParamsSchema>;
+export type ScatterParams = z.infer<typeof ScatterParamsSchema>;
+export type DrapeParams = z.infer<typeof DrapeParamsSchema>;
+
 export const RecipePartSchema = z
   .object({
     shape: z.enum(RECIPE_SHAPES),
@@ -267,6 +362,12 @@ export const RecipePartSchema = z
     rim: z.boolean().optional(),
     /** Detail kinds this part carries (PQ-T20); `rim` here equals `rim: true` on a wheel. */
     details: z.array(DetailKindSchema).max(DETAIL_KINDS.length).optional(),
+    /**
+     * Organic generator (PQ-T50 §7.3): grown detail (trunk, limbs, leaves, strands) expanded by
+     * `expandGenerators`, identically in the viewer and the judge render. The part's own box
+     * bounds the growth; expansion stays inside it, clamped.
+     */
+    generator: GeneratorParamsSchema.optional(),
   })
   .superRefine((p, ctx) => {
     if ((p.shape === 'extrude' || p.shape === 'hull') && !p.points)

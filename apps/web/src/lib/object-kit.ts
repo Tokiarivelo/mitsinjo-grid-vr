@@ -325,7 +325,15 @@ const part = (
   extra: Partial<
     Pick<
       RecipePart,
-      'axis' | 'front' | 'apex' | 'profile' | 'material' | 'status' | 'kind' | 'overhang'
+      | 'axis'
+      | 'front'
+      | 'apex'
+      | 'profile'
+      | 'material'
+      | 'status'
+      | 'kind'
+      | 'overhang'
+      | 'generator'
     >
   > = {}
 ): RecipePart => ({ shape, at, size, color, ...extra });
@@ -586,9 +594,23 @@ export const TEMPLATES: Record<KitArchetype, Template> = {
     ].slice(0, 12);
   },
   tree: ({ colors: c }) => [
+    // PQ-T50: the canopy stays smooth spheres (the golden cartoon is saturated at 99; leaf shells
+    // await outline-driven volumes with live proof). The trunk is a grown sweep (taper + flare).
     part('sphere', [0, 0.16, 0], [0.96, 0.64, 0.96], c.main, { front: true }),
-    part('cylinder', [0, -0.28, 0], [0.14, 0.44, 0.14], c.secondary),
-    // Organic multi-tier canopy volume:
+    part('box', [0, -0.28, 0], [0.16, 0.44, 0.16], c.secondary, {
+      generator: {
+        op: 'sweep',
+        seed: 7,
+        points: [
+          [0, -0.5, 0],
+          [0, -0.28, 0],
+          [0, -0.06, 0],
+        ],
+        r0: 0.06,
+        r1: 0.05,
+        flare: 0.15,
+      },
+    }),
     part('sphere', [-0.18, 0.18, 0.12], [0.52, 0.42, 0.52], c.main),
     part('sphere', [0.18, 0.22, -0.1], [0.48, 0.38, 0.48], c.main),
     part('sphere', [0.04, 0.32, 0.08], [0.44, 0.3, 0.44], c.main),
@@ -757,14 +779,38 @@ const ROLES = Object.keys(ROLE_TOKEN) as Role[];
  * the colour and the material (AI, `kit.materials`) of its role; fixed signal colours (taillight
  * red) pass through untouched, with no material.
  */
+/**
+ * Generator growth colours through the role tokens (PQ-T50): a palette or override left as a
+ * token would leaf near-black (#00000x). Exported for its test; templates resolve through it.
+ */
+export function resolveGeneratorColors(
+  generator: NonNullable<RecipePart['generator']>,
+  colors: ObjectKit['colors']
+): NonNullable<RecipePart['generator']> {
+  const resolveRole = (c: string): string => {
+    const found = ROLES.find((r) => ROLE_TOKEN[r] === c);
+    return found ? colors[found] : c;
+  };
+  if (generator.op === 'scatter')
+    return { ...generator, colors: generator.colors.map(resolveRole) };
+  if ('color' in generator && generator.color)
+    return { ...generator, color: resolveRole(generator.color) };
+  return generator;
+}
+
 export function kitToRecipe(kit: ObjectKit): ObjectRecipe {
   const parts = TEMPLATES[kit.archetype]({ ...kit, colors: ROLE_TOKEN })
     .slice(0, 12)
     .map((p) => {
       const role = ROLES.find((r) => ROLE_TOKEN[r] === p.color);
-      if (!role) return p;
-      const material = kit.materials?.[role];
-      return { ...p, color: kit.colors[role], ...(material ? { material } : {}) };
+      const material = role ? kit.materials?.[role] : undefined;
+      const generator = p.generator ? resolveGeneratorColors(p.generator, kit.colors) : undefined;
+      return {
+        ...p,
+        ...(role ? { color: kit.colors[role] } : {}),
+        ...(material ? { material } : {}),
+        ...(generator ? { generator } : {}),
+      };
     });
   return { proportions: kit.proportions, parts };
 }
