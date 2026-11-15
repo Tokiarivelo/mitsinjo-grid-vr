@@ -28,6 +28,7 @@ import {
 import { playLaserShootSound, playScanRadarSound, playTargetHitSound } from './xr-audio-fx';
 import { grabTurntable, releaseTurntable, rotateTurntable, type Turntable } from './turntable';
 import {
+  dragAngle,
   dragTo,
   endDrag,
   panelOf,
@@ -514,7 +515,7 @@ export const XRBlasterController = memo(function XRBlasterController({
         dragsRef.current.set(key, {
           panel: aim.panel,
           hit: aim.hit,
-          yaw: yawOf(direction),
+          yaw: dragAngle(aim.panel, yawOf(direction), pitchOf(direction)),
           moved: 0,
         });
         try {
@@ -764,6 +765,7 @@ export const XRBlasterController = memo(function XRBlasterController({
     const px = (e: MouseEvent) => (typeof e.clientX === 'number' ? e.clientX : 0);
     /** Last pointer x of a panel drag (px). */
     let lastX = 0;
+    let lastY = 0;
     const py = (e: MouseEvent) => (typeof e.clientY === 'number' ? e.clientY : 0);
     /**
      * A press that grabbed a panel or a model owns the gesture until release: its events stop
@@ -785,8 +787,11 @@ export const XRBlasterController = memo(function XRBlasterController({
       mouseAtRef.current = performance.now();
       const drag = dragsRef.current.get('mouse');
       if (drag) {
-        dragTo(drag, drag.yaw + (px(e) - lastX) * MOUSE_PANEL_GAIN);
+        // Mouse up scrolls a vertical list up (pitch grows upward, screen y downward).
+        const d = drag.panel.axis === 'y' ? lastY - py(e) : px(e) - lastX;
+        dragTo(drag, drag.yaw + d * MOUSE_PANEL_GAIN);
         lastX = px(e);
+        lastY = py(e);
         return;
       }
       const grab = grabsRef.current.get('mouse');
@@ -823,6 +828,7 @@ export const XRBlasterController = memo(function XRBlasterController({
         owned = true;
         own(e);
         lastX = px(e);
+        lastY = py(e);
         const grab = grabsRef.current.get('mouse');
         if (grab) {
           grab.x = px(e);
@@ -1009,7 +1015,11 @@ export const XRBlasterController = memo(function XRBlasterController({
         }
         rayFrom(space, _vOrigin, _vDirection);
         const drag = dragsRef.current.get(i);
-        if (drag) dragTo(drag, yawOf(_vDirection) + held.yaw);
+        if (drag)
+          dragTo(
+            drag,
+            dragAngle(drag.panel, yawOf(_vDirection) + held.yaw, pitchOf(_vDirection) + held.pitch)
+          );
         const grab = grabsRef.current.get(i) ?? grabsRef.current.get((i + 2) as InputKey);
         if (grab) {
           const yaw = yawOf(_vDirection) + held.yaw;

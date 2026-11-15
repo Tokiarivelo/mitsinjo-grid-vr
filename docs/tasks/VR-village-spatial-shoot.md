@@ -279,4 +279,4 @@ Style : hologramme futuriste (cyan / ambre, lignes de balayage, coins lumineux, 
 - [x] Laser selon Meta « Ray casting » : faisceau court qui s'efface, curseur anneau à taille angulaire constante, blanc / bleu nuit à l'appui (`xr-ray-visual.ts`), sur `/village` et `/simulation`.
 - [x] Menu poignet cliquable (main, laser, souris) et qui ne tourne plus avec la souris : bouton flottant dans l'émulateur ou sans poignet gauche suivi, latéralité lue sur la session.
 - [x] Bouton « Quitter le studio » / « Revenir au studio » ; l'objet du labo est gardé tant qu'on n'en extrait pas un autre. (`away` dans `utils/xr-extract.ts`, `FollowGroup`).
-- [ ] Calques dans le labo immersif, liste défilable verticalement (comme le carrousel).
+- [x] Calques dans le labo immersif, liste défilable verticalement (comme le carrousel) : axe `y` des panneaux (`holo-panel.ts`), `clampScroll` / `rowShown` (`utils/xr-lab.ts`).

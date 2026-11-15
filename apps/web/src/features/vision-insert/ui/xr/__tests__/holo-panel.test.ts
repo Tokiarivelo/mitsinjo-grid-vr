@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three';
 import {
   createPanelRegistry,
+  dragAngle,
   dragTo,
   endDrag,
   HOLO_PANEL_KEY,
@@ -84,5 +85,16 @@ describe('holo panels (VS-T19)', () => {
     dragTo(drag, 0.3);
     expect(endDrag(drag)).toBe(true);
     expect(onSelect).toHaveBeenCalledOnce();
+  });
+
+  it('a vertical list drags on the pointer pitch, a carousel on its yaw (VS-T26)', () => {
+    const list = { id: 'holo:list', axis: 'y' as const, onDrag: vi.fn() };
+    expect(dragAngle(list, 0.4, -0.2)).toBe(-0.2);
+    expect(dragAngle({}, 0.4, -0.2)).toBe(0.4);
+    // Pointer raised past the slop: the list scrolls by the whole rise, then by each step.
+    const drag = dragOf(list);
+    dragTo(drag, dragAngle(list, 0, 0.1));
+    dragTo(drag, dragAngle(list, 0.5, 0.15));
+    expect(list.onDrag.mock.calls.map(([d]) => Number(d.toFixed(3)))).toEqual([0.1, 0.05]);
   });
 });
