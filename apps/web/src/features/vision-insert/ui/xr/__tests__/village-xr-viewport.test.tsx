@@ -43,10 +43,6 @@ vi.mock('../spatial-air-button-texture', () => ({
   getSpatialAirButtonTexture: vi.fn(() => ({})),
 }));
 
-vi.mock('../holo-target-texture', () => ({
-  getHoloTargetTexture: vi.fn(() => ({})),
-}));
-
 describe('VillageXRViewport (VS-T1 / VS-T2)', () => {
   it('renders viewport HUD, canvas, and handles onExitVR', () => {
     const onExit = vi.fn();

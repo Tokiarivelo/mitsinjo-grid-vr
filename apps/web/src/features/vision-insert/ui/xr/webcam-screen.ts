@@ -7,7 +7,23 @@
  * - `surfaceFromView`: the invisible plane of a 360° tour scan photo (`tour/equirect.ts`).
  * Image coords: u → right, v → down, in [0, 1].
  */
+import {
+  dirFromYawPitch,
+  stripUv,
+  stripYawPitch,
+  viewBasis,
+  yawPitchOf,
+  type CaptureView,
+} from './tour/equirect';
+
 type Vec3 = [number, number, number];
+
+/** A panorama strip photo laid on a sphere of `distance` m around `eye` (tour scans). */
+export interface SurfaceStrip {
+  eye: Vec3;
+  view: CaptureView;
+  distance: number;
+}
 
 export interface ImageSurface {
   /** World centre of the image. */
@@ -15,9 +31,14 @@ export interface ImageSurface {
   /** Unit vectors along the image's +u (right) and its up (−v). */
   right: Vec3;
   up: Vec3;
-  /** Size of the image on the surface (m). */
+  /** Size of the image on the surface (m); a strip: its arc lengths. */
   width: number;
   height: number;
+  /**
+   * Set for a panorama strip (`surfaceFromStrip`): image coords map to headings around `eye`, not
+   * to the flat plane above (which then only gives the strip's centre and orientation).
+   */
+  strip?: SurfaceStrip;
 }
 
 const WEBCAM_HEIGHT = 4.2;
@@ -50,8 +71,34 @@ export function surfaceFromView(
   };
 }
 
+/**
+ * A panorama strip photo (`view.projection` `equirect`) around `eye`, at `distance` m: centre
+ * straight ahead of the strip, arc-length size.
+ */
+export function surfaceFromStrip(eye: Vec3, view: CaptureView, distance: number): ImageSurface {
+  const b = viewBasis(view);
+  return {
+    center: [
+      eye[0] + b.forward[0] * distance,
+      eye[1] + b.forward[1] * distance,
+      eye[2] + b.forward[2] * distance,
+    ],
+    right: b.right,
+    up: b.up,
+    width: distance * view.hfov,
+    height: (distance * view.hfov) / view.aspect,
+    strip: { eye, view, distance },
+  };
+}
+
 /** World point [x, y, z] of image coords (u, v) on the surface. */
 export function screenPoint(u: number, v: number, s: ImageSurface = WEBCAM_SCREEN): Vec3 {
+  if (s.strip) {
+    const { eye, view, distance } = s.strip;
+    const h = stripYawPitch(u, v, view);
+    const d = dirFromYawPitch(h.yaw, h.pitch);
+    return [eye[0] + d[0] * distance, eye[1] + d[1] * distance, eye[2] + d[2] * distance];
+  }
   const a = (u - 0.5) * s.width;
   const b = (0.5 - v) * s.height;
   return [
@@ -77,6 +124,7 @@ export function screenHitFromRay(
   direction: XYZ,
   s: ImageSurface = WEBCAM_SCREEN
 ): ScreenHit | null {
+  if (s.strip) return stripHitFromRay(origin, direction, s.strip);
   const [rx, ry, rz] = s.right;
   const [ux, uy, uz] = s.up;
   // Normal = right × up (towards the viewer).
@@ -130,4 +178,31 @@ export function pickTargetAtUv<T extends BoxLike>(
     }
   }
   return best;
+}
+
+/** Where a ray meets a strip's sphere (from inside), in strip image coords. */
+function stripHitFromRay(origin: XYZ, direction: XYZ, st: SurfaceStrip): ScreenHit | null {
+  const len = Math.hypot(direction.x, direction.y, direction.z) || 1;
+  const dx = direction.x / len;
+  const dy = direction.y / len;
+  const dz = direction.z / len;
+  const ox = origin.x - st.eye[0];
+  const oy = origin.y - st.eye[1];
+  const oz = origin.z - st.eye[2];
+  const b = ox * dx + oy * dy + oz * dz;
+  const c = ox * ox + oy * oy + oz * oz - st.distance * st.distance;
+  const disc = b * b - c;
+  if (disc < 0) return null;
+  const t = -b + Math.sqrt(disc);
+  if (t <= 0) return null;
+  const p: Vec3 = [ox + dx * t, oy + dy * t, oz + dz * t];
+  const { yaw, pitch } = yawPitchOf(p);
+  const { u, v } = stripUv(yaw, pitch, st.view);
+  if (u < 0 || u > 1 || v < 0 || v > 1) return null;
+  return {
+    u,
+    v,
+    point: [st.eye[0] + p[0], st.eye[1] + p[1], st.eye[2] + p[2]],
+    distance: t,
+  };
 }

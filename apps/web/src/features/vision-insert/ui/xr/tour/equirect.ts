@@ -41,7 +41,7 @@ export function uFrontFacing(u: number, yaw: number): number {
   return frac(u - yaw / TAU);
 }
 
-/** A pinhole camera at the viewer's eye: what a scan photographs. */
+/** A camera at the viewer's eye: what a scan photographs. */
 export interface CaptureView {
   yaw: number;
   pitch: number;
@@ -49,6 +49,39 @@ export interface CaptureView {
   hfov: number;
   /** Width / height. */
   aspect: number;
+  /**
+   * `gnomonic` (default): a pinhole photo. `equirect`: a panorama strip, linear in yaw and pitch
+   * (`hfov` wide, `hfov / aspect` tall): wider than any pinhole without stretching its edges, so
+   * an object only half in the viewer's sight is still whole in the photo.
+   */
+  projection?: 'gnomonic' | 'equirect';
+}
+
+/** Heading of a strip photo point (u, v) of an `equirect` view. */
+export function stripYawPitch(u: number, v: number, view: CaptureView) {
+  return {
+    yaw: wrapPi(view.yaw + (u - 0.5) * view.hfov),
+    pitch: view.pitch + ((0.5 - v) * view.hfov) / view.aspect,
+  };
+}
+
+/** Strip photo coords of a heading (inverse of `stripYawPitch`); may fall outside [0, 1]. */
+export function stripUv(yaw: number, pitch: number, view: CaptureView): { u: number; v: number } {
+  return {
+    u: 0.5 + wrapPi(yaw - view.yaw) / view.hfov,
+    v: 0.5 - ((pitch - view.pitch) * view.aspect) / view.hfov,
+  };
+}
+
+/** Photo coords of a direction in any view (null behind a pinhole camera). */
+export function projectInView(
+  d: Vec3,
+  view: CaptureView,
+  b: ViewBasis = viewBasis(view)
+): { u: number; v: number } | null {
+  if (view.projection !== 'equirect') return projectDir(d, b);
+  const { yaw, pitch } = yawPitchOf(d);
+  return stripUv(yaw, pitch, view);
 }
 
 export interface ViewBasis {
@@ -110,18 +143,28 @@ export interface Pixels {
  */
 export function renderView(src: Pixels, out: Pixels, view: CaptureView, uFront: number): void {
   const b = viewBasis(view);
+  const strip = view.projection === 'equirect';
   const { width: W, height: H, data: o } = out;
   const { width: SW, height: SH, data: s } = src;
   for (let j = 0; j < H; j++) {
     const y = (0.5 - (j + 0.5) / H) * 2 * b.ty;
     for (let i = 0; i < W; i++) {
-      const x = ((i + 0.5) / W - 0.5) * 2 * b.tx;
-      const dx = b.forward[0] + b.right[0] * x + b.up[0] * y;
-      const dy = b.forward[1] + b.right[1] * x + b.up[1] * y;
-      const dz = b.forward[2] + b.right[2] * x + b.up[2] * y;
-      const len = Math.hypot(dx, dy, dz);
-      const u = frac(uFront + Math.atan2(dx, -dz) / TAU);
-      const v = 0.5 - Math.asin(dy / len) / Math.PI;
+      let u: number;
+      let v: number;
+      if (strip) {
+        // Panorama strip: a straight crop of the equirect photo (clamped at the poles).
+        const h = stripYawPitch((i + 0.5) / W, (j + 0.5) / H, view);
+        u = frac(uFront + h.yaw / TAU);
+        v = Math.min(1, Math.max(0, 0.5 - h.pitch / Math.PI));
+      } else {
+        const x = ((i + 0.5) / W - 0.5) * 2 * b.tx;
+        const dx = b.forward[0] + b.right[0] * x + b.up[0] * y;
+        const dy = b.forward[1] + b.right[1] * x + b.up[1] * y;
+        const dz = b.forward[2] + b.right[2] * x + b.up[2] * y;
+        const len = Math.hypot(dx, dy, dz);
+        u = frac(uFront + Math.atan2(dx, -dz) / TAU);
+        v = 0.5 - Math.asin(dy / len) / Math.PI;
+      }
       // Bilinear, wrapping horizontally.
       const fx = u * SW - 0.5;
       const fy = Math.min(SH - 1, Math.max(0, v * SH - 0.5));
@@ -179,7 +222,7 @@ export function projectPanoBox(
       const u = box.u0 + ((u1 - box.u0) * a) / (SAMPLES - 1);
       const v = box.v0 + ((box.v1 - box.v0) * c) / (SAMPLES - 1);
       const { yaw, pitch } = equirectYawPitch(frac(u), v, uFront);
-      const p = projectDir(dirFromYawPitch(yaw, pitch), b);
+      const p = projectInView(dirFromYawPitch(yaw, pitch), view, b);
       if (!p || p.u < 0 || p.u > 1 || p.v < 0 || p.v > 1) continue;
       inside++;
       minU = Math.min(minU, p.u);
@@ -190,7 +233,7 @@ export function projectPanoBox(
   }
   if (inside < (SAMPLES * SAMPLES) / 2) return null;
   const centre = equirectYawPitch(frac((box.u0 + u1) / 2), (box.v0 + box.v1) / 2, uFront);
-  const pc = projectDir(dirFromYawPitch(centre.yaw, centre.pitch), b);
+  const pc = projectInView(dirFromYawPitch(centre.yaw, centre.pitch), view, b);
   if (!pc || pc.u < 0 || pc.u > 1 || pc.v < 0 || pc.v > 1) return null;
   const r = (n: number) => Number(n.toFixed(4));
   return { x: r(minU), y: r(minV), w: r(maxU - minU), h: r(maxV - minV) };

@@ -2,12 +2,14 @@
 
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { rememberExpectedDetections } from '../../../utils/expected-detections';
-import { surfaceFromView, type ImageSurface } from '../webcam-screen';
-import { viewBasis, type CaptureView } from './equirect';
+import { surfaceFromStrip, type ImageSurface } from '../webcam-screen';
+import type { CaptureView } from './equirect';
+import type { PhotoGround } from './grounded';
 import { TOUR_ROOMS, TOUR_START, type TourRoomId } from './tour-data';
 import {
   captureViewAt,
   tourArrows,
+  tourScale,
   TOUR_EYE,
   TOUR_SURFACE_DISTANCE,
   type TourArrow,
@@ -28,6 +30,13 @@ export interface PanoramaTourState {
   arrows: TourArrow[];
   /** Surface of the last scan photo, while still in that room; null otherwise. */
   surface: ImageSurface | null;
+  /** Wall distance of the shown photo (grounded panorama), m. */
+  wall: number;
+  /**
+   * Live grounded photo (stable object, `offset` written every frame by `PanoramaTour`): what is
+   * laid on the photo (outlines, labels) moves with it while the viewer walks.
+   */
+  ground: PhotoGround;
   arrive: (room: TourRoomId, uFront: number) => void;
   /** Walk to a room (ignored while a walk is running). */
   walk: (to: TourRoomId) => void;
@@ -45,6 +54,13 @@ export function usePanoramaTour(enabled: boolean): PanoramaTourState {
   const [pending, setPending] = useState<TourRoomId | null>(null);
   const [scanned, setScanned] = useState<{ room: TourRoomId; surface: ImageSurface } | null>(null);
   const captureRef = useRef<((view: CaptureView) => TourCapture | null) | null>(null);
+  const [ground] = useState<PhotoGround>(() => ({
+    eye: TOUR_EYE,
+    wall: tourScale(TOUR_ROOMS[TOUR_START]).wall,
+    floor: TOUR_EYE[1],
+    offset: [0, 0, 0],
+    step: 0,
+  }));
 
   const registerCapture = useCallback((fn: ((view: CaptureView) => TourCapture | null) | null) => {
     captureRef.current = fn;
@@ -74,7 +90,7 @@ export function usePanoramaTour(enabled: boolean): PanoramaTourState {
       const shot = captureRef.current?.(view);
       if (!shot) return null;
       rememberExpectedDetections(shot.url, shot.expected);
-      const surface = surfaceFromView(TOUR_EYE, viewBasis(view), TOUR_SURFACE_DISTANCE);
+      const surface = surfaceFromStrip(TOUR_EYE, view, TOUR_SURFACE_DISTANCE);
       setScanned({ room, surface });
       return { url: shot.url, surface };
     },
@@ -92,6 +108,8 @@ export function usePanoramaTour(enabled: boolean): PanoramaTourState {
     pending,
     arrows,
     surface: scanned && scanned.room === room ? scanned.surface : null,
+    wall: tourScale(TOUR_ROOMS[room]).wall,
+    ground,
     arrive,
     walk,
     walkThrough,

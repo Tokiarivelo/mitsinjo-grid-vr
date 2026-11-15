@@ -9,6 +9,7 @@ import {
   updateHandMesh,
 } from '@/features/microgrid-3d/utils/xr-hands';
 import type { SpatialTarget } from './spatial-projection';
+import { photoRay, type PhotoGround } from './tour/grounded';
 import {
   pickTargetAtUv,
   screenHitFromRay,
@@ -24,6 +25,17 @@ import {
 } from './wrist-menu';
 import { playLaserShootSound, playScanRadarSound, playTargetHitSound } from './xr-audio-fx';
 import { grabTurntable, releaseTurntable, rotateTurntable, type Turntable } from './turntable';
+import {
+  dragTo,
+  endDrag,
+  panelOf,
+  shown,
+  type HoloPanelData,
+  type PanelDrag,
+  type PanelRegistry,
+  HOLO_ID_PREFIX,
+} from './holo-panel';
+import { playHoverTick, playPanelSelectSound } from './xr-audio-fx';
 
 export const AIR_BUTTON_ID = 'spatial-air-button';
 
@@ -54,6 +66,43 @@ export interface XRBlasterControllerProps {
   onHotspot?: (id: string) => void;
   /** A shot that hit nothing (no surface, panel or arrow): 360° tour scans that direction. */
   onShootOutside?: (origin: THREE.Vector3, direction: THREE.Vector3) => void;
+  /** Holographic panels (dialog, carousel, lab): hit first, tapped or dragged (VS-T19). */
+  panels?: PanelRegistry;
+  /**
+   * 360° tour: the live grounded photo. The ray is resolved on the photo as drawn after walking
+   * (photo point → scan image), so aiming at an object hits it wherever the viewer stands.
+   */
+  photo?: PhotoGround;
+  /**
+   * Written every frame: what each pointer aims at and where its beam ends, and whether it is a
+   * hand (pinch) or a controller (trigger). Read by the aim hint (« Trigger · Extract … »).
+   */
+  aimOut?: AimReadout;
+}
+
+/** Live aim of the two XR pointers (and the mouse as pointer 0 off the headset). */
+export interface AimReadout {
+  pointers: [PointerAim, PointerAim];
+}
+
+export interface PointerAim {
+  visible: boolean;
+  kind: AimKind;
+  id: string | null;
+  /** Beam end (world). */
+  end: THREE.Vector3;
+  input: 'controller' | 'hand' | 'mouse';
+}
+
+export function createAimReadout(): AimReadout {
+  const one = (): PointerAim => ({
+    visible: false,
+    kind: 'none',
+    id: null,
+    end: new THREE.Vector3(),
+    input: 'controller',
+  });
+  return { pointers: [one(), one()] };
 }
 
 export interface Hotspot {
@@ -64,16 +113,20 @@ export interface Hotspot {
 /** Pick radius around a floor arrow (m). */
 const HOTSPOT_RADIUS = 0.38;
 
-type AimKind = 'wrist' | 'miniature' | 'button' | 'hotspot' | 'target' | 'screen' | 'none';
+type AimKind =
+  'wrist' | 'panel' | 'miniature' | 'button' | 'hotspot' | 'target' | 'screen' | 'none';
 interface Aim {
   kind: AimKind;
   id: string | null;
   u: number;
   v: number;
   miniature?: MiniatureHandle;
+  panel?: HoloPanelData;
+  hit?: THREE.Intersection;
 }
 
-type InputKey = 0 | 1 | 'mouse';
+/** Pointer 0 / 1 select, 2 / 3 their grip (squeeze), or the mouse. */
+type InputKey = 0 | 1 | 2 | 3 | 'mouse';
 /** One input holding a miniature: last pointer pose, to turn its motion into rotation. */
 interface Grab {
   miniature: MiniatureHandle;
@@ -110,6 +163,9 @@ const RAY_GAIN = 3;
 const MOVE_GAIN = 9;
 /** Rotation per pixel of mouse drag. */
 const MOUSE_GAIN = 0.012;
+/** Panel drag: pointer yaw per pixel of mouse drag (rad). */
+const MOUSE_PANEL_GAIN = 0.004;
+const BEAM_PANEL = '#67e8f9';
 
 /** Horizontal / vertical angle of a ray direction. */
 const yawOf = (d: THREE.Vector3) => Math.atan2(d.x, -d.z);
@@ -198,9 +254,28 @@ interface AimScene {
   miniatures?: readonly MiniatureHandle[];
   surface: ImageSurface | null;
   hotspots: readonly Hotspot[];
+  panels?: PanelRegistry;
+  photo?: PhotoGround | undefined;
+}
+
+const _panelHits: THREE.Intersection[] = [];
+
+/** Nearest shown panel the ray hits (the raycaster ray is already set). */
+function panelOnRay(panels: PanelRegistry | undefined) {
+  if (!panels || panels.objects.length === 0) return null;
+  _panelHits.length = 0;
+  _raycaster.intersectObjects(panels.objects, true, _panelHits);
+  for (const hit of _panelHits) {
+    if (!shown(hit.object)) continue;
+    const panel = panelOf(hit.object);
+    if (panel) return { panel, hit };
+  }
+  return null;
 }
 
 const _vHot = new THREE.Vector3();
+const _vPhotoO = new THREE.Vector3();
+const _vPhotoD = new THREE.Vector3();
 
 /**
  * What a ray points at, nearest first: the wrist button, a miniature, the scan button (menu
@@ -211,7 +286,7 @@ function aimAt(
   origin: THREE.Vector3,
   direction: THREE.Vector3,
   end: THREE.Vector3,
-  { targets, menu, miniatures = [], surface, hotspots }: AimScene
+  { targets, menu, miniatures = [], surface, hotspots, panels, photo }: AimScene
 ): Aim {
   _raycaster.ray.origin.copy(origin);
   _raycaster.ray.direction.copy(direction);
@@ -219,6 +294,12 @@ function aimAt(
   if (menu.buttonVisible && rayNear(origin, direction, menu.button, WRIST_RAY_RADIUS)) {
     end.copy(menu.button);
     return { kind: 'wrist', id: WRIST_BUTTON_ID, u: 0, v: 0 };
+  }
+
+  const onPanel = panelOnRay(panels);
+  if (onPanel) {
+    end.copy(onPanel.hit.point);
+    return { kind: 'panel', id: onPanel.panel.id, u: 0, v: 0, ...onPanel };
   }
 
   const mini = miniatureOnRay(origin, direction, miniatures);
@@ -240,14 +321,29 @@ function aimAt(
     }
   }
 
-  const hit = surface ? screenHitFromRay(origin, direction, surface) : null;
+  // Tour: the ray as the photo sees it (from its spot, toward the photo point under the laser).
+  const seen =
+    surface && photo
+      ? photoRay([origin.x, origin.y, origin.z], [direction.x, direction.y, direction.z], photo)
+      : null;
+  if (seen && photo) {
+    _vPhotoO.set(...photo.eye);
+    _vPhotoD.set(...seen.dir);
+  }
+  const hit = surface
+    ? seen
+      ? screenHitFromRay(_vPhotoO, _vPhotoD, surface)
+      : screenHitFromRay(origin, direction, surface)
+    : null;
   if (hit) {
     const target = pickTargetAtUv(targets, hit.u, hit.v);
     if (target) {
       end.set(...target.position);
+      // Targets are laid on the photo, which moves with the walk.
+      if (photo) end.set(end.x - photo.offset[0], end.y - photo.offset[1], end.z - photo.offset[2]);
       return { kind: 'target', id: target.id, u: hit.u, v: hit.v };
     }
-    end.set(...hit.point);
+    end.set(...(seen ? seen.point : hit.point));
     return { kind: 'screen', id: null, u: hit.u, v: hit.v };
   }
 
@@ -257,6 +353,7 @@ function aimAt(
 
 function beamColor(kind: AimKind): string {
   if (kind === 'wrist') return BEAM_WRIST;
+  if (kind === 'panel') return BEAM_PANEL;
   if (kind === 'hotspot') return BEAM_HOTSPOT;
   if (kind === 'miniature') return BEAM_MINIATURE;
   if (kind === 'button') return BEAM_BUTTON;
@@ -289,6 +386,9 @@ export const XRBlasterController = memo(function XRBlasterController({
   hotspots = [],
   onHotspot,
   onShootOutside,
+  panels,
+  photo,
+  aimOut,
 }: XRBlasterControllerProps) {
   const { gl, camera, scene } = useThree();
   const hoveredRef = useRef<string | null>(null);
@@ -298,7 +398,13 @@ export const XRBlasterController = memo(function XRBlasterController({
   >([]);
   const gripsRef = useRef<THREE.Object3D[]>([]);
   const lastTouchRef = useRef(0);
+  const inputKindsRef = useRef<['controller' | 'hand', 'controller' | 'hand']>([
+    'controller',
+    'controller',
+  ]);
   const grabsRef = useRef(new Map<InputKey, Grab>());
+  /** Selects held on a panel: a tap on release, or a sideways drag (carousel). */
+  const dragsRef = useRef(new Map<InputKey, PanelDrag>());
   const blastRef = useRef<{ origin: THREE.Vector3; to: THREE.Vector3; progress: number } | null>(
     null
   );
@@ -342,8 +448,36 @@ export const XRBlasterController = memo(function XRBlasterController({
 
   /** Starts holding the miniature the input points at; false when it points at none. */
   const tryGrab = useCallback(
-    (key: InputKey, origin: THREE.Vector3, direction: THREE.Vector3, haptics?: Gamepad | null) => {
-      const aim = aimAt(origin, direction, _vEnd, { targets, menu, miniatures, surface, hotspots });
+    (
+      key: InputKey,
+      origin: THREE.Vector3,
+      direction: THREE.Vector3,
+      haptics?: Gamepad | null,
+      grip = false
+    ) => {
+      const aim = aimAt(origin, direction, _vEnd, {
+        targets,
+        menu,
+        miniatures,
+        surface,
+        hotspots,
+        panels,
+        photo,
+      });
+      if (!grip && aim.kind === 'panel' && aim.panel && aim.hit) {
+        dragsRef.current.set(key, {
+          panel: aim.panel,
+          hit: aim.hit,
+          yaw: yawOf(direction),
+          moved: 0,
+        });
+        try {
+          haptics?.hapticActuators?.[0]?.pulse(0.3, 30);
+        } catch {
+          // No haptics on the desktop emulator.
+        }
+        return true;
+      }
       if (aim.kind !== 'miniature' || !aim.miniature) return false;
       grabTurntable(aim.miniature.turntable, key, performance.now());
       grabsRef.current.set(key, {
@@ -360,15 +494,23 @@ export const XRBlasterController = memo(function XRBlasterController({
       }
       return true;
     },
-    [targets, miniatures, menu, surface, hotspots]
+    [targets, miniatures, menu, surface, hotspots, panels, photo]
   );
 
   const release = useCallback(
     (key: InputKey) => {
+      const drag = dragsRef.current.get(key);
+      if (drag) {
+        dragsRef.current.delete(key);
+        if (endDrag(drag)) playPanelSelectSound();
+        return;
+      }
       const grab = grabsRef.current.get(key);
       if (!grab) return;
       grabsRef.current.delete(key);
-      if (releaseTurntable(grab.miniature.turntable, performance.now())) {
+      // A quick trigger / pinch on a miniature connects it; the grip only ever turns it.
+      const isGrip = key === 2 || key === 3;
+      if (releaseTurntable(grab.miniature.turntable, performance.now()) && !isGrip) {
         playTargetHitSound();
         onTapMiniature?.(grab.miniature.id);
       }
@@ -379,7 +521,7 @@ export const XRBlasterController = memo(function XRBlasterController({
   /** Resolves one shot. `haptics` is the gamepad of the input that fired, if any. */
   const triggerShot = useCallback(
     (origin: THREE.Vector3, direction: THREE.Vector3, haptics?: Gamepad | null) => {
-      const aim = aimAt(origin, direction, _vEnd, { targets, menu, surface, hotspots });
+      const aim = aimAt(origin, direction, _vEnd, { targets, menu, surface, hotspots, photo });
 
       if (aim.kind === 'wrist') {
         toggleMenu();
@@ -447,6 +589,7 @@ export const XRBlasterController = memo(function XRBlasterController({
       menu,
       surface,
       hotspots,
+      photo,
       toggleMenu,
       pressButton,
       onHotspot,
@@ -462,7 +605,7 @@ export const XRBlasterController = memo(function XRBlasterController({
     const added: Array<{ parent: THREE.Object3D; child: THREE.Object3D }> = [];
     const listeners: Array<{
       space: THREE.XRTargetRaySpace;
-      type: 'selectstart' | 'selectend';
+      type: 'selectstart' | 'selectend' | 'squeezestart' | 'squeezeend' | 'connected';
       fn: (e: THREE.Event) => void;
     }> = [];
 
@@ -476,10 +619,29 @@ export const XRBlasterController = memo(function XRBlasterController({
         triggerShot(_vOrigin, _vDirection, gamepad);
       };
       const onEnd = () => release(i);
+      // Grip (squeeze) held on a miniature turns it, like Meta's grab (VS-T23).
+      const gripKey = (i + 2) as InputKey;
+      const onSqueezeStart = (e: THREE.Event) => {
+        rayFrom(space, _vOrigin, _vDirection);
+        const gamepad = (e as { data?: XRInputSource }).data?.gamepad ?? null;
+        tryGrab(gripKey, _vOrigin, _vDirection, gamepad, true);
+      };
+      const onSqueezeEnd = () => release(gripKey);
+      // Which input drives this pointer: a hand pinches, a controller pulls its trigger.
+      const onConnected = (e: THREE.Event) => {
+        const source = (e as { data?: XRInputSource }).data;
+        inputKindsRef.current[i] = source?.hand ? 'hand' : 'controller';
+      };
       space.addEventListener('selectstart', onStart as never);
       space.addEventListener('selectend', onEnd as never);
+      space.addEventListener('squeezestart', onSqueezeStart as never);
+      space.addEventListener('squeezeend', onSqueezeEnd as never);
+      space.addEventListener('connected', onConnected as never);
       listeners.push({ space, type: 'selectstart', fn: onStart });
       listeners.push({ space, type: 'selectend', fn: onEnd });
+      listeners.push({ space, type: 'squeezestart', fn: onSqueezeStart });
+      listeners.push({ space, type: 'squeezeend', fn: onSqueezeEnd });
+      listeners.push({ space, type: 'connected', fn: onConnected });
 
       if (gl.xr.getHand && scene) {
         const hand = gl.xr.getHand(i) as Parameters<typeof updateHandMesh>[0];
@@ -533,9 +695,17 @@ export const XRBlasterController = memo(function XRBlasterController({
       };
     };
     const px = (e: MouseEvent) => (typeof e.clientX === 'number' ? e.clientX : 0);
+    /** Last pointer x of a panel drag (px). */
+    let lastX = 0;
     const py = (e: MouseEvent) => (typeof e.clientY === 'number' ? e.clientY : 0);
     const onMove = (e: MouseEvent) => {
       mouseNdcRef.current = toNdc(e);
+      const drag = dragsRef.current.get('mouse');
+      if (drag) {
+        dragTo(drag, drag.yaw + (px(e) - lastX) * MOUSE_PANEL_GAIN);
+        lastX = px(e);
+        return;
+      }
       const grab = grabsRef.current.get('mouse');
       if (!grab) return;
       const dx = px(e) - grab.x;
@@ -557,9 +727,12 @@ export const XRBlasterController = memo(function XRBlasterController({
       if ((typeof e.button === 'number' && e.button !== 0) || !camera) return;
       rayAt(e);
       if (tryGrab('mouse', _vOrigin, _vDirection)) {
-        const grab = grabsRef.current.get('mouse')!;
-        grab.x = px(e);
-        grab.y = py(e);
+        lastX = px(e);
+        const grab = grabsRef.current.get('mouse');
+        if (grab) {
+          grab.x = px(e);
+          grab.y = py(e);
+        }
         return;
       }
       press = { x: px(e), y: py(e) };
@@ -593,7 +766,15 @@ export const XRBlasterController = memo(function XRBlasterController({
     origin: THREE.Vector3,
     direction: THREE.Vector3
   ): string | null => {
-    const aim = aimAt(origin, direction, _vEnd, { targets, menu, miniatures, surface, hotspots });
+    const aim = aimAt(origin, direction, _vEnd, {
+      targets,
+      menu,
+      miniatures,
+      surface,
+      hotspots,
+      panels,
+      photo,
+    });
     const pointer = pointers[index];
     const pip = pips[index];
     const color = beamColor(aim.kind);
@@ -606,12 +787,22 @@ export const XRBlasterController = memo(function XRBlasterController({
     pip.visible = true;
     pip.position.copy(_vEnd);
     (pip.material as THREE.MeshBasicMaterial).color.set(color);
+    const out = aimOut?.pointers[index];
+    if (out) {
+      out.visible = true;
+      out.kind = aim.kind;
+      out.id = aim.id;
+      out.end.copy(_vEnd);
+      out.input = gl.xr?.isPresenting ? inputKindsRef.current[index] : 'mouse';
+    }
     return aim.id;
   };
 
   const hideBeam = (index: 0 | 1) => {
     pointers[index].visible = false;
     pips[index].visible = false;
+    const out = aimOut?.pointers[index];
+    if (out) out.visible = false;
   };
 
   useFrame((_, delta) => {
@@ -680,10 +871,13 @@ export const XRBlasterController = memo(function XRBlasterController({
         if (!space || !space.visible || space.matrixWorld.elements[15] === 0) {
           hideBeam(i);
           release(i); // tracking lost while holding: let go
+          release((i + 2) as InputKey);
           continue;
         }
         rayFrom(space, _vOrigin, _vDirection);
-        const grab = grabsRef.current.get(i);
+        const drag = dragsRef.current.get(i);
+        if (drag) dragTo(drag, yawOf(_vDirection));
+        const grab = grabsRef.current.get(i) ?? grabsRef.current.get((i + 2) as InputKey);
         if (grab) {
           const yaw = yawOf(_vDirection);
           const pitch = pitchOf(_vDirection);
@@ -714,6 +908,7 @@ export const XRBlasterController = memo(function XRBlasterController({
     }
 
     if (hovered !== hoveredRef.current) {
+      if (hovered?.startsWith(HOLO_ID_PREFIX)) playHoverTick();
       hoveredRef.current = hovered;
       onHoverTarget(hovered);
     }

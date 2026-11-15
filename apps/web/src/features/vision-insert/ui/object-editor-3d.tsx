@@ -63,6 +63,11 @@ export interface ObjectEditor3dProps {
   onPickSurface?: (surface: HullSurface) => void;
   /** Full-screen 3D Studio (PQ-T77): tools, view mode, camera, selection of the model's pieces. */
   studio?: StudioControls;
+  /**
+   * Drawn in the VR 3D lab (VS-T22): no contact shadow (an extra render target breaks foveation
+   * and MSAA), no print wipe, and the camera is the headset's (no framing moves).
+   */
+  xr?: boolean;
 }
 
 /** Strength of the studio reflections and fill (image-based light). */
@@ -73,7 +78,7 @@ const ENV_INTENSITY = 0.9;
  * (PMREM) as `scene.environment`, so every surface gets fill light and reflections by its roughness;
  * the studio scene is freed right after the bake, the target on unmount.
  */
-function StudioEnvironment() {
+export function StudioEnvironment() {
   const get = useThree((s) => s.get);
   useEffect(() => {
     const { gl, scene, invalidate } = get();
@@ -105,7 +110,8 @@ const PICK_MAX_DRAG = 4;
 const CAMERA_POSITION: [number, number, number] = [1.3, 0.85, 2.35];
 const CAMERA_DISTANCE = Math.hypot(...CAMERA_POSITION);
 
-function ObjectModel({
+/** The object's model, for any canvas (the editor's, or the VR lab's with `xr`). */
+export function ObjectModel({
   shape,
   preview,
   detection,
@@ -116,6 +122,7 @@ function ObjectModel({
   selectedSurface = null,
   onPickSurface,
   studio,
+  xr = false,
 }: ObjectEditor3dProps) {
   const reducedMotion = useReducedMotion();
   // Photo size only (silhouette proportions); cached image, no GPU upload.
@@ -273,14 +280,16 @@ function ObjectModel({
 
   return (
     <group>
-      <ContactShadows
-        position={[0, floorY * scale, 0]}
-        scale={2.4 * scale}
-        blur={2.2}
-        far={1.2}
-        opacity={0.45}
-        frames={1}
-      />
+      {!xr && (
+        <ContactShadows
+          position={[0, floorY * scale, 0]}
+          scale={2.4 * scale}
+          blur={2.2}
+          far={1.2}
+          opacity={0.45}
+          frames={1}
+        />
+      )}
       <group scale={scale}>
         {byPiece ? null : vertexColors ? (
           <mesh
@@ -311,6 +320,7 @@ function ObjectModel({
           edits={edits}
           scale={scale}
           {...(studio ? { studio } : {})}
+          fixedCamera={xr}
           {...(pickable && onPickSurface
             ? {
                 onPickSlot: (slot: number) => {
@@ -321,20 +331,24 @@ function ObjectModel({
             : {})}
         />
       )}
-      <PrintWipe
-        mesh={mesh}
-        materials={modelMaterials}
-        scale={scale}
-        building={building}
-        reducedMotion={reducedMotion}
-      />
-      <BuildFocus
-        recipe={activeRecipe}
-        {...(improve ? { improve } : {})}
-        scale={scale}
-        homeDistance={CAMERA_DISTANCE}
-        reducedMotion={reducedMotion}
-      />
+      {!xr && (
+        <>
+          <PrintWipe
+            mesh={mesh}
+            materials={modelMaterials}
+            scale={scale}
+            building={building}
+            reducedMotion={reducedMotion}
+          />
+          <BuildFocus
+            recipe={activeRecipe}
+            {...(improve ? { improve } : {})}
+            scale={scale}
+            homeDistance={CAMERA_DISTANCE}
+            reducedMotion={reducedMotion}
+          />
+        </>
+      )}
     </group>
   );
 }

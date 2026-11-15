@@ -26,6 +26,7 @@ import { useDetectionLabel } from '../hooks/use-object-name';
 import { shapeKey, useObjectShape } from '../hooks/use-object-shape';
 import { useKeptRef, useKeptState, VILLAGE_SCOPE } from '../hooks/use-kept-state';
 import { useVisionSession } from '../hooks/use-vision-session';
+import { useXrExtract } from '../hooks/use-xr-extract';
 import { applianceIdFor, photoKey } from '../utils/appliance-draft';
 import { ApplianceInsert } from './appliance-insert';
 import { ApplianceList } from './appliance-list';
@@ -163,6 +164,16 @@ export function VillageEditorPage() {
       });
     }
   };
+  // VR: shot → « Extract to 3D? » → 2D views → model → 3D lab, on this same pipeline (VS-T19–T22).
+  const xrExtract = useXrExtract({
+    imageUrl,
+    target: shapeRequest,
+    shape: objectShape,
+    requestShape,
+    editPieces: objectShape.editPieces,
+    select: onSelectObject,
+    scope: VILLAGE_SCOPE,
+  });
   const regenerateShape = () => {
     if (imageUrl && shapeRequest) void requestShape(imageUrl, shapeRequest, undefined, true);
   };
@@ -323,6 +334,8 @@ export function VillageEditorPage() {
           xrActive={xrActive}
           onEnterVR={xr.enter}
           photoKey={photo || 'studio-sample'}
+          extract={xrExtract}
+          imageUrl={imageUrl}
           onExitVR={() => {
             if (xrActive) xr.exit();
             setVrViewOpen(false);

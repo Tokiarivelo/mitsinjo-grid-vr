@@ -16,6 +16,7 @@ import {
   tourExpectedDetections,
   tourScale,
   TOUR_ARROW_REACH,
+  TOUR_CAPTURE_ASPECT,
   TOUR_EYE,
   TOUR_SPHERE_RADIUS,
   TOUR_WALK_SPEED,
@@ -26,6 +27,8 @@ import {
 import { isDevXREmulated } from '@/features/microgrid-3d';
 import type { ApplianceDetection } from '@/lib/vision';
 import { getPillLabelTexture } from '../wrist-menu-texture';
+import type { PhotoGround } from './grounded';
+import { isWalkStick } from '../xr-controls';
 
 export interface TourCapture {
   url: string;
@@ -47,6 +50,8 @@ export interface PanoramaTourProps {
   hoveredId?: string | null;
   /** Gives the parent the scan function of the current room. */
   onRegisterCapture: (fn: ((view: CaptureView) => TourCapture | null) | null) => void;
+  /** Live grounded photo: its walk offset and wall are written here every frame. */
+  photo?: PhotoGround;
 }
 
 const FADE_IN = 0.28;
@@ -58,8 +63,10 @@ const FLOOR = TOUR_EYE[1];
 /** Head bob while walking (off a real headset: bobbing the world in VR is a comfort issue). */
 const BOB_AMPLITUDE = 0.022;
 const STEPS_PER_SECOND = 1.8;
-const CAPTURE_W = 1280;
-const CAPTURE_H = 720;
+const CAPTURE_W = 2048;
+/** A snap step glides at this speed (m/s): short, but never a jump cut. */
+const STEP_SPEED = 3.2;
+const CAPTURE_H = Math.round(CAPTURE_W / TOUR_CAPTURE_ASPECT);
 
 const VERTEX = /* glsl */ `
   varying vec3 vWorld;
@@ -147,6 +154,7 @@ export const PanoramaTour = memo(function PanoramaTour({
   onWalk,
   hoveredId = null,
   onRegisterCapture,
+  photo,
 }: PanoramaTourProps) {
   const t = useTranslations('features.visionInsert');
   const { gl, camera } = useThree();
@@ -356,6 +364,10 @@ export const PanoramaTour = memo(function PanoramaTour({
         material.uniforms.uFrontA!.value = cross.uFront;
         material.uniforms.wallA!.value = tourScale(TOUR_ROOMS[cross.to]).wall;
         material.uniforms.offA!.value.set(0, 0, 0);
+        if (photo) {
+          photo.offset[0] = photo.offset[1] = photo.offset[2] = 0;
+          photo.wall = tourScale(TOUR_ROOMS[cross.to]).wall;
+        }
         return;
       }
     } else if (pending && !arrivedRef.current) {
@@ -386,12 +398,28 @@ export const PanoramaTour = memo(function PanoramaTour({
         typeof document !== 'undefined' && document.pointerLockElement
           ? { forward: 0, strafe: 0 }
           : keyWalkAxes(heldRef.current);
+      // Only the left stick walks (the right one snap-turns and steps, VS-T23).
       for (const source of session?.inputSources ?? []) {
+        if (!isWalkStick(source)) continue;
         const stick = stickWalkAxes(source.gamepad?.axes);
         axes.forward += stick.forward;
         axes.strafe += stick.strafe;
       }
       ground = stepWalk(ground, axes, headYaw, delta, scale.walk);
+      // A step asked for (right stick ↑/↓, thumb swipe): glide it off along the gaze.
+      if (photo && photo.step !== 0) {
+        const move = Math.sign(photo.step) * Math.min(Math.abs(photo.step), STEP_SPEED * delta);
+        photo.step -= move;
+        if (Math.abs(photo.step) < 1e-3) photo.step = 0;
+        let x = ground[0] + Math.sin(headYaw) * move;
+        let z = ground[1] - Math.cos(headYaw) * move;
+        const r = Math.hypot(x, z);
+        if (r > scale.walk) {
+          x *= scale.walk / r;
+          z *= scale.walk / r;
+        }
+        ground = [x, z];
+      }
       const onArrow = arrowAt(arrows, [ground[0] + head[0], ground[1] + head[1]]);
       if (onArrow) onWalk(onArrow.to);
     }
@@ -425,6 +453,13 @@ export const PanoramaTour = memo(function PanoramaTour({
     material.uniforms.uFrontA!.value = shownU;
     material.uniforms.wallA!.value = scale.wall;
     material.uniforms.offA!.value.set(ground[0], bob, ground[1]);
+    if (photo) {
+      // What is laid on the photo (outlines, labels, aim) follows the same offset.
+      photo.offset[0] = ground[0];
+      photo.offset[1] = bob;
+      photo.offset[2] = ground[1];
+      photo.wall = scale.wall;
+    }
     if (!crossRef.current) material.uniforms.mixB!.value = 0;
     material.uniforms.fade!.value = fadeRef.current;
   });

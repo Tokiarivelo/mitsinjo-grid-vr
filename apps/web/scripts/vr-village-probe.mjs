@@ -2,7 +2,8 @@
 // `window.__IWER_DEVICE__.remote.dispatch`, with the sample room fed as a fake webcam.
 // The emulator shows the walkable 360° tour (VS-T14), not the webcam. Checks: session starts;
 // wrist menu; loft with 2 floor arrows; a controller shot at the fridge (no scan yet) starts ONE
-// scan and a miniature; a tap on it connects it; a hand pinch at the lamp; shooting a floor
+// scan, outlines it and asks « Extract to 3D? »; then 2D views carousel → build → 3D lab (a piece
+// hidden) → leave = miniature; a tap on it connects it; a hand pinch at the lamp; shooting a floor
 // arrow walks to the hall; ↑ walks on. Screenshots show the photo orientation ("MARRY" letters).
 // Screenshots in <outDir>/vr-*.png.
 // Usage: node scripts/vr-village-probe.mjs <baseUrl> <outDir>   (dev server must run; needs ffmpeg)
@@ -165,7 +166,76 @@ try {
   const t0 = Date.now();
   while (scansDone === 0 && Date.now() - t0 < 120000) await sleep(1000);
   await sleep(3000);
-  await shot('3-fridge-3d');
+  await shot('3-fridge-outlined');
+
+  // 3D extraction (VS-T18–T22): every press below is a real controller shot at the panel.
+  const extract = () => page.evaluate(() => window.__VR_EXTRACT__ ?? null);
+  const lab = () => page.evaluate(() => window.__VR_LAB__ ?? null);
+  const panelAt = (id) =>
+    page.evaluate((pid) => {
+      const reg = window.__VR_PANELS__;
+      const o = reg?.objects.find((x) =>
+        typeof pid === 'string' && pid.endsWith('*')
+          ? x.userData.holoPanel?.id.startsWith(pid.slice(0, -1))
+          : x.userData.holoPanel?.id === pid
+      );
+      if (!o) return null;
+      o.updateWorldMatrix(true, false);
+      const p = o.getWorldPosition(new o.position.constructor());
+      return { x: p.x, y: p.y, z: p.z };
+    }, id);
+  const press = async (id) => {
+    const at = await panelAt(id);
+    if (!at) return false;
+    await fire('controller-right', at, { x: 0.12, y: 1.45, z: -0.05 });
+    return true;
+  };
+  const waitFor = async (fn, ms = 20000) => {
+    const t1 = Date.now();
+    while (Date.now() - t1 < ms) {
+      if (await fn()) return true;
+      await sleep(400);
+    }
+    return false;
+  };
+  check('the shot fridge asks « Extract to 3D? »', (await extract())?.stage === 'confirm');
+  await shot('3b-extract-dialog');
+  await press('holo:extract-yes');
+  check(
+    '« Extract in 3D » draws the 2D views (main + 4 faces), shown as slides',
+    await waitFor(async () => {
+      const x = await extract();
+      return x?.stage === 'views' && x.slides.length === 5 && x.canBuild;
+    }, 60000)
+  );
+  await shot('3c-views-carousel');
+  await press('holo:views-next');
+  await sleep(800);
+  await shot('3d-views-next-face');
+  await press('holo:views-build');
+  check(
+    '« Validate & build » builds the model',
+    await waitFor(async () => (await extract())?.ready === true, 90000)
+  );
+  await shot('3e-built');
+  await press('holo:build-lab');
+  check('« Enter the 3D lab » opens the lab', (await extract())?.stage === 'lab');
+  await waitFor(async () => ((await lab())?.names.length ?? 0) > 0, 15000);
+  await shot('3f-lab');
+  await press('holo:lab-piece-*');
+  const picked = (await lab())?.selected;
+  await press('holo:lab-hide');
+  check(
+    'in the lab a piece picked in the list is hidden live',
+    !!picked && ((await lab())?.hidden ?? []).includes(picked)
+  );
+  await shot('3g-lab-piece-hidden');
+  await press('holo:lab-show-all');
+  await press('holo:lab-exit');
+  check('leaving the lab ends the extraction', (await extract())?.stage === 'idle');
+  await sleep(1500);
+  await shot('3h-fridge-miniature');
+
   await fire('controller-right', MINI_0, { x: 0.25, y: 1.3, z: 0 });
   await shot('4-fridge-connected');
   check('one scan only (no double fire)', scans === 1);
@@ -173,7 +243,47 @@ try {
   await rc('set_input_mode', { mode: 'hand' });
   await fire('hand-right', panoPoint(...LAMP_UV, uF, 3), { x: 0.2, y: 1.35, z: -0.1 });
   await shot('5-hand-lamp');
+  check('a hand pinch at the lamp asks to extract it', (await extract())?.stage === 'confirm');
   await rc('set_input_mode', { mode: 'controller' });
+  await sleep(600);
+  // A hand pinch on « Cancel » (the pinch moves the ray a little: still a tap).
+  await rc('set_input_mode', { mode: 'hand' });
+  const no = await panelAt('holo:extract-no');
+  if (no) await fire('hand-right', no, { x: 0.12, y: 1.4, z: -0.1 });
+  await rc('set_input_mode', { mode: 'controller' });
+  check('« Cancel » closes the question', (await extract())?.stage === 'idle');
+
+  // Walking after the scan: outlines stay on the objects (laid on the photo, which moves with
+  // the walk), and aiming where the lamp is drawn now still finds the lamp.
+  await page.keyboard.down('ArrowRight');
+  await waitFor(async () => {
+    const g = (await tour())?.ground;
+    return !!g && Math.hypot(g.offset[0], g.offset[2]) > 0.4;
+  }, 8000);
+  await page.keyboard.up('ArrowRight');
+  await sleep(600);
+  const walked = await tour();
+  const off = walked?.ground?.offset ?? [0, 0, 0];
+  const lampT = walked?.targets.find((x) => /lamp/i.test(x.label));
+  check(
+    'walking after the scan moves the viewer off the photo spot',
+    Math.hypot(off[0], off[2]) > 0.3
+  );
+  if (lampT) {
+    const drawn = { x: lampT.at[0] - off[0], y: lampT.at[1] - off[1], z: lampT.at[2] - off[2] };
+    await rc('look_at', { device: 'headset', target: drawn });
+    await rc('set_transform', {
+      device: 'controller-right',
+      position: { x: 0.15, y: 1.4, z: -0.1 },
+    });
+    await rc('look_at', { device: 'controller-right', target: drawn });
+    await sleep(1200);
+    await shot('5b-walked-lamp-outline');
+    check(
+      'after walking, the lamp outline stays on the lamp (aiming at it hovers it)',
+      (await tour())?.hovered === lampT.id
+    );
+  } else check('after walking, the lamp outline stays on the lamp (aiming at it hovers it)', false);
 
   // Walking takes time (to the arrow, then through it): poll the room.
   const waitRoom = async (to, ms = 6000) => {
@@ -230,15 +340,30 @@ try {
   // Outdoor walk (houses, trees, forest) through the hall window.
   const walkTo = async (to) => {
     const arrow = (await tour())?.arrows.find((a) => a.to === to);
-    if (!arrow) return false;
+    if (!arrow) {
+      console.log(`  no arrow to ${to} in ${(await tour())?.room}`);
+      return false;
+    }
     const at = { x: arrow.position[0], y: arrow.position[1], z: arrow.position[2] };
     await rc('look_at', { device: 'headset', target: { x: at.x, y: 1.2, z: at.z } });
     await sleep(400);
     await fire('controller-right', at, { x: 0.2, y: 1.2, z: -0.1 });
-    const ok = await waitRoom(to);
+    // Outdoor arrows are 3 m away; headless frames are slow (delta capped at 0.1 s per frame).
+    const ok = await waitRoom(to, 20000);
     await sleep(400);
+    if (!ok) {
+      const now = await tour();
+      console.log(
+        `  walk to ${to} failed: in ${now?.room}, arrows ${JSON.stringify(now?.arrows.map((a) => [a.to, a.position]))}, hovered ${now?.hovered}, offset ${JSON.stringify(now?.ground?.offset)}, extract ${(await extract())?.stage}, scans ${scans}`
+      );
+    }
     return ok;
   };
+  // Left hand down by the hip: its wrist button must not sit across the right hand's ray.
+  await rc('set_transform', {
+    device: 'controller-left',
+    position: { x: -0.25, y: 0.85, z: 0.05 },
+  });
   let outdoor = await walkTo('hall');
   for (const to of ['terrace', 'street', 'house', 'garden', 'avenue', 'forest']) {
     outdoor = outdoor && (await walkTo(to));
