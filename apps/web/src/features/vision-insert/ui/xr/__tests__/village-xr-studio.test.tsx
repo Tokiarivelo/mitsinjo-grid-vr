@@ -1,4 +1,4 @@
-import { act, render } from '@testing-library/react';
+import { act, fireEvent, render } from '@testing-library/react';
 import * as THREE from 'three';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '@/lib/i18n';
@@ -85,6 +85,7 @@ vi.mock('../village-spatial-hud', () => ({ VillageSpatialHUD: () => null }));
 vi.mock('../spatial-interaction-guide', () => ({ SpatialInteractionGuide: () => null }));
 vi.mock('../xr-wrist-menu', () => ({
   WristMenuButton: () => null,
+  FollowGroup: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
   WristMenuPanel: ({ children }: { children?: React.ReactNode }) => (
     <div data-testid="wrist-menu-panel">{children}</div>
   ),
@@ -240,6 +241,9 @@ describe('VillageXRStudio — 3D extraction (VS-T18–T22)', () => {
     build: vi.fn(),
     enterLab: vi.fn(),
     exitLab: vi.fn(),
+    leave: vi.fn(),
+    back: vi.fn(),
+    awayId: null,
     slides: [],
     canBuild: false,
     redraw: vi.fn(),
@@ -288,6 +292,29 @@ describe('VillageXRStudio — 3D extraction (VS-T18–T22)', () => {
     rerender(view([], false, extractAt('idle', null)));
     act(() => controls.onAction!({ type: 'analyse' }));
     expect(onTriggerScan).toHaveBeenCalledOnce();
+  });
+
+  it('« Leave the studio » leaves from any studio step; the lab keeps its object (VS-T26)', () => {
+    const views = extractAt('views');
+    const { rerender, view, getByRole } = setup(false, views);
+    rerender(view([fridge], false));
+    fireEvent.click(getByRole('button', { name: 'Leave the studio' }));
+    expect(views.leave).toHaveBeenCalledOnce();
+
+    const inLab = extractAt('lab');
+    rerender(view([fridge], false, inLab));
+    fireEvent.click(getByRole('button', { name: 'Leave the studio' }));
+    expect(inLab.exitLab).toHaveBeenCalledOnce();
+  });
+
+  it('« Back to the studio » shows in the 360° view once the studio was left', () => {
+    const left = { ...extractAt('idle', null), awayId: 'fridge' };
+    const { rerender, view, getByRole, queryByRole } = setup(false, extractAt('idle', null));
+    rerender(view([fridge], false));
+    expect(queryByRole('button', { name: /Back to the studio/ })).toBeNull();
+    rerender(view([fridge], false, left));
+    fireEvent.click(getByRole('button', { name: 'Back to the studio · « Fridge »' }));
+    expect(left.back).toHaveBeenCalledOnce();
   });
 
   it('B / Y (back) in the lab leaves it, keeping the object as a miniature', () => {

@@ -40,6 +40,12 @@ export interface XrExtract {
   build: () => void;
   enterLab: () => void;
   exitLab: () => void;
+  /** Leaves the studio, keeping the step and the object to come back to (VS-T26). */
+  leave: () => void;
+  /** Back to the studio step left (no-op when none). */
+  back: () => void;
+  /** Object left in the studio, to come back to (null when none). */
+  awayId: string | null;
   slides: ViewSlide[];
   canBuild: boolean;
   redraw: (slide: ViewSlide['id']) => void;
@@ -68,6 +74,7 @@ export function useXrExtract({
 }: UseXrExtractOptions): XrExtract {
   const [state, dispatch] = useReducer(xrExtractReducer, XR_EXTRACT_IDLE);
   const active = state.stage !== 'idle' && target?.id === state.id ? target : null;
+  const awayId = state.away?.id ?? null;
   const facade = useFacade2d(imageUrl, active, undefined, scope);
   const faces = useFacadeFaces(active, facade.facade);
   const ready = shape.status === 'ready' && shape.shape?.detectionId === state.id;
@@ -120,6 +127,11 @@ export function useXrExtract({
     if (state.stage === 'build' && ready) dispatch({ type: 'enterLab' });
   }, [state.stage, ready]);
   const exitLab = useCallback(() => dispatch({ type: 'exitLab' }), []);
+  const leave = useCallback(() => dispatch({ type: 'leave' }), []);
+  const back = useCallback(() => {
+    if (awayId) select(awayId);
+    dispatch({ type: 'return' });
+  }, [awayId, select]);
 
   const buildable = canBuild(slides);
   const { validate } = facade;
@@ -167,6 +179,9 @@ export function useXrExtract({
     build,
     enterLab,
     exitLab,
+    leave,
+    back,
+    awayId,
     slides,
     canBuild: buildable,
     redraw,

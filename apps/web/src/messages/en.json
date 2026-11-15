@@ -1519,7 +1519,9 @@
         "readySub": "Edit it live in the 3D lab.",
         "outlineOnly": "AI shape unavailable: outline shape, editable in the lab.",
         "enterLab": "Enter the 3D lab",
-        "later": "Later"
+        "later": "Later",
+        "leaveStudio": "Leave the studio",
+        "backToStudio": "Back to the studio · « {name} »"
       },
       "vrViews": {
         "title": "2D views to validate",

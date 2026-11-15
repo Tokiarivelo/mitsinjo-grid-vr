@@ -1519,7 +1519,9 @@
         "readySub": "Ovay mivantana ao amin’ny laboratoara 3D.",
         "outlineOnly": "Tsy misy ny endrika IA: endrika sisiny, azo ovaina ao amin’ny labo.",
         "enterLab": "Midira ao amin’ny labo 3D",
-        "later": "Avy eo"
+        "later": "Avy eo",
+        "leaveStudio": "Hiala amin’ny studio",
+        "backToStudio": "Miverena any amin’ny studio · « {name} »"
       },
       "vrViews": {
         "title": "Sary 2D hamarinina",

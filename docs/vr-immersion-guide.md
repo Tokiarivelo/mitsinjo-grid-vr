@@ -264,7 +264,11 @@ Pilotage scripté (MCP IWER ou `remote.dispatch`) : voir [`vr-iwer-tools.md`](vr
    mouvement de souris. Pendant qu'une manette tient le carrousel ou un modèle, ce mouvement est intercepté
    (`window`, phase de capture) et tourne l'objet tenu, pas la vue (comme sur un casque, Meta « one-point
    manipulation »). Hors mode Play, clic gauche = gâchette du regard, clic droit glissé = tourner la tête.
-7. **Mains, manettes, laser** (VS-T26, `/village` et `/simulation`) : la main est le modèle articulé
+7. **Quitter / revenir au studio** (VS-T26) : un bouton « Quitter le studio » flotte à droite (miroir du bouton
+   « Menu ») à chaque étape du studio ; on retrouve la visite 360° et le bouton devient « Revenir au studio ·
+   « objet » », qui ramène à l'étape quittée (vues 2D, construction ou labo). Ré-extraire **le même objet** reprend
+   aussi là où on était (le labo garde son modèle) ; confirmer un autre objet oublie le précédent.
+8. **Mains, manettes, laser** (VS-T26, `/village` et `/simulation`) : la main est le modèle articulé
    `generic-hand` des WebXR input profiles (celui que dessine le Quest), peau mate + liseré clair (fresnel) ; la
    manette est celle que le navigateur annonce (Touch / Touch Plus). Chargés depuis le CDN des input profiles :
    hors ligne, les sphères / la manette simple restent. Laser selon Meta « Ray casting » : rayon de visée long et

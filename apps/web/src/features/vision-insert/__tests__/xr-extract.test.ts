@@ -24,7 +24,34 @@ describe('xrExtractReducer (VS-T19–T22)', () => {
       { type: 'enterLab' },
     ]);
     expect(lab).toEqual({ stage: 'lab', id: 'det-1' });
-    expect(run([{ type: 'exitLab' }], lab)).toEqual(XR_EXTRACT_IDLE);
+    expect(run([{ type: 'exitLab' }], lab)).toEqual({
+      ...XR_EXTRACT_IDLE,
+      away: { id: 'det-1', stage: 'lab' },
+    });
+  });
+
+  it('leaves the studio and comes back to the same step (VS-T26)', () => {
+    const views = run([{ type: 'ask', id: 'a' }, { type: 'confirm' }]);
+    const left = run([{ type: 'leave' }], views);
+    expect(left).toEqual({ stage: 'idle', id: null, away: { id: 'a', stage: 'views' } });
+    expect(run([{ type: 'return' }], left)).toEqual({ stage: 'views', id: 'a' });
+    // Nothing left: return does nothing; leave outside the studio does nothing.
+    expect(run([{ type: 'return' }])).toEqual(XR_EXTRACT_IDLE);
+    expect(run([{ type: 'ask', id: 'a' }, { type: 'leave' }]).stage).toBe('confirm');
+  });
+
+  it('keeps the object in the lab when the same object is extracted again (VS-T26, regression)', () => {
+    // Before: leaving the lab forgot it; extracting it again restarted at the 2D views.
+    const lab = { stage: 'lab' as const, id: 'a' };
+    const left = run([{ type: 'exitLab' }], lab);
+    expect(run([{ type: 'ask', id: 'a' }, { type: 'confirm' }], left)).toEqual(lab);
+    // Another object: a fresh extraction, the one left is forgotten.
+    expect(run([{ type: 'ask', id: 'b' }, { type: 'confirm' }], left)).toEqual({
+      stage: 'views',
+      id: 'b',
+    });
+    // Cancelling the question keeps what was left.
+    expect(run([{ type: 'ask', id: 'b' }, { type: 'cancel' }], left)).toEqual(left);
   });
 
   it('skips the views when the model is already built', () => {

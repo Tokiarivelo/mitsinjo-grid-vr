@@ -45,7 +45,13 @@ import { photoRay } from './tour/grounded';
 import { PhotoAnchored } from './tour/photo-anchored';
 import { TOUR_EYE } from './tour/tour-nav';
 import { yawPitchOf } from './tour/equirect';
-import { MENU_GUIDE_OFFSET, MENU_HELP_OFFSET, MENU_SCAN_OFFSET, miniatureSlot } from './xr-layout';
+import {
+  MENU_GUIDE_OFFSET,
+  MENU_HELP_OFFSET,
+  MENU_SCAN_OFFSET,
+  miniatureSlot,
+  STUDIO_DOOR_OFFSET,
+} from './xr-layout';
 import { createWristMenu, WRIST_BUTTON_ID } from './wrist-menu';
 import { createAimReadout } from './xr-blaster-controller';
 import { XrAimHint, XrControlLegend } from './xr-control-hints';
@@ -54,7 +60,7 @@ import { SNAP_TURN, snapshotSources, STEP_DISTANCE, type XrControlAction } from 
 import { snapTurn } from './xr-rig';
 import { newStudioWalk, StudioWalk, wheelStep } from './studio-walk';
 import type { AimHintContext } from './xr-aim-hint';
-import { WristMenuButton, WristMenuPanel } from './xr-wrist-menu';
+import { FollowGroup, WristMenuButton, WristMenuPanel } from './xr-wrist-menu';
 
 export interface VillageXRStudioProps {
   detections: ApplianceDetection[];
@@ -94,6 +100,8 @@ const NO_HOTSPOTS: [] = [];
  */
 const HELP_ON_ENTRY_MS = 12000;
 export const MENU_HELP_ID = 'holo:menu-help';
+/** « Leave the studio » / « Back to the studio » (VS-T26). */
+export const STUDIO_DOOR_ID = 'holo:studio-door';
 
 export const VillageXRStudio = memo(function VillageXRStudio({
   detections,
@@ -406,6 +414,16 @@ export const VillageXRStudio = memo(function VillageXRStudio({
     notifyEvent(t('vrHudEventMaterialized', { name: extractName }));
     extract.exitLab();
   }, [extract, findTarget, notifyEvent, t, extractName]);
+  /** Leaves the studio from any step; the step and the object wait for « Back to the studio ». */
+  const leaveStudio = useCallback(() => {
+    if (stage === 'lab') leaveLab();
+    else extract?.leave();
+  }, [stage, leaveLab, extract]);
+  const awayTarget = extract?.awayId ? findTarget(extract.awayId) : undefined;
+  const awayName = awayTarget
+    ? localLabel(awayTarget.detection, locale) || awayTarget.detection.label
+    : '';
+  const door = studio ? 'leave' : stage === 'idle' && awayTarget ? 'back' : null;
 
   // Controls (VS-T23): buttons, sticks and thumb gestures → turn, step, analyse, back, help.
   const tc = useTranslations('features.visionInsert.vrControls');
@@ -658,6 +676,27 @@ export const VillageXRStudio = memo(function VillageXRStudio({
           />
           <VillageSpatialHUD recentEvent={recentEvent} />
         </WristMenuPanel>
+      )}
+
+      {/* 5. Studio door (VS-T26): leave the studio, or go back to the step left */}
+      {extract && door && (
+        <FollowGroup offset={STUDIO_DOOR_OFFSET} name="xr-studio-door">
+          <HoloButton
+            registry={panels}
+            id={STUDIO_DOOR_ID}
+            label={
+              door === 'leave'
+                ? t('vrExtract.leaveStudio')
+                : t('vrExtract.backToStudio', { name: awayName })
+            }
+            width={0.34}
+            height={0.08}
+            position={[0, 0, 0]}
+            on={door === 'back'}
+            hovered={hoveredTargetId === STUDIO_DOOR_ID}
+            onSelect={door === 'leave' ? leaveStudio : extract.back}
+          />
+        </FollowGroup>
       )}
 
       {/* 6. Holographic Detection Targets, on the photo (they follow it while walking) */}

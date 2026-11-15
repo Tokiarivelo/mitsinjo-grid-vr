@@ -1519,7 +1519,9 @@
         "readySub": "Modifiez-le en direct dans le laboratoire 3D.",
         "outlineOnly": "Forme IA indisponible : forme contour, modifiable dans le labo.",
         "enterLab": "Entrer dans le labo 3D",
-        "later": "Plus tard"
+        "later": "Plus tard",
+        "leaveStudio": "Quitter le studio",
+        "backToStudio": "Revenir au studio · « {name} »"
       },
       "vrViews": {
         "title": "Vues 2D à valider",
