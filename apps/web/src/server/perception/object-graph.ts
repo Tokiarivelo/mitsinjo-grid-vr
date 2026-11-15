@@ -12,7 +12,7 @@ import {
 import { isChimneyStack } from './mask-chimney';
 import { isWheelPart, PART_MIRROR_MIN_Z, roofTopAbove, type MaskMapGeom } from './mask-geometry';
 import { vehicleShell } from './mask-panels';
-import { CONCEPT_KINDS } from './detail-score';
+import { anatomyMissing, CONCEPT_KINDS } from './detail-score';
 import { buildLandmarks, detailParts } from './score-shape';
 
 export interface GraphNode {
@@ -325,13 +325,15 @@ export function repairGraph(archetype: KitArchetype, recipe: ObjectRecipe): Grap
 
 /**
  * Parts seen but not built (PQ-T37): per SAM concept, masks beyond the parts that can draw it, as
- * `wheel ×1`; and every `listed` part name (the kit's visible parts, PQ-T12) no part kind draws.
- * Empty when everything seen is built. Pure.
+ * `wheel ×1`; every `listed` part name (the kit's visible parts, PQ-T12) no part kind draws; and
+ * every `anatomy` name (closed-list parts answered `present`, PQ-T46) no part draws, by exact
+ * name (« rear window »). Empty when everything seen is built. Pure.
  */
 export function notBuilt(
   recipe: ObjectRecipe,
   masks: ReadonlyArray<PartMask> = [],
-  listed: ReadonlyArray<string> = []
+  listed: ReadonlyArray<string> = [],
+  anatomy: ReadonlyArray<string> = []
 ): string[] {
   const coverage = partCoverage(recipe, masks);
   const out = coverage
@@ -340,6 +342,9 @@ export function notBuilt(
   const seen = new Set(coverage.map((c) => c.concept));
   for (const name of new Set(listed.map(listedConcept))) {
     if (name && !seen.has(name) && builtCount(recipe, name) === 0) out.push(name);
+  }
+  for (const name of anatomyMissing(anatomy, detailParts(recipe))) {
+    if (!out.includes(name)) out.push(name);
   }
   return out;
 }

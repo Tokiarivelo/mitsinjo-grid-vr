@@ -26,6 +26,81 @@ export const CONCEPT_KINDS: Readonly<Record<string, ReadonlyArray<PartKind>>> = 
   chimney: ['chimney'],
   lamp: ['light', 'head'],
 };
+
+/**
+ * Closed-inventory part name → the recipe part kinds that draw it (PQ-T46, universal pipeline E9).
+ * Kept apart from `CONCEPT_KINDS`: the inventory names the exact part (« rear window »), the SAM
+ * concepts stay coarse (« window »). Names the map lacks (mirrors, gutters, ridges: no kind draws
+ * them yet) count as missing — the honest list the loop works from.
+ */
+export const ANATOMY_KINDS: Readonly<Record<string, ReadonlyArray<PartKind>>> = {
+  windshield: ['window'],
+  'rear window': ['window'],
+  'side window': ['window'],
+  'side windows': ['window'],
+  window: ['window'],
+  windows: ['window'],
+  wheel: ['wheel'],
+  wheels: ['wheel'],
+  headlight: ['light'],
+  headlights: ['light'],
+  'tail light': ['light'],
+  'tail lights': ['light'],
+  'lamp head': ['light'],
+  head: ['head'],
+  bumper: ['bumper'],
+  bumpers: ['bumper'],
+  grille: ['grille'],
+  body: ['body'],
+  wall: ['wall'],
+  walls: ['wall'],
+  roof: ['roof'],
+  door: ['door'],
+  doors: ['door'],
+  entrance: ['door'],
+  chimney: ['chimney'],
+  plinth: ['plinth'],
+  step: ['step'],
+  steps: ['step'],
+  stairs: ['step'],
+  trunk: ['trunk'],
+  crown: ['crown'],
+  handle: ['handle'],
+  display: ['display'],
+  frame: ['frame'],
+  cell: ['cell'],
+  cells: ['cell'],
+  'solar panel': ['cell'],
+};
+
+/** Closed-list names the model answered `present` that no built part draws (PQ-T46, E9). Pure. */
+export function anatomyMissing(
+  present: ReadonlyArray<string>,
+  parts: ReadonlyArray<DetailPart>
+): string[] {
+  const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, ' ');
+  return [...new Set(present.map(norm).filter(Boolean))].filter((name) => {
+    const want = ANATOMY_KINDS[name] ?? [];
+    return !want.length || !parts.some((p) => p.kinds.some((k) => want.includes(k)));
+  });
+}
+
+/**
+ * Share of the `present` closed-list parts the model builds (PQ-T46, E9: the anatomy recall).
+ * `undefined` without an answered inventory; beside the score, never inside it (no gate yet: the
+ * full-set baseline needs every real capture re-run live, which this task does not do).
+ */
+export function anatomyRecall(
+  present: ReadonlyArray<string>,
+  parts: ReadonlyArray<DetailPart>
+): number | undefined {
+  const names = [
+    ...new Set(present.map((s) => s.trim().toLowerCase().replace(/\s+/g, ' ')).filter(Boolean)),
+  ];
+  if (!names.length) return undefined;
+  const missing = anatomyMissing(names, parts);
+  return Math.round(((names.length - missing.length) / names.length) * 100) / 100;
+}
 /** A match: centres closer than this share of the grid diagonal… */
 export const DETAIL_MATCH_DIST = 0.1;
 /** …and box areas within this ratio of each other (both ways). */
@@ -64,6 +139,8 @@ export interface DetailScore {
   worstBand?: number;
   /** Bands where the model covers under half of the outline (a blank band). */
   blankBands?: number;
+  /** Closed-list parts answered `present` that the model builds ÷ such parts (PQ-T46, E9); absent without an answered inventory. */
+  anatomyRecall?: number;
 }
 
 /** Height bands inside the outline (PQ-T36). */
@@ -218,6 +295,8 @@ export function scoreDetail(input: {
   parts: ReadonlyArray<DetailPart>;
   samParts: ReadonlyArray<GridPart>;
   concepts?: ReadonlyArray<string>;
+  /** Closed-list parts the kit answered `present` (PQ-T46); the anatomy recall needs them. */
+  anatomy?: ReadonlyArray<string>;
 }): DetailScore {
   const { render, crop, outline, parts } = input;
   const { cols, rows } = outline;
@@ -267,8 +346,10 @@ export function scoreDetail(input: {
   const interior = interiorF1(render, crop, interiorMask(outline, 2 * edgeTolerance(cols)));
   const bandRows = bandDifference(render, crop, outline);
   const worst = bandRows?.reduce((w, b, k) => (b.ssim < bandRows[w]!.ssim ? k : w), 0);
+  const anaRecall = input.anatomy?.length ? anatomyRecall(input.anatomy, parts) : undefined;
 
   return {
+    ...(anaRecall !== undefined ? { anatomyRecall: anaRecall } : {}),
     ...(sam.length ? { partRecall: round(matches.length / sam.length, 2) } : {}),
     ...(counted.length
       ? { partPrecision: round(counted.filter((k) => taken.has(k)).length / counted.length, 2) }

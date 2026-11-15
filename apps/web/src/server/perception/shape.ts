@@ -2,12 +2,17 @@ import type { ApplianceCategory } from '@mitsinjo/engine';
 import type { SceneryType } from '@/lib/vision';
 import { z } from 'zod';
 import {
+  ANATOMY,
+  ANATOMY_STATES,
   clampEstimatedDepth,
   EVIDENCE_VIEWS,
   KIT_ARCHETYPES,
+  MAX_ANATOMY_PARTS,
   MAX_VISIBLE_PARTS,
   ObjectKitSchema,
   PART_MATERIAL_KEYS,
+  type AnatomyState,
+  type KitAnatomy,
   type KitArchetype,
   type KitConfidence,
   type KitEvidence,
@@ -24,9 +29,9 @@ import { archetypeCard, skillFor } from './skills';
 
 /**
  * Version of the kit prompt (PQ-T5): bump it with every change of `SHAPE_SYSTEM_PROMPT` and keep the old
- * text in `KIT_PROMPTS`, so `make eval-shape PROMPT=1,2` compares them on the same captures.
+ * text in `KIT_PROMPTS`, so `make eval-shape PROMPT=1,4` compares them on the same captures.
  */
-export const KIT_PROMPT_VERSION = 1;
+export const KIT_PROMPT_VERSION = 4;
 
 export const SHAPE_SYSTEM_PROMPT = [
   'You describe ONE object seen on a photo crop so a SIMULATED rural microgrid editor can build a 3D model with high fidelity.',
@@ -61,6 +66,22 @@ export const KIT_PROMPT_CARDS_VERSION = 2;
  */
 export const KIT_PROMPT_FAMILY_VERSION = 3;
 
+/**
+ * Version 4 (PQ-T46): version 1 + the closed anatomy inventory of the hint's family. The list is
+ * dynamic per call, so like versions 2 and 3 it is built by `kitPrompt`, not kept in `KIT_PROMPTS`.
+ */
+export const KIT_PROMPT_ANATOMY_VERSION = 4;
+
+/** One closed-inventory line: short (PQ-T12: long prompts double the latency), list from `ANATOMY`. */
+export function anatomyLine(hint?: KitArchetype): string {
+  const parts = hint ? ANATOMY[hint] : [];
+  const states =
+    'present (you see it), hidden (it exists but you cannot see it) or absent (this object has none)';
+  return parts.length
+    ? `anatomy (required, answer first): for each of these parts say ${states}, and where it is: ${parts.join(', ')}.`
+    : `anatomy (required, answer first): for each part this family always has, say ${states}, and where it is.`;
+}
+
 /** Kit prompt version of a call that named none: the family-card one when that family is switched on. */
 export function kitVersionFor(
   hint: KitArchetype | undefined,
@@ -78,10 +99,12 @@ export function kitPrompt(version: number = KIT_PROMPT_VERSION, hint?: KitArchet
     const card = archetypeCard(hint);
     return card ? `${SHAPE_SYSTEM_PROMPT}\n\n${card}` : SHAPE_SYSTEM_PROMPT;
   }
+  if (version === KIT_PROMPT_ANATOMY_VERSION)
+    return `${SHAPE_SYSTEM_PROMPT}\n\n${anatomyLine(hint)}`;
   const text = KIT_PROMPTS[version];
   if (!text)
     throw new Error(
-      `unknown kit prompt version ${version} (kept: ${[...Object.keys(KIT_PROMPTS), KIT_PROMPT_CARDS_VERSION, KIT_PROMPT_FAMILY_VERSION].join(', ')})`
+      `unknown kit prompt version ${version} (kept: ${[...Object.keys(KIT_PROMPTS), KIT_PROMPT_CARDS_VERSION, KIT_PROMPT_FAMILY_VERSION, KIT_PROMPT_ANATOMY_VERSION].join(', ')})`
     );
   return text;
 }
@@ -162,6 +185,21 @@ export const SHAPE_JSON_SCHEMA = {
   },
 };
 
+/** The closed inventory answers (PQ-T46): one state per part, before the decision (E5). */
+const ANATOMY_JSON = {
+  type: 'array',
+  items: {
+    type: 'object',
+    properties: {
+      part: { type: 'string' },
+      state: { type: 'string', enum: [...ANATOMY_STATES] },
+      where: { type: 'string' },
+    },
+    required: ['part', 'state'],
+  },
+  maxItems: MAX_ANATOMY_PARTS,
+};
+
 /**
  * Schema of kit prompt 2 (PQ-T12): `evidence` first, so the answer is written in the order of the Look card
  * (look, then answer), and `confidence`. Kept apart from `SHAPE_JSON_SCHEMA`: under prompt 1 the model is
@@ -184,6 +222,7 @@ export const SHAPE_JSON_SCHEMA_CARDS = {
           unsure: { type: 'array', items: { type: 'string' } },
         },
       },
+      anatomy: ANATOMY_JSON,
       ...SHAPE_JSON_SCHEMA.schema.properties,
       confidence: {
         type: 'object',
@@ -198,9 +237,28 @@ export const SHAPE_JSON_SCHEMA_CARDS = {
   },
 };
 
+/**
+ * Schema of kit prompts 3 and 4 (PQ-T46): the base fields with the closed inventory answered first.
+ * Prompt 3 needs it too: its family card carries the Anatomy line since PQ-T46.
+ */
+export const SHAPE_JSON_SCHEMA_ANATOMY = {
+  ...SHAPE_JSON_SCHEMA,
+  schema: {
+    ...SHAPE_JSON_SCHEMA.schema,
+    properties: {
+      anatomy: ANATOMY_JSON,
+      ...SHAPE_JSON_SCHEMA.schema.properties,
+    },
+  },
+};
+
 /** The JSON schema sent with kit prompt `version`. */
 export const kitJsonSchema = (version: number = KIT_PROMPT_VERSION) =>
-  version === KIT_PROMPT_CARDS_VERSION ? SHAPE_JSON_SCHEMA_CARDS : SHAPE_JSON_SCHEMA;
+  version === KIT_PROMPT_CARDS_VERSION
+    ? SHAPE_JSON_SCHEMA_CARDS
+    : version === KIT_PROMPT_FAMILY_VERSION || version === KIT_PROMPT_ANATOMY_VERSION
+      ? SHAPE_JSON_SCHEMA_ANATOMY
+      : SHAPE_JSON_SCHEMA;
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 const NEUTRAL = '#9aa3ad';
@@ -215,6 +273,7 @@ const ReplySchema = z.object({
   partMaterials: z.record(z.string(), z.unknown()).optional(),
   details: z.record(z.string(), z.unknown()).optional(),
   evidence: z.unknown().optional(),
+  anatomy: z.unknown().optional(),
   confidence: z.unknown().optional(),
 });
 
@@ -255,6 +314,37 @@ export function parseEvidence(raw: unknown): KitEvidence | undefined {
   return Object.keys(out).length ? out : undefined;
 }
 
+/**
+ * Reads `anatomy` leniently (PQ-T46): entries without a part name or with an unknown state are
+ * dropped, names are lowercased, repeats keep the first answer, the list is cut at
+ * `MAX_ANATOMY_PARTS`. `undefined` when nothing usable is left (answers of prompt 1).
+ */
+export function parseAnatomy(raw: unknown): KitAnatomy | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const out: KitAnatomy = [];
+  const seen = new Set<string>();
+  for (const e of raw) {
+    if (out.length >= MAX_ANATOMY_PARTS) break;
+    if (!e || typeof e !== 'object' || Array.isArray(e)) continue;
+    const o = e as Record<string, unknown>;
+    if (typeof o.part !== 'string') continue;
+    const part = o.part.trim().toLowerCase().replace(/\s+/g, ' ').slice(0, 32);
+    if (!part || seen.has(part)) continue;
+    if (typeof o.state !== 'string') continue;
+    const state = o.state.trim().toLowerCase() as AnatomyState;
+    if (!(ANATOMY_STATES as readonly string[]).includes(state)) continue;
+    seen.add(part);
+    out.push({
+      part,
+      state,
+      ...(typeof o.where === 'string' && o.where.trim()
+        ? { where: o.where.trim().replace(/\s+/g, ' ').slice(0, 80) }
+        : {}),
+    });
+  }
+  return out.length ? out : undefined;
+}
+
 /** `confidence` of the answer, each value clamped to 0..1; `undefined` when none is a number. */
 export function parseKitConfidence(raw: unknown): KitConfidence | undefined {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
@@ -282,6 +372,19 @@ export const CRITIC_SYSTEM_PROMPT = [
 
 /** Version 2 (PQ-T14): Base + Critic card + the family's card, for the 2 × 2 sheet. Built per call. */
 export const CRITIC_PROMPT_CARDS_VERSION = 2;
+/** Version 3 (PQ-T52, E11): version 1 + the closed anatomy list; the critic names missing parts. */
+export const CRITIC_ANATOMY_VERSION = 3;
+
+/**
+ * One closed-inventory line for the critic (PQ-T52): the §5 ids it may name in `missingParts`.
+ * Generic without a family (the parser then keeps nothing: ids are verified per family).
+ */
+export function criticAnatomyLine(archetype?: KitArchetype): string {
+  const ids = archetype ? ANATOMY[archetype] : [];
+  return ids.length
+    ? `Also list, in "missingParts", the parts of this closed list that show on the photo but are missing or wrong in the model, using exactly these ids: ${ids.join(', ')}.`
+    : 'Also list, in "missingParts", the closed-list parts that show on the photo but are missing or wrong in the model.';
+}
 
 /** The critic system prompt of `version`; throws on an unknown one. */
 export function criticPrompt(
@@ -289,6 +392,8 @@ export function criticPrompt(
   archetype?: KitArchetype
 ): string {
   if (version === CRITIC_PROMPT_CARDS_VERSION) return skillFor('critic', archetype).text;
+  if (version === CRITIC_ANATOMY_VERSION)
+    return `${CRITIC_SYSTEM_PROMPT} ${criticAnatomyLine(archetype)}`;
   if (version === CRITIC_PROMPT_VERSION) return CRITIC_SYSTEM_PROMPT;
   throw new Error(`unknown critic prompt version ${version}`);
 }
@@ -367,7 +472,7 @@ export const CRITIC_JSON_SCHEMA = {
   },
 };
 
-/** The critic schema of version 2: the patch fields plus `reasons`. */
+/** The critic schema of version 2: the patch fields plus `reasons` and `missingParts` (PQ-T52). */
 export const criticJsonSchema = (version: number = CRITIC_PROMPT_VERSION) =>
   version === CRITIC_PROMPT_CARDS_VERSION
     ? {
@@ -377,10 +482,22 @@ export const criticJsonSchema = (version: number = CRITIC_PROMPT_VERSION) =>
           properties: {
             ...CRITIC_JSON_SCHEMA.schema.properties,
             reasons: { type: 'array', items: { type: 'string' } },
+            missingParts: { type: 'array', items: { type: 'string' } },
           },
         },
       }
-    : CRITIC_JSON_SCHEMA;
+    : version === CRITIC_ANATOMY_VERSION
+      ? {
+          name: CRITIC_JSON_SCHEMA.name,
+          schema: {
+            ...CRITIC_JSON_SCHEMA.schema,
+            properties: {
+              ...CRITIC_JSON_SCHEMA.schema.properties,
+              missingParts: { type: 'array', items: { type: 'string' } },
+            },
+          },
+        }
+      : CRITIC_JSON_SCHEMA;
 
 /** User turn: current kit JSON + the score numbers the patch must raise. */
 export function criticQuestion(
@@ -395,12 +512,43 @@ export function criticQuestion(
       `Answer the JSON patch of the kit (at most ${CRITIC_MAX_FIELDS} fields) and "reasons".`
     );
   }
+  // Version 3 asks the version-1 question: the closed ids ride in the system prompt, like cards do.
   return (
     `Left is the photo of the selected object, right is our 3D model seen from the same view. ` +
     `Current kit: ${JSON.stringify(kit)}. ` +
     `Scores: ${score.score}/100 (silhouette IoU ${score.iou}, edge F1 ${score.edgeF1}, colour ΔE ${score.deltaE}). ` +
     `What differs (shape, sub-type, counts, proportions, colours of each part)? Answer only the JSON patch of the kit.`
   );
+}
+
+/** Most anatomy ids kept per critic answer (like the views check's `MAX_MISSING`). */
+export const MAX_CRITIC_MISSING = 4;
+
+/**
+ * The critic's `missingParts` (PQ-T52, version 3): kept only when the id is on the family's
+ * closed list (`ANATOMY`), lowercased and deduplicated; anything else is the critic guessing
+ * outside the inventory and is dropped. Empty without a family. Never throws.
+ */
+export function parseMissingParts(content: string, archetype?: KitArchetype): string[] {
+  try {
+    if (!archetype) return [];
+    const raw = (JSON.parse(content) as { missingParts?: unknown }).missingParts;
+    if (!Array.isArray(raw)) return [];
+    const ids = new Set(ANATOMY[archetype].map((s) => s.toLowerCase()));
+    const out: string[] = [];
+    const seen = new Set<string>();
+    for (const m of raw) {
+      if (typeof m !== 'string') continue;
+      const name = m.trim().toLowerCase().replace(/\s+/g, ' ');
+      if (!name || !ids.has(name) || seen.has(name)) continue;
+      seen.add(name);
+      out.push(name);
+      if (out.length >= MAX_CRITIC_MISSING) break;
+    }
+    return out;
+  } catch {
+    return [];
+  }
 }
 
 /**
@@ -569,9 +717,11 @@ export function parseKit(content: string, fallback: KitArchetype = 'other'): Obj
     if (m) partMaterials[k] = m;
   }
   const evidence = parseEvidence(reply.data.evidence);
+  const anatomy = parseAnatomy(reply.data.anatomy);
   const kitConfidence = parseKitConfidence(reply.data.confidence);
   const kit = ObjectKitSchema.safeParse({
     ...(evidence ? { evidence } : {}),
+    ...(anatomy ? { anatomy } : {}),
     ...(kitConfidence ? { confidence: kitConfidence } : {}),
     archetype,
     ...(subtype ? { subtype } : {}),

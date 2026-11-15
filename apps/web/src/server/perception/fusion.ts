@@ -3,7 +3,7 @@
  * the final value = prior + c·(measured − prior). Counts are discrete: the measurement wins at c ≥ ½.
  * Pure and deterministic.
  */
-import type { ObjectKit } from '@/lib/object-kit';
+import type { AnatomyState, ObjectKit } from '@/lib/object-kit';
 import type { ObjectRecipe } from '@/lib/object-shape';
 import { linearToHex, MIN_MEASURED_PIXELS, srgbToLinear } from './color-measure';
 
@@ -78,6 +78,24 @@ export function modelDoubts(
 /** A measured confidence raised toward 1 when the model doubts that field; 0 stays 0 (nothing measured). */
 export const ledByMeasurement = (c: number, doubted: boolean): number =>
   c > 0 && doubted ? round2(c + (1 - c) * UNSURE_LEAD) : c;
+
+type KitAnatomy = Pick<ObjectKit, 'anatomy'>;
+
+const normPart = (part: string) => part.trim().toLowerCase().replace(/\s+/g, ' ');
+
+/**
+ * State the kit's closed inventory gives `part` (PQ-T46, universal pipeline §5: anatomy is evidence,
+ * like `visibleParts`). `undefined` when the kit answered no inventory (prompts before 4).
+ */
+export function anatomyState(kit: KitAnatomy | undefined, part: string): AnatomyState | undefined {
+  const want = normPart(part);
+  return kit?.anatomy?.find((a) => normPart(a.part) === want)?.state;
+}
+
+/** Closed-list parts the kit saw (PQ-T46): they join `notBuilt` / coverage like `visibleParts`. */
+export function presentAnatomy(kit: KitAnatomy | undefined): string[] {
+  return (kit?.anatomy ?? []).filter((a) => a.state === 'present').map((a) => normPart(a.part));
+}
 
 export const mixNumber = (measured: number, prior: number, c: number) =>
   prior + clamp01(c) * (measured - prior);

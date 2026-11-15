@@ -2,7 +2,15 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ObjectRecipe, RecipePart } from '@/lib/object-shape';
 vi.mock('server-only', () => ({}));
-import { bandDifference, degenerateView, scoreDetail, ssim, type GridPart } from '../detail-score';
+import {
+  anatomyMissing,
+  anatomyRecall,
+  bandDifference,
+  degenerateView,
+  scoreDetail,
+  ssim,
+  type GridPart,
+} from '../detail-score';
 import { kitToRecipe } from '@/lib/object-kit';
 import { iou } from '../silhouette-fit';
 import { renderFlat, type FlatRender } from '../flat-render';
@@ -252,5 +260,57 @@ describe('degenerate view (PQ-T36)', () => {
     const v = degenerateView(recipe([BODY, floating]), 'vehicle');
     expect(v.pieces45).toBeGreaterThan(1);
     expect(v.fail).toBe('detached');
+  });
+});
+
+describe('anatomy recall (PQ-T46)', () => {
+  // TRUTH: body, two wheels, one window, one door.
+  const parts = () => detailParts(recipe(TRUTH));
+
+  it('counts the closed-list parts answered present that the model builds', () => {
+    expect(anatomyRecall(['wheels', 'rear window', 'door'], parts())).toBe(1);
+    expect(anatomyRecall(['wheels', 'grille'], parts())).toBe(0.5);
+    expect(anatomyRecall(['Side Mirrors', 'wheels', 'wheels'], parts())).toBe(0.5);
+    expect(anatomyRecall([], parts())).toBeUndefined();
+  });
+
+  it('names the missing parts by their exact closed-list name', () => {
+    expect(anatomyMissing(['wheels', 'grille', 'side mirrors'], parts())).toEqual([
+      'grille',
+      'side mirrors',
+    ]);
+    expect(anatomyMissing(['windshield', 'tail lights'], parts())).toEqual(['tail lights']);
+  });
+
+  it('scoreDetail reports it beside the SAM numbers, absent without an inventory', () => {
+    const d = scoreDetail({
+      render: photo,
+      crop,
+      outline: photo.mask,
+      parts: parts(),
+      samParts: SAM,
+      anatomy: ['wheels', 'grille'],
+    });
+    expect(d.anatomyRecall).toBe(0.5);
+    expect(d.partRecall).toBe(1);
+    expect(detail(TRUTH).anatomyRecall).toBeUndefined();
+  });
+
+  it('a template car builds its rear window through the generic map (E5 success)', () => {
+    const car = kitToRecipe({
+      archetype: 'vehicle',
+      subtype: 'sedan',
+      proportions: { w: 1, h: 0.4, d: 0.45 },
+      colors: { main: '#a33327', secondary: '#cfd6dd', accent: '#1c1c1e' },
+    });
+    const names = [
+      'windshield',
+      'rear window',
+      'side windows',
+      'wheels',
+      'headlights',
+      'tail lights',
+    ];
+    expect(anatomyMissing(names, detailParts(car))).toEqual([]);
   });
 });

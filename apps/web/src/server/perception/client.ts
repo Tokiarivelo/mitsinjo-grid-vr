@@ -20,6 +20,7 @@ import type {
   CriticResult,
   JudgeResult,
   DetectionResult,
+  PartAskResult,
   PerceptionSource,
   SegmentResult,
   ShapeResult,
@@ -155,6 +156,15 @@ export class PerceptionClient {
     opts?: CriticOptions
   ): Promise<CriticResult> {
     return this.run('criticizeShape', (b) => b.criticizeShape(imageUrl, question, signal, opts));
+  }
+
+  /** Short per-part question (PQ-T52); a backend without it answers null (no questions). */
+  askPart(imageUrl: string, question: string, signal?: AbortSignal): Promise<PartAskResult> {
+    return this.run('askPart', (b) =>
+      b.askPart
+        ? b.askPart(imageUrl, question, signal)
+        : Promise.resolve({ model: b.name, usage: {}, result: { answer: null } })
+    );
   }
 
   judgeShape(imageUrl: string, question: string, signal?: AbortSignal): Promise<JudgeResult> {

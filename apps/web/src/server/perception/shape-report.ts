@@ -11,6 +11,7 @@ import type { ElevationScore } from './elevation-score';
 import { renderFlat, THREE_QUARTER, type FlatRender } from './flat-render';
 import type { ModelScore, RgbGrid } from './model-score';
 import { checkConstraints, notBuilt } from './object-graph';
+import { presentAnatomy } from './fusion';
 import { readCapture, rescoreCapture } from './shape-capture';
 
 /**
@@ -86,11 +87,11 @@ export function worstMetric(s: ModelScore): { metric: Metric; gap: number } {
   return { metric, gap: gaps[metric] };
 }
 
-/** Detail cells (PQ-T2): part recall, precision, interior edge F1, part ΔE with ✓ / ✗ against `STOP_DETAIL`; « — » when not measured. */
+/** Detail cells (PQ-T2): part recall, precision, interior edge F1, part ΔE with ✓ / ✗ against `STOP_DETAIL`, then the anatomy recall (PQ-T46, no gate yet); « — » when not measured. */
 function detailCells(s: ModelScore): string {
   const d = s.detail ?? {};
   const g = STOP_DETAIL;
-  return (
+  const gated = (
     [
       [d.partRecall, (v: number) => v >= g.partRecall],
       [d.partPrecision, (v: number) => v >= g.partPrecision],
@@ -100,6 +101,7 @@ function detailCells(s: ModelScore): string {
   )
     .map(([v, pass]) => (v === undefined ? '—' : `${v} ${ok(pass(v))}`))
     .join(' | ');
+  return `${gated} | ${d.anatomyRecall === undefined ? '—' : d.anatomyRecall}`;
 }
 
 /** Worst height band (PQ-T36): `SSIM@band`, ✗ with the count when bands are blank. */
@@ -122,8 +124,8 @@ const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.l
 const ok = (pass: boolean) => (pass ? '✓' : '✗');
 
 const HEADER = [
-  '| Object | Score | IoU | Edge F1 | ΔE | Recall | Prec | Int F1 | Part ΔE | Band | Views | Not built | Parts | ms | Viol | Status | Worst |',
-  '| ------ | ----- | --- | ------- | -- | ------ | ---- | ------ | ------- | ---- | ----- | --------- | ----- | -- | ---- | ------ | ----- |',
+  '| Object | Score | IoU | Edge F1 | ΔE | Recall | Prec | Int F1 | Part ΔE | Ana | Band | Views | Not built | Parts | ms | Viol | Status | Worst |',
+  '| ------ | ----- | --- | ------- | -- | ------ | ---- | ------ | ------- | --- | ---- | ----- | --------- | ----- | -- | ---- | ------ | ----- |',
 ];
 
 /** One table: a row per object and the means. */
@@ -139,9 +141,13 @@ function scoreTable(rows: ReadonlyArray<ReportRow>): string[] {
     );
   }
   const avg = (f: (s: ModelScore) => number) => mean(rows.map((r) => f(r.score)));
+  const avgOpt = (f: (s: ModelScore) => number | undefined) => {
+    const xs = rows.map((r) => f(r.score)).filter((v): v is number => v !== undefined);
+    return xs.length ? (xs.reduce((a, b) => a + b, 0) / xs.length).toFixed(2) : '';
+  };
   lines.push(
     `| **mean** | ${Math.round(avg((s) => s.score))} | ${avg((s) => s.iou).toFixed(2)} | ` +
-      `${avg((s) => s.edgeF1).toFixed(2)} | ${avg((s) => s.deltaE).toFixed(1)} | | | | | | | | | | | | |`,
+      `${avg((s) => s.edgeF1).toFixed(2)} | ${avg((s) => s.deltaE).toFixed(1)} | | | | | ${avgOpt((s) => s.detail?.anatomyRecall)} | | | | | | | | |`,
     ''
   );
   return lines;
@@ -178,6 +184,7 @@ export function reportMarkdown(rows: ReportRow[], date: string, real?: RealSecti
     '',
     `Stop criteria: IoU ≥ ${STOP.iou} · edge F1 ≥ ${STOP.edgeF1} · ΔE ≤ ${STOP.deltaE}. Sheet: \`contact-sheet.png\` (photo | flat | ¾).`,
     `Detail (PQ-T6, weighted into the score when SAM part masks exist): recall ≥ ${STOP_DETAIL.partRecall} · precision ≥ ${STOP_DETAIL.partPrecision} · interior edge F1 ≥ ${STOP_DETAIL.interiorEdgeF1} · part ΔE ≤ ${STOP_DETAIL.partDeltaE}; « — » when not measured.`,
+    'Ana (PQ-T46): share of the closed-list parts answered `present` the model builds (no gate yet).',
     'Band (PQ-T36): SSIM of the worst of 8 height bands inside the outline @ band (0 = top), blank bands ✗. Views: side ÷ front silhouette, ✗ thin (< 0.15) or detached at 45°. Not built (PQ-T37): SAM parts the model lacks, ✓ none.',
     '',
     '## Synthetic (drawn streets)',
@@ -209,7 +216,9 @@ export function reportRow(
   recipe: ObjectRecipe,
   archetype: KitArchetype,
   ms?: number,
-  masks?: ReadonlyArray<PartMask>
+  masks?: ReadonlyArray<PartMask>,
+  /** Closed-list parts answered `present` (PQ-T46); their misses show without SAM masks. */
+  anatomy?: ReadonlyArray<string>
 ): ReportRow {
   const statusCounts = { measured: 0, estimated: 0, inferred: 0, unknown: 0 };
   for (const p of recipe.parts) statusCounts[p.status ?? 'unknown'] += 1;
@@ -221,7 +230,9 @@ export function reportRow(
     violations: checkConstraints(archetype, recipe),
     statusCounts,
     view: degenerateView(recipe, archetype),
-    ...(masks?.length ? { notBuilt: notBuilt(recipe, masks) } : {}),
+    ...(masks?.length || anatomy?.length
+      ? { notBuilt: notBuilt(recipe, masks ?? [], [], anatomy ?? []) }
+      : {}),
   };
 }
 
@@ -258,7 +269,15 @@ export async function scoreRealSet(
     }
     const name = c.hard ? `${c.id} (${c.hard})` : c.id;
     scored.push({
-      row: reportRow(name, s.score, capture.recipe, capture.kit.archetype, undefined, s.masks),
+      row: reportRow(
+        name,
+        s.score,
+        capture.recipe,
+        capture.kit.archetype,
+        undefined,
+        s.masks,
+        presentAnatomy(capture.kit)
+      ),
       sheet: {
         name: `${name} — ${s.score.score}`,
         crop: s.crop,

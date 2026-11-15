@@ -429,6 +429,57 @@ describe('assembly details (PQ-T3): the judge sees what the viewer shows', () =>
     expect(pixels(grown)).toBeGreaterThan(0);
   });
 
+  it('a loft replaces its host and an inset darkens its face in the judge (PQ-T51)', () => {
+    const hull = part({
+      size: [1, 0.48, 0.9],
+      front: true,
+      kind: 'body',
+      color: '#b03a2e',
+      generator: {
+        op: 'loft',
+        seed: 3,
+        axis: 'x',
+        stations: [
+          { width: 0.7, height: 0.3, radius: 0 },
+          { width: 0.9, height: 0.48, radius: 0 },
+          { width: 0.8, height: 0.4, radius: 0 },
+        ],
+      },
+    });
+    const solid = renderFlat(recipe([{ ...hull, generator: undefined }]), 1, N, N);
+    const grown = renderFlat(recipe([hull]), 1, N, N);
+    const diff = (a: ReturnType<typeof renderFlat>, b: ReturnType<typeof renderFlat>) =>
+      a.rgb.reduce((n, v, i) => n + (v !== b.rgb[i] ? 1 : 0), 0);
+    // Stepped nose and tail: the silhouette changes, the body stays visible.
+    expect(diff(grown, solid)).toBeGreaterThan(0);
+    expect(grown.mask.data.reduce((a, b) => a + b, 0)).toBeGreaterThan(0);
+    const pocketed = renderFlat(
+      recipe([
+        {
+          ...hull,
+          generator: {
+            op: 'inset',
+            seed: 11,
+            face: 'front',
+            u: 0.5,
+            v: 0.5,
+            w: 0.4,
+            h: 0.4,
+            depth: -0.05,
+          },
+        },
+      ]),
+      1,
+      N,
+      N
+    );
+    // A hollow on the front face: the wall keeps its silhouette, its face darkens.
+    expect(diff(pocketed, solid)).toBeGreaterThan(0);
+    expect(pocketed.mask.data.reduce((a, b) => a + b, 0)).toBe(
+      solid.mask.data.reduce((a, b) => a + b, 0)
+    );
+  });
+
   it('the heaviest detailed model (golden facade house) renders within budget', () => {
     const front = measureElevation(GOLDEN_ELEVATIONS[0]!.masks)!;
     const house = fitRecipe(

@@ -7,6 +7,7 @@ import type {
   CodeResult,
   CriticResult,
   JudgeResult,
+  PartAskResult,
   ViewsCheckResult,
   ShapeOpsResult,
   DetectionResult,
@@ -91,6 +92,16 @@ export interface PerceptionBackend {
     opts?: CriticOptions
   ): Promise<PerceptionCall<CriticResult>>;
   /**
+   * Short per-part question (PQ-T52, E9/E11): `imageUrl` is the zone crop, `question` names one
+   * part. One Spark call at `low` effort; null answer when unusable. Optional: no per-part
+   * questions without it.
+   */
+  askPart?(
+    imageUrl: string,
+    question: string,
+    signal?: AbortSignal
+  ): Promise<PerceptionCall<PartAskResult>>;
+  /**
    * Rubric judge (PQ-T4): `imageUrl` is photo | model | model ¾, `question` names the object.
    * Asked of `META_JUDGE_MODEL` (Muse Wonder); offline and background only.
    */
@@ -100,8 +111,8 @@ export interface PerceptionBackend {
     signal?: AbortSignal
   ): Promise<PerceptionCall<JudgeResult>>;
   /**
-   * AI check of a views model (PV-H): `imageUrl` is the 2 × 2 drawings | model sheet, `question`
-   * the label and silhouette match. One vision call; null check when unusable.
+   * AI check of a views model (PV-H): `imageUrl` is the three-view drawings | model sheet,
+   * `question` the label and silhouette match. One vision call; null check when unusable.
    */
   checkViews(
     imageUrl: string,

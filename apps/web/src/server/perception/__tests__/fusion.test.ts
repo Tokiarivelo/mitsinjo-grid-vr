@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ObjectRecipe } from '@/lib/object-shape';
 import {
+  anatomyState,
   confidence,
   ledByMeasurement,
   mixColor,
@@ -9,6 +10,7 @@ import {
   mixRecipe,
   modelDoubts,
   pickCount,
+  presentAnatomy,
 } from '../fusion';
 
 describe('confidence (PF-T7)', () => {
@@ -97,5 +99,29 @@ describe('fields the model doubts are led by the measurement (PQ-T12)', () => {
     const plain = mixColor('#ff0000', '#0000ff', 0.5);
     const led = mixColor('#ff0000', '#0000ff', ledByMeasurement(0.5, true));
     expect(parseInt(led.slice(1, 3), 16)).toBeGreaterThan(parseInt(plain.slice(1, 3), 16));
+  });
+});
+
+describe('closed inventory as evidence (PQ-T46)', () => {
+  const kit = {
+    anatomy: [
+      { part: 'rear window', state: 'present' as const },
+      { part: 'plate', state: 'hidden' as const },
+    ],
+  };
+
+  it('reads the state of one closed-list part, case-insensitively', () => {
+    expect(anatomyState(kit, 'rear window')).toBe('present');
+    expect(anatomyState(kit, 'Rear  Window')).toBe('present');
+    expect(anatomyState(kit, 'plate')).toBe('hidden');
+    expect(anatomyState(kit, 'grille')).toBeUndefined();
+    expect(anatomyState(undefined, 'wheel')).toBeUndefined();
+    expect(anatomyState({}, 'wheel')).toBeUndefined();
+  });
+
+  it('lists the seen parts for notBuilt and coverage', () => {
+    expect(presentAnatomy(kit)).toEqual(['rear window']);
+    expect(presentAnatomy(undefined)).toEqual([]);
+    expect(presentAnatomy({})).toEqual([]);
   });
 });

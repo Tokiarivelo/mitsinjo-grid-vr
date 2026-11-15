@@ -101,7 +101,8 @@ describe('evalCaptures (PR-3.1)', () => {
     expect(parsePromptVersions('1,2')).toEqual([1, 2]);
     expect(parsePromptVersions('v2, 2 ,x')).toEqual([2]);
     expect(parsePromptVersions(undefined)).toEqual([KIT_PROMPT_VERSION]);
-    expect(kitPrompt(KIT_PROMPT_VERSION)).toBe(SHAPE_SYSTEM_PROMPT);
+    expect(kitPrompt(1)).toBe(SHAPE_SYSTEM_PROMPT);
+    expect(kitPrompt(KIT_PROMPT_VERSION).startsWith(SHAPE_SYSTEM_PROMPT)).toBe(true);
     expect(() => kitPrompt(99)).toThrow(/unknown kit prompt version 99/);
   });
 });

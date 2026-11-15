@@ -115,7 +115,30 @@ describe('MetaPerceptionBackend (shapes recorded from real calls, 2026-10-30)', 
     const out = await backend.criticizeShape('data:image/png;base64,AA', 'Patch?');
     const body = JSON.parse(lastRequest(fetchMock).init.body as string);
     expect(body.response_format.json_schema.name).toBe('KitPatch');
-    expect(out.result).toEqual({ patch: { subtype: 'sedan', details: { wheels: 4 } } });
+    expect(out.result).toEqual({
+      patch: { subtype: 'sedan', details: { wheels: 4 } },
+      missingParts: [],
+    });
+  });
+
+  it('asks one part with the PartAnswer schema at low effort (PQ-T52)', async () => {
+    const fetchMock = respond({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({ present: true, where: 'lower left', color: '#111111' }),
+          },
+        },
+      ],
+      usage: { prompt_tokens: 100, completion_tokens: 20 },
+    });
+    const out = await backend.askPart('data:image/jpeg;base64,AA', 'Is there a wheel?');
+    const body = JSON.parse(lastRequest(fetchMock).init.body as string);
+    expect(body.response_format.json_schema.name).toBe('PartAnswer');
+    expect(body.reasoning_effort).toBe('low');
+    expect(out.result).toEqual({
+      answer: { present: true, where: 'lower left', color: '#111111' },
+    });
   });
 
   it('each call sends its configured reasoning effort (PQ-T17)', async () => {

@@ -1,7 +1,11 @@
 import {
+  AXIS,
+  facePoint,
   MIN_EXTENT,
   type BranchParams,
   type DrapeParams,
+  type InsetParams,
+  type LoftParams,
   type RecipePart,
   type ScatterParams,
   type SweepParams,
@@ -9,12 +13,13 @@ import {
 import { mulberry32 } from './seeded-random';
 
 /**
- * Organic generators (PQ-T50 §7.3): seeded, bounded growth of trunks, limbs, leaves and strands.
- * Every function is pure: same params, same parts, on every platform (no `Math.random`). A part
- * that carries `generator` expands through `expandGenerators` — inside `expandAssemblies`, so the
- * viewer and the judge render grow the identical parts, with no server twin to drift. Grown parts
- * are plain boxes and cylinders in the host's colour: the fit reads the host box, the renders see
- * the growth. Growth is clamped into the host box plus `GROW_MARGIN`.
+ * Generators (PQ-T50/51 §7.3): seeded, bounded growth of trunks, limbs, leaves, strands, lofted
+ * bodies and face pockets. Every function is pure: same params, same parts, on every platform
+ * (no `Math.random`). A part that carries `generator` expands through `expandGenerators` —
+ * inside `expandAssemblies`, so the viewer and the judge render grow the identical parts, with
+ * no server twin to drift. Grown parts are plain boxes and cylinders in the host's look: the fit
+ * reads the host box, the renders see the growth. Growth is clamped into the host box plus
+ * `GROW_MARGIN`.
  */
 
 type Vec3 = [number, number, number];
@@ -248,6 +253,92 @@ export function drapeStrands(host: RecipePart, p: DrapeParams): RecipePart[] {
   return out;
 }
 
+/**
+ * Lofted body (§7.3 `loft`, PQ-T51): the stations spread evenly along the host's extent on the
+ * axis and each pair grows one segment with the averaged cross section (a 4-station car body =
+ * nose, mid, tail steps). Width runs across the host on the horizontal cross axis, height rises
+ * from the host's bottom — except on a vertical loft, where width × height sections stack
+ * upward (bottles, fuselages standing). Round stations (radius ≥ 0.4 of the smaller side) grow
+ * elliptical cylinders, the rest boxes; segments overlap 6 % to fuse. Deterministic: the seed
+ * is carried, never read, like `sweep`.
+ */
+export function loftBody(host: RecipePart, p: LoftParams): RecipePart[] {
+  const look = lookOf(host, p);
+  const a = AXIS[p.axis];
+  const n = p.stations.length;
+  const lo = host.at[a] - host.size[a] / 2;
+  const spacing = host.size[a] / (n - 1);
+  // Cross axes: width across, height up from the host's bottom (centred on a vertical loft).
+  const wAxis = (p.axis === 'x' ? 2 : 0) as 0 | 2;
+  const hAxis = (p.axis === 'y' ? 2 : 1) as 1 | 2;
+  const baseline = host.at[1] - host.size[1] / 2;
+  const out: RecipePart[] = [];
+  for (let i = 0; i < n - 1; i++) {
+    const s0 = p.stations[i]!;
+    const s1 = p.stations[i + 1]!;
+    const w = (s0.width + s1.width) / 2;
+    const h = (s0.height + s1.height) / 2;
+    const r = (s0.radius + s1.radius) / 2;
+    const at = [...host.at] as Vec3;
+    at[a] = lo + spacing * (i + 0.5);
+    at[wAxis] = host.at[wAxis];
+    at[hAxis] = p.axis === 'y' ? host.at[hAxis] : baseline + h / 2;
+    const size = [0, 0, 0] as Vec3;
+    size[a] = spacing * 1.06;
+    size[wAxis] = w;
+    size[hAxis] = h;
+    if (r >= 0.4 * Math.min(w, h)) {
+      out.push(grownPart('cylinder', at, size, look, p.axis));
+    } else {
+      out.push(grownPart('box', at, size, look));
+    }
+  }
+  return out;
+}
+
+/** Shade of a hollow pocket (a recess reads dark, never black). */
+export const INSET_HOLLOW_SHADE = 0.55;
+
+/** Scale a `#rrggbb` colour by `f`, channel by channel. */
+function darken(hex: string, f: number): string {
+  const hx = (v: number) => Math.round(v).toString(16).padStart(2, '0');
+  const ch = (i: number) => parseInt(hex.slice(i, i + 2), 16) * f;
+  return `#${hx(ch(1))}${hx(ch(3))}${hx(ch(5))}`;
+}
+
+/**
+ * Rectangular pocket on a host face (§7.3 `inset`, PQ-T51): one slab on the face at (u, v),
+ * w × h shares of it (the `attach` / `cut` convention, clamped to fit). Hollows (depth < 0)
+ * read as dark recesses — the explicit colour, else the host darkened; reliefs (depth > 0)
+ * stand proud in the host's look. The slab fuses into the host, and a hollow stays 0.004 proud
+ * so its colour reads without z-fighting. Additive: `expandGenerators` keeps the host, so a
+ * wall renders with its pocket, not instead of it.
+ */
+export function insetPocket(host: RecipePart, p: InsetParams): RecipePart[] {
+  const cw = Math.min(p.w, 1);
+  const ch = Math.min(p.h, 1);
+  const cu = Math.min(Math.max(p.u - cw / 2, 0), 1 - cw) + cw / 2;
+  const cv = Math.min(Math.max(p.v - ch / 2, 0), 1 - ch) + ch / 2;
+  const { at, ax, vAxis } = facePoint(host, p.face, cu, cv);
+  const size = [0, 0, 0] as Vec3;
+  size[ax.u] = cw * host.size[ax.u];
+  size[vAxis] = ch * host.size[vAxis];
+  const facePlane = host.at[ax.n] + (ax.sign * host.size[ax.n]) / 2;
+  // Into the host (fuse) and out of it (proud): reliefs by depth, hollows to a dark skin.
+  const c1 = facePlane - ax.sign * (p.depth >= 0 ? 0.01 : -p.depth);
+  const c2 = facePlane + ax.sign * (p.depth >= 0 ? Math.max(p.depth, 0.004) : 0.004);
+  at[ax.n] = (c1 + c2) / 2;
+  size[ax.n] = Math.abs(c2 - c1);
+  const look: HostLook = {
+    ...lookOf(host, {
+      color: p.color ?? (p.depth < 0 ? darken(host.color, INSET_HOLLOW_SHADE) : host.color),
+      material: p.material,
+    }),
+    kind: p.kind ?? host.kind,
+  };
+  return [grownPart('box', at, size, look)];
+}
+
 /** One host's growth, clamped into its box (empty only for a degenerate host). */
 export function growPart(host: RecipePart): RecipePart[] {
   const g = host.generator;
@@ -259,14 +350,20 @@ export function growPart(host: RecipePart): RecipePart[] {
         ? branchTree(host, g)
         : g.op === 'scatter'
           ? scatterLeaves(host, g)
-          : drapeStrands(host, g);
+          : g.op === 'drape'
+            ? drapeStrands(host, g)
+            : g.op === 'loft'
+              ? loftBody(host, g)
+              : insetPocket(host, g);
   return grown.map((q) => clampInto(host, q));
 }
 
 /**
  * Generator parts → plain parts, with the recipe index each one grew from. Parts without a
- * generator pass through untouched. `details` on a generator part are ignored (trim belongs on
- * plain hosts); a part that grows nothing keeps its own box, so the silhouette never vanishes.
+ * generator pass through untouched. `details` on a replacing generator part are ignored (trim
+ * belongs on plain hosts); a part that grows nothing keeps its own box, so the silhouette never
+ * vanishes. `inset` is additive: the host keeps rendering (minus its consumed generator, so a
+ * second expansion cannot double the pocket) with the slab beside it.
  */
 export function expandGenerators(parts: ReadonlyArray<RecipePart>): {
   parts: RecipePart[];
@@ -286,6 +383,11 @@ export function expandGenerators(parts: ReadonlyArray<RecipePart>): {
       out.push(box);
       from.push(k);
       return;
+    }
+    if (p.generator.op === 'inset') {
+      const { generator: _consumed, ...kept } = p;
+      out.push(kept);
+      from.push(k);
     }
     for (const q of grown) {
       out.push(q);

@@ -1,24 +1,34 @@
 import 'server-only';
 
 import sharp from 'sharp';
-import { flatWaterRecipe, kitToRecipe, type ObjectKit } from '@/lib/object-kit';
+import { flatWaterRecipe, kitToRecipe, type KitArchetype, type ObjectKit } from '@/lib/object-kit';
 import {
   SHAPE_TIMEOUT_MS,
   formatDuration,
   type ObjectRecipe,
   type ObjectShape,
+  type PartMask,
   type ShapeTarget,
 } from '@/lib/object-shape';
 import type { PerceptionClient } from './client';
 import { renderFlat, THREE_QUARTER, type FlatRender } from './flat-render';
-import type { DetailScore } from './detail-score';
+import { anatomyMissing, type DetailScore } from './detail-score';
+import { listedConcept } from './object-graph';
+import { PART_CONCEPTS, fetchPartMasks, partMasksTimeout } from './part-masks';
+import { askPartQuestions } from './part-question';
 import { STOP_DETAIL } from './shape-report';
+import { cropForShape } from './shape-crop';
 import type { Mask } from './silhouette-fit';
 import type { ModelScore, RgbGrid } from './model-score';
 import { runObjectShape, type ObjectShapeOptions } from './object-shape';
 import type { PhotoForRegions } from './region';
-import { scoreRecipe } from './score-shape';
-import { CRITIC_PROMPT_VERSION, criticQuestion, mergeKitPatch } from './shape';
+import { detailParts, scoreRecipe } from './score-shape';
+import {
+  CRITIC_PROMPT_CARDS_VERSION,
+  CRITIC_PROMPT_VERSION,
+  criticQuestion,
+  mergeKitPatch,
+} from './shape';
 
 /**
  * Spark visual critic, shared half (PR-0.6): the side-by-side image (photo crop | flat render)
@@ -179,7 +189,11 @@ async function shapeWithCriticRound(
   const started = Date.now();
   let shape = await runObjectShape(perception, photo, fullImageUrl, target, opts);
   // Version 1: one round. Version 2 (PQ-T14): up to `CRITIC_ROUNDS`, each kept only on gain.
-  const rounds = (opts.criticPromptVersion ?? CRITIC_PROMPT_VERSION) >= 2 ? CRITIC_ROUNDS : 1;
+  // Version 3 (PQ-T52) rides the version-1 round: the anatomy fix needs no extra rounds.
+  const rounds =
+    (opts.criticPromptVersion ?? CRITIC_PROMPT_VERSION) === CRITIC_PROMPT_CARDS_VERSION
+      ? CRITIC_ROUNDS
+      : 1;
   for (let r = 0; r < rounds; r++) {
     const roundStart = Date.now();
     let ran = false;
@@ -213,7 +227,7 @@ type CriticPerception = Pick<
   PerceptionClient,
   'describeShape' | 'describeParts' | 'criticizeShape'
 > &
-  Partial<Pick<PerceptionClient, 'segmentImage' | 'checkViews'>>;
+  Partial<Pick<PerceptionClient, 'segmentImage' | 'checkViews' | 'askPart'>>;
 
 /** One critic round over `shape`: the same object back when nothing was kept. */
 async function criticRound(
@@ -258,7 +272,7 @@ async function criticRound(
     );
     if (!scored) return shape;
     if (
-      version >= 2
+      version === CRITIC_PROMPT_CARDS_VERSION
         ? !criticFires(scored.score.score, scored.score.detail)
         : scored.score.score >= CRITIC_SCORE_MAX
     )
@@ -266,9 +280,9 @@ async function criticRound(
     const w = target.box.w * photo.width;
     const h = target.box.h * photo.height;
     if (!(w > 0 && h > 0)) return shape;
-    const patch = await requestPatch(
+    const answer = await requestPatch(
       perception,
-      version >= 2
+      version === CRITIC_PROMPT_CARDS_VERSION
         ? await criticSheet(scored.crop, shape.recipe, w / h, scored.outline)
         : await criticImage(scored.crop, shape.recipe, w / h),
       shape.kit,
@@ -276,7 +290,8 @@ async function criticRound(
       opts.signal,
       version
     );
-    if (!patch) return shape;
+    if (!answer) return shape;
+    const { patch, missingParts } = answer;
     // No re-check of the budget here: the patch is paid for, and the retry below carries no
     // LLM call (stubbed kit, same photo) — only the 5 s SAM batch plus local math — so it runs
     // even when the patch arrived past the budget (live: 146 ms over). The expired budget used
@@ -284,7 +299,17 @@ async function criticRound(
     // fix died with it; the clamp in runObjectShape keeps the signal construction safe instead.
     const remainingMs =
       timeoutMs === null || !Number.isFinite(timeoutMs) ? null : timeoutMs - (Date.now() - started);
-    const patched = mergeKitPatch(shape.kit, patch);
+    // PQ-T52: the named anatomy ids, verified against the build, asked one by one in parallel,
+    // chased when a builder places them. Runs even without a patch: denied ids still correct
+    // the inventory, and confirmed ones may rebuild the model on their own.
+    const fix: AnatomyFix = missingParts.length
+      ? await fixMissingAnatomy(perception, photo, target, shape.kit, shape.recipe, missingParts, {
+          ...(opts.signal ? { signal: opts.signal } : {}),
+          timeoutMs: remainingMs,
+        })
+      : { extraMasks: [], denied: [] };
+    if (!patch && !fix.extraMasks.length) return withDeniedFlips(shape, fix.denied);
+    const patched = patch ? mergeKitPatch(shape.kit, patch) : shape.kit;
     const retry = await runObjectShape(
       {
         describeShape: async () => ({
@@ -303,9 +328,10 @@ async function criticRound(
       photo,
       fullImageUrl,
       target,
-      { ...opts, timeoutMs: remainingMs }
+      { ...opts, timeoutMs: remainingMs, extraPartMasks: fix.extraMasks }
     );
-    if (retry.mode !== 'recipe' || !retry.recipe || !retry.outline) return shape;
+    if (retry.mode !== 'recipe' || !retry.recipe || !retry.outline)
+      return withDeniedFlips(shape, fix.denied);
     const rescored = await scoreRecipe(
       photo,
       { box: target.box, outline: retry.outline },
@@ -313,15 +339,19 @@ async function criticRound(
       retry.partMasks
     );
     if (rescored && rescored.score.score > scored.score.score) {
+      const what = [
+        ...(patch ? Object.keys(patch) : []),
+        ...(fix.extraMasks.length ? [`${fix.extraMasks.length} chased masks`] : []),
+      ].join(', ');
       console.info(
-        `[vision] 3D critic kept: score ${scored.score.score} → ${rescored.score.score} (${Object.keys(patch).join(',')})`
+        `[vision] 3D critic kept: score ${scored.score.score} → ${rescored.score.score} (${what})`
       );
-      return retry;
+      return withDeniedFlips(retry, fix.denied);
     }
     console.info(
       `[vision] 3D critic dropped: score ${scored.score.score} → ${rescored?.score.score ?? 'n/a'}`
     );
-    return shape;
+    return withDeniedFlips(shape, fix.denied);
   } catch (err) {
     console.warn('[vision] 3D critic round failed:', err instanceof Error ? err.message : err);
     return shape;
@@ -329,8 +359,182 @@ async function criticRound(
 }
 
 /**
- * One patch request: the side-by-side image + kit + scores → the kit fields to change, or null
- * (mock, match, or an unusable reply). Never throws: a failed round keeps the recipe.
+ * SAM concepts a mask builder places, per archetype (PQ-T52): the gates of `withMaskWheels`
+ * (vehicle wheels), `withMaskPanels` (vehicle windows, house windows and doors — vehicles skip
+ * doors, PR-2.7) and `withMaskChimney` (house chimneys). A confirmed missing part is chased only
+ * for these pairs; anything else stays « seen, not built » until a builder places it. Effective
+ * coverage today: none — every placed concept is already measured (`PART_CONCEPTS`) — so the
+ * chase below activates when builders outrun the measured concepts (vehicle doors need a
+ * placement-side decision first; a zone-crop chase needs a PQ-T8-style eval).
+ */
+export const PLACED_CONCEPTS: Partial<Record<KitArchetype, ReadonlyArray<string>>> = {
+  vehicle: ['wheel', 'window'],
+  house: ['window', 'door', 'chimney'],
+};
+
+/** Closed id → SAM concept when `listedConcept` misses (a door line is found by chasing its door). */
+const ANATOMY_CHASE: Readonly<Record<string, string>> = {
+  'door lines': 'door',
+};
+
+/** The SAM concept to chase for a closed anatomy id. Pure. */
+export function chaseConcept(id: string): string {
+  return ANATOMY_CHASE[id] ?? listedConcept(id);
+}
+
+/**
+ * Named ids the recipe really lacks (PQ-T52, E11): the critic's word against the built parts —
+ * a named part the model does build is the critic erring, and is dropped. Pure.
+ */
+export function verifyMissingAnatomy(named: ReadonlyArray<string>, recipe: ObjectRecipe): string[] {
+  if (!named.length) return [];
+  return anatomyMissing(named, detailParts(recipe));
+}
+
+export interface AnatomyFix {
+  /** SAM masks of confirmed parts a builder places: the retry's `extraPartMasks`. */
+  extraMasks: PartMask[];
+  /** Ids the short question denied: the kit inventory flips them to `absent`. */
+  denied: string[];
+}
+
+/**
+ * One fix round per verified-missing id (PQ-T52, E9/E11): a short question on the zone crop for
+ * each (in parallel); denied ids correct the inventory, confirmed ones are SAM-chased when a
+ * builder places their concept and the pipeline did not measure it already. Never throws.
+ */
+export async function fixMissingAnatomy(
+  perception: Partial<Pick<PerceptionClient, 'askPart' | 'segmentImage'>>,
+  photo: PhotoForRegions,
+  target: ShapeTarget,
+  kit: ObjectKit,
+  recipe: ObjectRecipe,
+  missing: ReadonlyArray<string>,
+  { signal, timeoutMs }: { signal?: AbortSignal; timeoutMs?: number | null } = {}
+): Promise<AnatomyFix> {
+  const empty: AnatomyFix = { extraMasks: [], denied: [] };
+  const verified = verifyMissingAnatomy(missing, recipe);
+  if (!verified.length) return empty;
+  const built = missing.filter((id) => !verified.includes(id));
+  console.info(
+    `[vision] 3D critic missing for "${target.label}": ${verified.join(', ')}` +
+      (built.length ? ` (already built: ${built.join(', ')})` : '')
+  );
+  const ask = perception.askPart?.bind(perception);
+  if (!ask) return empty;
+  const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, ' ');
+  const whereOf = (id: string) => kit.anatomy?.find((a) => norm(a.part) === id)?.where;
+  let cropUrl: string;
+  try {
+    cropUrl = await cropForShape(photo, target.box);
+  } catch {
+    return empty;
+  }
+  const asked = await askPartQuestions(
+    async (imageUrl, question, s) => (await ask(imageUrl, question, s)).answer,
+    cropUrl,
+    verified.map((part) => {
+      const where = whereOf(part);
+      return where ? { part, where } : { part };
+    }),
+    { ...(signal ? { signal } : {}) }
+  );
+  const denied: string[] = [];
+  const confirmed: string[] = [];
+  for (const { part, answer } of asked) {
+    if (!answer) continue;
+    (answer.present ? confirmed : denied).push(part);
+  }
+  if (denied.length)
+    console.info(`[vision] 3D critic denied for "${target.label}": ${denied.join(', ')} → absent`);
+  // Chase only what a builder places and the pipeline did not measure already.
+  const placed = PLACED_CONCEPTS[kit.archetype] ?? [];
+  const measured = new Set(PART_CONCEPTS[kit.archetype] ?? []);
+  const segment = perception.segmentImage?.bind(perception);
+  const toChase: string[] = [];
+  for (const part of confirmed) {
+    const concept = chaseConcept(part);
+    if (!placed.includes(concept)) {
+      console.info(
+        `[vision] 3D critic confirmed for "${target.label}": ${part}, no placer — stays not built`
+      );
+      continue;
+    }
+    if (measured.has(concept)) {
+      console.info(`[vision] 3D critic confirmed for "${target.label}": ${part}, already measured`);
+      continue;
+    }
+    toChase.push(concept);
+  }
+  const extraMasks =
+    toChase.length && segment
+      ? await chaseMasks(segment, cropUrl, kit.archetype, toChase, target.label, timeoutMs ?? null)
+      : [];
+  return { extraMasks, denied };
+}
+
+/**
+ * SAM-chase of confirmed concepts on the crop (PQ-T52): one batch per concept, misses and
+ * failures logged per concept. Never throws. No live caller reaches it today (every placed
+ * concept is already measured) — it activates with the builders, and is tested directly.
+ */
+export async function chaseMasks(
+  segment: PerceptionClient['segmentImage'],
+  cropUrl: string,
+  archetype: KitArchetype,
+  concepts: ReadonlyArray<string>,
+  label: string,
+  timeoutMs: number | null = null
+): Promise<PartMask[]> {
+  const out: PartMask[] = [];
+  for (const concept of concepts) {
+    const masks = await fetchPartMasks(segment, cropUrl, archetype, {
+      concepts: [concept],
+      timeoutMs: partMasksTimeout(timeoutMs),
+    }).catch((): PartMask[] => []);
+    if (masks.length) {
+      console.info(`[vision] 3D critic chase for "${label}": ${concept} ×${masks.length}`);
+      out.push(...masks);
+    } else {
+      console.info(
+        `[vision] 3D critic chase for "${label}": ${concept}, no mask — stays not built`
+      );
+    }
+  }
+  return out;
+}
+
+/**
+ * The inventory corrected by denied short answers (PQ-T52): ids the zone crop does not show flip
+ * from `present` to `absent`. A soft signal rescued by a second look (the kit's first look said
+ * present); geometry never changes here. Pure.
+ */
+export function withDeniedFlips(shape: ObjectShape, denied: ReadonlyArray<string>): ObjectShape {
+  if (!denied.length || shape.mode !== 'recipe' || !shape.kit?.anatomy) return shape;
+  const ids = new Set(denied);
+  let flipped = 0;
+  const anatomy = shape.kit.anatomy.map((a) => {
+    const id = a.part.trim().toLowerCase().replace(/\s+/g, ' ');
+    if (a.state === 'present' && ids.has(id)) {
+      flipped++;
+      return { ...a, state: 'absent' as const };
+    }
+    return a;
+  });
+  if (!flipped) return shape;
+  return { ...shape, kit: { ...shape.kit, anatomy } };
+}
+
+/** What one critic answer carries: the kit patch, and (version 3) the named missing parts. */
+export interface CriticAnswer {
+  patch: Partial<ObjectKit> | null;
+  missingParts: string[];
+}
+
+/**
+ * One patch request: the side-by-side image + kit + scores → the kit fields to change plus the
+ * named missing anatomy ids, or null (mock, match, or an unusable reply). Never throws: a failed
+ * round keeps the recipe.
  */
 export async function requestPatch(
   client: Pick<PerceptionClient, 'criticizeShape'>,
@@ -339,7 +543,7 @@ export async function requestPatch(
   score: ModelScore,
   signal?: AbortSignal,
   version: number = CRITIC_PROMPT_VERSION
-): Promise<Partial<ObjectKit> | null> {
+): Promise<CriticAnswer | null> {
   try {
     const out = await client.criticizeShape(
       imageUrl,
@@ -356,7 +560,9 @@ export async function requestPatch(
       signal,
       { promptVersion: version, archetype: kit.archetype }
     );
-    return out.patch;
+    const missingParts = out.missingParts ?? [];
+    if (!out.patch && !missingParts.length) return null;
+    return { patch: out.patch, missingParts };
   } catch (err) {
     console.warn('[vision] 3D critic failed:', err instanceof Error ? err.message : err);
     return null;

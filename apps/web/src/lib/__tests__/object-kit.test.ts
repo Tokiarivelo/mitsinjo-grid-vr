@@ -510,3 +510,74 @@ describe('plant templates (PQ-T50 §7.3)', () => {
     if (trunk.op === 'sweep') expect(trunk.color).toBe('#6e6a62');
   });
 });
+
+describe('template part kinds (PQ-T46)', () => {
+  it('the car declares glass, wheels and lights: the rear slope is a window', () => {
+    const r = kitToRecipe({ ...kit('vehicle'), subtype: 'sedan' });
+    const kinds = r.parts.map((p) => p.kind);
+    expect(kinds.filter((k) => k === 'window')).toHaveLength(2);
+    expect(kinds.filter((k) => k === 'wheel')).toHaveLength(4);
+    expect(kinds.filter((k) => k === 'light')).toHaveLength(4);
+    // The rear prism (x < 0, apex 1) reads as a rear window through the generic map.
+    const rear = r.parts.find((p) => p.shape === 'prism' && p.at[0] < 0);
+    expect(rear?.kind).toBe('window');
+    // The glasshouse band stays kindless: it is glazing, not a framed opening.
+    expect(r.parts.find((p) => p.shape === 'box' && !p.front)?.kind).toBeUndefined();
+  });
+
+  it('vans, trucks and bikes declare their wheels and lights too', () => {
+    for (const sub of ['van', 'truck', 'motorbike']) {
+      const r = kitToRecipe({ ...kit('vehicle'), subtype: sub });
+      expect(
+        r.parts.some((p) => p.kind === 'wheel'),
+        sub
+      ).toBe(true);
+      expect(
+        r.parts.some((p) => p.kind === 'light'),
+        sub
+      ).toBe(true);
+    }
+    const van = kitToRecipe({ ...kit('vehicle'), subtype: 'van' });
+    expect(van.parts.some((p) => p.kind === 'bumper')).toBe(true);
+  });
+
+  it('houses declare walls, roof, openings and chimney', () => {
+    const r = kitToRecipe(kit('house', { windows: 4, doors: 1, chimney: true }));
+    const kinds = r.parts.map((p) => p.kind);
+    expect(kinds).toContain('wall');
+    expect(kinds).toContain('roof');
+    expect(kinds).toContain('chimney');
+    expect(kinds.filter((k) => k === 'window').length).toBeGreaterThanOrEqual(4);
+    expect(kinds.filter((k) => k === 'door').length).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe('lofted vehicle template (PQ-T51 §7.3)', () => {
+  it('the classic car body is a 4-station loft, tapered at nose and tail', () => {
+    const recipe = kitToRecipe(kit('vehicle'));
+    expect(recipe.parts).toHaveLength(12);
+    const body = recipe.parts[0]!;
+    expect(body.generator?.op).toBe('loft');
+    if (body.generator?.op === 'loft') {
+      expect(body.generator.axis).toBe('x');
+      expect(body.generator.stations).toHaveLength(4);
+      const mid = body.generator.stations[1]!;
+      const nose = body.generator.stations[3]!;
+      expect(mid.width).toBeGreaterThan(nose.width);
+      expect(mid.height).toBeGreaterThan(nose.height);
+    }
+    expect(recipe.parts.slice(1).every((p) => !p.generator)).toBe(true);
+    expect(ObjectRecipeSchema.safeParse(recipe).success).toBe(true);
+  });
+
+  it('van, pickup and two-wheel branches stay plain (unmeasured, no golden)', () => {
+    for (const details of [
+      { subtype: 'van' },
+      { subtype: 'pickup' },
+      { subtype: 'motorbike', wheels: 2 },
+    ] as const) {
+      const recipe = kitToRecipe(kit('vehicle', details));
+      expect(recipe.parts.every((p) => !p.generator)).toBe(true);
+    }
+  });
+});

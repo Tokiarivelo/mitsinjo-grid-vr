@@ -517,7 +517,19 @@ One task = one commit, with its Vitest test, its `contracts.md` update and its m
       kit-replay); contracts + V267. Deferred: checkpoint resume of code rounds, block patches (full
       body re-sent), richer writer sheet (photo crop only, v1). Live measure pending (no key): valid-code
       rate, gain vs route A, tour duration (Vercel/OVHcloud).
-- [ ] **PQ-T46 `anatomy` in kit, cards and score** (§12.3, §5, E5, E9).
+- [x] **PQ-T46 `anatomy` in kit, cards and score** (§12.3, §5, E5, E9).
+      _Built 2026-11-12:_ `ANATOMY` closed lists + `KitAnatomySchema` + `anatomy?` on the kit,
+      `parseAnatomy`, kit prompt v4 = v1 + one inventory line (new default; v1 baseline kept,
+      v2/v3 schemas offer anatomy too), `Anatomy:` lines in the §5 cards (`make skills-gen`, sync
+      test), `anatomyState`/`presentAnatomy` in fusion, `ANATOMY_KINDS` + `anatomyRecall`/
+      `anatomyMissing` in the score (report `Ana` column, no gate yet), `present` parts refuse
+      into `notBuilt` by exact name, vehicle glass slopes/wheels/lights + house walls/roof/
+      openings/chimney tagged (glasshouse band kindless: glazing, not a framed opening).
+      Live (Meta key): eval-shape v1 29/30 @14.2 s vs v4 27/31 @17.1 s on 4 captures (v4 answers
+      more where v1 stays silent; full inventories 13/10/6/6); car-side re-captured 53 (frozen
+      52), ana 0.45, rear window hidden on the side view and built; house route-B round 1 twice
+      (0.800→0.780, 0.860→0.850, both dropped; valid code 2/2; to-stall loop left to PQ-T55).
+      Contracts + V272.
 - [x] **PQ-T47 Image type, representation family, routing** (§12.4, §4), with motivated refusal and the
       operator question under 0.82.
       _Built 2026-11-12:_ `routing.ts` (`routeImage`: image type + family + pipeline/ask/refuse;
@@ -554,8 +566,39 @@ One task = one commit, with its Vitest test, its `contracts.md` update and its m
       volumes, measured trunks, Muse branch params, the plant card, prompt ops and
       palm/conifer/willow need live proof. Scatter ≤ 60 boxes (2-tri cards need `plane`).
       Contracts + V271.
-- [ ] **PQ-T51 `loft` for vehicles, `inset` for openings** (§12.8, §7.3).
-- [ ] **PQ-T52 Short question per part, anatomy critic, three-view sheet** (§12.9, E9–E11).
+- [x] **PQ-T51 `loft` for vehicles, `inset` for openings** (§12.8, §7.3).
+      _Built 2026-11-12:_ `LoftParams` (axis + 3–6 stations w/h/radius) +
+      `InsetParams` (face/u/v/w/h/depth + colour/material/kind) in the generator
+      union, `loftBody` (segments average each station pair, round → elliptical
+      cylinder, 6 % fuse overlap) + `insetPocket` (one slab, hollows darken the
+      host 0.55, reliefs stand proud, rect clamped; additive: host renders too),
+      `FACES`/`facePoint`/`AXIS` moved to `object-shape.ts` (shared with
+      `attach`/`cut`, re-exported), `set {…, generator}` (no dedicated ops: a
+      measured-from-growth box would lie about a loft's span and shrink an
+      inset's rect on every regrow; Spark untold, JSON schema unchanged),
+      classic-car body lofted live (tapered nose/tail). Synth car 93→92 (-1 in
+      tolerance, IntF1 0.81→0.84), synth mean 93→92, real 53 + ΔE 10.1 frozen
+      identical. Grille inset tried and reverted (neutral 93, edge-on to the
+      side golden: needs live ¾ proof); van/pickup/bike branches, house
+      reveals (need wall splits), Muse-chosen stations and route-B
+      `api.loft/api.inset` (writer prompt v2 + eval) next.
+      Live (Meta key): car-side re-captured with the lofted template 54
+      (frozen 52, box-body live 53 in PQ-T46): the taper gains on real data
+      too. Contracts + V273.
+- [x] **PQ-T52 Short question per part, anatomy critic, three-view sheet** (§12.9, E9–E11).
+      _Built 2026-11-12:_ `part-question.ts` (prompt + `PartAnswer` schema + lenient parser +
+      `zoneRect` words→zone + `zoneCropUrl` ≤ 512 px + parallel `askPartQuestions`), `askPart?`
+      backend + client + Meta impl at `low` effort (first measured `low`, `make part-probe`),
+      critic v3 = v1 + anatomy line (new `missingParts`, v2 schema offers it too, §7 card line +
+      `skills-gen`), fix path (verify vs build → ask → denied flips inventory to `absent` →
+      confirmed chased only when placed + unmeasured → retry carries patch and/or
+      `extraPartMasks`, kept only on gain), three-view `viewsSheet` (back = flopped front +
+      `BACK_CAMERA`) + `back` in the views check (verified on the flop, joins front parts).
+      v1 stays default, v3 opt-in (`criticPromptVersion: 3`): live A/B car-side 55 v1 vs
+      54 v3, both patches dropped (kit variance, not the critic) — parity, no gain yet.
+      Effective chase coverage today: none (every placed concept is already measured; vehicles
+      skip doors, PR-2.7); zone-crop chase needs a PQ-T8-style eval. Contracts + copilot +
+      V274 scenario.
 - [ ] **PQ-T53 SDF for smooth shapes** (§12.10, §8), after measuring the triangle budget.
 - [ ] **PQ-T54 Real set ≥ 12 photos, judge calibration, turntable sheet** (§12.11, §9.1).
 - [ ] **PQ-T55 Scored evaluation of B vs draft A** (§12.13: willow, car, house, one appliance) and tour

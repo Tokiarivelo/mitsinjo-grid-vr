@@ -32,6 +32,8 @@ import {
   viewIou,
   markDrawnInferred,
   viewsRecipe,
+  viewsSheet,
+  flopPng,
   PERSON_TORSO,
 } from '../object-views';
 
@@ -348,6 +350,149 @@ describe('AI views check (PV-H)', () => {
     expect(viewsCheckQuestion('car', { front: 0.87, side: 0.81 })).toContain(
       'front 87 %, side 81 %'
     );
+  });
+
+  it('accepts parts named on the back view (PQ-T52)', () => {
+    const c = parseViewsCheck(
+      JSON.stringify({
+        missing: [
+          { part: 'Tail Lights!', view: 'back', color: '#FF0000', material: 'glass' },
+          { part: 'tail lights', view: 'back' },
+          { part: 'tail lights', view: 'front' },
+        ],
+      })
+    )!;
+    // Same part on two views counts twice (each view is verified on its own image).
+    expect(c.missing).toEqual([
+      { part: 'tail lights', view: 'back', color: '#ff0000', material: 'glass' },
+      { part: 'tail lights', view: 'front' },
+    ]);
+  });
+
+  it('flops pixels left-right, null on undecodable bytes (PQ-T52)', async () => {
+    const two = await sharp(Buffer.from([255, 0, 0, 0, 0, 255]), {
+      raw: { width: 2, height: 1, channels: 3 },
+    })
+      .png()
+      .toBuffer();
+    const flopped = await flopPng(two);
+    const raw = await sharp(flopped!).raw().toBuffer();
+    expect([...raw]).toEqual([0, 0, 255, 255, 0, 0]);
+    // Flop twice: the original back.
+    expect([
+      ...(await sharp((await flopPng(flopped!))!)
+        .raw()
+        .toBuffer()),
+    ]).toEqual([255, 0, 0, 0, 0, 255]);
+    await expect(flopPng(Buffer.from('nope'))).resolves.toBeNull();
+  });
+
+  it('sheets three rows: the back drawing mirrors the front (PQ-T52)', async () => {
+    // Front drawing: red left half, blue right half.
+    const red = await sharp({
+      create: { width: 100, height: 100, channels: 3, background: '#ff0000' },
+    })
+      .png()
+      .toBuffer();
+    const blue = await sharp({
+      create: { width: 100, height: 100, channels: 3, background: '#0000ff' },
+    })
+      .png()
+      .toBuffer();
+    const drawing = await sharp({
+      create: { width: 200, height: 100, channels: 3, background: '#ffffff' },
+    })
+      .composite([
+        { input: red, left: 0, top: 0 },
+        { input: blue, left: 100, top: 0 },
+      ])
+      .png()
+      .toBuffer();
+    const views = {
+      front,
+      side: null,
+      frontUrl: `data:image/png;base64,${drawing.toString('base64')}`,
+      sidePng: null,
+    };
+    const sheet = await viewsSheet(viewsRecipe(views, KIT), views);
+    const bytes = Buffer.from(sheet!.split(',')[1]!, 'base64');
+    const meta = await sharp(bytes).metadata();
+    // No side: cols = 200 × 1.5; three rows of tiles.
+    expect([meta.width, meta.height]).toEqual([600, 600]);
+    // The crop keeps the 1.5 aspect, so each drawing tile is red | blue with no margins.
+    // Raw pixels, not stats(): stats() ignores the extract and reads the whole sheet.
+    const meanRed = async (left: number, top: number) => {
+      const raw = await sharp(bytes)
+        .extract({ left, top, width: 150, height: 200 })
+        .raw()
+        .toBuffer();
+      let sum = 0;
+      for (let i = 0; i < raw.length; i += 3) sum += raw[i]!;
+      return sum / (raw.length / 3);
+    };
+    expect(await meanRed(0, 0)).toBeGreaterThan(200);
+    expect(await meanRed(0, 400)).toBeLessThan(150);
+  });
+
+  it('a part SAM finds on the back joins the front parts, x flipped (PQ-T52)', async () => {
+    // Asymmetric drawing (dark left, light right): its flop cannot re-encode identically.
+    const dark = await sharp({
+      create: { width: 100, height: 100, channels: 3, background: '#202020' },
+    })
+      .png()
+      .toBuffer();
+    const light = await sharp({
+      create: { width: 100, height: 100, channels: 3, background: '#e0e0e0' },
+    })
+      .png()
+      .toBuffer();
+    const png = await sharp({
+      create: { width: 200, height: 100, channels: 3, background: '#808080' },
+    })
+      .composite([
+        { input: dark, left: 0, top: 0 },
+        { input: light, left: 100, top: 0 },
+      ])
+      .png()
+      .toBuffer();
+    const frontUrl = `data:image/png;base64,${png.toString('base64')}`;
+    const views = { front, side: null, frontUrl, sidePng: null };
+    const seen: Array<[string, string]> = [];
+    const segment = vi.fn(async (url: string, concept: string) => {
+      seen.push([url, concept]);
+      return {
+        source: 'meta' as const,
+        model: 'sam',
+        concept,
+        imageWidth: 1000,
+        imageHeight: 1000,
+        instances: [{ box: { x1: 600, y1: 400, x2: 699, y2: 499 }, confidence: 0.9 }],
+        count: 1,
+        boxCoverage: 0.01,
+      };
+    });
+    const fixed = await applyViewsCheck(
+      segment,
+      views,
+      {
+        missing: [{ part: 'tail light', view: 'back', color: '#ff0000', material: 'glass' }],
+        redrawSide: false,
+      },
+      'car',
+      'car',
+      []
+    );
+    // Chased on the flopped front (another image than the front URL), as its own words.
+    expect(seen).toHaveLength(1);
+    expect(seen[0]![0]).not.toBe(frontUrl);
+    expect(seen[0]![1]).toBe('tail light');
+    expect(fixed?.applied).toEqual(['tail light (back)']);
+    // Mirror fractions (x 0.6) back to front fractions (x 0.3), then to the object box.
+    const added = fixed!.views.front.parts.at(-1)!;
+    expect(added.concept).toBe('tail light');
+    expect(added.box.x).toBeCloseTo((0.3 - 0.2) / 0.6, 6);
+    expect(added.box.y).toBeCloseTo((0.4 - 0.1) / 0.8, 6);
+    expect(added).toMatchObject({ look: { color: '#ff0000', material: 'glass' } });
   });
 
   it('a part SAM finds on the side becomes a patch on both sides, in the colour read', async () => {

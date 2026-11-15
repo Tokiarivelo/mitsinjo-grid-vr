@@ -873,3 +873,53 @@ describe('runObjectShape route B (PQ-T45)', () => {
     expect(timings).not.toContain('code');
   });
 });
+
+describe('runObjectShape critic-chased masks (PQ-T52)', () => {
+  const vehicle: ObjectKit = {
+    archetype: 'vehicle',
+    proportions: { w: 1, h: 0.5, d: 0.45 },
+    colors: { main: '#aa2222', secondary: '#222222', accent: '#88aacc' },
+  };
+  const car: ShapeTarget = {
+    id: 'det-9',
+    label: 'car',
+    category: 'other',
+    scenery: 'vehicle',
+    box: { x: 0, y: 0, w: 1, h: 1 },
+    outline: 'M0 0L1 0L1 1L0 1Z',
+  };
+  const empty = (concept: string) => ({
+    source: 'meta' as const,
+    model: 'sam-3.1',
+    concept,
+    imageWidth: 200,
+    imageHeight: 100,
+    instances: [],
+    count: 0,
+    boxCoverage: 0,
+  });
+
+  it('appends extraPartMasks to the fetched ones before the builders', async () => {
+    const p = {
+      ...client(meta(kitToRecipe(vehicle), { kit: vehicle })),
+      segmentImage: vi.fn(async (_url: string, concept: string) => empty(concept)),
+    };
+    const extra = [{ concept: 'door', box: { x: 0.4, y: 0.4, w: 0.15, h: 0.3 } }];
+    const out = await runObjectShape(p, await photo(), 'data:full', car, {
+      extraPartMasks: extra,
+    });
+    expect(out.mode).toBe('recipe');
+    // The fetched batch found nothing; the extra mask still reaches the shape.
+    expect(out.partMasks).toEqual(extra);
+  });
+
+  it('without extras the shape carries only fetched masks', async () => {
+    const p = {
+      ...client(meta(kitToRecipe(vehicle), { kit: vehicle })),
+      segmentImage: vi.fn(async (_url: string, concept: string) => empty(concept)),
+    };
+    const out = await runObjectShape(p, await photo(), 'data:full', car);
+    expect(out.mode).toBe('recipe');
+    expect(out.partMasks ?? []).toEqual([]);
+  });
+});

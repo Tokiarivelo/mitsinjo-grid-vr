@@ -62,11 +62,14 @@ import {
 import { REGION_SYSTEM_PROMPT, regionQuestion } from './region-prompt';
 import { archetypeOf, kitToRecipe } from '@/lib/object-kit';
 import {
+  CRITIC_ANATOMY_VERSION,
+  CRITIC_PROMPT_CARDS_VERSION,
   CRITIC_PROMPT_VERSION,
   capPatchFields,
   criticJsonSchema,
   criticPrompt,
   parseKitReasons,
+  parseMissingParts,
   kitVersionFor,
   kitPrompt,
   parseKit,
@@ -84,12 +87,18 @@ import {
   parseStageOps,
 } from './shape-script-prompt';
 import { effortFor } from './effort';
+import {
+  PART_QUESTION_JSON_SCHEMA,
+  PART_QUESTION_SYSTEM_PROMPT,
+  parsePartAnswer,
+} from './part-question';
 import { redactDataUrls, redactDataUrlsInText, type VisionCallLog } from './vision-log';
 import {
   ObservationSchema,
   type CodeResult,
   type CriticResult,
   type JudgeResult,
+  type PartAskResult,
   type ViewsCheckResult,
   type ShapeOpsResult,
   type DetectionResult,
@@ -480,13 +489,40 @@ export class MetaPerceptionBackend implements PerceptionBackend {
       { kind: 'criticizeShape', params: { promptVersion } }
     );
     const parsed = parseKitPatch(content);
-    // Version 2 cuts a long patch to its first 4 fields (PQ-T14).
-    const patch = parsed && promptVersion >= 2 ? capPatchFields(parsed) : parsed;
-    const reasons = promptVersion >= 2 ? parseKitReasons(content) : [];
+    // Version 2 cuts a long patch to its first 4 fields (PQ-T14); version 3 keeps version 1 whole.
+    const patch =
+      parsed && promptVersion === CRITIC_PROMPT_CARDS_VERSION ? capPatchFields(parsed) : parsed;
+    const reasons = promptVersion === CRITIC_PROMPT_CARDS_VERSION ? parseKitReasons(content) : [];
+    const missingParts =
+      promptVersion === CRITIC_PROMPT_CARDS_VERSION || promptVersion >= CRITIC_ANATOMY_VERSION
+        ? parseMissingParts(content, opts.archetype)
+        : [];
     console.info(
-      `[vision] 3D critic from ${model}: ${patch ? Object.keys(patch).join(',') : 'no patch'}${reasons.length ? ` (${reasons.join(' | ')})` : ''}`
+      `[vision] 3D critic from ${model}: ${patch ? Object.keys(patch).join(',') : 'no patch'}${missingParts.length ? `, missing ${missingParts.join(', ')}` : ''}${reasons.length ? ` (${reasons.join(' | ')})` : ''}`
     );
-    return { model, usage, result: { patch } };
+    return { model, usage, result: { patch, missingParts } };
+  }
+
+  async askPart(
+    imageUrl: string,
+    question: string,
+    signal?: AbortSignal
+  ): Promise<PerceptionCall<PartAskResult>> {
+    // Standard id, like the kit call: the critic waits on these answers.
+    const { content, model, usage } = await this.visionJson(
+      PART_QUESTION_SYSTEM_PROMPT,
+      question,
+      imageUrl,
+      PART_QUESTION_JSON_SCHEMA,
+      signal,
+      false,
+      { kind: 'askPart' }
+    );
+    const answer = parsePartAnswer(content);
+    console.info(
+      `[vision] 3D part answer from ${model}: ${answer ? (answer.present ? `yes${answer.where ? ` (${answer.where})` : ''}${answer.color ? ` ${answer.color}` : ''}` : 'no') : 'unusable'}`
+    );
+    return { model, usage, result: { answer } };
   }
 
   async judgeShape(

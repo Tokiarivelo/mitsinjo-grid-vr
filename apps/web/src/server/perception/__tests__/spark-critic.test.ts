@@ -9,6 +9,8 @@ import type { RgbGrid } from '../model-score';
 import { runObjectShape } from '../object-shape';
 import { scoreRecipe } from '../score-shape';
 import {
+  chaseConcept,
+  chaseMasks,
   CRITIC_ROUNDS,
   CRITIC_TILE,
   CRITIC_WIDTH,
@@ -16,8 +18,11 @@ import {
   criticImage,
   criticSheet,
   differenceTile,
+  fixMissingAnatomy,
   requestPatch,
   shapeWithCritic,
+  verifyMissingAnatomy,
+  withDeniedFlips,
 } from '../spark-critic';
 import { renderFlat } from '../flat-render';
 import { capPatchFields, criticPrompt, parseKitReasons } from '../shape';
@@ -40,7 +45,10 @@ describe('spark critic image + patch (PR-0.6)', () => {
     const score = { iou: 0.7, edgeF1: 0.5, deltaE: 9, score: 62 };
     const patch = { subtype: 'sedan' };
     const ok = { criticizeShape: vi.fn().mockResolvedValue({ patch }) };
-    await expect(requestPatch(ok, 'data:img', kit, score)).resolves.toEqual(patch);
+    await expect(requestPatch(ok, 'data:img', kit, score)).resolves.toEqual({
+      patch,
+      missingParts: [],
+    });
     expect(ok.criticizeShape.mock.calls[0]![1]).toContain('62/100');
     const bad = { criticizeShape: vi.fn().mockRejectedValue(new Error('boom')) };
     await expect(requestPatch(bad, 'data:img', kit, score)).resolves.toBeNull();
@@ -352,4 +360,152 @@ describe('critic v2 (PQ-T14)', () => {
       archetype: kit.archetype,
     });
   });
+});
+
+describe('anatomy fix (PQ-T52)', () => {
+  it('chases a door for door lines, the listed concept otherwise', () => {
+    expect(chaseConcept('door lines')).toBe('door');
+    expect(chaseConcept('rear window')).toBe('window');
+    expect(chaseConcept('grille')).toBe('grille');
+  });
+
+  it('drops named ids the recipe already builds', () => {
+    // The golden car builds wheels (tagged kind) but no door lines (no kind draws them).
+    expect(verifyMissingAnatomy(['wheels', 'door lines'], car())).toEqual(['door lines']);
+    expect(verifyMissingAnatomy([], car())).toEqual([]);
+  });
+
+  it('flips denied present ids to absent, nothing else', () => {
+    const kit = {
+      ...GOLDEN_SHAPES.find((c) => c.name === 'car')!.prior,
+      anatomy: [
+        { part: 'grille', state: 'present' },
+        { part: 'rear window', state: 'present' },
+        { part: 'plate', state: 'hidden' },
+      ],
+    } as never;
+    const shape = { mode: 'recipe', kit } as never;
+    const out = withDeniedFlips(shape, ['grille']);
+    expect(out.kit!.anatomy).toEqual([
+      { part: 'grille', state: 'absent' },
+      { part: 'rear window', state: 'present' },
+      { part: 'plate', state: 'hidden' },
+    ]);
+    // Unknown ids, hidden states and kits without inventory: the shape back, same reference.
+    expect(withDeniedFlips(shape, ['spoiler'])).toBe(shape);
+    expect(withDeniedFlips(shape, ['plate'])).toBe(shape);
+    expect(withDeniedFlips({ mode: 'recipe', kit: {} } as never, ['grille'])).toEqual({
+      mode: 'recipe',
+      kit: {},
+    });
+  });
+
+  it('asks verified ids, denies the grille, chases nothing placed by nothing', async () => {
+    const golden = GOLDEN_SHAPES.find((c) => c.name === 'car')!;
+    const buffer = await sharp(Buffer.from(goldenSvg(golden)))
+      .jpeg({ quality: 85 })
+      .toBuffer();
+    const photo = { buffer, ...PHOTO };
+    const target: ShapeTarget = {
+      id: golden.name,
+      label: golden.name,
+      category: 'other',
+      box: goldenBox(golden),
+    };
+    const kit = {
+      ...golden.prior,
+      anatomy: [
+        { part: 'door lines', state: 'present' as const, where: 'side' },
+        { part: 'grille', state: 'present' as const },
+      ],
+    };
+    const questions: string[] = [];
+    const askPart = vi.fn(async (_url: string, question: string) => {
+      questions.push(question);
+      return {
+        answer: question.includes('door lines') ? { present: true } : { present: false },
+      };
+    });
+    // Door lines confirm, but no builder places vehicle doors: nothing is chased.
+    const segmentImage = vi.fn(async () => {
+      throw new Error('must not chase');
+    });
+    const fix = await fixMissingAnatomy(
+      { askPart, segmentImage } as never,
+      photo,
+      target,
+      kit,
+      car(),
+      ['wheels', 'door lines', 'grille']
+    );
+    // Built wheels: verified out, never asked. Door lines: confirmed, no placer. Grille: denied.
+    expect(questions.some((q) => q.includes('wheels'))).toBe(false);
+    expect(questions).toHaveLength(2);
+    expect(fix).toEqual({ extraMasks: [], denied: ['grille'] });
+    expect(segmentImage).not.toHaveBeenCalled();
+  });
+
+  it('chaseMasks collects one batch per concept, misses and failures logged', async () => {
+    const seg = (concept: string, instances: unknown[]) => ({
+      source: 'meta',
+      model: 'sam-3.1',
+      concept,
+      imageWidth: 100,
+      imageHeight: 100,
+      instances,
+      count: instances.length,
+      boxCoverage: 0.1,
+    });
+    const segment = vi.fn(async (_url: string, concept: string) => {
+      if (concept === 'boom') throw new Error('no');
+      return seg(concept, concept === 'door' ? [{ box: { x1: 10, y1: 10, x2: 30, y2: 30 } }] : []);
+    });
+    const masks = await chaseMasks(
+      segment as never,
+      'data:crop',
+      'vehicle',
+      ['door', 'grille'],
+      'car'
+    );
+    expect(masks).toHaveLength(1);
+    expect(masks[0]!.concept).toBe('door');
+    // A failed batch answers nothing, never throws.
+    await expect(
+      chaseMasks(segment as never, 'data:crop', 'vehicle', ['boom'], 'x')
+    ).resolves.toEqual([]);
+  });
+
+  it('chases nothing already measured, placed by nothing, or without clients', async () => {
+    const golden = GOLDEN_SHAPES.find((c) => c.name === 'car')!;
+    const buffer = await sharp(Buffer.from(goldenSvg(golden)))
+      .jpeg({ quality: 85 })
+      .toBuffer();
+    const photo = { buffer, ...PHOTO };
+    const target: ShapeTarget = {
+      id: golden.name,
+      label: golden.name,
+      category: 'other',
+      box: goldenBox(golden),
+    };
+    const kit = golden.prior;
+    const askPart = vi.fn(async () => ({ answer: { present: true } }));
+    const segmentImage = vi.fn(async () => {
+      throw new Error('must not chase');
+    });
+    // Rear window → window: placed, but the pipeline measures it already. Grille: no placer.
+    const fix = await fixMissingAnatomy(
+      { askPart, segmentImage } as never,
+      photo,
+      target,
+      kit,
+      car(),
+      ['rear window', 'grille']
+    );
+    expect(fix).toEqual({ extraMasks: [], denied: [] });
+    expect(segmentImage).not.toHaveBeenCalled();
+    // No ask client: nothing verified further, no chase either.
+    await expect(
+      fixMissingAnatomy({ segmentImage } as never, photo, target, kit, car(), ['grille'])
+    ).resolves.toEqual({ extraMasks: [], denied: [] });
+  }, 30_000);
 });
