@@ -16,19 +16,16 @@ Cars left: estate, coupe, sport, bus, limo, lorry, motorhome, tractor. Trees lef
 
 ## Done this session
 
-- **PQ-T78 cars:** built the right way round (profile = `left` elevation), glass cut along the read windows,
-  bumpers from the front / back drawing, top view turned when drawn across, ≈ 40 ms mesh. Studio: one layer
-  per window / tyre / wheel, masks baked as a real cut. Eleven cars replay (`make car-replay OUT=r5`).
+- **PQ-T78 cars:** right way round, glass cut on the read windows, a layer per window / tyre / wheel.
 - **PQ-T80 wing mirrors:** `car/car-mirrors.ts` measures them on the front's outline, the section reads the
   body across their rows (no more ledge along the car), `carMesh` builds one piece per side (slot `mirror`,
   a Studio layer each, glass on its back). The car team's `mirror` details give their place along the car
   and, when the front shows none, their outline (plain colour). `make car-replay OUT=r7`: 11 / 11 with mirrors.
 - **PQ-T79 trees** (Sonnet subagent, then refined): `tree` / `bush` no longer carved into boxes.
   `recon/route.ts` → `tree/tree-recon.ts` (`fitTree` → `packCrown` → `treeRecipe`), generic path when no
-  crown is found or the outline IoU < 0.4. Trunk = one `lathe` (measured radius per height, flat foot),
-  crown = ≤ 36 clumps in 3 `sdf` tiers; a palm label (`FROND_LABEL`) gets six arched fronds
-  (`tree/tree-fronds.ts`). Drawing prompts carry `PLANT_CLEAN`; species names count as trees.
-- Six trees replay offline: `make tree-replay OUT=r13`; sheet `resources/refine-3d/t79-bench.jpg`.
+  crown is found or the outline IoU < 0.4. Trunk = one `lathe`, crown = ≤ 36 clumps in 3 `sdf` tiers,
+  six arched fronds on a palm label. Drawing prompts carry `PLANT_CLEAN`.
+- Six trees replay offline: `make tree-replay OUT=r13`.
 
 ## Decisions
 
