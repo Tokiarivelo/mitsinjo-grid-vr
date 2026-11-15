@@ -17,7 +17,8 @@ import type {
   VisionResult,
 } from './schemas';
 
-type WithoutSource<T> = Omit<T, 'source' | 'model' | 'fallback'>;
+/** A backend answer without its envelope: what the cache remembers (PQ-T49). */
+export type WithoutSource<T> = Omit<T, 'source' | 'model' | 'fallback'>;
 
 export interface CriticOptions {
   promptVersion?: number;
@@ -156,6 +157,11 @@ export interface ShapeSubject {
   archetype?: string;
   /** Kit prompt version to ask with (PQ-T5, evals); default `KIT_PROMPT_VERSION`. */
   promptVersion?: number;
+  /**
+   * Skip the answer cache entirely (PQ-T49): the second kit sample of a vote must be an
+   * independent answer, never the first sample remembered.
+   */
+  fresh?: boolean;
 }
 
 /** What `describeParts` is told about the object. */

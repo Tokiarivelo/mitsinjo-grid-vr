@@ -41,6 +41,11 @@ const envSchema = z.object({
     .transform((v) => v === 'true'),
   /** Kit samples per photo (PQ-T18): 2 votes between two parallel calls when ≥ 40 s are left. */
   SHAPE_KIT_SAMPLES: z.coerce.number().int().min(1).max(2).default(1),
+  /** Meta answer cache (PQ-T49, E12): (image, prompt version) → kit, (crop, concept) → SAM. Off for agreement evals. */
+  SHAPE_CACHE: z
+    .enum(['true', 'false'])
+    .default('true')
+    .transform((v) => v === 'true'),
   META_IMAGE_MODEL: z.string().default('muse-image-1.0'),
   /** Estimated Meta spend allowed per chat session (USD). Over it → deterministic mock. 0 = no paid calls. */
   META_SPEND_CAP_USD: z.coerce.number().min(0).default(15),
@@ -80,6 +85,7 @@ export const env = envSchema.parse({
   SHAPE_SIDE_V2: process.env.SHAPE_SIDE_V2 || undefined,
   SHAPE_LOOP_CARDS: process.env.SHAPE_LOOP_CARDS || undefined,
   SHAPE_KIT_SAMPLES: process.env.SHAPE_KIT_SAMPLES || undefined,
+  SHAPE_CACHE: process.env.SHAPE_CACHE || undefined,
   META_IMAGE_MODEL: process.env.META_IMAGE_MODEL || undefined,
   META_SPEND_CAP_USD: process.env.META_SPEND_CAP_USD || undefined,
   META_PREFER_CONTRIBUTOR: process.env.META_PREFER_CONTRIBUTOR || undefined,

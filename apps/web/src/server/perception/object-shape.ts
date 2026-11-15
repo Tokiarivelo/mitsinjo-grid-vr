@@ -400,7 +400,7 @@ export async function runObjectShape(
     const started = Date.now();
     // No default budget: the caller's signal only (an explicit `timeoutMs` still bounds it).
     const kitSignal = timeoutSignal(timeoutMs, signal);
-    const askKit = () =>
+    const askKit = (fresh = false) =>
       perception.describeShape(
         imageUrl,
         {
@@ -412,19 +412,21 @@ export async function runObjectShape(
           ...(target.facadeUrl ? { facadeUrl: target.facadeUrl } : {}),
           ...(target.archetype ? { archetype: target.archetype } : {}),
           ...(promptVersion ? { promptVersion } : {}),
+          ...(fresh ? { fresh: true as const } : {}),
         },
         kitSignal
       );
     const kitStart = Date.now();
     const shapeCall = askKit();
     // PQ-T18: a second sample in parallel when asked and the budget allows it (≥ 40 s, or unbounded).
+    // PQ-T49: it asks `fresh`, so the vote never compares the cache with itself.
     const secondCall: Promise<ShapeResult | null> | null =
       kitSamples >= 2 &&
       (timeoutMs === null ||
         timeoutMs === undefined ||
         !Number.isFinite(timeoutMs) ||
         timeoutMs >= SECOND_SAMPLE_MIN_MS)
-        ? askKit().catch(() => null)
+        ? askKit(true).catch(() => null)
         : null;
     // 2D facade validated (user 2026-11-02): the house is rebuilt from its elevations — front
     // measured by SAM while Muse Image draws the side, then the side measured — in parallel

@@ -535,7 +535,14 @@ One task = one commit, with its Vitest test, its `contracts.md` update and its m
       `door_line` = always-vertical `seam`; outline counts the 5 proud newcomers; viewer and judge
       share `expandAssemblies` (flat test: flush keep the mask, step grows it); 18-kind triangle
       budget holds; contracts + V269. No builder sets them yet (designer pass first, as PQ-T20).
-- [ ] **PQ-T49 Parallelism, draft / refine, cache** (§12.6, E12).
+- [x] **PQ-T49 Parallelism, draft / refine, cache** (§12.6, E12).
+      _Built 2026-11-12:_ `shape-cache.ts` (per-process, bounded oldest-out: kit by image +
+      prompt/label/category/hint/facade, SAM by crop + concept; entries cloned both ways; usable
+      kits only, empty SAM kept) wired into `meta.ts` (`SHAPE_CACHE`, default on; hits log and cost
+      $0, cap still gates); `ShapeSubject.fresh` (second kit sample bypasses both ways, vote stays
+      independent); `make eval-shape` forces `SHAPE_CACHE=false`. E12 audit: parallel first answer
+      (kit + outline + measures launched together), staged draft/refine (`onStagesLeft`) and critic
+      skips (gates + free/facade/views/code) already held — verified, no change. Contracts + V270.
 - [ ] **PQ-T50 Organic generators + `plant` family** (§12.7, §7.3: `sweep, branch, scatter, drape`).
 - [ ] **PQ-T51 `loft` for vehicles, `inset` for openings** (§12.8, §7.3).
 - [ ] **PQ-T52 Short question per part, anatomy critic, three-view sheet** (§12.9, E9–E11).

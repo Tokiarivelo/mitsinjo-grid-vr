@@ -675,6 +675,9 @@ describe('runObjectShape kit samples (PQ-T18)', () => {
     });
     expect(p.describeShape).toHaveBeenCalledTimes(2);
     expect(out.mode).toBe('recipe');
+    // PQ-T49: the second sample asks fresh, so the vote never compares the cache with itself.
+    expect(p.describeShape.mock.calls[0]![1]).not.toHaveProperty('fresh');
+    expect(p.describeShape.mock.calls[1]![1]).toMatchObject({ fresh: true });
   });
 
   it('a failing second sample leaves the first alone', async () => {

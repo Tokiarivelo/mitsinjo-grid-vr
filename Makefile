@@ -140,7 +140,7 @@ shape-judge: ## Rubric judge (META_JUDGE_MODEL) on the real captures, intact vs 
 
 eval-shape: ## Kit eval on live Spark over the real captures (MODEL=…, PROMPT=1,2,3 kit prompt versions (3 = family card only, PQ-T13; prints a per-family on/off table), PR-3.1, costs API calls)
 	$(need_ws)
-	eval "$$(make -s env-export)" && EVAL_SHAPE=1 EVAL_SHAPE_DIR="$(CURDIR)/apps/web/src/server/perception/__fixtures__/shape/real" $(if $(MODEL),META_VISION_MODEL="$(MODEL)") $(if $(PROMPT),EVAL_SHAPE_PROMPTS="$(PROMPT)") $(PNPM) --filter $(WEB) exec vitest run src/server/perception/__tests__/eval-shape.test.ts -t "make eval-shape"
+	eval "$$(make -s env-export)" && EVAL_SHAPE=1 SHAPE_CACHE=false EVAL_SHAPE_DIR="$(CURDIR)/apps/web/src/server/perception/__fixtures__/shape/real" $(if $(MODEL),META_VISION_MODEL="$(MODEL)") $(if $(PROMPT),EVAL_SHAPE_PROMPTS="$(PROMPT)") $(PNPM) --filter $(WEB) exec vitest run src/server/perception/__tests__/eval-shape.test.ts -t "make eval-shape"
 	@$(MAKE) -s eval-stages
 
 eval-parts: ## Free-parts call on live Spark over the real captures (PROMPT=1,2, IDS=pump,fan limits the run; PQ-T12, costs API calls)
