@@ -432,6 +432,26 @@ describe('MetaPerceptionBackend (shapes recorded from real calls, 2026-10-30)', 
       await expect(noKey.segmentImage('https://x', 'roof')).rejects.toThrow(/META_API_KEY/);
     }
   });
+
+  it('writes build code with the v1 prompt by default, v2 on request (PQ-T55)', async () => {
+    const reply = {
+      choices: [{ message: { content: JSON.stringify({ code: 'return []; ' }) } }],
+      usage: { prompt_tokens: 100, completion_tokens: 20 },
+    };
+    const sysOf = (fetchMock: ReturnType<typeof vi.fn>) => {
+      const body = JSON.parse(lastRequest(fetchMock).init.body as string);
+      return body.messages[0].content as string;
+    };
+    const first = respond(reply);
+    const v1 = await backend.writeBuildCode('data:image/png;base64,AA', 'q');
+    expect(v1.result).toEqual({ code: 'return [];' });
+    expect(sysOf(first)).toMatch(/House rules/);
+    expect(sysOf(first)).not.toMatch(/VEHICLE:/);
+    const second = respond(reply);
+    await backend.writeBuildCode('data:image/png;base64,AA', 'q', undefined, 2);
+    expect(sysOf(second)).toMatch(/VEHICLE:/);
+    expect(sysOf(second)).toMatch(/PLANT:/);
+  });
 });
 
 describe('Meta answer cache (PQ-T49 E12)', () => {

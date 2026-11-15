@@ -13,6 +13,12 @@ import { CODE_MAX_BYTES } from './code-sandbox';
 
 /** Current writer prompt; bumped only with a measured eval behind it (PQ-T5). */
 export const CODE_PROMPT_VERSION = 1;
+/**
+ * Generic writer prompt (PQ-T55): v1 only knew houses, so the B-vs-A eval on willow, car and
+ * appliances asks v2. Opt-in until the eval backs it (`writeBuildCode(…, version)`); the live
+ * house path stays on v1.
+ */
+export const CODE_PROMPT_GENERIC_VERSION = 2;
 
 /** The construction `api` the guest sees, as Wonder must know it (single source: the prompt). */
 const CODE_API_SPEC = [
@@ -37,8 +43,46 @@ export const CODE_SYSTEM_PROMPT = [
   'Never output an energy value (no watt, kW, kWh). Never invent colours: main/secondary/accent roles only. Answer only the JSON schema: { "code": "<build() body>" }.',
 ].join('\n');
 
+/**
+ * Grown-geometry options a part may carry (PQ-T50/51 §7.3, `sdf` PQ-T53 §8): the guest passes
+ * them inside the `api.*` options object and the recipe schema validates them like the rest.
+ * Field names mirror the Zod schemas; an invalid part is dropped with its reason, not fatal.
+ */
+const CODE_GROWN_OPTIONS = [
+  'Grown options (inside any part object; same validation as the recipe):',
+  "- generator {op:'sweep', seed, points (2-8 [x,y,z] centres within ±0.6), r0, r1, flare?} — trunks, pipes, rails.",
+  "- generator {op:'branch', seed, at, dir, length, radius, levels 1-3, count 2-5, angle, droop, decay} — limbs.",
+  "- generator {op:'scatter', seed, volume {shape box|ellipsoid, at, size}, count ≤ 60, size, orientation flat|upright|random, colors[1-4]} — leaves, thatch.",
+  "- generator {op:'drape', seed, points 1-12, strands 1-4, length, waviness, thickness} — hanging strands.",
+  "- generator {op:'loft', axis x|y|z, stations 3-6 {width, height, radius}} — bodies along the host extent.",
+  "- generator {op:'inset', face front|back|left|right|top, u, v, w, h, depth -0.3 to 0.05} — hollows and reliefs on a face.",
+  '- sdf shape: blobs [{kind sphere|capsule|ellipsoid|box, c (centre within ±0.5), r|radii|size, axis?+halfLen?, k? blend ≤ 0.1}], 1-12 blobs, radii ≥ 0.04.',
+].join('\n');
+
+/** Per-kind rules (PQ-T55 v2): the question names the kind, the matching section applies. */
+const CODE_KIND_RULES = [
+  'Follow the section for this object kind:',
+  'HOUSE: the roof overhang and slope come from the measured roofline; windows and doors sit on all four faces where the photo or the drawing shows them; the roof foot overlaps the wall top (no groove at the joint); gable ends are wall, not roof.',
+  'VEHICLE: a lofted body along x with a tapered nose and tail beats a box; the glasshouse (windscreen, side glass, rear window) is dark glass proud of the cabin; wheels sit in arches at the four corners, lights and bumpers at both ends.',
+  'PLANT: trunk by sweep with base flare, limbs by branch, crown by scatter inside the measured outline volume, hanging strands by drape; the crown underside is hollow (trunk visible into it), never a solid dome.',
+  'TECHNICAL (cabinet, machine, screen, tank, fan, lamp, pole, other): one hull box first, then door leaves, handles, vents, feet and displays as thin proud parts; symmetric unless the photo shows otherwise.',
+].join('\n');
+
+export const CODE_SYSTEM_PROMPT_V2 = [
+  'You write the body of build(api, params), JavaScript that constructs ONE 3D object for a SIMULATED rural microgrid editor. It must return an array of parts.',
+  CODE_API_SPEC,
+  CODE_GROWN_OPTIONS,
+  'OBSERVE, DO NOT GUESS: every value you choose cites the measure or the photo zone that justifies it in a short comment (e.g. // overhang: roofline measured 6 % wider than the wall). A face the photo does not show is imagined from the object kind (thatch overhangs more than tile) and stays plausible and symmetric.',
+  'Rebuild the draft for THIS object: keep what the photo confirms, fix what the score and the current render prove wrong (silhouette, part counts and places, colours per part). Small, exact parts beat many approximate ones.',
+  CODE_KIND_RULES,
+  'Never output an energy value (no watt, kW, kWh). Never invent colours: main/secondary/accent roles only. Answer only the JSON schema: { "code": "<build() body>" }.',
+].join('\n');
+
 /** Every writer prompt still comparable by version (current = `CODE_PROMPT_VERSION`). */
-export const CODE_PROMPTS: Readonly<Record<number, string>> = { 1: CODE_SYSTEM_PROMPT };
+export const CODE_PROMPTS: Readonly<Record<number, string>> = {
+  1: CODE_SYSTEM_PROMPT,
+  [CODE_PROMPT_GENERIC_VERSION]: CODE_SYSTEM_PROMPT_V2,
+};
 
 /** The writer system prompt of `version` (default: current); throws on a version not kept. */
 export function codePrompt(version: number = CODE_PROMPT_VERSION): string {
@@ -80,6 +124,8 @@ export function codeModel(): string {
 
 export interface CodeQuestionInput {
   label: string;
+  /** Kit archetype (`tree`, `vehicle`, …): selects the v2 kind section, shown beside the label. */
+  archetype?: string;
   /** The template draft to rebuild for this object (its proportions win). */
   draft: ObjectRecipe;
   /** One-line score of the draft (`0.83 (iou 0.91, edge 0.55, ΔE 6.2)`). */
@@ -109,7 +155,7 @@ export function buildCodeQuestion(q: CodeQuestionInput): string {
     })),
   });
   const lines = [
-    `Object: ${q.label}. Draft score ${q.scoreText}${q.detailText ? ` (${q.detailText})` : ''}.`,
+    `Object: ${q.label}${q.archetype ? ` (${q.archetype})` : ''}. Draft score ${q.scoreText}${q.detailText ? ` (${q.detailText})` : ''}.`,
     `Draft: ${draft}`,
   ];
   if (q.measuresText) lines.push(`Measured: ${q.measuresText}. Cite these in comments.`);

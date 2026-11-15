@@ -139,7 +139,9 @@ export interface PerceptionBackend {
   writeBuildCode?(
     imageUrl: string,
     question: string,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    /** Writer prompt version (PQ-T55 v2: generic kinds; default = current). */
+    version?: number
   ): Promise<PerceptionCall<CodeResult>>;
 }
 

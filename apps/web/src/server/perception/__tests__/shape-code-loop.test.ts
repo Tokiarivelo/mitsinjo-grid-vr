@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('server-only', () => ({}));
 import type { ObjectRecipe } from '@/lib/object-shape';
 import { CODE_PROMPT_VERSION } from '../shape-code';
-import { CODE_ROUNDS_MAX, codeSeedFor, refineWithCode } from '../shape-code-loop';
+import { CODE_ROUNDS_MAX, codeRoundValid, codeSeedFor, refineWithCode } from '../shape-code-loop';
 import type { CodeParams } from '../code-sandbox';
 
 const part = (color = '#ffffff') => ({
@@ -137,5 +137,66 @@ describe('shape-code-loop (PQ-T45)', () => {
   it('seeds deterministically per object id', () => {
     expect(codeSeedFor('house-front')).toBe(codeSeedFor('house-front'));
     expect(codeSeedFor('house-front')).not.toBe(codeSeedFor('car-side'));
+  });
+
+  it('times every round and splits writer / exec / score (PQ-T55)', async () => {
+    const { out } = await runLoop({ bodies: ['good', 'bad', null], scores: [0.79] });
+    expect(out.rounds).toHaveLength(3);
+    for (const r of out.rounds) {
+      expect(r.ms).toBeGreaterThanOrEqual(0);
+      expect(r.writeMs).toBeGreaterThanOrEqual(0);
+      expect(r.execMs).toBeGreaterThanOrEqual(0);
+      expect(r.scoreMs).toBeGreaterThanOrEqual(0);
+      expect(r.writeMs + r.execMs + r.scoreMs).toBeLessThanOrEqual(r.ms);
+    }
+    // The no-code round never reaches the sandbox or the yardstick.
+    expect(out.rounds[2]).toMatchObject({ reason: 'no code', execMs: 0, scoreMs: 0 });
+  });
+
+  it('records model and cost when the writer reports usage (PQ-T55)', async () => {
+    const out = await refineWithCode({
+      label: 'house',
+      draft: DRAFT,
+      baseScore: 0.8,
+      params: PARAMS,
+      sheet: async () => 'data:image/png;base64,x',
+      writeCode: async () => ({
+        code: 'good',
+        model: 'muse-spark-1.3',
+        usage: { inputTokens: 1_000_000, outputTokens: 1_000_000 },
+      }),
+      score: async () => 0.79,
+      execute: async () => ({ ok: true as const, recipe: BETTER, issues: [], stats: STATS }),
+      roundsMax: 1,
+    });
+    expect(out.rounds[0]?.model).toBe('muse-spark-1.3');
+    // 1 M in × $1.25 + 1 M out × $4.25.
+    expect(out.rounds[0]?.costUsd).toBeCloseTo(5.5, 6);
+  });
+
+  it('passes the archetype to the writer question (PQ-T55)', async () => {
+    const questions: string[] = [];
+    await refineWithCode({
+      label: 'willow',
+      archetype: 'tree',
+      draft: DRAFT,
+      baseScore: 0.8,
+      params: PARAMS,
+      sheet: async () => 'data:image/png;base64,x',
+      writeCode: async (_image, question) => {
+        questions.push(question);
+        return { code: null };
+      },
+      score: async () => null,
+      roundsMax: 1,
+    });
+    expect(questions[0]).toMatch(/willow \(tree\)/);
+  });
+
+  it('counts a round valid when its body executed (PQ-T55)', () => {
+    expect(codeRoundValid({ bytes: 0, score: null, reason: 'no code' })).toBe(false);
+    expect(codeRoundValid({ bytes: 12, score: null, reason: 'boom' })).toBe(false);
+    expect(codeRoundValid({ bytes: 12, score: 0.8 })).toBe(true);
+    expect(codeRoundValid({ bytes: 12, score: null, reason: 'unscorable' })).toBe(true);
   });
 });

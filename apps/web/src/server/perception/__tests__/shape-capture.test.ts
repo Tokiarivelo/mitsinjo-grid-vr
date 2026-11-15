@@ -313,8 +313,10 @@ describe.skipIf(!LIVE)('make shape-capture', () => {
     let code: ShapeCode | undefined;
     const started = Date.now();
     // Offline tooling, not the live path: an explicit budget (routes set none and wait).
+    // PQ-T55: 10 min so a house route-B loop reaches its stall stop (PQ-T46 left round 2
+    // hanging at the old budget).
     const shape = await runObjectShape(perception, size, dataUrl, target, {
-      timeoutMs: 150_000,
+      timeoutMs: 600_000,
       onKit: (k) => (kit = k),
       onCode: (c) => (code = c),
     });
@@ -360,5 +362,5 @@ describe.skipIf(!LIVE)('make shape-capture', () => {
           : ', no outline: rescore skipped') +
         `\n  ${json}\n  ${jpg}`
     );
-  }, 300_000);
+  }, 900_000);
 });
