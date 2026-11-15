@@ -48,7 +48,9 @@ try {
           [method, params]
         );
       } catch (e) {
-        if (attempt >= 4 || !/timed out/.test(String(e))) throw e;
+        if (attempt >= 8 || !/timed out/.test(String(e))) throw e;
+        // The render loop is stalled (often right after a screenshot): give it time to resume.
+        await sleep(5000);
       }
     }
   };
@@ -243,11 +245,14 @@ try {
   await shot('sim-6-interior-dark');
   await pressPanel('restore');
   await pressPanel('exit');
+  // The teleport lands a few frames after the press on software GL.
+  await waitFor(async () => (await state()).inside === null && (await head())[1] > -5, 60000);
   const out = await head();
+  const outState = await state();
   check(
     '« Go outside » brings you to the door',
-    (await state()).inside === null && out[1] > -5 && xz(out, HOUSEHOLDS) < 8,
-    `${xz(out, HOUSEHOLDS).toFixed(1)} m from the houses`
+    outState.inside === null && out[1] > -5 && xz(out, HOUSEHOLDS) < 8,
+    `${xz(out, HOUSEHOLDS).toFixed(1)} m from the houses, y ${out[1].toFixed(1)}, inside ${outState.inside}`
   );
 
   // --- The clinic is never cut ---------------------------------------------------------------
