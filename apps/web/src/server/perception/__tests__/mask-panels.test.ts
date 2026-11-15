@@ -11,6 +11,7 @@ import {
   ObjectRecipeSchema,
   type ObjectRecipe,
   type PartMask,
+  type RecipePart,
   type ShapeTarget,
 } from '@/lib/object-shape';
 import { polygonPath } from '@/lib/vision';
@@ -21,7 +22,7 @@ import type { MaskMapGeom } from '../mask-geometry';
 import { runObjectShape } from '../object-shape';
 import { scoreRecipe } from '../score-shape';
 import { cropRectForShape } from '../shape-crop';
-import { convexHull, minAreaRect, withMaskPanels } from '../mask-panels';
+import { convexHull, fitSidePanel, minAreaRect, withMaskPanels } from '../mask-panels';
 
 const vehicleKit = (): ObjectKit => ({
   archetype: 'vehicle',
@@ -638,5 +639,64 @@ describe('withMaskPanels (PR-2.7)', () => {
       `[test] cottage openings score: ${plainScored.score.score} → ${scored.score.score}`
     );
     expect(scored.score.score).toBeGreaterThanOrEqual(plainScored.score.score - 2);
+  });
+});
+
+describe('fitSidePanel + oblique faces (PQ-T44 remedy 3)', () => {
+  const wall: RecipePart = { shape: 'box', at: [0, 0, 0], size: [1, 1, 1], color: '#aaaaaa' };
+
+  it('un-projects a side-strip mask onto the visible face depth', () => {
+    // yaw 0.5: left face visible; a mask at rect.x -0.44 sits mid-depth.
+    const hit = fitSidePanel({ x: -0.44, y: 0, w: 0.1, h: 0.2 }, 0.5, 1, 0.5, wall)!;
+    expect(hit.z).toBeCloseTo(0, 1);
+    expect(hit.w).toBeCloseTo(0.417, 2);
+    expect(hit.h).toBe(0.2);
+    expect(hit.y).toBe(0);
+    // Mirrored yaw shows the right face with the same depth.
+    const mirror = fitSidePanel({ x: 0.44, y: 0, w: 0.1, h: 0.2 }, -0.5, 1, 0.5, wall)!;
+    expect(mirror.z).toBeCloseTo(0, 1);
+  });
+
+  it('rejects edge-on yaws, front-span masks and false positives', () => {
+    expect(fitSidePanel({ x: -0.44, y: 0, w: 0.1, h: 0.2 }, 0.1, 1, 0.5, wall)).toBeNull();
+    expect(fitSidePanel({ x: 0.3, y: 0, w: 0.1, h: 0.2 }, 0.5, 1, 0.5, wall)).toBeNull();
+    expect(fitSidePanel({ x: -0.44, y: 0.9, w: 0.1, h: 0.2 }, 0.5, 1, 0.5, wall)).toBeNull();
+    expect(fitSidePanel({ x: -0.44, y: 0, w: 0.005, h: 0.2 }, 0.5, 1, 0.5, wall)).toBeNull();
+  });
+
+  it('yawed house: side masks become measured overlays, template sides replaced', () => {
+    const geom = geomA();
+    const recipe = {
+      ...kitToRecipe({ ...houseKit(), details: { windows: 2, doors: 0 } }),
+      yaw: 0.5,
+    };
+    expect(recipe.parts).toHaveLength(12);
+    const out = withMaskPanels(
+      'house',
+      recipe,
+      [
+        rectMask(geom, 'window', 60, 50, 90, 66),
+        rectMask(geom, 'window', 22, 50, 34, 70),
+        rectMask(geom, 'window', 34, 52, 46, 62),
+      ],
+      geom
+    );
+    expect(out).not.toBe(recipe);
+    const sides = (s: number) =>
+      out.parts.filter((p) => p.shape === 'box' && p.size[0] === 0.02 && Math.sign(p.at[0]) === s);
+    // Visible (left) face: two measured overlays, outer (taller) deeper than inner.
+    const left = sides(-1);
+    expect(left).toHaveLength(2);
+    expect(left.every((p) => p.status === undefined)).toBe(true);
+    const byHeight = [...left].sort((a, b) => b.size[1] - a.size[1]);
+    expect(byHeight[0]!.at[2]).toBeLessThan(byHeight[1]!.at[2]!);
+    // Hidden face keeps its template pair; front still segmented around its leaf.
+    const right = sides(1);
+    expect(right).toHaveLength(2);
+    expect(right.every((p) => p.status === 'inferred')).toBe(true);
+    expect(
+      out.parts.some((p) => p.shape === 'box' && p.size[2] === 0.02 && Math.abs(p.at[2]!) < 0.01)
+    ).toBe(true);
+    expect(ObjectRecipeSchema.safeParse(out).success).toBe(true);
   });
 });

@@ -13,6 +13,7 @@ import {
   enforcePartBudget,
   partCeiling,
   isWheelPart,
+  sideFacePlates,
   MASK_YAW_HARD_MAX,
   MASK_YAW_MAX,
   PART_KEEP_VOLUME,
@@ -211,6 +212,56 @@ interface PlacedPanel {
   h: number;
 }
 
+/** A measured opening on a ±x side face: depth position instead of x. */
+interface SidePanel {
+  concept: 'window' | 'door';
+  y: number;
+  z: number;
+  /** Extent along the depth. */
+  w: number;
+  h: number;
+}
+
+/**
+ * Side-face placement (PQ-T44 remedy 3): masks the front span rejects are tried on the
+ * visible ±x face (yaw > 0 shows the left one: screenX = x·cos + z·sin, camera at +z).
+ * Measurable from 17° (edge-on below) to the 60° hard max. Null when the mask fits no
+ * side geometry (a false positive or the other face).
+ */
+export function fitSidePanel(
+  rect: { x: number; y: number; w: number; h: number },
+  yaw: number,
+  w: number,
+  d: number,
+  main: RecipePart
+): Omit<SidePanel, 'concept'> | null {
+  if (Math.abs(yaw) < MASK_YAW_MAX) return null;
+  const cos = Math.cos(yaw);
+  const sin = Math.sin(yaw);
+  const xFace = main.at[0] + (Math.sign(yaw) > 0 ? -1 : 1) * (main.size[0] / 2);
+  const z = (rect.x * w - xFace * w * cos) / (d * sin);
+  const zw = (rect.w * w) / (Math.abs(sin) * d);
+  const z0 = main.at[2] - main.size[2] / 2;
+  const z1 = main.at[2] + main.size[2] / 2;
+  const y0 = main.at[1] - main.size[1] / 2;
+  const y1 = main.at[1] + main.size[1] / 2;
+  if (z < z0 - 0.03 || z > z1 + 0.03 || rect.y < y0 - 0.03 || rect.y > y1 + 0.03) return null;
+  const cw = Math.min(zw, z1 - z0);
+  const ch = Math.min(rect.h, y1 - y0);
+  if (cw < PANEL_MIN_SIZE || ch < PANEL_MIN_SIZE) return null;
+  return {
+    y: Math.min(y1 - ch / 2, Math.max(y0 + ch / 2, rect.y)),
+    z: Math.min(z1 - cw / 2, Math.max(z0 + cw / 2, z)),
+    w: cw,
+    h: ch,
+  };
+}
+
+/** Visible ±x face from the yaw sign (render turns x by yaw: yaw > 0 shows the left face). */
+function sideSignOf(yaw: number): 1 | -1 {
+  return yaw > 0 ? -1 : 1;
+}
+
 /**
  * Measured glass and door panels (PR-2.7, PR-2.12): each window/door mask becomes a thin
  * panel at its min-area rectangle on the shell (vehicle) or walls (house) face, replacing the
@@ -274,6 +325,7 @@ export function withMaskPanels(
   const sin = Math.sin(yaw);
   const { w, d } = recipe.proportions;
   const panels: PlacedPanel[] = [];
+  const sidePanels: Array<SidePanel & { concept: 'window' | 'door' }> = [];
   let windows = 0;
   let doors = 0;
   for (const mask of masks) {
@@ -291,18 +343,41 @@ export function withMaskPanels(
       ux = (rect.x * w - face * d * sin) / cos / w;
       uw = rect.w / cos;
     }
-    if (ux < x0 - 0.03 || ux > x1 + 0.03 || rect.y < y0 - 0.03 || rect.y > y1 + 0.03) continue;
-    const cw = Math.min(uw, x1 - x0);
-    const ch = Math.min(rect.h, y1 - y0);
-    const px = Math.min(x1 - cw / 2, Math.max(x0 + cw / 2, ux));
-    const py = Math.min(y1 - ch / 2, Math.max(y0 + ch / 2, rect.y));
-    if (cw < PANEL_MIN_SIZE || ch < PANEL_MIN_SIZE) continue;
-    panels.push({ concept: mask.concept, x: px, y: py, w: cw, h: ch });
+    const frontFit = !(
+      ux < x0 - 0.03 ||
+      ux > x1 + 0.03 ||
+      rect.y < y0 - 0.03 ||
+      rect.y > y1 + 0.03
+    );
+    // Houses at an angle: masks off the front span are tried on the visible side face.
+    const sideHit = !frontFit && archetype === 'house' ? fitSidePanel(rect, yaw, w, d, main) : null;
+    if (!frontFit && !sideHit) continue;
+    if (sideHit) {
+      sidePanels.push({ concept: mask.concept, ...sideHit });
+    } else {
+      const cw = Math.min(uw, x1 - x0);
+      const ch = Math.min(rect.h, y1 - y0);
+      const px = Math.min(x1 - cw / 2, Math.max(x0 + cw / 2, ux));
+      const py = Math.min(y1 - ch / 2, Math.max(y0 + ch / 2, rect.y));
+      if (cw < PANEL_MIN_SIZE || ch < PANEL_MIN_SIZE) continue;
+      panels.push({ concept: mask.concept, x: px, y: py, w: cw, h: ch });
+    }
     if (mask.concept === 'window') windows++;
     else doors++;
   }
-  if (panels.length === 0) return recipe;
+  if (panels.length === 0 && sidePanels.length === 0) return recipe;
   const paint = (c: PlacedPanel['concept']) => (c === 'window' ? glass! : (doorPaint ?? glass!));
+  const sideSign = sideSignOf(yaw);
+  const mkSide = (pp: SidePanel & { concept: 'window' | 'door' }): RecipePart => {
+    const pc = paint(pp.concept);
+    return {
+      shape: 'box',
+      at: [main.at[0] + (sideSign * main.size[0]) / 2 + (sideSign * PANEL_THICK) / 2, pp.y, pp.z],
+      size: [PANEL_THICK, pp.h, pp.w],
+      color: pc.color,
+      ...(pc.material ? { material: pc.material } : {}),
+    };
+  };
 
   // PR-2.17: real openings — the wall segments around the measured holes and each leaf sits
   // centred in its hole instead of floating on the face. Whole-wall atomic: when strips +
@@ -324,6 +399,7 @@ export function withMaskPanels(
           at: [s.x, s.y, main.at[2]],
           size: [s.w, s.h, main.size[2]],
           color: main.color,
+          kind: 'wall',
           ...(main.material ? { material: main.material } : {}),
         }));
         // The wall node survives as its largest strip (keeps `front`, parents the leaves).
@@ -342,7 +418,20 @@ export function withMaskPanels(
             ...(pc.material ? { material: pc.material } : {}),
           };
         });
-        return { ...recipe, parts: [...rest, ...stripParts, ...leaves] };
+        // Measured sides replace the guessed ones on the visible face when room allows.
+        const room = CEIL - (rest.length + stripParts.length + leaves.length);
+        const placed = sidePanels.slice(0, Math.max(0, room));
+        const cut = placed.length > 0 ? sideFacePlates(rest, main, sideSign) : [];
+        if (placed.length < sidePanels.length) {
+          console.info(
+            `[vision] 3D panels: ${sidePanels.length - placed.length} side panel(s) dropped, no room`
+          );
+        }
+        const kept = rest.filter((p) => !cut.includes(p));
+        return {
+          ...recipe,
+          parts: [...kept, ...stripParts, ...leaves, ...placed.map((pp) => mkSide(pp))],
+        };
       }
     }
   }
@@ -414,11 +503,15 @@ export function withMaskPanels(
     if (mirror) parts.push(mk(pp, -(face + PANEL_PROUD)));
   }
   const { parts: fit, dropped } = enforcePartBudget(parts, protect, { max: CEIL });
+  const sideRoom = CEIL - fit.length;
+  const placed = sidePanels.slice(0, Math.max(0, sideRoom));
+  const cut = placed.length > 0 ? sideFacePlates(fit, main, sideSign) : [];
+  const out = [...fit.filter((p) => !cut.includes(p)), ...placed.map((pp) => mkSide(pp))];
   const allDropped = [...base.dropped, ...dropped];
   if (allDropped.length > 0) {
     console.info(
       `[vision] 3D panels: budget dropped ${allDropped.length} part(s): ${allDropped.join(' ')}`
     );
   }
-  return { ...recipe, parts: fit };
+  return { ...recipe, parts: out };
 }

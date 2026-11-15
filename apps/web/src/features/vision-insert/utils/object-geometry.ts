@@ -6,6 +6,7 @@ import {
   DEFAULT_ROOF_OVERHANG,
   HIP_CLIP_MAX,
   MAX_TRIANGLES,
+  wallTintFor,
   type ObjectRecipe,
   type RecipePart,
 } from '@/lib/object-shape';
@@ -15,7 +16,7 @@ import { holedBox } from './holed-wall';
 import { expandAssemblies } from './assembly-parts';
 import { trimReach } from './roof-trim';
 import type { AssemblyDetail } from './openings';
-import { planarUvs } from './surface-maps';
+import { planarUvs, seedForRecipe, uvOffsetFor } from './surface-maps';
 import { type ApplianceDetection, type NormBox, type SceneryType } from '@/lib/vision';
 
 /**
@@ -499,7 +500,8 @@ function buildMesh(recipe: ObjectRecipe, detail: AssemblyDetail): THREE.BufferGe
   const sorted = expanded
     .map((p) => ({ p, surface: surfaceIndex(p.material) }))
     .sort((a, b) => a.surface - b.surface);
-  const parts = sorted.map(({ p, surface }) => {
+  const seed = seedForRecipe(recipe);
+  const parts = sorted.map(({ p, surface }, i) => {
     const [sx, sy, sz] = [p.size[0] * dims[0], p.size[1] * dims[1], p.size[2] * dims[2]];
     let g: THREE.BufferGeometry;
     const cut = holes.get(p);
@@ -542,7 +544,8 @@ function buildMesh(recipe: ObjectRecipe, detail: AssemblyDetail): THREE.BufferGe
         planarUvs(
           g.getAttribute('position').array,
           g.getAttribute('normal').array,
-          p.shape === 'prism' || p.shape === 'hip'
+          p.shape === 'prism' || p.shape === 'hip',
+          uvOffsetFor(seed, i)
         ),
         2
       )
@@ -553,7 +556,35 @@ function buildMesh(recipe: ObjectRecipe, detail: AssemblyDetail): THREE.BufferGe
     color.set(p.color);
     const count = g.getAttribute('position').count;
     const colors = new Float32Array(count * 3);
-    for (let i = 0; i < count; i++) color.toArray(colors, i * 3);
+    const tints = recipe.wallTints;
+    const tintable =
+      tints !== undefined && p.shape === 'box' && (p.kind === 'wall' || p.front === true);
+    if (!tintable) {
+      for (let i = 0; i < count; i++) color.toArray(colors, i * 3);
+    } else {
+      // Per-face tints (PQ-T44 remedy 4): bucket by the pre-yaw normal (faces are object-fixed).
+      const nrm = g.getAttribute('normal');
+      const cy = Math.cos(recipe.yaw ?? 0);
+      const sy = Math.sin(recipe.yaw ?? 0);
+      const palette = new Map<string, [number, number, number]>();
+      const rgbOf = (hex: string): [number, number, number] => {
+        const hit = palette.get(hex);
+        if (hit) return hit;
+        const v: [number, number, number] = [0, 0, 0];
+        new THREE.Color(hex).toArray(v);
+        palette.set(hex, v);
+        return v;
+      };
+      for (let i = 0; i < count; i++) {
+        const nx = nrm.getX(i) * cy - nrm.getZ(i) * sy;
+        const nz = nrm.getX(i) * sy + nrm.getZ(i) * cy;
+        const hex = wallTintFor(p, tints, [nx, nrm.getY(i), nz]) ?? p.color;
+        const [r, gg, b] = rgbOf(hex);
+        colors[i * 3] = r;
+        colors[i * 3 + 1] = gg;
+        colors[i * 3 + 2] = b;
+      }
+    }
     g.setAttribute('color', new THREE.BufferAttribute(colors, 3));
     return g;
   });

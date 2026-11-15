@@ -74,6 +74,18 @@ describe('deduceHiddenSides (PR-2.16)', () => {
     }
   });
 
+  it('skips gable ends on faces that already carry side windows (PQ-T44)', () => {
+    const r = houseRecipe();
+    r.parts.push(
+      part({ shape: 'box', at: [-0.51, 0.1, 0.1], size: [0.02, 0.14, 0.1], color: '#2222bb' })
+    );
+    const out = deduceHiddenSides('house', r, { yaw: 0, colors: COLORS, room: 4 });
+    // Back set (2) fits the leftover room; only the bare right face gets an end.
+    const ends = out.filter((p) => p.shape === 'box' && p.size[0] === 0.02);
+    expect(ends).toHaveLength(1);
+    expect(ends[0]!.at[0]).toBeGreaterThan(0);
+  });
+
   it('skips plates whose twin already exists', () => {
     const r = houseRecipe();
     r.parts.push(

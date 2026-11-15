@@ -2,7 +2,7 @@ import 'server-only';
 
 import type { KitArchetype, ObjectKit } from '@/lib/object-kit';
 import { frontPartIndex, type ObjectRecipe, type RecipePart } from '@/lib/object-shape';
-import { MASK_YAW_MAX, PART_MIRROR_MIN_Z } from './mask-geometry';
+import { MASK_YAW_MAX, PART_MIRROR_MIN_Z, sideFacePlates } from './mask-geometry';
 
 /**
  * Hidden-side deduction (PR-2.16): rule-based multiview completion, pre-S4. From the fitted
@@ -148,7 +148,11 @@ function endWindows(parts: ReadonlyArray<RecipePart>, main: RecipePart): RecipeP
     color: ref.color,
   });
   const pair = [wins(1), wins(-1)];
-  return pair.some((w) => occupied(parts, w)) ? [] : pair;
+  // Faces that already carry side windows (template or measured) keep them; only bare faces
+  // get a deduced end (PQ-T44 remedy 3: measured-visible pairs with deduced-hidden).
+  const wanted = pair.filter((_, i) => sideFacePlates(parts, main, i === 0 ? 1 : -1).length === 0);
+  if (wanted.length === 0) return [];
+  return wanted.some((w) => occupied(parts, w)) ? [] : wanted;
 }
 
 /**

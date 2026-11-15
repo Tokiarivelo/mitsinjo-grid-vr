@@ -113,6 +113,29 @@ export function isWheelPart(p: RecipePart, midY: number): boolean {
   return p.shape === 'cylinder' && p.axis === 'z' && p.at[1] < midY;
 }
 
+/**
+ * Window-ish plates on one ±x side face (PQ-T44 remedy 3): thin in x, small in z (a wall
+ * strip spans the depth), on the wall band. Template sides and measured overlays both match;
+ * the deduced end windows skip faces that already have them.
+ */
+export function sideFacePlates(
+  parts: ReadonlyArray<RecipePart>,
+  main: RecipePart,
+  forX: 1 | -1
+): RecipePart[] {
+  const faceX = main.at[0] + (forX * main.size[0]) / 2;
+  return parts.filter(
+    (p) =>
+      p !== main &&
+      p.shape === 'box' &&
+      Math.sign(p.at[0] - main.at[0]) === forX &&
+      Math.abs(p.at[0] - faceX) < 0.06 &&
+      p.size[0] <= 0.05 &&
+      p.size[2] < main.size[2] - 0.01 &&
+      Math.abs(p.at[1] - main.at[1]) <= main.size[1] / 2
+  );
+}
+
 const volume = (p: RecipePart) => p.size[0] * p.size[1] * p.size[2];
 const describe = (p: RecipePart) => `${p.shape}@[${p.at.map((v) => v.toFixed(2)).join(',')}]`;
 

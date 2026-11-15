@@ -7,6 +7,7 @@ import {
   type AppliancePosition,
   type SectorId,
 } from '@mitsinjo/engine';
+import { fnv1a32 } from '@/lib/hash';
 import { isAppliance, type ApplianceDetection } from '@/lib/vision';
 import { nearestSector } from '@/features/microgrid-3d/utils/placement';
 
@@ -138,12 +139,7 @@ export const fromAppliance = (
  */
 export function photoKey(url: string): string {
   const sample = `${url.length}|${url.slice(0, 4096)}|${url.slice(-4096)}`;
-  let h = 0x811c9dc5;
-  for (let i = 0; i < sample.length; i++) {
-    h ^= sample.charCodeAt(i);
-    h = Math.imul(h, 0x01000193);
-  }
-  return (h >>> 0).toString(36);
+  return fnv1a32(sample).toString(36);
 }
 
 /** Engine id of a photo object: `vision-<photo>-<detection>` (≤ 64 chars). */

@@ -400,4 +400,20 @@ describe('assembly details (PQ-T3): the judge sees what the viewer shows', () =>
     expect(r.mask.data.some((v) => v === 1)).toBe(true);
     expect(ms).toBeLessThan(process.env.SHAPE_BUDGET_STRICT ? 300 : 900);
   });
+
+  it('wall tints colour faces by normal (PQ-T44)', () => {
+    const wall = part({
+      shape: 'box',
+      at: [0, 0, 0],
+      size: [1, 1, 1],
+      color: '#808080',
+      kind: 'wall',
+    });
+    const plain = renderFlat(recipe([wall]), 1, 32, 32);
+    const tinted = renderFlat({ ...recipe([wall]), wallTints: { front: '#ff0000' } }, 1, 32, 32);
+    const p0 = pixel(plain, 16, 16, 32);
+    const p1 = pixel(tinted, 16, 16, 32);
+    expect(p1[0]!).toBeGreaterThan(p1[1]!);
+    expect(p1).not.toEqual(p0);
+  });
 });

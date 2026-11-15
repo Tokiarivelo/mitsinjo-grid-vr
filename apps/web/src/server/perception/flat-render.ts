@@ -9,7 +9,7 @@
  */
 import { expandAssemblies } from '@/features/vision-insert/utils/assembly-parts';
 import type { WallHole } from '@/features/vision-insert/utils/openings';
-import { HIP_CLIP_MAX, type ObjectRecipe, type RecipePart } from '@/lib/object-shape';
+import { HIP_CLIP_MAX, wallTintFor, type ObjectRecipe, type RecipePart } from '@/lib/object-shape';
 import { hexToRgb } from './color-measure';
 import {
   applyTransform,
@@ -561,6 +561,7 @@ export function renderFlat(
     // Ray toward −z in view space, mapped to the unit space of the part.
     const d = mul(inv, [0, 0, -1]);
     const [cr, cg, cb] = hexToRgb(p.color);
+    const tintRgb = new Map<string, [number, number, number]>();
     for (let r = r0; r <= r1; r++) {
       const y = cy + fh / 2 - ((r + 0.5) / rows) * fh;
       for (let c = c0; c <= c1; c++) {
@@ -583,11 +584,24 @@ export function renderFlat(
           inv[2]! * nx + inv[5]! * ny + inv[8]! * nz,
         ]);
         const shade = FLAT_AMBIENT + (1 - FLAT_AMBIENT) * Math.max(0, dot(nv, FLAT_LIGHT));
+        // Measured wall tints (PQ-T44 remedy 4): same face rule as the 3D view.
+        const tint = wallTintFor(p, recipe.wallTints, hit.n!);
+        let rr = cr;
+        let gg = cg;
+        let bb = cb;
+        if (tint) {
+          let v = tintRgb.get(tint);
+          if (!v) {
+            v = hexToRgb(tint);
+            tintRgb.set(tint, v);
+          }
+          [rr, gg, bb] = v;
+        }
         mask.data[i] = 1;
         part[i] = k;
-        rgb[i * 3] = cr * shade;
-        rgb[i * 3 + 1] = cg * shade;
-        rgb[i * 3 + 2] = cb * shade;
+        rgb[i * 3] = rr * shade;
+        rgb[i * 3 + 1] = gg * shade;
+        rgb[i * 3 + 2] = bb * shade;
       }
     }
   });

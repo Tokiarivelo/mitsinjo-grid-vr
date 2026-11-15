@@ -64,10 +64,16 @@ import {
 } from './shape-stages-spark';
 import { formatElevationScore, scoreElevation, type ScoredElevation } from './elevation-score';
 import { ELEVATION_ARCHETYPES, measureFacadeElevations } from './facade-views';
+import { routeHouseFacade } from './house-facade-route';
 import { photoTarget, tagPhotoParts } from './photo-stages';
 import { fetchPartMasks, partMasksTimeout } from './part-masks';
 import { fitPartParams, hasPartGroups, preparePartFit } from './part-fit';
-import { REGION_GRID, measureRegionColors, withRegionColors } from './region-colors';
+import {
+  REGION_GRID,
+  measureRegionColors,
+  measureWallTints,
+  withRegionColors,
+} from './region-colors';
 import { withMaskChimney } from './mask-chimney';
 import { withMaskPanels } from './mask-panels';
 import { withMaskWheels } from './mask-wheels';
@@ -418,10 +424,18 @@ export async function runObjectShape(
     const hint = archetypeOf(target);
     // PQ-T42: the honest start of the measures (they run while Spark thinks; the awaits below
     // only see the remainder).
-    const measureViews =
-      !!target.facadeUrl &&
+    // PQ-T44 remedy 1: houses without a validated drawing get one drawn (in parallel
+    // with Spark); the template stays the fallback when the drawing fails.
+    const remedyFacade =
+      !target.facadeUrl &&
       !!perception.segmentImage &&
-      (ELEVATION_ARCHETYPES.includes(hint) || VIEW_ARCHETYPES.includes(hint));
+      ELEVATION_ARCHETYPES.includes(hint) &&
+      !!photo;
+    const measureViews =
+      !!perception.segmentImage &&
+      ((!!target.facadeUrl &&
+        (ELEVATION_ARCHETYPES.includes(hint) || VIEW_ARCHETYPES.includes(hint))) ||
+        remedyFacade);
     const viewsStart = measureViews ? Date.now() : null;
     const elevations =
       target.facadeUrl && perception.segmentImage && ELEVATION_ARCHETYPES.includes(hint)
@@ -435,7 +449,16 @@ export async function runObjectShape(
               ...(env.SHAPE_SIDE_V2 ? { sideCards: true } : {}),
             }
           ).catch(() => null)
-        : Promise.resolve(null);
+        : remedyFacade && photo && perception.segmentImage
+          ? routeHouseFacade({
+              hint,
+              target,
+              photo,
+              segment: perception.segmentImage.bind(perception),
+              ...(signal ? { signal } : {}),
+              ...(onSideView ? { onSideView } : {}),
+            }).catch(() => null)
+          : Promise.resolve(null);
     // PV-H: any other object with a validated 2D view → hull of that view and its drawn side.
     const views =
       target.facadeUrl && perception.segmentImage && VIEW_ARCHETYPES.includes(hint)
@@ -1008,6 +1031,25 @@ export async function runObjectShape(
               geom
             );
             if (recoloured !== recipe) recipe = recoloured;
+            // PQ-T44 remedy 4: measured wall tints per face (yawed elevations with a roofline).
+            const eaveY = finalKit.roof?.eave ?? null;
+            if (
+              ELEVATION_ARCHETYPES.includes(finalKit.archetype) &&
+              (partMasks?.length ?? 0) > 0 &&
+              eaveY !== null
+            ) {
+              const tints = measureWallTints(
+                grid,
+                rings,
+                partMasks ?? [],
+                geom,
+                photo,
+                target.box,
+                recipe.yaw ?? 0,
+                eaveY
+              );
+              if (tints) recipe = { ...recipe, wallTints: tints };
+            }
           } catch (err) {
             console.warn('[vision] region colours failed:', err);
           }
