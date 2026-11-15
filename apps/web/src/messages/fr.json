@@ -1501,7 +1501,9 @@
           "leaf": "Feuilles",
           "leafDark": "Feuilles à l’ombre",
           "flower": "Fleurs et fruits",
-          "painted": "Peint"
+          "painted": "Peint",
+          "pot": "Pot",
+          "soil": "Terre"
         }
       },
       "vrExtractHint": "Tirez pour l’extraire en 3D",

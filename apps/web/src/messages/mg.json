@@ -1501,7 +1501,9 @@
           "leaf": "Ravina",
           "leafDark": "Ravina an-aloka",
           "flower": "Voninkazo sy voankazo",
-          "painted": "Voaloko"
+          "painted": "Voaloko",
+          "pot": "Vilany",
+          "soil": "Tany"
         }
       },
       "vrExtractHint": "Tifiro hamoahana azy amin’ny 3D",

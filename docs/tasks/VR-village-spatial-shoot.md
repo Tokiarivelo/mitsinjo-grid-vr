@@ -271,3 +271,4 @@ Style : hologramme futuriste (cyan / ambre, lignes de balayage, coins lumineux, 
 - [x] Mode Play de l'émulateur : tenir le carrousel / un modèle à la gâchette et bouger la souris tourne l'objet, plus la vue.
 - [x] Marcher dans le studio : stick gauche, pas de 80 cm (stick droit ↑/↓, swipe du pouce), molette ; remis à zéro à la sortie.
 - [x] Vues 2D plus grandes (0,6 m, espacées de 32°), colonne de génération décalée à droite.
+- [x] Plante en pot : le pot dessiné est lu (`tree/plant-pot.ts`) et tourné sous la plante, posée sur la terre ; boîte à la hauteur du dessin (avant : pot coupé comme des racines, plante aplatie).

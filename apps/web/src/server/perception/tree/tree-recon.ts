@@ -4,7 +4,9 @@ import type { Palette } from '../recon/palette';
 import type { ReconReport } from '../recon/reconstruct';
 import { scoreRecipeOnViews } from '../recon/score';
 import type { AlignedViews } from '../recon/views';
+import type { PlantPlan } from '@/lib/plant-plan';
 import { buildPlant, type PlantHints } from './plant-build';
+import { cropRows, findPot, potPlan, raisePlant } from './plant-pot';
 import { scorePlant } from './plant-score';
 import { fitTree, type TreePlan } from './tree-fit';
 import { FROND_LABEL } from './tree-fronds';
@@ -66,8 +68,12 @@ export function reconstructTree(
   // judged on the outline itself, the packed crown.
   const iou = plan.fronds ? scored(treeRecipe({ ...plan, fronds: undefined })).iou : own;
   // The plant the 3D views build (PQ-T82); the clumps above stay its parts for the parts views.
-  const plant = buildPlant(plan, label, hints, seedOf(label));
-  const plantScore = scorePlant(plant, plan, aligned);
+  const plant =
+    potted(aligned, label, hints, { fronds, sideIsFront }) ??
+    buildPlant(plan, label, hints, seedOf(label));
+  // A potted plant stands in the whole drawing, pot included (the tree's foot stops at its rim).
+  const frame = plant.pot ? { W: aligned.W, H: aligned.H, D: aligned.D } : plan;
+  const plantScore = scorePlant(plant, frame, aligned);
   // Spikes, canes and blades are no clumps: the plant answers for the drawing when it fits better.
   if (Math.max(iou, plantScore.mean) < TREE_MIN_IOU) {
     console.info(
@@ -77,7 +83,11 @@ export function reconstructTree(
   }
   const { W, H, D } = aligned;
   return {
-    recipe: { ...recipe, plant },
+    recipe: {
+      ...recipe,
+      ...(plant.pot ? { proportions: frameProportions(frame) } : {}),
+      plant,
+    },
     plan,
     plantScore,
     report: {
@@ -92,6 +102,44 @@ export function reconstructTree(
       score: { ...score, overall: own },
     },
   };
+}
+
+/**
+ * A potted plant (VS-T25): the pot at the foot of the drawing turned round its axis, and the
+ * plant fitted on the rows above its rim, stood on its soil. Null when no pot is drawn (or the
+ * rows above it hold no plant): the plant then grows from the ground as before.
+ */
+export function potted(
+  aligned: AlignedViews,
+  label: string,
+  hints: PlantHints,
+  options: { fronds: boolean; sideIsFront: boolean }
+): PlantPlan | null {
+  const pot = findPot(aligned, options.sideIsFront);
+  if (!pot || pot.top < 2) return null;
+  const upper = fitTree(cropRows(aligned, pot.top), options);
+  if (!upper) return null;
+  // The team traced on the whole drawing: its heights are re-read on the rows above the rim.
+  const scale = aligned.H / pot.top;
+  const lift = (lines?: Array<{ points: Array<[number, number]>; width: number }>) =>
+    lines?.map((l) => ({
+      ...l,
+      points: l.points.map(([x, y]) => [x, Math.min(1, y * scale)] as [number, number]),
+    }));
+  const own: PlantHints = {
+    ...hints,
+    ...(hints.branches ? { branches: lift(hints.branches)! } : {}),
+    ...(hints.trunks ? { trunks: lift(hints.trunks)! } : {}),
+    ...(hints.traces ? { traces: lift(hints.traces)! } : {}),
+  };
+  const plant = raisePlant(buildPlant(upper, label, own, seedOf(label)), aligned, pot.top);
+  return { ...plant, pot: potPlan(pot, aligned) };
+}
+
+/** Box proportions of a frame (cells): its largest side is 1, the margin cancels out. */
+function frameProportions({ W, H, D }: { W: number; H: number; D: number }) {
+  const max = Math.max(W, H, D);
+  return { w: W / max, h: H / max, d: D / max };
 }
 
 /** A seed from the label: the same plant always gets the same leaves. */

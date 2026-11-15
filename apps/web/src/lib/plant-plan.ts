@@ -144,6 +144,28 @@ export const PlantTierSchema = z.object({
 });
 export type PlantTier = z.infer<typeof PlantTierSchema>;
 
+/** Points of a pot's outline (foot → rim). */
+export const POT_PROFILE_MAX = 24;
+
+/**
+ * The pot, vase or planter the plant grows in (VS-T25), turned round its axis: its outline as
+ * measured on the drawing, from its foot (y 0) to its rim. The plant stands on the soil just
+ * under the rim.
+ */
+export const PlantPotSchema = z.object({
+  /** Axis: x and z shares of the box. */
+  c: z.tuple([share, share]),
+  /** Outline foot → rim: [height (y share), radius (share of the box's largest side)]. */
+  profile: z
+    .array(z.tuple([share, z.number().min(0.005).max(0.5)]))
+    .min(2)
+    .max(POT_PROFILE_MAX),
+  /** Depth over width (an oval or a trough seen on the side); absent = round. */
+  depth: z.number().min(0.3).max(3).optional(),
+  color: hex,
+});
+export type PlantPot = z.infer<typeof PlantPotSchema>;
+
 export const PlantPlanSchema = z.object({
   habit: z.enum(PLANT_HABITS),
   leaf: z.enum(LEAF_TYPES),
@@ -152,6 +174,7 @@ export const PlantPlanSchema = z.object({
   strands: z.array(PlantStrandSchema).max(PLANT_STRANDS_MAX).optional(),
   leaves: z.array(PlantLeafSchema).max(PLANT_LEAVES_MAX).optional(),
   tiers: z.array(PlantTierSchema).max(PLANT_TIERS_MAX).optional(),
+  pot: PlantPotSchema.optional(),
   /** Colours measured on the drawing: bark, leaves (light, dark), flowers or fruit. */
   look: z.object({
     bark: hex,
