@@ -172,58 +172,63 @@ Baladez-vous dans les différents quartiers du village pour comparer leur statut
 
 ---
 
-## 6. Interaction avec les boutons flottants dans les airs & Détection spatiale (`/village`)
+## 6. Commandes de l'immersion `/village` (visite 360°, détection, extraction 3D) — VS-T23
 
-Dans l'atelier immersif de détection spatiale (`/village`), l'interface utilisateur est entièrement **diégétique 3D** (flottante dans l'espace physique virtuel sans balise 2D HTML bloquée par le casque).
+Un seul principe partout : **on vise, on valide** (gâchette, pincement ou clic). Une **bulle ambre** près du
+bout du laser dit ce que fera la validation (« Gâchette · Extraire « Réfrigérateur » en 3D », « Pincer · Aller à
+Cuisine »…). Une **carte légende** au-dessus de chaque manette ou main liste ses boutons : affichée 25 s à
+l'entrée, puis rappelée d'un clic de stick.
 
-Voici les **4 modalités de contrôle** supportées selon votre équipement :
+### 6.1 Manettes Touch
 
-### 1. Meta Quest avec Manettes Touch (Touch Controllers)
+| Bouton               | Manette gauche                                                             | Manette droite                               |
+| :------------------- | :------------------------------------------------------------------------- | :------------------------------------------- |
+| **Gâchette** (index) | Valider ce qui est visé                                                    | Valider ce qui est visé                      |
+| **Grip** (majeur)    | Attraper / faire tourner un modèle 3D                                      | Attraper / faire tourner un modèle 3D        |
+| **Stick**            | Marcher (glisse dans le sens du stick)                                     | ←/→ : pivoter de 30° · ↑/↓ : un pas de 0,8 m |
+| **X / A**            | Analyser la vue (comme le bouton)                                          | Analyser la vue                              |
+| **Y / B**            | Retour : annuler le dialogue, quitter le labo, sinon ouvrir/fermer le menu | idem                                         |
+| **Clic du stick**    | Afficher / masquer les légendes                                            | Afficher / masquer les légendes              |
 
-- **Représentation visuelle :** La manette Touch droite/gauche apparaît dans votre main virtuelle sous forme d'un modèle 3D précis (anneau de suivi infrarouge, manche ergonomique, boutons primaires).
-- **Visée :** Un faisceau laser continu cyan étincelant pointe depuis la tête de la manette vers l'avant, avec un réticule d'impact lumineux au point d'intersection.
-- **Action de clic / Tir :** Pressez la **gâchette d'index** (_Index Trigger_) ou appuyez sur le **bouton A** (manette droite) / **bouton X** (manette gauche).
-- **Retour sensoriel :** Une impulsion haptique vibrante (`gamepad.hapticActuators`) et un effet sonore spatialisé confirment l'activation.
+- Le stick droit tenu répète le pivot / le pas toutes les 0,6 s ; relâcher sous 30 % pour réarmer.
+- Chaque pivot / pas joue un petit son ; le pivot se fait autour de la tête (pas de dérive).
+- Retour : vibration haptique et son à chaque tir, survol et validation.
 
-### 2. Meta Quest avec Suivi des Mains (Hand Tracking / Mains nues)
+### 6.2 Mains nues (suivi des mains)
 
-- **Représentation visuelle :** Vos mains physiques réelles sont transposées dans la scène grâce à un squelette 3D articulé de **25 articulations** (poignet, paume, phalanges index, majeur, annulaire, auriculaire et pouce).
-- **Visée :** Tendez votre index vers le bouton ou la cible flottante. Le faisceau laser cyan s'étire précisément depuis le bout de votre index.
-- **Action de clic / Tir (Geste de pincement - Index Pinch) :** Joignez l'extrémité de votre pouce et de votre index dans les airs. Le geste est instantanément reconnu comme un `selectstart` WebXR et déclenche le scan ou le tir laser.
+| Geste                                               | Effet                                    |
+| :-------------------------------------------------- | :--------------------------------------- |
+| **Pincer** (pouce + index) en visant                | Valider (bouton, objet, flèche, panneau) |
+| **Pincer et tenir** puis tourner                    | Faire défiler le carrousel des vues      |
+| **Pouce glissé ← / →** sur l'index                  | Pivoter de 30°                           |
+| **Pouce glissé avant / arrière**                    | Un pas de 0,8 m en avant / en arrière    |
+| **Tap du pouce** sur l'index                        | Analyser la vue                          |
+| **Regarder son poignet gauche** et pincer le bouton | Ouvrir le menu poignet                   |
 
-### 3. Navigateur PC avec l'Émulateur Meta Quest (IWER / DevUI)
+Les gestes de pouce (microgestes) n'existent que si le navigateur les expose (Quest Browser récent, IWER) ;
+sinon le pincement suffit pour tout (bouton « Analyser », flèches au sol, menu).
 
-#### A. Comment activer et basculer entre le mode Mains et le mode Manettes
+### 6.3 Navigateur PC (souris, clavier, émulateur IWER)
 
-- **Barre d'outils DevUI en haut de l'écran :**
-  - Cliquez sur l'icône **`(✋) / (🎮)`** au centre de la barre d'outils pour basculer d'un clic entre le mode **Suivi des Mains** (_Hand Tracking_) et le mode **Manettes Touch** (_Touch Controllers_).
-  - En mode mains : les panneaux d'outils aux coins s'intitulent `Hand [L]` et `Hand [R]`, et vous voyez les mains articulées à 25 jointures.
-  - En mode manettes : les panneaux d'outils s'intitulent `Controller [L]` et `Controller [R]` avec les boutons A, B, X, Y, la gâchette `Trig` et le joystick `Stick`.
+| Action                          | Comment                                                                               |
+| :------------------------------ | :------------------------------------------------------------------------------------ |
+| Viser / valider                 | Survol + **clic gauche** (sans casque, le plus simple)                                |
+| Marcher dans la visite 360°     | **↑ ↓ ← →**, **W A S D** ou **Z Q S D** (souris au-dessus de la scène)                |
+| Changer de lieu                 | Marcher sur la flèche au sol, ou la viser et valider                                  |
+| Manettes / mains de l'émulateur | Barre DevUI : bascule ✋ / 🎮 ; panneaux `Controller [L/R]` (A, B, X, Y, Trig, Stick) |
+| Bouger une manette              | Cliquer dessus → gizmo (flèches = déplacer, anneaux = tourner) ou champs Pos / Rot    |
 
-#### B. Comment orienter et déplacer les contrôleurs virtuels sur PC
+Sous Linux, `Alt + clic` est souvent pris par le bureau : utilisez le gizmo ou la souris directe.
+Pilotage scripté (MCP IWER ou `remote.dispatch`) : voir [`vr-iwer-tools.md`](vr-iwer-tools.md).
 
-- **Sans touche clavier (le plus fiable, surtout sous Linux) :** cliquez sur la manette ou la main dans la vue DevUI : un gizmo apparaît. Les **flèches** déplacent, les **anneaux** font tourner. Les champs `Pos` / `Rot` des panneaux `Controller [L]` / `[R]` règlent une valeur exacte ; l'icône ✋ / 🎮 bascule mains ↔ manettes ; « Play Mode » capture la souris pour regarder.
-- **Marcher dans l'espace 360° de /village (VS-T16) :** maintenez ↑ / W / Z (S recule, A / Q / D de côté) ou poussez le stick : on avance dans la direction du regard, le sol défile. Marchez sur une flèche au sol (ou visez-la et tirez) pour passer au lieu suivant.
+### 6.4 Déroulé type
 
-- **Manette droite (`Controller [R]`) :** Maintenez la touche **`Alt`** (ou `Option` sur Mac) du clavier enfoncée tout en déplaçant votre souris. La manette droite s'oriente immédiatement et suit vos mouvements.
-- **Manette gauche (`Controller [L]`) :** Maintenez la touche **`Shift`** du clavier enfoncée tout en déplaçant votre souris.
-- **Profondeur avant / arrière (Axe Z) :** Tout en maintenant `Alt` ou `Shift`, faites rouler la **molette de votre souris** pour approcher ou éloigner la manette.
-- **Actionner la gâchette (Tir / Clic) :** Tout en maintenant `Alt` ou `Shift`, effectuez un **clic gauche** ou appuyez sur la touche **`Espace`**.
-- **Contrôles directs dans le panneau 2D :** Vous pouvez aussi cliquer directement sur le curseur **`Trig`** ou sur le bouton **`A: press`** dans la boîte `Controller [R]` en bas à droite de votre écran.
-
-> [!NOTE]
-> **Pourquoi `Alt` peut ne pas répondre sous Linux (Ubuntu / GNOME) :**  
-> Sous Linux, la combinaison `Alt + Clic` est souvent interceptée par le système d'exploitation pour déplacer les fenêtres du bureau. Si c'est votre cas, ne vous embêtez pas avec les touches `Alt`/`Shift` : utilisez directement le **Mode Souris Direct** ci-dessous !
-
-### 4. Navigateur PC en Vue Directe à la Souris (Recommandé sur PC / Linux)
-
-Pour tester immédiatement sans aucune combinaison de touches ni conflit système :
-
-- **Visée directe :** Déplacez simplement le curseur standard de votre souris sur le bouton spatial flottant au centre (_« Scanner la pièce et détecter »_) ou sur n'importe quel appareil 3D.
-- **Rétroaction visuelle :** Le bouton passe immédiatement en surbrillance d'énergie violette/cyan, le faisceau laser s'aligne et le réticule d'impact lumineux se verrouille sur la cible.
-- **Clic direct :** Un **simple clic gauche** sur le bouton flottant déclenche immédiatement le scan radar et la détection d'appareils, sans avoir besoin de manipuler les manettes virtuelles de l'émulateur.
-
----
+1. **Analyser** (bouton en l'air, A/X ou tap du pouce) : barre de progression, puis contour complet + description
+   au-dessus de chaque objet de la partie visible (bande de 180° × 112°).
+2. Marcher : les contours restent **collés aux objets** (ils sont posés sur la photo, pas devant les yeux).
+3. **Viser un objet et valider** → « Extraire en 3D ? » → _Extraire_ / _Annuler_ (ou B/Y pour annuler).
+4. Valider les vues 2D dans le carrousel hologramme (glisser, flèches, ou viser une vue latérale), puis le **labo 3D** s'ouvre :
+   grip pour attraper / tourner, B/Y pour en sortir.
 
 ## 7. Confort visuel et prévention du vertige : Écran panoramique à focus plat (`/village`)
 
@@ -269,6 +274,7 @@ L'architecture du composant `<LiveWebcamBackdrop />` a été entièrement refond
 | Problème rencontré                                          | Explication                                                                                           | Action corrective                                                                                                                                        |
 | :---------------------------------------------------------- | :---------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **La scène reste dans une petite boîte centrale**           | Le mode plein écran automatique a été bloqué par la politique du navigateur (ex. iframe).             | Cliquez directement sur l'icône **« Plein écran »** dans la barre HUD en haut à droite du viewport 3D pour forcer le plein écran.                        |
+| **Je ne sais plus quel bouton fait quoi (`/village`)**      | Les légendes se masquent après 25 s.                                                                  | Cliquez un stick : les cartes légende réapparaissent au-dessus des manettes / mains.                                                                     |
 | **Mes touches clavier ne font pas bouger la caméra**        | Le curseur n'est pas verrouillé dans le mode FPS.                                                     | Cliquez sur **Play Mode** dans l'overlay DevUI, puis cliquez dans la fenêtre 3D pour verrouiller le pointeur.                                            |
 | **Le clavier avance de travers (clavier français AZERTY)**  | Les raccourcis par défaut de l'émulateur sont en QWERTY (WASD).                                       | Utilisez **W/A/S/D**, ou cliquez sur le menu de mapping clavier de DevUI pour réassigner **Z/Q/S/D**.                                                    |
 | **Le bouton « Voir en VR » n'apparaît pas**                 | WebXR requiert obligatoirement un contexte sécurisé (`localhost` ou HTTPS).                           | Vérifiez que l'URL commence bien par `http://localhost:...` ou `https://...`. En HTTP avec une adresse IP locale, WebXR est désactivé par le navigateur. |

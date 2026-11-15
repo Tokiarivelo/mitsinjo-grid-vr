@@ -84,7 +84,9 @@ redondante mais compatible).
 `make vr-probe` (serveur dev lancé, ffmpeg) : IWER piloté via `window.__IWER_DEVICE__.remote.dispatch`
 (dev seulement, même API que l'IWER MCP) dans l'espace 360° (VS-T14, lu via `window.__VR_TOUR__`) —
 menu au poignet, tir sur le frigo du loft, main, flèche au sol → hall, ↑ maintenu → on marche (la flèche
-se rapproche) puis séjour, promenade dehors (terrasse → forêt), panneaux DevUI montés, bouton de sortie visible (15 PASS). Détails : `docs/vr-village-spatial-detection.md` §6.
+se rapproche) puis séjour, promenade dehors (terrasse → forêt), panneaux DevUI montés, bouton de sortie visible, scan en bande + contour qui reste sur la lampe après avoir marché, extraction (dialogue → faces → 3D → labo) (25 PASS). Détails : `docs/vr-village-spatial-detection.md` §6.
+
+`make vr-iwer-tools` : chaque outil IWER (session, poses, gâchette, mains, microgestes) puis les commandes de l'app — légendes, bulle de visée, pivot ±30°, pas 0,8 m, B/Y retour, A/X analyser, clic de stick = aide, geste de pouce (31 PASS, captures `test-results/vr-iwer-tools/`). Référence des outils : `docs/vr-iwer-tools.md`.
 
 ## Tests automatiques (déjà verts)
 

@@ -214,37 +214,45 @@ Style : hologramme futuriste (cyan / ambre, lignes de balayage, coins lumineux, 
 
 ### VS-T17 : Brève description par le modèle vision
 
-- [ ] `ApplianceDetection.description` (EN) + `descriptions.{fr,mg}` (≤ 90 caractères), demandés au modèle de détection ; `localDescription()`.
-- [ ] Mock : descriptions des objets de la pièce d'exemple ; sans description → nom + catégorie (repli).
-- [ ] **Done when :** `/api/vision` renvoie une description par objet (mock et Meta), tests de parsing verts.
+- [x] `ApplianceDetection.description` (EN) + `descriptions.{fr,mg}` (≤ 90 caractères), demandés au modèle de détection ; `localDescription()`.
+- [x] Mock : descriptions des objets de la pièce d'exemple ; sans description → nom + catégorie (repli).
+- [x] **Done when :** `/api/vision` renvoie une description par objet (mock et Meta), tests de parsing verts.
 
 ### VS-T18 : Analyse en cours & contours holographiques sur la vue
 
-- [ ] « Analyser la vue » ferme le menu ; balayage holographique (barre de scan, coins, « Analyse de la vue… ») sur la zone analysée.
-- [ ] Contour SAM (ou boîte) de chaque objet posé sur la photo 360°, voile au survol, étiquette nom + description au-dessus.
-- [ ] **Done when :** après l'analyse, chaque objet est contouré et décrit ; le survol l'illumine.
+- [x] « Analyser la vue » ferme le menu ; balayage holographique (barre de scan, coins, « Analyse de la vue… ») sur la zone analysée.
+- [x] Contour SAM (ou boîte) de chaque objet posé sur la photo 360°, voile au survol, étiquette nom + description au-dessus.
+- [x] **Done when :** après l'analyse, chaque objet est contouré et décrit ; le survol l'illumine.
 
 ### VS-T19 : Dialogue « Extraire en 3D ? » & panneaux holographiques
 
-- [ ] Registre de panneaux (`holo-panel.ts`) lu par `XRBlasterController` : survol, tir, glisser (source d'entrée unique conservée).
-- [ ] Tir sur un objet non extrait → dialogue holographique (Extraire en 3D / Annuler), le reste estompé.
-- [ ] **Done when :** tirer sur le frigo ouvre le dialogue ; Annuler le ferme sans appel réseau.
+- [x] Registre de panneaux (`holo-panel.ts`) lu par `XRBlasterController` : survol, tir, glisser (source d'entrée unique conservée).
+- [x] Tir sur un objet non extrait → dialogue holographique (Extraire en 3D / Annuler), le reste estompé.
+- [x] **Done when :** tirer sur le frigo ouvre le dialogue ; Annuler le ferme sans appel réseau.
 
 ### VS-T20 : Vue 2D & faces en carrousel holographique
 
-- [ ] Extraire → vue 2D dessinée (Muse) puis les autres faces, une diapositive chacune, sur un arc devant soi.
-- [ ] Glisser (manette, main, souris) ou flèches → diapositive suivante ; Valider / Redessiner par face ; « Valider et construire la 3D ».
-- [ ] **Done when :** en `make dev-mock`, les 5 diapositives défilent, se valident, et lancent la 3D.
+- [x] Extraire → vue 2D dessinée (Muse) puis les autres faces, une diapositive chacune, sur un arc devant soi.
+- [x] Glisser (manette, main, souris) ou flèches → diapositive suivante ; Valider / Redessiner par face ; « Valider et construire la 3D ».
+- [x] **Done when :** en `make dev-mock`, les 5 diapositives défilent, se valident, et lancent la 3D.
 
 ### VS-T21 : Construction 3D en immersion
 
-- [ ] Étapes du serveur (découpe → Spark → ajustement) en hologramme, puis « Entrer dans le labo 3D ».
-- [ ] **Done when :** le modèle prêt ouvre le labo d'un tir.
+- [x] Étapes du serveur (découpe → Spark → ajustement) en hologramme, puis « Entrer dans le labo 3D ».
+- [x] **Done when :** le modèle prêt ouvre le labo d'un tir.
 
 ### VS-T22 : Laboratoire 3D immersif, édition en temps réel
 
-- [ ] Salle holographique (dôme sombre, grille, socle), modèle à ~1 m, saisie pour tourner.
-- [ ] Pièces : liste, sélection (tir sur la pièce ou la liste), masquer, échelle −/+, tourner 90°, opacité, modes d'affichage, annuler / rétablir, réinitialiser.
-- [ ] Chaque édition va à la recette à l'instant (`editPieces`) : la page 2D et le village la voient.
-- [ ] Quitter le labo → miniature de l'objet devant soi (raccordement inchangé).
-- [ ] **Done when :** `make vr-probe` : analyse → dialogue → faces → 3D → labo → une pièce masquée ; 0 erreur.
+- [x] Salle holographique (dôme sombre, grille, socle), modèle à ~1 m, saisie pour tourner.
+- [x] Pièces : liste, sélection (tir sur la pièce ou la liste), masquer, échelle −/+, tourner 90°, opacité, modes d'affichage, annuler / rétablir, réinitialiser.
+- [x] Chaque édition va à la recette à l'instant (`editPieces`) : la page 2D et le village la voient.
+- [x] Quitter le labo → miniature de l'objet devant soi (raccordement inchangé).
+- [x] **Done when :** `make vr-probe` : analyse → dialogue → faces → 3D → labo → une pièce masquée ; 0 erreur.
+
+### VS-T23 : Commandes manettes & mains réécrites (lisibles, Meta)
+
+- [x] Carte unique (`xr-controls.ts`) : gâchette / pincement valider · grip attraper · stick gauche marcher · stick droit ←/→ pivot 30°, ↑/↓ pas 0,8 m · A/X analyser · B/Y retour · clic de stick aide ; mains : microgestes de pouce (pivot, pas, tap = analyser).
+- [x] Bulle « Gâchette · Extraire « Frigo » en 3D » au bout de chaque laser ; légende des boutons sur chaque manette / main (25 s à l'entrée, clic de stick).
+- [x] Panneaux : un bouton tape toujours, glisser seulement au-delà de 4° nets (« Extraire en 3D / Annuler » ne ratent plus) ; contours fixes en marchant ; contour complet de l'objet (bande 180°).
+- [x] Docs : `vr-immersion-guide.md` § 6 réécrit, `vr-iwer-tools.md` (outils IWER, index des boutons, microgestes).
+- [x] **Done when :** `make vr-iwer-tools` 31/31 et `make vr-probe` vert.
