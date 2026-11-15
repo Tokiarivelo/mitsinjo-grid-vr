@@ -29,6 +29,9 @@ export const SCENERY_TYPES = [
 export const SceneryTypeSchema = z.enum(SCENERY_TYPES);
 export type SceneryType = z.infer<typeof SceneryTypeSchema>;
 
+/** Longest brief description kept per object (VS-T17). */
+export const DESCRIPTION_MAX = 90;
+
 /**
  * One object seen on a photo (PV). `kind` absent = `appliance`. Scenery (houses, cars, trees…) is
  * outlined but has no load: its `category` is `other` and `scenery` says what it is.
@@ -42,6 +45,15 @@ export const ApplianceDetectionSchema = z.object({
     .object({
       fr: z.string().min(1).max(40).optional(),
       mg: z.string().min(1).max(40).optional(),
+    })
+    .optional(),
+  /** Brief English description from the vision model (what it looks like, what it is for; VS-T17). */
+  description: z.string().min(1).max(DESCRIPTION_MAX).optional(),
+  /** Same description in French / Malagasy when the model gave it. */
+  descriptions: z
+    .object({
+      fr: z.string().min(1).max(DESCRIPTION_MAX).optional(),
+      mg: z.string().min(1).max(DESCRIPTION_MAX).optional(),
     })
     .optional(),
   kind: z.enum(['appliance', 'scenery']).optional(),
@@ -130,6 +142,16 @@ export function localLabel(
   locale: string
 ): string {
   return (locale === 'fr' || locale === 'mg' ? d.labels?.[locale] : undefined) ?? d.label;
+}
+
+/** Brief description in the page language (English when no translation); undefined when none. */
+export function localDescription(
+  d: Pick<ApplianceDetection, 'description' | 'descriptions'>,
+  locale: string
+): string | undefined {
+  return (
+    (locale === 'fr' || locale === 'mg' ? d.descriptions?.[locale] : undefined) ?? d.description
+  );
 }
 
 /** True when the object can carry an electrical load (an appliance). */

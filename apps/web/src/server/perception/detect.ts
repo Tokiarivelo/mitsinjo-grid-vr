@@ -4,7 +4,7 @@ import {
   type ApplianceCategory,
 } from '@mitsinjo/engine';
 import { z } from 'zod';
-import { SCENERY_TYPES, SceneryTypeSchema, type SceneryType } from '@/lib/vision';
+import { DESCRIPTION_MAX, SCENERY_TYPES, SceneryTypeSchema, type SceneryType } from '@/lib/vision';
 import type { ApplianceDetection } from './schemas';
 
 /** Most detections kept from one photo (the UI lists them all). */
@@ -20,6 +20,7 @@ export const DETECT_SYSTEM_PROMPT = [
   'For vehicles (cars, vintage cars, compacts, sedans, hatchbacks, trucks, vans, carts, vehicle sculptures/topiary): identify them clearly as kind "scenery" with scenery "vehicle".',
   'For each: a short English label (also used to outline it),',
   'the same short name in French (label_fr) and in Malagasy (label_mg);',
+  'a brief description (at most 12 words: what it looks like and what it is for) in English (description), French (description_fr) and Malagasy (description_mg);',
   'kind "appliance" with a category from the enum (street lights and lamp posts are "lamp", other if no category fits),',
   'or kind "scenery" for things without a plug (buildings, vehicles, trees, plants, people, animals, water) with a scenery type;',
   'and bbox [x_min, y_min, x_max, y_max] on a 0-1000 grid, origin top-left.',
@@ -44,6 +45,9 @@ export const DETECT_JSON_SCHEMA = {
             label: { type: 'string' },
             label_fr: { type: 'string' },
             label_mg: { type: 'string' },
+            description: { type: 'string' },
+            description_fr: { type: 'string' },
+            description_mg: { type: 'string' },
             kind: { type: 'string', enum: ['appliance', 'scenery'] },
             category: { type: 'string', enum: [...APPLIANCE_CATEGORIES] },
             scenery: { type: 'string', enum: [...SCENERY_TYPES] },
@@ -320,6 +324,21 @@ function translatedLabels(obj: Record<string, unknown>): ApplianceDetection['lab
   return fr || mg ? { ...(fr ? { fr } : {}), ...(mg ? { mg } : {}) } : undefined;
 }
 
+/** `description` / `description_fr` / `description_mg` from the model (VS-T17), each cut to the max. */
+function translatedDescriptions(
+  obj: Record<string, unknown>
+): Pick<ApplianceDetection, 'description' | 'descriptions'> {
+  const pick = (v: unknown) =>
+    (typeof v === 'string' ? v.trim().slice(0, DESCRIPTION_MAX).trim() : '') || undefined;
+  const en = pick(obj.description);
+  const fr = pick(obj.description_fr);
+  const mg = pick(obj.description_mg);
+  return {
+    ...(en ? { description: en } : {}),
+    ...(fr || mg ? { descriptions: { ...(fr ? { fr } : {}), ...(mg ? { mg } : {}) } } : {}),
+  };
+}
+
 /** Appliance or scenery for a free label (operator hint, PV-T8): same rules as a model object. */
 export function classifyLabel(label: string) {
   return classify({ label });
@@ -361,6 +380,7 @@ export function parseDetections(content: string): ApplianceDetection[] {
     const base = {
       label,
       ...(labels ? { labels } : {}),
+      ...translatedDescriptions(obj),
       box,
       ...(confidence !== undefined ? { confidence } : {}),
     };

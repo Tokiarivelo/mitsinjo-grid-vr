@@ -32,6 +32,34 @@ describe('parseDetections (PV-T4)', () => {
     for (const d of out) expect(ApplianceDetectionSchema.safeParse(d).success).toBe(true);
   });
 
+  it('keeps the brief descriptions in EN / FR / MG, cut to the max (VS-T17)', () => {
+    const [d] = parseDetections(
+      reply([
+        {
+          label: 'Fridge',
+          category: 'fridge',
+          bbox: [100, 200, 300, 900],
+          description: '  Tall white fridge  ',
+          description_fr: 'Grand frigo blanc',
+          description_mg: '',
+        },
+      ])
+    );
+    expect(d).toMatchObject({
+      description: 'Tall white fridge',
+      descriptions: { fr: 'Grand frigo blanc' },
+    });
+    expect(d!.descriptions).not.toHaveProperty('mg');
+    const [long] = parseDetections(
+      reply([{ label: 'TV', bbox: [1, 1, 500, 500], description: 'x'.repeat(200) }])
+    );
+    expect(long!.description).toHaveLength(90);
+    expect(ApplianceDetectionSchema.safeParse(long).success).toBe(true);
+    const [none] = parseDetections(reply([{ label: 'TV', bbox: [1, 1, 500, 500] }]));
+    expect(none).not.toHaveProperty('description');
+    expect(none).not.toHaveProperty('descriptions');
+  });
+
   it('clamps boxes to the 0–1000 grid and fixes swapped corners', () => {
     expect(gridBoxToNorm([-50, 900, 1200, 1100])).toEqual({ x: 0, y: 0.9, w: 1, h: 0.1 });
     expect(gridBoxToNorm([600, 500, 200, 100])).toEqual({ x: 0.2, y: 0.1, w: 0.4, h: 0.4 });

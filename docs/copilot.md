@@ -38,6 +38,7 @@ features/copilot/          # ChatPanel, ChatMessage, ToolActivity, ConfirmPropos
   The answer also says what the image is (`image_type`: photo or drawing, PQ-T47 E2; lenient, old answers read as photo).
   Names: the schema asks for `label` (English, SAM prompt) plus `label_fr` / `label_mg` in the same answer → `labels`
   (a few output tokens; shown in the page language). The mock fixture carries the three languages.
+  Brief description (VS-T17): `description` / `description_fr` / `description_mg` (≤ 12 words asked, cut at 90 chars) in the same answer → `description` + `descriptions`; never a power value.
   `identifyRegion` (PV-T8, `region.ts` + `region-prompt.ts`): one Spark call per operator-drawn shape on a crop of it (sharp, 15 %
   margin, outside of the shape whitened 65 %), same JSON schema, `REGION_SYSTEM_PROMPT` asks for exactly one object, the operator's
   text is passed quoted as a hint. The model box (crop grid) is mapped back to the photo and kept only if it overlaps the shape
