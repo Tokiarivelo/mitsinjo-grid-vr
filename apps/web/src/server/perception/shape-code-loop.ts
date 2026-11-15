@@ -44,6 +44,21 @@ export function codeRoundValid(r: Pick<CodeRound, 'bytes' | 'score' | 'reason'>)
   return r.bytes > 0 && (r.score !== null || r.reason === 'unscorable');
 }
 
+/** Everything one round produced, for the debug dump (PQ-T56): the body, its model, why it lost. */
+export interface CodeRoundEvent extends CodeRound {
+  question: string;
+  /** The sheet the writer saw this round (data URL), for the dump. */
+  sheet?: string;
+  /** Score the round had to beat. */
+  baseScore: number;
+  /** The `build()` body the writer answered, null when it answered nothing usable. */
+  rawBody: string | null;
+  /** Executed recipe, null when the body failed to run. */
+  recipe: ObjectRecipe | null;
+  /** Dropped-part reasons (`index: reason`). */
+  issues: string[];
+}
+
 export interface CodeLoopResult {
   recipe: ObjectRecipe;
   /** Winning body, null when no round beat the draft. */
@@ -79,6 +94,14 @@ export interface CodeLoopInput {
   score: (recipe: ObjectRecipe) => Promise<number | null>;
   /** Sandbox execution (default: the §8bis QuickJS runner; tests inject fakes). */
   execute?: typeof runSandboxedCode;
+  /** Called after every round, kept or not (debug dump); must not throw into the loop. */
+  onRound?: (event: CodeRoundEvent) => void | Promise<void>;
+  /** Static frame text of the drawing, repeated every round (`elevationFrameText`). */
+  frameText?: string;
+  /** Stop as soon as the best score reaches this (0–1): a good match ends the loop. */
+  goal?: number;
+  /** Writer prompt version of this run, stored with the code (default: current). */
+  promptVersion?: number;
   roundsMax?: number;
   minGain?: number;
   signal?: AbortSignal;
@@ -109,6 +132,10 @@ export async function refineWithCode(input: CodeLoopInput): Promise<CodeLoopResu
     writeCode,
     score,
     execute = runSandboxedCode,
+    onRound,
+    frameText,
+    goal,
+    promptVersion = CODE_PROMPT_VERSION,
     roundsMax = CODE_ROUNDS_MAX,
     minGain = CODE_MIN_GAIN,
     signal,
@@ -119,11 +146,41 @@ export async function refineWithCode(input: CodeLoopInput): Promise<CodeLoopResu
   let stalls = 0;
   let droppedText: string | undefined;
   const rounds: CodeRound[] = [];
+  let lastSheet: string | undefined;
+  const record = async (
+    r: CodeRound,
+    question: string,
+    rawBody: string | null,
+    recipe: ObjectRecipe | null,
+    issues: string[]
+  ) => {
+    rounds.push(r);
+    try {
+      await onRound?.({
+        ...r,
+        question,
+        ...(lastSheet ? { sheet: lastSheet } : {}),
+        baseScore: bestScore,
+        rawBody,
+        recipe,
+        issues,
+      });
+    } catch (err) {
+      console.warn('[vision] 3D code round hook failed:', err instanceof Error ? err.message : err);
+    }
+  };
   for (let round = 1; round <= Math.max(1, roundsMax); round++) {
     if (signal?.aborted) break;
+    if (goal !== undefined && bestScore >= goal) {
+      console.info(
+        `[vision] 3D code for "${label}": goal ${goal.toFixed(2)} reached (${bestScore.toFixed(3)}), stop`
+      );
+      break;
+    }
     let image: string;
     try {
       image = await sheet(best);
+      lastSheet = image;
     } catch (err) {
       console.warn(
         '[vision] 3D code sheet failed, keeping the draft:',
@@ -140,6 +197,7 @@ export async function refineWithCode(input: CodeLoopInput): Promise<CodeLoopResu
       ...(measuresText ? { measuresText } : {}),
       ...(code ? { currentCode: code } : {}),
       ...(droppedText ? { droppedText } : {}),
+      ...(frameText ? { frameText } : {}),
     });
     const roundStart = Date.now();
     const answered = await writeCode(image, question, signal).catch(() => null);
@@ -148,20 +206,29 @@ export async function refineWithCode(input: CodeLoopInput): Promise<CodeLoopResu
     const costUsd = model && answered?.usage ? estimateCostUsd(model, answered.usage) : undefined;
     const body = answered?.code ?? null;
     if (!body) {
-      rounds.push({
-        round,
-        bytes: 0,
-        score: null,
-        kept: false,
-        dropped: 0,
-        reason: 'no code',
-        ms: Date.now() - roundStart,
-        writeMs,
-        execMs: 0,
-        scoreMs: 0,
-        ...(model ? { model } : {}),
-        ...(costUsd !== undefined ? { costUsd } : {}),
-      });
+      await record(
+        {
+          round,
+          bytes: 0,
+          score: null,
+          kept: false,
+          dropped: 0,
+          reason: 'no code',
+          ms: Date.now() - roundStart,
+          writeMs,
+          execMs: 0,
+          scoreMs: 0,
+          ...(model ? { model } : {}),
+          ...(costUsd !== undefined ? { costUsd } : {}),
+        },
+        question,
+        null,
+        null,
+        []
+      );
+      console.info(
+        `[vision] 3D code round ${round} for "${label}": ${answered ? 'writer answer unusable (empty, not JSON or over 64 Ko)' : 'writer call failed'}`
+      );
       stalls += 1;
       if (stalls >= CODE_STALLS_MAX) break;
       continue;
@@ -173,20 +240,26 @@ export async function refineWithCode(input: CodeLoopInput): Promise<CodeLoopResu
     }));
     const execMs = Date.now() - execStart;
     if (!exec.ok) {
-      rounds.push({
-        round,
-        bytes: Buffer.byteLength(body, 'utf8'),
-        score: null,
-        kept: false,
-        dropped: 0,
-        reason: trunc(exec.reason, 120),
-        ms: Date.now() - roundStart,
-        writeMs,
-        execMs,
-        scoreMs: 0,
-        ...(model ? { model } : {}),
-        ...(costUsd !== undefined ? { costUsd } : {}),
-      });
+      await record(
+        {
+          round,
+          bytes: Buffer.byteLength(body, 'utf8'),
+          score: null,
+          kept: false,
+          dropped: 0,
+          reason: trunc(exec.reason, 120),
+          ms: Date.now() - roundStart,
+          writeMs,
+          execMs,
+          scoreMs: 0,
+          ...(model ? { model } : {}),
+          ...(costUsd !== undefined ? { costUsd } : {}),
+        },
+        question,
+        body,
+        null,
+        []
+      );
       console.info(
         `[vision] 3D code round ${round} for "${label}": failed (${trunc(exec.reason, 120)})`
       );
@@ -201,20 +274,30 @@ export async function refineWithCode(input: CodeLoopInput): Promise<CodeLoopResu
     const s = await score(exec.recipe).catch(() => null);
     const scoreMs = Date.now() - scoreStart;
     const kept = s !== null && s - bestScore >= minGain;
-    rounds.push({
-      round,
-      bytes: Buffer.byteLength(body, 'utf8'),
-      score: s,
-      kept,
-      dropped: exec.issues.length,
-      ...(s === null ? { reason: 'unscorable' } : {}),
-      ms: Date.now() - roundStart,
-      writeMs,
-      execMs,
-      scoreMs,
-      ...(model ? { model } : {}),
-      ...(costUsd !== undefined ? { costUsd } : {}),
-    });
+    await record(
+      {
+        round,
+        bytes: Buffer.byteLength(body, 'utf8'),
+        score: s,
+        kept,
+        dropped: exec.issues.length,
+        ...(s === null
+          ? { reason: 'unscorable' }
+          : !kept
+            ? { reason: `no gain (${s.toFixed(3)} vs ${bestScore.toFixed(3)}, needs +${minGain})` }
+            : {}),
+        ms: Date.now() - roundStart,
+        writeMs,
+        execMs,
+        scoreMs,
+        ...(model ? { model } : {}),
+        ...(costUsd !== undefined ? { costUsd } : {}),
+      },
+      question,
+      body,
+      exec.recipe,
+      exec.issues.map((i) => `${i.index}: ${i.reason}`)
+    );
     const secs = ((Date.now() - roundStart) / 1000).toFixed(1);
     if (kept && s !== null) {
       console.info(
@@ -233,5 +316,5 @@ export async function refineWithCode(input: CodeLoopInput): Promise<CodeLoopResu
     }
   }
   if (!code) console.info(`[vision] 3D code for "${label}": no round beat the draft`);
-  return { recipe: best, code, promptVersion: CODE_PROMPT_VERSION, seed: params.seed, rounds };
+  return { recipe: best, code, promptVersion, seed: params.seed, rounds };
 }

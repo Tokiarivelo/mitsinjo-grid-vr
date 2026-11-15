@@ -721,3 +721,75 @@ describe('ShapeScript seed (PG-T14)', () => {
     ).toBe(true);
   });
 });
+
+describe('several volumes (PQ-T62)', () => {
+  it('before: a wide multi-roof house was measured as its largest roof only (the central tower)', async () => {
+    const { measureElevation } = await import('../facade-house');
+    const masks = {
+      aspect: 1.55,
+      // Largest roof and wall: the central volume only.
+      roof: { box: { x: 0.27, y: 0.18, w: 0.33, h: 0.2 } },
+      wall: { box: undefined } as never,
+      windows: [
+        { x: 0.14, y: 0.42, w: 0.1, h: 0.14 },
+        { x: 0.34, y: 0.36, w: 0.15, h: 0.16 },
+        { x: 0.58, y: 0.56, w: 0.11, h: 0.12 },
+      ],
+      doors: [{ x: 0.78, y: 0.62, w: 0.12, h: 0.18 }],
+      chimneys: [],
+      // Every house / roof / wall instance united: the whole building.
+      extent: { x: 0.04, y: 0.18, w: 0.94, h: 0.63 },
+      roofTop: 0.18,
+    };
+    const { wall: _w, ...clean } = masks;
+    const e = measureElevation(clean)!;
+    expect(e.left).toBeCloseTo(0.04, 2);
+    expect(e.right).toBeCloseTo(0.98, 2);
+    // Openings of the side volumes are no longer filtered out.
+    expect(e.windows).toHaveLength(3);
+    expect(e.doors).toHaveLength(1);
+    // A single-volume house (extent ≈ its roof) keeps the roof edges.
+    const single = measureElevation({ ...clean, extent: { x: 0.26, y: 0.18, w: 0.35, h: 0.63 } })!;
+    expect(single.left).toBeCloseTo(0.27, 2);
+  });
+});
+
+describe('side of a multi-volume house (PQ-T65)', () => {
+  it('before: rejected for its eave share; now kept unless it copies the front', async () => {
+    const { sideConsistent } = await import('../facade-house');
+    const base = {
+      aspect: 1.5,
+      left: 0.05,
+      right: 0.95,
+      wallLeft: 0.05,
+      wallRight: 0.95,
+      top: 0.2,
+      bottom: 0.8,
+      ridge: null,
+      doors: [],
+      chimneys: [],
+      plinth: null,
+      steps: [],
+      panes: [],
+      beams: [],
+    };
+    const win = (n: number) =>
+      Array.from({ length: n }, (_, i) => ({ x: 0.1 + i * 0.1, y: 0.5, w: 0.05, h: 0.1 }));
+    const front = { ...base, eave: 0.32, windows: win(3), multi: true };
+    // Eave share 0.2 vs 0.6: far apart, and a narrower body — a real side.
+    const side = {
+      ...base,
+      left: 0.2,
+      right: 0.8,
+      wallLeft: 0.2,
+      wallRight: 0.8,
+      eave: 0.56,
+      windows: win(4),
+    };
+    expect(sideConsistent(front, side)).toBe(true);
+    // Same body and the same windows: Muse Image redrew the front.
+    expect(sideConsistent(front, { ...front })).toBe(false);
+    // A single-volume house keeps the eave rule.
+    expect(sideConsistent({ ...front, multi: false }, side)).toBe(false);
+  });
+});

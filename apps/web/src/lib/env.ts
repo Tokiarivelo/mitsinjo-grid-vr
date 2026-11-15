@@ -18,6 +18,8 @@ const envSchema = z.object({
   META_JUDGE_MODEL: z.string().default('muse-wonder-1.0'),
   /** Writer of the sandboxed construction code, route B (PQ-T45, §8bis); unset = META_REFINE_MODEL. */
   META_CODE_MODEL: z.string().optional(),
+  /** Folder of the route-B debug dump (PQ-T56): code, Blender .py, logs per round. `off` disables; unset = `debug/shape-code` outside production. */
+  SHAPE_CODE_DUMP_DIR: z.string().optional(),
   META_SEGMENT_MODEL: z.string().default('sam-3.1'),
   /** Object families whose kit call carries the family card (PQ-T13), comma separated; empty = none. */
   SHAPE_KIT_CARD_FAMILIES: z
@@ -80,6 +82,7 @@ export const env = envSchema.parse({
   META_REFINE_MODEL: process.env.META_REFINE_MODEL || undefined,
   META_JUDGE_MODEL: process.env.META_JUDGE_MODEL || undefined,
   META_CODE_MODEL: process.env.META_CODE_MODEL || undefined,
+  SHAPE_CODE_DUMP_DIR: process.env.SHAPE_CODE_DUMP_DIR || undefined,
   META_SEGMENT_MODEL: process.env.META_SEGMENT_MODEL || undefined,
   SHAPE_KIT_CARD_FAMILIES: process.env.SHAPE_KIT_CARD_FAMILIES || undefined,
   SHAPE_SIDE_V2: process.env.SHAPE_SIDE_V2 || undefined,

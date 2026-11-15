@@ -167,6 +167,20 @@ export async function measureElevationImage(
   const sized = [house, roof, wall, windows, chimneys, doors].find((f) => f && f.width > 0);
   if (!sized) return null;
   const r = largest(roof);
+  // PQ-T62: every instance united — a house of several volumes has several roofs and walls.
+  const all = [house, roof, wall].flatMap((f) => f?.boxes ?? []);
+  const extent: NormBox | null = all.length
+    ? (() => {
+        const x0 = Math.min(...all.map((b) => b.x));
+        const y0 = Math.min(...all.map((b) => b.y));
+        const x1 = Math.max(...all.map((b) => b.x + b.w));
+        const y1 = Math.max(...all.map((b) => b.y + b.h));
+        return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+      })()
+    : null;
+  const roofRings = (roof?.outlines ?? []).flatMap((o) =>
+    o ? pathToRings(o).filter((ring) => ring.length >= 3) : []
+  );
   const masks: ElevationMasks = {
     aspect: sized.width / sized.height,
     ...(largest(house) ? { house: largest(house)!.box } : {}),
@@ -174,13 +188,14 @@ export async function measureElevationImage(
       ? {
           roof: {
             box: r.box,
-            ...(r.outline
-              ? { rings: pathToRings(r.outline).filter((ring) => ring.length >= 3) }
-              : {}),
+            // Every roof's outline: the score and the writer see all the roofs.
+            ...(roofRings.length ? { rings: roofRings } : {}),
           },
         }
       : {}),
     ...(largest(wall) ? { wall: largest(wall)!.box } : {}),
+    ...(extent ? { extent } : {}),
+    ...(roof?.boxes.length ? { roofTop: Math.min(...roof.boxes.map((b) => b.y)) } : {}),
     windows: windows?.boxes ?? [],
     doors: doors?.boxes ?? [],
     chimneys: chimneys?.boxes ?? [],

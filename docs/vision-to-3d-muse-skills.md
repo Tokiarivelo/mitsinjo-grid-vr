@@ -578,6 +578,19 @@ say « found », never « has », because SAM can miss parts.
 
 ---
 
+## 17. MODELER card (Wonder, `writeBuildCode`, prompt v3, PQ-T58)
+
+The writer is told to work as a modeller, not to patch a template: **LOOK** (list volumes, roof of each volume and its
+slope, every opening and detail, count them) → **COARSE FIRST** (one part per volume, `extrude` ring for any non-rectangular
+profile such as a shed roof or stepped silhouette) → **SECONDARY FORMS** (roofs with overhang, slabs, chimney, plinth) →
+**DETAILS** (openings at the measured boxes, rails, beams, lights) → **CHECK** against the sheet (drawing | model | diff:
+red drawn-not-built, blue built-not-drawn, amber wrong part), largest difference first, keep what matches.
+Never collapse a multi-volume object into one box with a gable. The template draft is a floor to beat, not a shape to keep.
+User turn (code): draft + score, `elevationFrameText` (frame, every opening as `at/size` in object units, each roof outline
+ring as a ready `extrude` part), measures, current code on patch rounds. Code: `shape-code.ts` (`CODE_SYSTEM_PROMPT_V3`).
+Loop: `refineWithCode` with `goal` (elevation ≥ 0.90 stops), ≤ 5 rounds, ≥ 0.005 gain kept. When the code wins, the Spark
+stage loop does not run (its ops patch template parts); it stays the fallback.
+
 ## 16. LAB EDIT card (Spark, `proposeLabEdit`: the AI assistant of the 3D Lab)
 
 Target of `tasks/PV-capture-lab.md` (PC-T25). The user asks for a change in words; the model answers a sentence

@@ -239,3 +239,23 @@ describe('code-sandbox (PQ-T45, §8bis)', () => {
     expect(bad.ok).toBe(false);
   });
 });
+
+describe('lenient optional fields (PQ-T62)', () => {
+  it('before: glazed:true dropped the whole window; now the field goes and the part stays', async () => {
+    const { runSandboxedCode } = await import('../code-sandbox');
+    const out = await runSandboxedCode(
+      "return [api.box({at:[0,0,0],size:[0.3,0.3,0.05],color:params.colors.accent,kind:'window',glazed:true,grid:[2,2]})];",
+      {
+        seed: 1,
+        proportions: { w: 1, h: 1, d: 1 },
+        colors: { main: '#aaaaaa', secondary: '#555555', accent: '#224466' },
+      }
+    );
+    expect(out.ok).toBe(true);
+    if (!out.ok) return;
+    expect(out.recipe.parts).toHaveLength(1);
+    expect(out.recipe.parts[0]!.grid).toEqual([2, 2]);
+    expect(out.recipe.parts[0]!.glazed).toBeUndefined();
+    expect(out.issues[0]!.reason).toMatch(/glazed invalid and ignored/);
+  });
+});

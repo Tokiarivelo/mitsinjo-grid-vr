@@ -512,6 +512,47 @@ une étape de plus, sans nouvelle infrastructure.
 - **À mesurer au build** : démarrage à froid avec le WASM, mémoire de la fonction, taille du point de reprise avec le
   code. Ces trois mesures n'ont pas été faites : seules les 2,4 Mo du paquet le sont.
 
+**Modeleur d'abord (PQ-T58).** Sur la maison avec dessin 2D, la voie B passe **avant** les étapes Spark : Wonder reçoit la
+planche dessin | modèle | différence, le cadre mesuré en unités d'objet (`elevationFrameText` : chaque ouverture en
+`at/size`, chaque contour de toit en anneau `extrude` prêt à coller) et le prompt v3 (regarder → volumes → formes
+secondaires → détails → vérifier). Arrêt dès que le score d'élévation atteint 0,90 (`CODE_GOAL_ELEVATION`) ou après
+3 tours sans gain. Si le code gagne, les étapes Spark ne tournent pas (elles retoucheraient des pièces de gabarit et leur
+fond écraserait le modèle du code) ; elles restent le repli. Le prompt v3 est le défaut des deux chemins.
+
+**Étalon sur les pixels du dessin (PQ-T59).** Le score d'élévation suppose une seule ligne d'égout et un rectangle de mur :
+une maison à plusieurs volumes bien construite y perdait contre le gabarit. La voie B se note donc sur le dessin lui-même
+(`drawing-score.ts`) : `0,5 × IoU (zone dessinée vs silhouette du modèle) + 0,2 × couleur + 0,3 × ouvertures mesurées`.
+La planche envoyée à Wonder montre dessin | modèle | différence (rouge = dessiné non construit, bleu = construit non
+dessiné), et la question porte la **ligne de toit mesurée** en 24 stations (`skylineText`) : où commence chaque volume, sa
+hauteur, le sens de chaque pente. Sans image du dessin, repli sur le score d'élévation.
+**Vue de côté d'une maison à plusieurs volumes (PQ-T65).** `sideConsistent` comparait la part de mur sous l'égout entre
+face et côté : sur une maison à plusieurs volumes cette part n'a pas de sens (plusieurs égouts) et tout dessin de côté
+était refusé, donc la profondeur n'était jamais notée. Quand la face ou le côté est `multi`, seul un côté **copié de la
+face** est refusé (même rapport de mur et même nombre de fenêtres) ; le côté accepté pèse 30 % du score (`SIDE_WEIGHT`).
+
+**Sculpture en direct (PQ-T66, `code-progress.ts`).** Un tour gardé n'est plus échangé d'un bloc : ses pièces partent
+dans l'ordre où le code les a construites (volumes, toits, ouvertures, détails), en 6 lots à 1 s d'intervalle
+(`SCULPT_STEPS`, `SCULPT_STEP_MS`), sur les événements `shape_stage` existants (`running` + `recipe` partielle + `kinds`
+du lot), puis l'événement `done` porte le modèle entier. Le visualiseur imprime chaque lot de bas en haut et entoure les
+pièces ajoutées ou modifiées ; pendant qu'un tour s'écrit, il cadre les pièces de l'étape (`STAGE_FOCUS`). La révélation
+passe par une file à part : la boucle n'attend pas, le tour suivant part aussitôt. La réponse de Wonder elle-même arrive
+d'un bloc (pas de flux de jetons) : le direct commence quand un tour se termine.
+
+**Chemin photo (PQ-T57).** La voie B tourne aussi pour tout objet de la photo (hors `water`), après le gabarit ajusté et
+la boucle d'étapes : Wonder reçoit la planche photo | rendu courant, le score détaillé, les pièces vues et l'anatomie
+`present`, avec le prompt v2 (familles). Même étalon que le brouillon (silhouette, contours, couleur, masques, anatomie),
+≤ 3 tours (`PHOTO_CODE_ROUNDS`), gain ≥ 0,005 ou le brouillon reste ; lacet, teintes de mur et statuts restent ceux du
+brouillon. Le tour est inline (pas encore en fond) : il allonge la première réponse d'environ 70 s par tour.
+
+**Débogage du code généré (PQ-T56).** Chaque objet passé par la voie B écrit un dossier
+`debug/shape-code/<date>-<objet>/` (ignoré par git ; `SHAPE_CODE_DUMP_DIR`, `off` pour couper) : `draft.blender.py`
+(gabarit A), puis par tour `round-N.build.js` (le `build()` écrit par Wonder), `round-N.blender.py` (le modèle qu'il
+construit, maillage identique au viewer, rejouable dans Blender), `round-N.question.txt`, `round-N.json` (score, gardé,
+raison du rejet, durées, coût), `final.*` si un tour gagne, `summary.json`. `make code-dump` affiche le dernier,
+`make blender-render F=…` le rend sans interface. Les logs `[vision] 3D route B …` et `3D code round …` disent
+pourquoi un tour est écarté (aucun code, échec d'exécution, pas de gain avec les deux scores). Le writer reçoit aussi
+les boîtes mesurées de l'élévation 2D (toit, égout, chaque ouverture) : il place les ouvertures dessus, pas à égale distance.
+
 **Boucle de raffinage.**
 
 1. Wonder reçoit la photo, le rendu courant (face et ¾), le score détaillé, l'anatomie manquante (§5) et le code
@@ -652,5 +693,5 @@ Vérification à chaque pas : `make test-shape` · `make shape-report` (table «
 4. ~~Budgets du fond~~ : décidé le 2026-11-11, **aucune limite de temps** (voir E12, point 7).
 5. **Blender sans interface** comme outil hors ligne (rendus de référence, validation de maillage) : ajoute un
    exécutable au dépôt pour un gain réservé aux évaluations ; non recommandé avant les étapes 1 à 8.
-6. **Modèle de code** : `muse-wonder-1.0` retenu ; une variante plus grosse (« full ») à chercher dans la liste de modèles de l'API (`META_CODE_MODEL`).
+6. **Modèle de code** : `muse-wonder-1.0` retenu. Liste `/models` relevée le 2026-11-13 : `muse-ember-1.0, muse-wonder-1.0, sam-3.1, muse-spark-1.1/1.2/1.3 (+contributor), muse-voice-transcribe-1.0, muse-image-1.0` : **aucune variante « full » de Wonder n'existe**. `META_CODE_MODEL` la prendra le jour où elle paraît.
 7. ~~Enchaînement des tours sur Vercel~~ : décidé, point de reprise porté par le navigateur (§8bis), pas de Neon.

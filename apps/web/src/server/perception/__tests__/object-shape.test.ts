@@ -842,7 +842,7 @@ describe('runObjectShape route B (PQ-T45)', () => {
     expect(writer).toHaveBeenCalled();
     const [image, question] = writer.mock.calls[0]!;
     expect(image).toMatch(/^data:image\/jpeg;base64,/);
-    expect(question).toMatch(/Draft: \{/);
+    expect(question).toMatch(/Template draft \(a floor to beat[^)]*\): \{/);
     expect(question).toMatch(/Measured: /);
     expect(question).toMatch(/eave /);
     expect(timings).toContain('code');

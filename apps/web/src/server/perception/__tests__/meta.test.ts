@@ -433,7 +433,7 @@ describe('MetaPerceptionBackend (shapes recorded from real calls, 2026-10-30)', 
     }
   });
 
-  it('writes build code with the v1 prompt by default, v2 on request (PQ-T55)', async () => {
+  it('writes build code with the modeler prompt (v3) by default, v1 and v2 on request (PQ-T55, PQ-T58)', async () => {
     const reply = {
       choices: [{ message: { content: JSON.stringify({ code: 'return []; ' }) } }],
       usage: { prompt_tokens: 100, completion_tokens: 20 },
@@ -443,10 +443,13 @@ describe('MetaPerceptionBackend (shapes recorded from real calls, 2026-10-30)', 
       return body.messages[0].content as string;
     };
     const first = respond(reply);
-    const v1 = await backend.writeBuildCode('data:image/png;base64,AA', 'q');
-    expect(v1.result).toEqual({ code: 'return [];' });
-    expect(sysOf(first)).toMatch(/House rules/);
-    expect(sysOf(first)).not.toMatch(/VEHICLE:/);
+    const v3 = await backend.writeBuildCode('data:image/png;base64,AA', 'q');
+    expect(v3.result).toEqual({ code: 'return [];' });
+    expect(sysOf(first)).toMatch(/COARSE FIRST/);
+    const legacy = respond(reply);
+    await backend.writeBuildCode('data:image/png;base64,AA', 'q', undefined, 1);
+    expect(sysOf(legacy)).toMatch(/House rules/);
+    expect(sysOf(legacy)).not.toMatch(/VEHICLE:/);
     const second = respond(reply);
     await backend.writeBuildCode('data:image/png;base64,AA', 'q', undefined, 2);
     expect(sysOf(second)).toMatch(/VEHICLE:/);

@@ -38,7 +38,18 @@ export interface ElevationMasks {
   panes?: ReadonlyArray<NormBox>;
   /** Exposed timber beams on the walls (posts and rails of a half-timbered house). */
   beams?: ReadonlyArray<NormBox>;
+  /**
+   * Every house, roof and wall instance SAM found, united (PQ-T62). A house made of several
+   * volumes has several roofs and walls: `roof` and `wall` hold the largest one only, and the
+   * object used to be measured as that single volume (a wide house rebuilt as its central tower).
+   */
+  extent?: NormBox;
+  /** Top of the highest roof instance, image fraction. */
+  roofTop?: number;
 }
+
+/** A united extent wider than the main roof / wall by this factor means several volumes. */
+export const MULTI_VOLUME_MIN = 1.1;
 
 /** One elevation measured in its own pixel-aspect units (u = x · aspect, v = y). */
 export interface Elevation {
@@ -67,6 +78,8 @@ export interface Elevation {
   beams: NormBox[];
   /** Roof outline on the drawing (SAM rings), for the elevation score (PG-T2). */
   roofRings?: Ring[];
+  /** Several volumes (PQ-T62): `eave` and `ridge` describe the largest roof only. */
+  multi?: boolean;
 }
 
 /** A roof thinner than this share of the body height is a flat top (shop, block). */
@@ -127,19 +140,27 @@ export function measureElevation(m: ElevationMasks): Elevation | null {
   const base = m.wall ?? m.house ?? m.roof?.box;
   if (!base || !(m.aspect > 0)) return null;
   const roof = m.roof?.box;
-  const left = Math.min(
+  let left = Math.min(
     ...[roof, m.wall, roof || m.wall ? undefined : m.house].flatMap((b) => (b ? [b.x] : []))
   );
-  const rightX = Math.max(
+  let rightX = Math.max(
     ...[roof, m.wall, roof || m.wall ? undefined : m.house].flatMap((b) => (b ? [right(b)] : []))
   );
+  // PQ-T62: several volumes — the whole object, not its largest roof.
+  const multi = !!m.extent && m.extent.w > MULTI_VOLUME_MIN * (rightX - left);
+  if (multi) {
+    left = Math.min(left, m.extent!.x);
+    rightX = Math.max(rightX, right(m.extent!));
+  }
   const bottom = Math.max(
-    ...[m.house, m.wall, ...m.doors].flatMap((b) => (b ? [bottomOf(b)] : []))
+    ...[m.house, m.wall, multi ? m.extent : undefined, ...m.doors].flatMap((b) =>
+      b ? [bottomOf(b)] : []
+    )
   );
   // Roof top: the roof mask, else the house box below its chimneys.
   const chimneyFoot = m.chimneys.length ? Math.max(...m.chimneys.map(bottomOf)) : -1;
   const top = roof
-    ? roof.y
+    ? Math.min(roof.y, multi && m.roofTop !== undefined ? m.roofTop : roof.y)
     : m.house
       ? Math.max(m.house.y, Math.min(chimneyFoot, m.wall?.y ?? 1))
       : base.y;
@@ -191,6 +212,7 @@ export function measureElevation(m: ElevationMasks): Elevation | null {
         (b.h >= BEAM_ASPECT * b.w * m.aspect || b.w * m.aspect >= BEAM_ASPECT * b.h)
     ),
     ...(m.roof?.rings?.length ? { roofRings: m.roof.rings.map((r) => [...r]) } : {}),
+    ...(multi ? { multi: true } : {}),
   };
 }
 
@@ -464,6 +486,14 @@ export function sideRoofHint(front: Elevation): 'slope' | 'end' | null {
  * roof on both views with the same body shape — a copy, unless the plan is square.
  */
 export function sideConsistent(front: Elevation, side: Elevation): boolean {
+  // PQ-T65: a house of several volumes has no single eave line; its largest roof's eave differs
+  // from one view to the other by nature (live: both side drawings of a stepped shed-roof house
+  // were rejected, so nothing guided the depth). Only the copied-front test applies there.
+  if (front.multi || side.multi) {
+    const r = wallRatio(side) / wallRatio(front);
+    const sameOpenings = side.windows.length === front.windows.length && front.windows.length > 0;
+    return !(Math.abs(r - 1) < COPY_RATIO && sameOpenings);
+  }
   if (Math.abs(eaveShare(front) - eaveShare(side)) > EAVE_SHARE_TOLERANCE) return false;
   if (peaked(front) && peaked(side)) {
     const r = wallRatio(side) / wallRatio(front);

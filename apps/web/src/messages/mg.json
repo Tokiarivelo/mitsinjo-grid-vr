@@ -1085,7 +1085,8 @@
         "crop": "Fanalana ilay zavatra amin'ny sary (fanapahana, fanitarana)",
         "model": "Mamorona ny ampahany sy ny loko i Muse Spark",
         "fit": "Fampifanarahana ny ampahany amin'ny haben'ny sary",
-        "check": "Muse Spark manamarina ny lafiny tsirairay amin'ny sary ary manampy izay tsy ampy"
+        "check": "Muse Spark manamarina ny lafiny tsirairay amin'ny sary ary manampy izay tsy ampy",
+        "code": "Muse Wonder manoratra ny kaody 3D an'ity zavatra ity ary manatsara azy araka ny sary (miseho aloha ny drafitra, 1 hatramin'ny 2 min isaky ny fihodinana)"
       },
       "insertTitle": "Ampidiro ao amin'ny simulation",
       "insertSourceLabel": "Avy aiza ny herinaratra",

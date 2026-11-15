@@ -8,6 +8,10 @@ score before any other change), `PV-shape-realism.md` (loop log), `PV-shape-fide
 Method and the as-built pipeline: `docs/vision-to-3d-methodology.md`. Any change to a Muse prompt starts from its
 card in `docs/vision-to-3d-muse-skills.md` and is kept only on a measured eval (that file, § 1.3).
 Judge every change with `/shape-loop`.
+**Code first (PQ-T57/58).** The final model of any object is the `build(api, params)` code Wonder writes (route B,
+`shape-code.ts` prompt v3 « modeler », `shape-code-loop.ts`, sandbox `code-sandbox.ts`); the template is only the draft and
+the fallback. Work like a modeller: look → volumes → secondary forms → details → check. Debug a run with
+`make code-dump` (`debug/shape-code/`: build() per round, Blender `.py`, question, score).
 
 **Hard rules**
 
@@ -18,7 +22,7 @@ Judge every change with `/shape-loop`.
    repetition, yaw, part masks). Measurements win by confidence (`fusion.ts`).
 4. Shape math is pure, seeded TS in `server/perception/` (no `Math.random`), ≤ 300 ms per object; every function has
    a Vitest test; a fixed bug gets a regression test (« before: … »).
-5. ≤ 5 k triangles and ≤ 12 parts per object (Spark / photo path; server-built facade / views recipes ≤ 32 components `MAX_COMPONENTS`, assemblies expanded in the viewer, PG-T10); one merged geometry, groups per material.
+5. ≤ 5 k triangles and ≤ 12 parts per object (Spark template draft; the code path allows ≤ 32 parts; server-built facade / views recipes ≤ 32 components `MAX_COMPONENTS`, assemblies expanded in the viewer, PG-T10); one merged geometry, groups per material.
 6. No energy value anywhere in this pipeline.
 
 **Map (read barrels first, then only what the task names)**

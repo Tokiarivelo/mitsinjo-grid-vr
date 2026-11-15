@@ -8,10 +8,10 @@ import { spendGuard } from '@/server/spend';
 import { getPerceptionClient } from '../client';
 import { scoreRecipe } from '../score-shape';
 import { readCapture } from '../shape-capture';
+import { detailTextOf } from '../shape-code';
 import {
   CodeEvalSchema,
   codeVerdict,
-  detailTextOf,
   EVAL_CODE_IDS,
   evalCodeMarkdown,
   evalOneCode,
