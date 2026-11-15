@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { CAR_SLOTS } from '@/lib/car-mesh';
+import { PLANT_SLOTS } from '@/lib/plant-mesh';
 import { HULL_SURFACES } from '@/lib/face-hull';
 import { HOUSE_SLOTS } from '@/lib/house-mesh';
 import type { ObjectRecipe } from '@/lib/object-shape';
@@ -14,15 +15,16 @@ import { SURFACES } from './surface-look';
  * pivot) and baked into a geometry for the village and the Blender export.
  */
 
-export type ModelKind = 'house' | 'car' | 'faces' | 'parts';
+export type ModelKind = 'house' | 'car' | 'plant' | 'faces' | 'parts';
 
 /** How the model is built, as the object view and the village choose it. */
 export function modelKind(
-  recipe: Pick<ObjectRecipe, 'yaw' | 'house' | 'car' | 'faces'>
+  recipe: Pick<ObjectRecipe, 'yaw' | 'house' | 'car' | 'plant' | 'faces'>
 ): ModelKind {
   if (recipe.yaw) return 'parts';
   if (recipe.house) return 'house';
   if (recipe.car?.body) return 'car';
+  if (recipe.plant) return 'plant';
   if (recipe.faces) return 'faces';
   return 'parts';
 }
@@ -34,6 +36,8 @@ export function pieceNames(kind: ModelKind): readonly string[] {
       return HOUSE_SLOTS;
     case 'car':
       return CAR_SLOTS;
+    case 'plant':
+      return PLANT_SLOTS;
     case 'faces':
       return HULL_SURFACES;
     default:

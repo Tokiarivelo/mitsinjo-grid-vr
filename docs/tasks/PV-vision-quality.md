@@ -946,3 +946,15 @@ OUT=r8`: hatchback 0.970, SUVs 0.976 / 0.984, pick-up 0.997, the others 1; wides
       **Still open:** a weeping curtain is round clumps, not hanging strands; a lean of the trunk
       leans the same way seen from the side. **Test:** `sdf-mesh.test.ts` (faces wound out),
       `car-views.test.ts` (`facesFor`, a tree built with nothing drawn), `facade-faces-panel.test.tsx`.
+- [x] **PQ-T82 Every plant faithful to its drawing: a plant team and a plant plan.** User 2026-11-15
+      (a willow curtain, then « une génération parfaite… tout types de végétales », then « look at the
+      agave… il n'y a pas de feuilles », « all other plants also are not good »). Done: `PlantPlan` +
+      `plantMesh` (strands, tiers, whole leaves, fans, fronds as combs, pads, canes); `buildPlant` per
+      habit; plant team of five (`leaves` traces each big leaf on the drawing); the front drawing as
+      skin, holes filled; 14 photos in `resources/refine-3d`, results in `resources/generated-view/
+plants/` (`make plants-live`, `make plant-gallery`, VERSIONS.md). Live v005 (contributor model):
+      front IoU coconut 0.14 → 0.61, banana 0.05 → 0.66, agave 0.26 → 0.52, opuntia 0.45 → 0.43 (pads
+      instead of one column). **Still open:** agave tips that curl down are straight; pads float apart;
+      conifers are regular tiers; side IoU 0.15–0.3 (the side is the front's turned leaves); lemongrass,
+      aloe, bamboo, jacaranda not re-run live with the `leaves` specialist. **Test:** `plant-mesh.test.ts`,
+      `plant-build.test.ts`, `plant-tools.test.ts`, `plant-projection.test.ts`, `recon-texture.test.ts`.

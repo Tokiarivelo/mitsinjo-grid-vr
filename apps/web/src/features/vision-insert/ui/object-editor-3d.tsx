@@ -28,6 +28,7 @@ import { useStableExcept } from '../hooks/use-stable-except';
 import { HULL_SURFACES, type HullSurface } from '@/lib/face-hull';
 import { faceMaterials, facesMesh } from '../utils/face-projection';
 import { carGeometry, carMaterials } from '../utils/car-projection';
+import { plantGeometry, plantMaterials } from '../utils/plant-projection';
 import { houseGeometry, houseMaterials } from '../utils/house-projection';
 import { recipeMesh, silhouetteDepth, silhouetteMesh } from '../utils/object-geometry';
 import { surfaceMaterial, SURFACES } from '../utils/surface-look';
@@ -152,11 +153,19 @@ function ObjectModel({
     () => (carPlan && activeRecipe ? { ...activeRecipe, car: carPlan } : null),
     [carPlan, activeRecipe]
   );
-  const pickable = Boolean(faces || house || car);
+  // A plant built from its plan (PQ-T82): trunk, limbs, foliage, strands, fronds.
+  const plantPlan =
+    !house && !car && activeRecipe?.plant && !activeRecipe.yaw ? activeRecipe.plant : null;
+  const plant = useMemo(
+    () => (plantPlan && activeRecipe ? { ...activeRecipe, plant: plantPlan } : null),
+    [plantPlan, activeRecipe]
+  );
+  const pickable = Boolean(faces || house || car || plant);
   const mesh = useMemo(() => {
     if (house?.house) return houseGeometry({ ...house, house: house.house });
     const carMesh = car ? carGeometry(car) : null;
     if (carMesh) return carMesh;
+    if (plant) return plantGeometry(plant);
     return faces && activeRecipe
       ? facesMesh({ proportions: activeRecipe.proportions, faces })
       : activeRecipe
@@ -167,7 +176,7 @@ function ObjectModel({
             photoAspect,
             silhouetteDepth(detection)
           );
-  }, [activeRecipe, faces, house, car, detection, photoAspect]);
+  }, [activeRecipe, faces, house, car, plant, detection, photoAspect]);
   useEffect(() => () => mesh.dispose(), [mesh]);
   const invalidate = useThree((s) => s.invalidate);
   const vertexColors = Boolean(activeRecipe);
@@ -189,6 +198,14 @@ function ObjectModel({
       );
     if (car)
       return carMaterials(car, {
+        tint,
+        selected: selectedSurface
+          ? { surface: selectedSurface, color: TOKEN_HEX.energyCyan }
+          : null,
+        onLoad: invalidate,
+      });
+    if (plant)
+      return plantMaterials(plant, {
         tint,
         selected: selectedSurface
           ? { surface: selectedSurface, color: TOKEN_HEX.energyCyan }
@@ -217,7 +234,7 @@ function ObjectModel({
         ...(map ? { map } : {}),
       });
     });
-  }, [mesh, vertexColors, swatches, tint, invalidate, faces, house, car, selectedSurface]);
+  }, [mesh, vertexColors, swatches, tint, invalidate, faces, house, car, plant, selectedSurface]);
   useEffect(() => () => surfaces.forEach((m) => m.dispose()), [surfaces]);
   // Plain silhouette material, memo'd like the surfaces (so the print wipe can clip it too).
   const silhouetteMaterial = useMemo(

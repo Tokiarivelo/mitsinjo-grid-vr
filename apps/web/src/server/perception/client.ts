@@ -229,6 +229,22 @@ export class PerceptionClient {
     );
   }
 
+  /** Pilot or specialist of the plant team (PQ-T82); null content without it (label and outline). */
+  askPlantTool(
+    tool: string,
+    system: string,
+    schema: { name: string; schema: object },
+    imageUrl: string,
+    question: string,
+    signal?: AbortSignal
+  ): Promise<{ content: string | null } & PerceptionSource> {
+    return this.run('askPlantTool', (b) =>
+      b.askPlantTool
+        ? b.askPlantTool(tool, system, schema, imageUrl, question, signal)
+        : Promise.resolve({ model: b.name, usage: {}, result: { content: null } })
+    );
+  }
+
   judgeShape(imageUrl: string, question: string, signal?: AbortSignal): Promise<JudgeResult> {
     return this.run('judgeShape', (b) => b.judgeShape(imageUrl, question, signal));
   }

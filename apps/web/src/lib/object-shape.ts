@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { MODEL_VIEWS } from './face-atlas';
 import { HULL_BOXES_MAX, type HullSurface } from './face-hull';
 import { CarPlanSchema } from './car-plan';
+import { PlantPlanSchema } from './plant-plan';
 import { HousePlanSchema } from './house-plan';
 import { PieceEditsSchema } from './piece-edits';
 import type { ObjectKit } from './object-kit';
@@ -662,6 +663,13 @@ export const ObjectRecipeSchema = z.object({
    * clearance, tyre and rim colours (`lib/car-plan.ts`). Later read by the car specialists too.
    */
   car: CarPlanSchema.optional(),
+  /**
+   * A plant as measured on its drawing and named by the plant team (PQ-T82, trees, palms, bushes,
+   * grasses, cacti of the `views` source, `lib/plant-plan.ts`): stems, foliage masses, hanging
+   * strands, whole leaves, conifer skirts, colours. The 3D views build it (`lib/plant-mesh.ts`)
+   * instead of the `sdf` clumps of `parts`, which stay for the views that draw parts.
+   */
+  plant: PlantPlanSchema.optional(),
   /**
    * The operator's edits of the model's pieces in the 3D Studio (PQ-T77, `lib/piece-edits.ts`):
    * hidden, locked, opacity, move / turn / scale, layer mask, per slot name. Never set by a model.

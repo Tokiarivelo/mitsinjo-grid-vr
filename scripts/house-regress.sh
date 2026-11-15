@@ -4,9 +4,9 @@
 # with their PQ-T72 references, then runs the mesh hash tests.
 #   bungalow: house.json must equal house-pq-t72.json byte for byte;
 #   school:   only the `base` line may differ (measured plinth colour, PQ-T74, intended).
-# Usage: scripts/house-regress.sh [refDir]   (default ~/Téléchargements/generated-view)
+# Usage: scripts/house-regress.sh [refDir]   (default resources/generated-view)
 set -euo pipefail
-REF="${1:-$HOME/Téléchargements/generated-view}"
+REF="${1:-$(cd "$(dirname "$0")/.." && pwd)/resources/generated-view}"
 OUT="$(mktemp -d)"
 trap 'rm -rf "$OUT"' EXIT
 fail=0

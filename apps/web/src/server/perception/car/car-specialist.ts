@@ -2,6 +2,7 @@ import 'server-only';
 
 import type { PerceptionClient } from '../client';
 import { cropToObject } from '../house/house-specialist';
+import { askSpecialists, callWithDeadline } from '../team-call';
 import type { AlignedViews, ViewFrame, ViewName } from '../recon/views';
 import {
   CAR_PILOT_JSON_SCHEMA,
@@ -68,28 +69,15 @@ export async function readCarParts(
   const tag = `[vision] car team for "${label}"`;
   const [main, ...refs] = images;
   if (!main) return { reading: null, brief: null };
-  // Each call ends with the request or at its own deadline, whichever comes first.
-  const ask = async (
+  const ask = (
     tool: CarTool | 'pilot',
     system: string,
     schema: { name: string; schema: object },
     question: string
-  ): Promise<string | null> => {
-    const deadline = AbortSignal.timeout(timeoutMs);
-    const both = signal ? AbortSignal.any([signal, deadline]) : deadline;
-    try {
-      return await new Promise<string | null>((resolve, reject) => {
-        const stop = () =>
-          reject(new Error(`${tool}: no answer in ${Math.round(timeoutMs / 1000)} s`));
-        if (both.aborted) return stop();
-        both.addEventListener('abort', stop, { once: true });
-        rawAsk(tool, system, schema, main, question, refs, both).then(resolve, reject);
-      });
-    } catch (err) {
-      console.warn(`${tag}: ${tool} failed:`, err instanceof Error ? err.message : err);
-      return null;
-    }
-  };
+  ) =>
+    callWithDeadline(tag, tool, timeoutMs, signal, (both) =>
+      rawAsk(tool, system, schema, main, question, refs, both)
+    );
   const briefText = await ask(
     'pilot',
     CAR_PILOT_SYSTEM_PROMPT,
@@ -108,15 +96,7 @@ export async function readCarParts(
       CAR_TOOL_SPECS[tool].schema,
       carToolQuestion(tool, label, order, brief)
     );
-  const answers: Partial<Record<CarTool, string | null>> = Object.fromEntries(
-    await Promise.all(tools.map(async (t) => [t, await askTool(t)] as const))
-  );
-  // A call cut by the network (or answering nothing usable) is asked once more, alone.
-  for (const tool of tools) {
-    if (carToolAnswered(tool, answers[tool]) || signal?.aborted) continue;
-    console.info(`${tag}: ${tool} unusable, asked again`);
-    answers[tool] = await askTool(tool);
-  }
+  const answers = await askSpecialists(tag, tools, askTool, carToolAnswered, signal);
   const missing = CAR_TOOLS_REQUIRED.filter((t) => !carToolAnswered(t, answers[t]));
   if (missing.length) {
     console.info(`${tag}: no ${missing.join(', ')} after a retry: no reading`);

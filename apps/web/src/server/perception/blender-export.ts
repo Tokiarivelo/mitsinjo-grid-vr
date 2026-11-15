@@ -8,6 +8,11 @@ import {
   type CarRecipe,
 } from '@/features/vision-insert/utils/car-projection';
 import { houseGeometry, houseSlotLooks } from '@/features/vision-insert/utils/house-projection';
+import {
+  plantGeometry,
+  plantSlotLooks,
+  type PlantRecipe,
+} from '@/features/vision-insert/utils/plant-projection';
 import { recipeMesh } from '@/features/vision-insert/utils/object-geometry';
 import { withPieceEdits } from '@/features/vision-insert/utils/model-pieces';
 import { HULL_SURFACES } from '@/lib/face-hull';
@@ -112,11 +117,31 @@ function carGroups(recipe: CarRecipe): DrawnGroup[] | null {
   return out;
 }
 
+/** A plant (PQ-T82) by slot, as the 3D view draws it: each slot its material in its colour. */
+function plantGroups(recipe: PlantRecipe): DrawnGroup[] {
+  const geo = withPieceEdits(plantGeometry(recipe), recipe);
+  const looks = plantSlotLooks(recipe);
+  const out = geo.groups
+    .filter((g) => g.count > 0)
+    .map((g): DrawnGroup => {
+      const look = looks[g.materialIndex ?? 0]!;
+      return {
+        surface: look.slot,
+        ...groupVertices(geo, g.start, g.count),
+        color: look.color,
+        material: look.surface,
+      };
+    });
+  geo.dispose();
+  return out;
+}
+
 /** The drawn hull of a recipe by surface, as the 3D view draws it; empty without drawn faces. */
 export function drawnGroups(recipe: ObjectRecipe): DrawnGroup[] {
   if (recipe.house) return houseGroups({ ...recipe, house: recipe.house });
   const car = recipe.car?.body ? carGroups({ ...recipe, car: recipe.car }) : null;
   if (car) return car;
+  if (recipe.plant) return plantGroups({ ...recipe, plant: recipe.plant });
   if (!recipe.faces) return [];
   const geo = withPieceEdits(
     facesMesh({ proportions: recipe.proportions, faces: recipe.faces }),
@@ -391,7 +416,7 @@ export function recipeToBlender(
     ...meta,
     groups: recipeGroups(recipe),
     recipe,
-    ...(recipe.faces || recipe.house || recipe.car?.body
+    ...(recipe.faces || recipe.house || recipe.car?.body || recipe.plant
       ? { drawn: drawnGroups(recipe), ...(recipe.faces ? { atlas: recipe.faces.atlas } : {}) }
       : {}),
   });

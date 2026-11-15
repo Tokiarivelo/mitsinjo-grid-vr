@@ -4,6 +4,7 @@ import { memo, useEffect, useMemo } from 'react';
 import { useThree } from '@react-three/fiber';
 import { faceMaterials, facesMesh } from '@/features/vision-insert/utils/face-projection';
 import { carGeometry, carMaterials } from '@/features/vision-insert/utils/car-projection';
+import { plantGeometry, plantMaterials } from '@/features/vision-insert/utils/plant-projection';
 import { houseGeometry, houseMaterials } from '@/features/vision-insert/utils/house-projection';
 import { withPieceEdits } from '@/features/vision-insert/utils/model-pieces';
 import type { PlacedDrawnModel } from '../utils/placed-models-geometry';
@@ -17,7 +18,7 @@ const STATE_TINT: Record<PlacedDrawnModel['state'], string | null> = {
 };
 
 /**
- * A placed model wearing its validated drawings (PQ-T71), or built from its house plan (PQ-T72) or its car plan (PQ-T76), with the operator's surface looks: the
+ * A placed model wearing its validated drawings (PQ-T71), or built from its house plan (PQ-T72), its car plan (PQ-T76) or its plant plan (PQ-T82), with the operator's surface looks: the
  * same hull and materials as the 3D object view (`facesMesh`, `faceMaterials`). One draw call per
  * surface kind in use; the atlas texture is shared with the object view (cached by URL).
  */
@@ -35,7 +36,9 @@ export const PlacedDrawnModelMesh = memo(function PlacedDrawnModelMesh({
         recipe.house
           ? houseGeometry({ ...recipe, house: recipe.house })
           : ((recipe.car?.body ? carGeometry({ ...recipe, car: recipe.car }) : null) ??
-              facesMesh({ proportions: recipe.proportions, faces: recipe.faces! })),
+              (recipe.plant
+                ? plantGeometry({ ...recipe, plant: recipe.plant })
+                : facesMesh({ proportions: recipe.proportions, faces: recipe.faces! }))),
         recipe
       ),
     [recipe]
@@ -47,7 +50,9 @@ export const PlacedDrawnModelMesh = memo(function PlacedDrawnModelMesh({
       ? houseMaterials({ ...recipe, house: recipe.house }, options)
       : recipe.car?.body
         ? carMaterials({ ...recipe, car: recipe.car }, options)
-        : faceMaterials(recipe.faces!, options);
+        : recipe.plant
+          ? plantMaterials({ ...recipe, plant: recipe.plant }, options)
+          : faceMaterials(recipe.faces!, options);
   }, [recipe, model.state, invalidate]);
   useEffect(() => () => materials.forEach((m) => m.dispose()), [materials]);
   return (

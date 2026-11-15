@@ -4,6 +4,8 @@ import type { Palette } from '../recon/palette';
 import type { ReconReport } from '../recon/reconstruct';
 import { scoreRecipeOnViews } from '../recon/score';
 import type { AlignedViews } from '../recon/views';
+import { buildPlant, type PlantHints } from './plant-build';
+import { scorePlant } from './plant-score';
 import { fitTree, type TreePlan } from './tree-fit';
 import { FROND_LABEL } from './tree-fronds';
 import { treeRecipe } from './tree-parts';
@@ -21,14 +23,25 @@ export interface TreeOutcome {
   recipe: ObjectRecipe;
   report: ReconReport;
   plan: TreePlan;
+  /** The plant plan's silhouette IoU on the front and the side (PQ-T82). */
+  plantScore: { front: number; side: number; mean: number };
+}
+
+export interface TreeOptions {
+  /** The side view is the front reused (PQ-T81: a plant is round). */
+  sideIsFront?: boolean;
+  /** What the plant team read (PQ-T82). */
+  hints?: PlantHints;
 }
 
 export function reconstructTree(
   aligned: AlignedViews,
   palette: Palette,
-  label = ''
+  label = '',
+  { sideIsFront = false, hints = {} }: TreeOptions = {}
 ): TreeOutcome | null {
-  const plan = fitTree(aligned, { fronds: FROND_LABEL.test(label) });
+  const fronds = hints.habit ? hints.habit === 'palm' : FROND_LABEL.test(label);
+  const plan = fitTree(aligned, { fronds, sideIsFront });
   if (!plan) return null;
   const classLab = palette.classes.map((c) => hexToLab(c.hex));
   const scored = (recipe: ObjectRecipe) => {
@@ -52,14 +65,21 @@ export function reconstructTree(
   // Fronds are a few leaves inside the measured outline (they never fill it): the reading is
   // judged on the outline itself, the packed crown.
   const iou = plan.fronds ? scored(treeRecipe({ ...plan, fronds: undefined })).iou : own;
-  if (iou < TREE_MIN_IOU) {
-    console.info(`[vision] tree: silhouette iou ${iou.toFixed(2)} under ${TREE_MIN_IOU}, not used`);
+  // The plant the 3D views build (PQ-T82); the clumps above stay its parts for the parts views.
+  const plant = buildPlant(plan, label, hints, seedOf(label));
+  const plantScore = scorePlant(plant, plan, aligned);
+  // Spikes, canes and blades are no clumps: the plant answers for the drawing when it fits better.
+  if (Math.max(iou, plantScore.mean) < TREE_MIN_IOU) {
+    console.info(
+      `[vision] tree: silhouette iou ${iou.toFixed(2)}, plant ${plantScore.mean.toFixed(2)}, under ${TREE_MIN_IOU}, not used`
+    );
     return null;
   }
   const { W, H, D } = aligned;
   return {
-    recipe,
+    recipe: { ...recipe, plant },
     plan,
+    plantScore,
     report: {
       grid: { W, H, D },
       views: aligned.read,
@@ -72,4 +92,11 @@ export function reconstructTree(
       score: { ...score, overall: own },
     },
   };
+}
+
+/** A seed from the label: the same plant always gets the same leaves. */
+export function seedOf(label: string): number {
+  let h = 2166136261;
+  for (const ch of label) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
+  return (h >>> 0) % 2147483647;
 }

@@ -366,11 +366,15 @@ make eval-shape PROMPT=1,2
 make views-3d FRONT=front.png RIGHT=right.png OUT=test-results/views OFFLINE=1 MATERIALS=slate,wood,stone,glass
 make views-3d FRONT=front.png RIGHT=right.png BACK=back.png LEFT=left.png OUT=test-results/views LABEL='stone house'
 # House zero-regression check, offline (no Meta call, free): replays the reference houses' saved drawings and readings
-make house-regress
+make house-regress   # reference drawings in resources/generated-view (REF= to change)
 # Car offline replay (no Meta call): rebuilds every saved resources/refine-3d/c-*/ car from its drawings → recipe.json, car.json
 make car-replay OUT=replay
 # Tree offline replay (no Meta call): rebuilds every saved resources/refine-3d/t-*/ tree (crown + trunk read on the drawings)
 make tree-replay OUT=replay
+# Plants: live bench on photos of resources/refine-3d (Muse draws, the plant team reads, contributor model, API cost),
+# then the gallery to look at: resources/generated-view/plants/v<NNN>-…/ (photo → drawing → 3D), listed in VERSIONS.md
+make plants-live PLANTS="agave:plant coconut:tree"
+make plant-gallery OUT=replay NAMES="agave coconut"
 # A car is built from its profile: RIGHT= is its main view, FRONT= BACK= TOP= BOTTOM= the others, its left side mirrored.
 # NO_CAR=1 skips the car team (5 Spark calls); PHOTO= draws the profile and the other views (Muse Image, API cost).
 make views-3d PHOTO=resources/refine-3d/sedan.jpg OUT=resources/refine-3d/c-sedan-p LABEL=car NO_CAR=1

@@ -1463,6 +1463,10 @@
           "rim": "Roues",
           "under": "Dessous",
           "mirror": "Rétroviseurs",
+          "bark": "Tronc et branches",
+          "leaf": "Feuilles",
+          "leafDark": "Feuilles à l’ombre",
+          "flower": "Fleurs et fruits",
           "painted": "Peint"
         }
       }

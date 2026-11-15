@@ -1463,6 +1463,10 @@
           "rim": "Wheels",
           "under": "Underside",
           "mirror": "Wing mirrors",
+          "bark": "Trunk and limbs",
+          "leaf": "Leaves",
+          "leafDark": "Shaded leaves",
+          "flower": "Flowers and fruit",
           "painted": "Painted"
         }
       }

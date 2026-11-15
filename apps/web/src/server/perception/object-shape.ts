@@ -47,6 +47,7 @@ import {
   sampleObjectRgb,
 } from './shape-colors';
 import { carToolAsk, liveReadCar } from './car/car-specialist';
+import { liveReadPlant, plantToolAsk } from './tree/plant-specialist';
 import { houseToolAsk } from './house/house-specialist';
 import { conceptOf, fetchOutlineForBox, samRetries, type OutlineCrop } from './outline';
 import { applyConstraints, buildGraph, notBuilt, partCoverage, repairGraph } from './object-graph';
@@ -243,6 +244,7 @@ export async function runObjectShape(
         | 'readHouse'
         | 'askHouseTool'
         | 'askCarTool'
+        | 'askPlantTool'
       >
     >,
   photo: PhotoForRegions | null,
@@ -433,6 +435,13 @@ export async function runObjectShape(
                 ? {
                     readCar: liveReadCar(
                       carToolAsk({ askCarTool: perception.askCarTool.bind(perception) })
+                    ),
+                  }
+                : {}),
+              ...(perception.askPlantTool
+                ? {
+                    readPlant: liveReadPlant(
+                      plantToolAsk({ askPlantTool: perception.askPlantTool.bind(perception) })
                     ),
                   }
                 : {}),

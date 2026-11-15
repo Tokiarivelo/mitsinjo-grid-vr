@@ -150,6 +150,18 @@ export interface PerceptionBackend {
     signal?: AbortSignal
   ): Promise<PerceptionCall<{ content: string | null }>>;
   /**
+   * One call of the plant team (PQ-T82): the pilot or a specialist on the front drawing. Optional:
+   * without it a plant is built from its label and its outline.
+   */
+  askPlantTool?(
+    tool: string,
+    system: string,
+    schema: { name: string; schema: object },
+    imageUrl: string,
+    question: string,
+    signal?: AbortSignal
+  ): Promise<PerceptionCall<{ content: string | null }>>;
+  /**
    * Rubric judge (PQ-T4): `imageUrl` is photo | model | model ¾, `question` names the object.
    * Asked of `META_JUDGE_MODEL` (Muse Wonder); offline and background only.
    */

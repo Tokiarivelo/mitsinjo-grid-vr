@@ -17,7 +17,12 @@ import type { ClassMaterialsResult } from '../schemas';
 import { FACE_ORDER, buildFacePrompt, buildTopPrompt } from '../facade-faces';
 import { buildFacadePrompt } from '../facade-specialist';
 import { buildCarFacePrompt, type CarFace } from '../car/car-views';
-import { readHousePlan, type AskHouseTool, type ReadHouse } from '../house/house-specialist';
+import {
+  cropToObject,
+  readHousePlan,
+  type AskHouseTool,
+  type ReadHouse,
+} from '../house/house-specialist';
 import { inlineImageUrl } from '../inline-image';
 import { grow, type ViewImage } from './grid';
 import { buildLabelQuestion } from './label-classes';
@@ -37,7 +42,10 @@ import { profileProportions, vehicleAspects } from '../car/car-proportions';
 import { readCarTop } from '../car/car-top';
 import { readUnderside } from '../car/car-underside';
 import { reconstructTree } from '../tree/tree-recon';
-import { bleedPaper, maskAt, shrink, trimPaper } from './texture';
+import { FRAME_MARGIN } from '../tree/tree-parts';
+import type { ReadPlant } from '../tree/plant-specialist';
+import { plantHints, type PlantReading } from '../tree/plant-tools';
+import { bleedPaper, maskAt, plantHoles, shrink, trimPaper } from './texture';
 import {
   alignTop,
   depthFromPlan,
@@ -82,6 +90,8 @@ export interface ReconDeps {
   askHouseTool?: AskHouseTool;
   /** The car team (PQ-T76), live or a saved reading; absent = a car keeps its measured plan. */
   readCar?: ReadCar;
+  /** The plant team (PQ-T82), live or a saved reading; absent = label and outline decide. */
+  readPlant?: ReadPlant;
 }
 
 export interface ReconOptions {
@@ -98,6 +108,8 @@ export interface ReconOptions {
   onHouseReading?: (reading: unknown) => void;
   /** The car team's reading, for captures, evals and replays (PQ-T76). */
   onCarReading?: (reading: unknown) => void;
+  /** The plant team's reading, for captures, evals and replays (PQ-T82). */
+  onPlantReading?: (reading: unknown) => void;
 }
 
 export interface ReconOutcome {
@@ -147,6 +159,73 @@ export async function encodeView(img: ViewImage): Promise<string> {
   return dataUrl(png);
 }
 
+/**
+ * One drawing cut to the object's box, `w` × `h` raw sRGB, mirrored when its frame says so, its
+ * paper bled to the nearest drawn colour (filtering at the outline never reads the sheet). Null
+ * when it cannot be cut. Throws only on an unreadable image.
+ */
+export async function cutDrawing(
+  png: Buffer,
+  frame: ViewFrame,
+  grid: GridView,
+  w: number,
+  h: number,
+  plant = false
+): Promise<Uint8Array | null> {
+  const flat = sharp(png, { failOn: 'none' }).flatten({ background: '#ffffff' });
+  const meta = await flat.metadata();
+  if (!meta.width || !meta.height) return null;
+  const [kx, ky] = [meta.width / frame.cols, meta.height / frame.rows];
+  const left = Math.max(0, Math.floor(frame.box.x0 * kx));
+  const top = Math.max(0, Math.floor(frame.box.y0 * ky));
+  const width = Math.min(meta.width - left, Math.ceil((frame.box.x1 - frame.box.x0 + 1) * kx));
+  const height = Math.min(meta.height - top, Math.ceil((frame.box.y1 - frame.box.y0 + 1) * ky));
+  if (width < 2 || height < 2) return null;
+  let cut = flat.extract({ left, top, width, height });
+  if (frame.mirrored) cut = cut.flop();
+  const tile = await cut.resize(w, h, { fit: 'fill' }).removeAlpha().raw().toBuffer();
+  const rgb = new Uint8Array(tile.buffer, tile.byteOffset, tile.byteLength);
+  const trimmed = trimPaper(rgb, maskAt(grid, w, h), w, h, frame.paper);
+  // A plant's holes (sky, paper between its leaves) take its leaves' colours, far enough to fill them.
+  const mask = shrink(plant ? plantHoles(rgb, trimmed, frame.paper) : trimmed, w, h);
+  bleedPaper(rgb, mask, w, h, plant ? PLANT_BLEED_PASSES : undefined);
+  return rgb;
+}
+
+/** Bleed passes over a plant's skin: its holes and its paper covered (pixels of the skin). */
+const PLANT_BLEED_PASSES = 48;
+/** Side of a plant's skin, pixels. */
+const PLANT_SKIN_SIDE = 512;
+/** JPEG quality of a plant's skin. */
+const PLANT_SKIN_QUALITY = 84;
+
+/**
+ * A plant's skin (PQ-T82): its front drawing over the plant's box, whose margin (`margin` times the
+ * drawing) is above the plant and on both sides, never under it; the margin repeats the bled edge.
+ */
+export async function plantSkin(
+  png: Buffer,
+  frame: ViewFrame,
+  grid: GridView,
+  margin: number
+): Promise<string | null> {
+  const [w, h] = [Math.round(PLANT_SKIN_SIDE / margin), Math.round(PLANT_SKIN_SIDE / margin)];
+  const rgb = await cutDrawing(png, frame, grid, w, h, true).catch(() => null);
+  if (!rgb) return null;
+  const side = Math.floor((PLANT_SKIN_SIDE - w) / 2);
+  const jpg = await sharp(Buffer.from(rgb), { raw: { width: w, height: h, channels: 3 } })
+    .extend({
+      left: side,
+      right: PLANT_SKIN_SIDE - w - side,
+      top: PLANT_SKIN_SIDE - h,
+      bottom: 0,
+      extendWith: 'copy',
+    })
+    .jpeg({ quality: PLANT_SKIN_QUALITY })
+    .toBuffer();
+  return `data:image/jpeg;base64,${jpg.toString('base64')}`;
+}
+
 /** Cells the footprint read on the view from above is grown by before it cuts the hull. */
 const FOOTPRINT_GROW = 3;
 
@@ -185,29 +264,8 @@ export async function buildFaceAtlas(
         : (pngs[view] ?? (view === 'right' && aligned.rightFromLeft ? pngs.left : undefined));
     if (!frame || !grid || !png) continue;
     try {
-      const flat = sharp(png, { failOn: 'none' }).flatten({ background: '#ffffff' });
-      const meta = await flat.metadata();
-      if (!meta.width || !meta.height) continue;
-      const [kx, ky] = [meta.width / frame.cols, meta.height / frame.rows];
-      const left = Math.max(0, Math.floor(frame.box.x0 * kx));
-      const top = Math.max(0, Math.floor(frame.box.y0 * ky));
-      const width = Math.min(meta.width - left, Math.ceil((frame.box.x1 - frame.box.x0 + 1) * kx));
-      const height = Math.min(meta.height - top, Math.ceil((frame.box.y1 - frame.box.y0 + 1) * ky));
-      if (width < 2 || height < 2) continue;
-      let cut = flat.extract({ left, top, width, height });
-      if (frame.mirrored) cut = cut.flop();
-      const tile = await cut
-        .resize(FACE_TILE, FACE_TILE, { fit: 'fill' })
-        .removeAlpha()
-        .raw()
-        .toBuffer();
-      const rgb = new Uint8Array(tile.buffer, tile.byteOffset, tile.byteLength);
-      const mask = shrink(
-        trimPaper(rgb, maskAt(grid, FACE_TILE, FACE_TILE), FACE_TILE, FACE_TILE, frame.paper),
-        FACE_TILE,
-        FACE_TILE
-      );
-      bleedPaper(rgb, mask, FACE_TILE, FACE_TILE);
+      const rgb = await cutDrawing(png, frame, grid, FACE_TILE, FACE_TILE);
+      if (!rgb) continue;
       const slot = faceSlot(view);
       const [ox, oy] = [
         (slot % FACE_ATLAS_COLS) * FACE_TILE,
@@ -244,6 +302,7 @@ export async function reconstructObject(
     topPng,
     onHouseReading,
     onCarReading,
+    onPlantReading,
   }: ReconOptions = {}
 ): Promise<ReconOutcome | null> {
   const tag = `[vision] 3D views reconstruction for "${target.label}"`;
@@ -387,10 +446,36 @@ export async function reconstructObject(
     }
     // A tree or a bush is one crown on one trunk (PQ-T79): read on the drawings, not carved into boxes.
     if (archetype === 'tree' || archetype === 'bush') {
-      const tree = reconstructTree(reading.aligned, reading.palette, target.label);
+      // The plant team names what the outline cannot: the species, the habit, the leaves, the limbs.
+      let plantReading: PlantReading | null = null;
+      const frontFrame = reading.aligned.frames.front;
+      if (deps.readPlant && !signal?.aborted && pngs.front && frontFrame) {
+        const image = await cropToObject(pngs.front, frontFrame);
+        plantReading = image
+          ? await deps.readPlant(target.label, image, signal).catch((err) => {
+              console.warn(`${tag}: plant team failed:`, err instanceof Error ? err.message : err);
+              return null;
+            })
+          : null;
+        if (plantReading) onPlantReading?.(plantReading);
+      }
+      const tree = reconstructTree(reading.aligned, reading.palette, target.label, {
+        sideIsFront: pngs.right === pngs.front,
+        hints: plantHints(plantReading),
+      });
       if (tree) {
+        // The plant wears its own drawing (PQ-T82), projected from the front.
+        if (tree.recipe.plant && pngs.front && frontFrame) {
+          const skin = await plantSkin(
+            pngs.front,
+            frontFrame,
+            reading.aligned.views.front,
+            FRAME_MARGIN
+          );
+          if (skin) tree.recipe.plant.skin = skin;
+        }
         console.info(
-          `${tag}: ${tree.recipe.parts.length} parts (${tree.plan.bush ? 'no trunk' : `trunk ${tree.plan.trunk.length} lobes`}, crown ${tree.plan.crown.length} lobes)${drawn.length ? `, drawn here: ${drawn.join(', ')}` : ''}; ${reportLine(tree.report)}`
+          `${tag}: ${tree.recipe.parts.length} parts (${tree.plan.bush ? 'no trunk' : `trunk ${tree.plan.trunk.length} lobes`}, crown ${tree.plan.crown.length} lobes); plant ${tree.recipe.plant ? `${tree.recipe.plant.habit}, ${tree.recipe.plant.stems.length} stems, ${tree.recipe.plant.masses.length} masses, ${tree.recipe.plant.strands?.length ?? 0} strands, ${tree.recipe.plant.leaves?.length ?? 0} leaves, ${tree.recipe.plant.tiers?.length ?? 0} tiers, iou front ${tree.plantScore.front.toFixed(2)} side ${tree.plantScore.side.toFixed(2)}` : 'none'}${drawn.length ? `, drawn here: ${drawn.join(', ')}` : ''}; ${reportLine(tree.report)}`
         );
         return { recipe: tree.recipe, report: tree.report, drawn };
       }

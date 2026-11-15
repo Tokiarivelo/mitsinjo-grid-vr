@@ -33,11 +33,24 @@ export interface TreePlan {
   foot: number;
   /** A palm's crown (`options.fronds`): the heart and its fronds; `crown` then only measures the outline. */
   fronds?: FrondCrown;
+  /**
+   * The closed crown on each row (PQ-T82): its first and last cell on the front (x) and on the
+   * side (z), null on a row without leaves; and per column the lowest row with leaves (the hem of
+   * a weeping curtain), -1 without. Read by the plant builders (`plant-build.ts`).
+   */
+  rows: { front: Array<[number, number] | null>; side: Array<[number, number] | null> };
+  hem: { front: number[]; side: number[] };
+  /** Flowers or fruit inside the crown: their colour and their share of the crown's pixels. */
+  bloom?: { color: string; share: number };
+  /** The side was the front reused (a round plant): the trunk does not lean in depth. */
+  sideIsFront: boolean;
 }
 
 export interface TreeFitOptions {
   /** The label names a palm, a banana plant…: the crown is written as fronds round a heart. */
   fronds?: boolean;
+  /** The side view is the front reused (PQ-T81): its trunk's lean is not a lean in depth. */
+  sideIsFront?: boolean;
 }
 
 /** Closing radius of the leaf mask, cells: leaves, twigs and gaps between fronds become one mass. */
@@ -86,6 +99,20 @@ export function isLeaf(r: number, g: number, b: number): boolean {
   return s >= 0.1 && v >= 0.1 && h >= 50 && (h <= 175 || (h <= 198 && s >= 0.2));
 }
 
+/**
+ * A pixel of flowers or fruit: saturated, neither leaf nor dull bark brown (a jacaranda's purple, a
+ * flamboyant's red), or near-white petals.
+ */
+export function isPetal(r: number, g: number, b: number): boolean {
+  const [hue, sat, val] = hsv(r, g, b);
+  if (isLeaf(r, g, b)) return false;
+  const brown = hue >= 15 && hue < 50 && sat < 0.6 && val < 0.7;
+  return (sat >= 0.45 && val >= 0.45 && !brown) || (sat < 0.12 && val > 0.9);
+}
+
+/** Crown matter: leaves, or the flowers that hide them (a tree in full bloom has a crown too). */
+const isFoliage = (r: number, g: number, b: number) => isLeaf(r, g, b) || isPetal(r, g, b);
+
 const hex = ([r, g, b]: Rgb) =>
   `#${[r, g, b]
     .map((v) =>
@@ -106,6 +133,8 @@ function either(a: GridView, b: GridView | undefined, pick: (v: GridView, i: num
 
 const leafAt = (v: GridView, i: number) =>
   v.mask[i] && isLeaf(v.rgb[i * 3]!, v.rgb[i * 3 + 1]!, v.rgb[i * 3 + 2]!) ? 1 : 0;
+const crownAt = (v: GridView, i: number) =>
+  v.mask[i] && isFoliage(v.rgb[i * 3]!, v.rgb[i * 3 + 1]!, v.rgb[i * 3 + 2]!) ? 1 : 0;
 const objectAt = (v: GridView, i: number) => v.mask[i]!;
 
 /** The value at share `q` of the sorted values (0 = smallest); 0 when none. */
@@ -217,7 +246,7 @@ export function barkColour(
       ) {
         const i = y * v.cols + x;
         const [r, g, b] = [v.rgb[i * 3]!, v.rgb[i * 3 + 1]!, v.rgb[i * 3 + 2]!];
-        if (v.mask[i] === 1 && !isLeaf(r, g, b)) px.push([r, g, b]);
+        if (v.mask[i] === 1 && !isFoliage(r, g, b)) px.push([r, g, b]);
       }
     }
   }
@@ -249,6 +278,80 @@ function tierColours(
   );
 }
 
+/** A trunk's bark rising from the foot (`mask` = bark pixels): its top and foot rows; null without. */
+export function barkRise(
+  mask: Uint8Array,
+  cols: number,
+  rows: number
+): { top: number; foot: number } | null {
+  let foot = -1;
+  let centre = -1;
+  // The foot: the lowest row with bark near the middle third.
+  for (let y = rows - 1; y >= 0 && foot < 0; y--)
+    for (const [a, b] of runsOf(mask, cols, [y], 1))
+      if ((a + b + 1) / 2 > cols / 3 && (a + b + 1) / 2 < (2 * cols) / 3) {
+        foot = y;
+        centre = (a + b + 1) / 2;
+        break;
+      }
+  if (foot < 0) return null;
+  let top = foot;
+  let lost = 0;
+  for (let y = foot - 1; y >= 0; y--) {
+    const runs = runsOf(mask, cols, [y], 1).filter(
+      ([a, b]) => Math.abs((a + b + 1) / 2 - centre) <= Math.max(3, (b - a + 1) * 1.5)
+    );
+    if (!runs.length) {
+      // Leaves cross the trunk: a few rows without bark do not end it.
+      if (++lost > BARK_GAP) break;
+      continue;
+    }
+    lost = 0;
+    const run = runs.reduce((p, q) =>
+      Math.abs((q[0] + q[1] + 1) / 2 - centre) < Math.abs((p[0] + p[1] + 1) / 2 - centre) ? q : p
+    );
+    centre = (run[0] + run[1] + 1) / 2;
+    top = y;
+  }
+  return { top, foot };
+}
+
+/** Rows without bark a trunk seen through hanging leaves may cross. */
+export const BARK_GAP = 6;
+
+/** Share of the crown's pixels that must be flowers or fruit for them to count. */
+export const BLOOM_MIN = 0.02;
+
+/**
+ * Flowers or fruit in the crown (`isPetal` pixels). Their mean colour and share; null under `BLOOM_MIN`.
+ */
+export function bloomOf(
+  views: ReadonlyArray<GridView | undefined>,
+  crown: Uint8Array,
+  cols: number,
+  top: number,
+  base: number
+): { color: string; share: number } | null {
+  let [r, g, b, n, all] = [0, 0, 0, 0, 0];
+  for (const v of views) {
+    if (!v || v.cols !== cols) continue;
+    for (let y = top; y <= base && y < v.rows; y++)
+      for (let x = 0; x < cols; x++) {
+        const i = y * cols + x;
+        if (!crown[i] || !v.mask[i]) continue;
+        all++;
+        const [pr, pg, pb] = [v.rgb[i * 3]!, v.rgb[i * 3 + 1]!, v.rgb[i * 3 + 2]!];
+        if (!isPetal(pr, pg, pb)) continue;
+        r += pr;
+        g += pg;
+        b += pb;
+        n++;
+      }
+  }
+  if (!all || n / all < BLOOM_MIN) return null;
+  return { color: hex([r / n, g / n, b / n]), share: Math.round((n / all) * 1000) / 1000 };
+}
+
 /**
  * Reads the tree. Null when no crown shows (no leaf colour on the drawings): the caller then keeps
  * the generic reconstruction.
@@ -258,8 +361,8 @@ export function fitTree(aligned: AlignedViews, options: TreeFitOptions = {}): Tr
   const { W, D } = aligned;
   const rows = front.rows;
   const sideA = right;
-  const frontLeaf = either(front, back, leafAt);
-  const sideLeaf = either(sideA, left, leafAt);
+  const frontLeaf = either(front, back, crownAt);
+  const sideLeaf = either(sideA, left, crownAt);
   const frontCrown = close(frontLeaf, W, rows, CROWN_CLOSE);
   const sideCrown = close(sideLeaf, D, rows, CROWN_CLOSE);
   // Crown rows: the share of each row the closed leaves fill, the larger of the two views.
@@ -280,14 +383,30 @@ export function fitTree(aligned: AlignedViews, options: TreeFitOptions = {}): Tr
   // Trunk: the run that rises from the ground, median-filtered (fallen fronds, roots, forks).
   const frontObject = either(front, back, objectAt);
   const sideObject = either(sideA, left, objectAt);
-  const trunkTop = base + 1;
+  let trunkTop = base + 1;
   let foot = rows - 1;
   let bush = rows - 1 - base < BUSH_TRUNK_SHARE * rows;
+  // A weeping crown hangs down to the ground round its trunk (PQ-T82): the trunk is then the
+  // bark that rises from the foot through the curtain, not what shows under the crown.
+  let frontTrunkMask = frontObject;
+  let sideTrunkMask = sideObject;
+  if (bush) {
+    const bark = (v: GridView, i: number) =>
+      v.mask[i] && !isFoliage(v.rgb[i * 3]!, v.rgb[i * 3 + 1]!, v.rgb[i * 3 + 2]!) ? 1 : 0;
+    const frontBark = either(front, back, bark);
+    const rise = barkRise(frontBark, W, rows);
+    if (rise && rise.foot - rise.top >= BUSH_TRUNK_SHARE * rows) {
+      bush = false;
+      trunkTop = rise.top;
+      frontTrunkMask = frontBark;
+      sideTrunkMask = options.sideIsFront ? frontBark : either(sideA, left, bark);
+    }
+  }
   const trunk: Lobe[] = [];
   let bark: Rgb = FALLBACK_BARK;
   if (!bush) {
-    const f = trunkRuns(frontObject, W, rows, trunkTop);
-    const s = trunkRuns(sideObject, D, rows, trunkTop);
+    const f = trunkRuns(frontTrunkMask, W, rows, trunkTop);
+    const s = trunkRuns(sideTrunkMask, D, rows, trunkTop);
     const pf = trunkProfile(f.w, f.c, TRUNK_WINDOW);
     const ps = trunkProfile(s.w, s.c, TRUNK_WINDOW);
     const [fw, fc, sw, sc] = [pf.w, pf.c, ps.w, ps.c];
@@ -339,7 +458,8 @@ export function fitTree(aligned: AlignedViews, options: TreeFitOptions = {}): Tr
         const y = Math.round(mid);
         const [wf, ws] = [at(fw, y), at(sw, y)];
         trunk.push({
-          c: [centre(fc, y), mid, centre(sc, y)],
+          // A side that is the front reused says nothing of a lean in depth.
+          c: [centre(fc, y), mid, options.sideIsFront ? D / 2 : centre(sc, y)],
           r: [Math.max(1, wf / 2), step * LOBE_REACH, Math.max(1, ws / 2)],
         });
       }
@@ -375,8 +495,28 @@ export function fitTree(aligned: AlignedViews, options: TreeFitOptions = {}): Tr
       Math.max(centre[1] - sz[0], sz[1] - centre[1]),
     ]);
   }
+  const spans = (mask: Uint8Array, cols: number) =>
+    Array.from({ length: rows }, (_, y): [number, number] | null => {
+      let [lo, hi] = [-1, -1];
+      for (let x = 0; x < cols; x++)
+        if (mask[y * cols + x]) {
+          if (lo < 0) lo = x;
+          hi = x;
+        }
+      return lo < 0 ? null : [lo, hi + 1];
+    });
+  const hems = (mask: Uint8Array, cols: number) =>
+    Array.from({ length: cols }, (_, x) => {
+      for (let y = rows - 1; y >= 0; y--) if (mask[y * cols + x]) return y;
+      return -1;
+    });
+  const bloom = bloomOf([front, back], frontCrown, W, top, bush ? foot : base);
   return {
     ...(fronds ? { fronds } : {}),
+    ...(bloom ? { bloom } : {}),
+    rows: { front: spans(frontCrown, W), side: spans(sideCrown, D) },
+    hem: { front: hems(frontLeaf, W), side: hems(sideLeaf, D) },
+    sideIsFront: Boolean(options.sideIsFront),
     W,
     H: foot + 1,
     D,

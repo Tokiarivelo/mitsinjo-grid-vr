@@ -10,7 +10,11 @@ import { renderFlat, THREE_QUARTER } from '../flat-render';
 import { getPerceptionClient } from '../client';
 import { CAR_SLOTS, carMesh, type CarSlot } from '@/lib/car-mesh';
 import { rasterCar } from '../car/car-raster';
+import { rasterMesh } from '../recon/mesh-raster';
+import { PLANT_SLOTS, PLANT_TWO_SIDED, plantMesh } from '@/lib/plant-mesh';
 import { carToolAsk, liveReadCar } from '../car/car-specialist';
+import { liveReadPlant, plantToolAsk } from '../tree/plant-specialist';
+import { PlantReadingSchema } from '../tree/plant-tools';
 import { CarReadingSchema } from '../car/car-tools';
 import { houseToolAsk } from '../house/house-specialist';
 import { reconstructObject, reportLine } from '../recon';
@@ -106,6 +110,17 @@ describe.runIf(
           : perception && !process.env.VIEWS_3D_NO_CAR
             ? { readCar: liveReadCar(carToolAsk(perception)) }
             : {}),
+        // PQ-T82: a plant is read by the plant team (`PLANT_READING=plant-reading.json` replays one).
+        ...(process.env.VIEWS_3D_PLANT_READING
+          ? {
+              readPlant: async () =>
+                PlantReadingSchema.parse(
+                  JSON.parse(await readFile(process.env.VIEWS_3D_PLANT_READING!, 'utf8'))
+                ),
+            }
+          : perception && !process.env.VIEWS_3D_NO_PLANT
+            ? { readPlant: liveReadPlant(plantToolAsk(perception)) }
+            : {}),
         // Offline: materials given by hand, largest class first (`MATERIALS=slate,wood,…`).
         ...(process.env.VIEWS_3D_MATERIALS
           ? {
@@ -132,6 +147,8 @@ describe.runIf(
           void writeFile(join(out, 'house-reading.json'), JSON.stringify(reading, null, 2)),
         onCarReading: (reading) =>
           void writeFile(join(out, 'car-reading.json'), JSON.stringify(reading, null, 2)),
+        onPlantReading: (reading) =>
+          void writeFile(join(out, 'plant-reading.json'), JSON.stringify(reading, null, 2)),
       }
     );
     if (!built)
@@ -382,6 +399,80 @@ describe.runIf(
         .composite(shots)
         .png()
         .toFile(join(out, 'car-sheet.png'));
+    }
+    // A plant (PQ-T82): its plan and the mesh the viewer draws, from four sides.
+    if (recipe.plant) {
+      await writeFile(join(out, 'plant.json'), JSON.stringify(recipe.plant, null, 2));
+      const { w, h, d } = recipe.proportions;
+      const mesh = plantMesh(recipe.plant, [w, h, d]);
+      const look = recipe.plant.look;
+      const colors = {
+        bark: look.bark,
+        leaf: look.leaf,
+        leafDark: look.leafDark,
+        flower: look.flower ?? look.leaf,
+      };
+      // The plant's skin (its front drawing) worn like the viewer wears it.
+      const skinUrl = recipe.plant.skin;
+      const skin = skinUrl
+        ? await sharp(Buffer.from(skinUrl.slice(skinUrl.indexOf(',') + 1), 'base64'))
+            .removeAlpha()
+            .raw()
+            .toBuffer({ resolveWithObject: true })
+        : null;
+      if (skin)
+        await sharp(Buffer.from(skinUrl!.slice(skinUrl!.indexOf(',') + 1), 'base64')).toFile(
+          join(out, 'plant-skin.jpg')
+        );
+      const side = 320;
+      const gap = 12;
+      const cams = [
+        { yaw: 0, pitch: 0.05 },
+        { yaw: Math.PI / 4, pitch: 0.3 },
+        { yaw: Math.PI / 2, pitch: 0.05 },
+        { yaw: 0.3, pitch: 1.2 },
+      ];
+      const shots = await Promise.all(
+        cams.map(async (cam, i) => ({
+          input: await sharp(
+            Buffer.from(
+              rasterMesh(mesh, PLANT_SLOTS, {
+                ...cam,
+                size: side,
+                colors,
+                twoSided: PLANT_TWO_SIDED,
+                ...(skin
+                  ? {
+                      atlas: {
+                        rgb: new Uint8Array(skin.data),
+                        width: skin.info.width,
+                        height: skin.info.height,
+                      },
+                    }
+                  : {}),
+              })
+            ),
+            {
+              raw: { width: side, height: side, channels: 3 },
+            }
+          )
+            .png()
+            .toBuffer(),
+          left: gap + i * (side + gap),
+          top: gap,
+        }))
+      );
+      await sharp({
+        create: {
+          width: 4 * side + 5 * gap,
+          height: side + 2 * gap,
+          channels: 3,
+          background: '#ffffff',
+        },
+      })
+        .composite(shots)
+        .png()
+        .toFile(join(out, 'plant-sheet.png'));
     }
     console.info(`\n${recipe.parts.length} parts — ${reportLine(report)}\n→ ${out}`);
     expect(recipe.parts.length).toBeGreaterThan(0);
