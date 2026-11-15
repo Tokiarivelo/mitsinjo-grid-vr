@@ -6,7 +6,12 @@ import { projectDetectionsTo3D } from '../spatial-projection';
 import { screenPoint } from '../webcam-screen';
 import { miniatureSlot } from '../xr-layout';
 import { createWristMenu, type WristMenu } from '../wrist-menu';
-import { XRBlasterController, type MiniatureHandle } from '../xr-blaster-controller';
+import {
+  mouseTarget,
+  XRBlasterController,
+  xrEyeAt,
+  type MiniatureHandle,
+} from '../xr-blaster-controller';
 import { createTurntable } from '../turntable';
 
 vi.mock('../xr-audio-fx', () => ({
@@ -103,6 +108,8 @@ describe('XRBlasterController (VS-T4)', () => {
     Object.defineProperty(canvas, 'getBoundingClientRect', {
       value: () => ({ left: 0, top: 0, width: 800, height: 600 }),
     });
+    // Mouse input is listened on the document (the emulator overlay covers the canvas).
+    document.body.replaceChildren(canvas);
     controller0 = new THREE.Group();
     controller1 = new THREE.Group();
     hand0 = Object.assign(new THREE.Group(), { joints: {} });
@@ -221,6 +228,28 @@ describe('XRBlasterController (VS-T4)', () => {
     expect(onTriggerScan).toHaveBeenCalledTimes(1);
   });
 
+  it('in the emulator a click on the DevUI overlay canvas reaches the scene (VS-T24)', () => {
+    // Regression: the IWER DevUI draws a full-screen canvas over ours, which swallowed every
+    // click (wrist menu, « Extract in 3D » / « Cancel »).
+    gl.xr.isPresenting = true;
+    (gl.xr as unknown as { getCamera: () => unknown }).getCamera = () => ({ cameras: [camera] });
+    const { onTriggerScan } = setup();
+    const overlay = document.createElement('canvas');
+    document.body.append(overlay);
+    const html = document.createElement('div');
+    document.body.append(html);
+    act(() => {
+      fireEvent.pointerDown(html, { button: 0, clientX: 400, clientY: 300 });
+      fireEvent.pointerUp(html, { button: 0, clientX: 400, clientY: 300 });
+    });
+    expect(onTriggerScan).not.toHaveBeenCalled(); // HTML panels never shoot
+    act(() => {
+      fireEvent.pointerDown(overlay, { button: 0, clientX: 400, clientY: 300 });
+      fireEvent.pointerUp(overlay, { button: 0, clientX: 400, clientY: 300 });
+    });
+    expect(onTriggerScan).toHaveBeenCalledTimes(1);
+  });
+
   it('a mouse drag looks around without shooting', () => {
     const { onTriggerScan, onShootScreen } = setup();
     const canvas = gl.domElement;
@@ -241,6 +270,59 @@ describe('XRBlasterController (VS-T4)', () => {
     controller1.visible = false;
     act(() => frame?.({}, 0.016));
     expect(onHoverTarget).toHaveBeenLastCalledWith('fridge');
+  });
+
+  it('in the headset view the mouse hovers too, but never hides what a laser aims at', () => {
+    gl.xr.isPresenting = true;
+    (gl.xr as unknown as { getCamera: () => unknown }).getCamera = () => ({ cameras: [camera] });
+    menu.open = true; // the camera looks at the scan button
+    const { onHoverTarget } = setup();
+    controller0.visible = false;
+    controller1.visible = false;
+    act(() => {
+      fireEvent.pointerMove(gl.domElement, { clientX: 400, clientY: 300 });
+    });
+    act(() => frame?.({}, 0.016));
+    expect(onHoverTarget).toHaveBeenLastCalledWith('spatial-air-button');
+
+    controller0.visible = true;
+    aim(controller0, fridgeOnVideo);
+    act(() => frame?.({}, 0.016));
+    expect(onHoverTarget).toHaveBeenLastCalledWith('fridge');
+  });
+
+  it('dragging a held model keeps its events: the view behind never turns (VS-T24)', () => {
+    // Regression: in the emulator, dragging the carousel or a model also turned the headset
+    // (the DevUI overlay turns the view on a mouse drag).
+    const m: MiniatureHandle = {
+      id: 'fridge',
+      position: miniatureSlot(0),
+      turntable: createTurntable(),
+    };
+    setup([fridge], [m]);
+    camera.lookAt(...m.position);
+    camera.updateMatrixWorld(true);
+    const overlay = document.createElement('canvas');
+    document.body.append(overlay);
+    const seen: string[] = [];
+    for (const type of ['pointerdown', 'pointermove', 'pointerup', 'mousedown', 'mousemove'])
+      overlay.addEventListener(type, () => seen.push(type));
+    const send = (target: EventTarget, type: string, clientX: number) =>
+      target.dispatchEvent(
+        new MouseEvent(type, { clientX, clientY: 300, button: 0, bubbles: true })
+      );
+    act(() => {
+      send(gl.domElement, 'pointerdown', 400);
+      send(overlay, 'pointermove', 460);
+      send(overlay, 'mousemove', 460);
+      send(overlay, 'pointerup', 460);
+    });
+    expect(seen).toEqual([]);
+    // Nothing held: the overlay gets its drag (look around).
+    act(() => {
+      send(overlay, 'pointermove', 300);
+    });
+    expect(seen).toEqual(['pointermove']);
   });
 
   describe('3D miniatures (hold to rotate, tap to connect)', () => {
@@ -358,5 +440,28 @@ describe('XRBlasterController (VS-T4)', () => {
       act(() => frame?.({}, 0.016));
       expect(menu.toggle).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe('mouse helpers (VS-T24)', () => {
+  it('mouseTarget: our canvas always, a canvas over it only in the headset view', () => {
+    const dom = document.createElement('canvas');
+    const other = document.createElement('canvas');
+    const div = document.createElement('div');
+    expect(mouseTarget(dom, dom, false)).toBe(true);
+    expect(mouseTarget(other, dom, false)).toBe(false);
+    expect(mouseTarget(other, dom, true)).toBe(true);
+    expect(mouseTarget(div, dom, true)).toBe(false);
+    expect(mouseTarget(null, dom, true)).toBe(false);
+  });
+
+  it('xrEyeAt: one view fills the canvas, two views share it left | right', () => {
+    const left = new THREE.PerspectiveCamera();
+    const right = new THREE.PerspectiveCamera();
+    expect(xrEyeAt(undefined, 0.3)).toBeNull();
+    expect(xrEyeAt({ cameras: [] }, 0.3)).toBeNull();
+    expect(xrEyeAt({ cameras: [left] }, 0.3)).toEqual({ camera: left, x: 0.3 });
+    expect(xrEyeAt({ cameras: [left, right] }, -0.5)).toEqual({ camera: left, x: 0 });
+    expect(xrEyeAt({ cameras: [left, right] }, 0.5)).toEqual({ camera: right, x: 0 });
   });
 });

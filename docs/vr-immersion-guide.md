@@ -187,8 +187,9 @@ au-dessus de chaque manette 25 s à l'entrée, puis d'un clic de stick.
 
 Un seul principe partout : **on vise, on valide** (gâchette, pincement ou clic). Une **bulle ambre** près du
 bout du laser dit ce que fera la validation (« Gâchette · Extraire « Réfrigérateur » en 3D », « Pincer · Aller à
-Cuisine »…). Une **carte légende** au-dessus de chaque manette ou main liste ses boutons : affichée 25 s à
-l'entrée, puis rappelée d'un clic de stick.
+Cuisine »…). Une **carte légende** au-dessus de chaque manette ou main liste ses boutons : affichée 12 s à
+l'entrée, puis rappelée d'un clic de stick ou du bouton **Menu › « Afficher l'aide des commandes »** (Meta :
+laisser rappeler l'aide depuis un menu, VS-T24).
 
 ### 6.1 Manettes Touch
 
@@ -221,15 +222,21 @@ sinon le pincement suffit pour tout (bouton « Analyser », flèches au sol, men
 
 ### 6.3 Navigateur PC (souris, clavier, émulateur IWER)
 
-| Action                          | Comment                                                                               |
-| :------------------------------ | :------------------------------------------------------------------------------------ |
-| Viser / valider                 | Survol + **clic gauche** (sans casque, le plus simple)                                |
-| Marcher dans la visite 360°     | **↑ ↓ ← →**, **W A S D** ou **Z Q S D** (souris au-dessus de la scène)                |
-| Changer de lieu                 | Marcher sur la flèche au sol, ou la viser et valider                                  |
-| Manettes / mains de l'émulateur | Barre DevUI : bascule ✋ / 🎮 ; panneaux `Controller [L/R]` (A, B, X, Y, Trig, Stick) |
-| Bouger une manette              | Cliquer dessus → gizmo (flèches = déplacer, anneaux = tourner) ou champs Pos / Rot    |
+| Action                          | Comment                                                                                 |
+| :------------------------------ | :-------------------------------------------------------------------------------------- |
+| Viser / valider                 | Survol + **clic gauche**, aussi pendant la session émulée (bouton du poignet, panneaux) |
+| Marcher dans la visite 360°     | **↑ ↓ ← →**, **W A S D** ou **Z Q S D** (souris au-dessus de la scène)                  |
+| Changer de lieu                 | Marcher sur la flèche au sol, ou la viser et valider                                    |
+| Manettes / mains de l'émulateur | Barre DevUI : bascule ✋ / 🎮 ; panneaux `Controller [L/R]` (A, B, X, Y, Trig, Stick)   |
+| Bouger une manette              | Cliquer dessus → gizmo (flèches = déplacer, anneaux = tourner) ou champs Pos / Rot      |
 
 Sous Linux, `Alt + clic` est souvent pris par le bureau : utilisez le gizmo ou la souris directe.
+La DevUI d'IWER dessine son propre canvas plein écran par-dessus la scène : la souris est donc écoutée sur la
+page (un clic sur ce canvas vise la scène avec la caméra de l'œil XR) ; un clic sur un panneau HTML ou un glisser
+de gizmo ne tire jamais.
+Glisser le carrousel des vues ou tourner un modèle à la souris garde le geste pour lui : la DevUI (qui tourne
+le casque émulé quand on glisse dans le vide) ne reçoit rien, la vue reste fixe. Glisser dans le vide tourne
+toujours la vue.
 Pilotage scripté (MCP IWER ou `remote.dispatch`) : voir [`vr-iwer-tools.md`](vr-iwer-tools.md).
 
 ### 6.4 Déroulé type
@@ -238,8 +245,12 @@ Pilotage scripté (MCP IWER ou `remote.dispatch`) : voir [`vr-iwer-tools.md`](vr
    au-dessus de chaque objet de la partie visible (bande de 180° × 112°).
 2. Marcher : les contours restent **collés aux objets** (ils sont posés sur la photo, pas devant les yeux).
 3. **Viser un objet et valider** → « Extraire en 3D ? » → _Extraire_ / _Annuler_ (ou B/Y pour annuler).
-4. Valider les vues 2D dans le carrousel hologramme (glisser, flèches, ou viser une vue latérale), puis le **labo 3D** s'ouvre :
-   grip pour attraper / tourner, B/Y pour en sortir.
+4. **Studio 3D** (VS-T24) : dès « Extraire en 3D », la vue 360° laisse place au studio (dôme, grille, socle).
+   Au centre le carrousel des vues 2D (glisser, flèches, ou viser la vue voisine) ; **à droite** une colonne
+   hologramme liste la génération (chaque vue, puis chaque étape 3D avec ses secondes) au-dessus de l'objet en
+   **miniature** tournante sur un petit socle. « Valider et construire la 3D » → l'hologramme passe sur le socle
+   central ; le **labo 3D s'ouvre tout seul** au même endroit quand le modèle est prêt : grip pour attraper /
+   tourner, B/Y pour en sortir.
 
 ## 7. Confort visuel et prévention du vertige : Écran panoramique à focus plat (`/village`)
 
@@ -285,7 +296,7 @@ L'architecture du composant `<LiveWebcamBackdrop />` a été entièrement refond
 | Problème rencontré                                          | Explication                                                                                           | Action corrective                                                                                                                                        |
 | :---------------------------------------------------------- | :---------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **La scène reste dans une petite boîte centrale**           | Le mode plein écran automatique a été bloqué par la politique du navigateur (ex. iframe).             | Cliquez directement sur l'icône **« Plein écran »** dans la barre HUD en haut à droite du viewport 3D pour forcer le plein écran.                        |
-| **Je ne sais plus quel bouton fait quoi (`/village`)**      | Les légendes se masquent après 25 s.                                                                  | Cliquez un stick : les cartes légende réapparaissent au-dessus des manettes / mains.                                                                     |
+| **Je ne sais plus quel bouton fait quoi (`/village`)**      | Les légendes se masquent après 12 s.                                                                  | Cliquez un stick, ou Menu › « Afficher l'aide des commandes » : les cartes légende réapparaissent au-dessus des manettes / mains.                        |
 | **Mes touches clavier ne font pas bouger la caméra**        | Le curseur n'est pas verrouillé dans le mode FPS.                                                     | Cliquez sur **Play Mode** dans l'overlay DevUI, puis cliquez dans la fenêtre 3D pour verrouiller le pointeur.                                            |
 | **Le clavier avance de travers (clavier français AZERTY)**  | Les raccourcis par défaut de l'émulateur sont en QWERTY (WASD).                                       | Utilisez **W/A/S/D**, ou cliquez sur le menu de mapping clavier de DevUI pour réassigner **Z/Q/S/D**.                                                    |
 | **Le bouton « Voir en VR » n'apparaît pas**                 | WebXR requiert obligatoirement un contexte sécurisé (`localhost` ou HTTPS).                           | Vérifiez que l'URL commence bien par `http://localhost:...` ou `https://...`. En HTTP avec une adresse IP locale, WebXR est désactivé par le navigateur. |

@@ -1509,7 +1509,7 @@
       "vrScanAnalyzingSub": "Ny IA no manoritra sy mamaritra ny zavatra tsirairay",
       "vrExtract": {
         "title": "Havoaka amin’ny 3D ve « {name} » ?",
-        "sub": "Ny IA aloha no manao ny sary 2D; hamarinao ireo, avy eo atao ny 3D.",
+        "sub": "Miditra ao amin’ny studio 3D ianao : ao ny IA no manao ny sary 2D, hamarinao ireo, avy eo atao ny 3D ary misokatra ao amin’ny labo.",
         "yes": "Avoahy amin’ny 3D",
         "no": "Foano",
         "building": "Manamboatra ny 3D an’i « {name} »",
@@ -1577,8 +1577,14 @@
         "turned": "Nitodika {direction}",
         "left": "havia",
         "right": "havanana",
-        "helpShown": "Miseho ny fanampiana : tsindrio ny stick hanafenana azy",
-        "helpHidden": "Miafina ny fanampiana : tsindrio ny stick hanehoana azy"
+        "helpShown": "Miseho ny fanampiana : tsindrio ny stick, na Menu › Fanampiana, hanafenana azy",
+        "helpHidden": "Miafina ny fanampiana : tsindrio ny stick, na Menu › Fanampiana, hanehoana azy",
+        "helpShow": "Asehoy ny fanampiana momba ny fanaraha-maso",
+        "helpHide": "Afeno ny fanampiana momba ny fanaraha-maso"
+      },
+      "vrStudio": {
+        "viewsTitle": "Manao ny sary 2D an’i « {name} »",
+        "buildSub": "Misokatra ho azy ny labo 3D raha vao vonona ny modely"
       }
     },
     "dispatch": {

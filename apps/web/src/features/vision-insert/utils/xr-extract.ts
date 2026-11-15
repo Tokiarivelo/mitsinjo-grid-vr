@@ -5,7 +5,8 @@ import type { FaceName } from '@/lib/object-shape';
  * the slides of the views carousel (the main 2D view, then each face drawn beside it).
  *
  * idle → (shot on an object) confirm → (« Extract to 3D ») views → (« Validate & build ») build
- * → (model ready, « Enter the 3D lab ») lab → (« Leave the lab ») idle. Cancel goes back to idle
+ * → (model ready: opened by itself, VS-T24) lab → (« Leave the lab ») idle. From views on, the
+ * viewer is in the 3D studio room. Cancel goes back to idle
  * from every step but the lab. An object whose model is already built skips the views.
  */
 export type XrExtractStage = 'idle' | 'confirm' | 'views' | 'build' | 'lab';

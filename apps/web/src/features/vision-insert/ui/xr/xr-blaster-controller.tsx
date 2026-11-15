@@ -150,6 +150,8 @@ const BEAM_LENGTH = 3;
 const TOUCH_COOLDOWN_MS = 750;
 /** Mouse travel (px) under which a press + release is a click, not a drag. */
 const CLICK_SLOP_PX = 6;
+/** In the headset view, the mouse keeps hovering this long after its last move (ms). */
+const MOUSE_HOVER_MS = 2500;
 
 const BEAM_IDLE = '#38bdf8';
 const BEAM_WRIST = '#e9d5ff';
@@ -203,6 +205,34 @@ function createPointerLine(): THREE.Line {
   line.visible = false;
   line.frustumCulled = false;
   return line;
+}
+
+/**
+ * Whether a mouse event belongs to the scene: on our canvas, or, in the headset view, on a canvas
+ * laid over it (the IWER DevUI overlay of the emulator). HTML panels and buttons never count.
+ */
+export function mouseTarget(
+  target: EventTarget | null,
+  dom: HTMLCanvasElement,
+  presenting: boolean
+): boolean {
+  if (target === dom) return true;
+  return presenting && (target as { tagName?: string } | null)?.tagName === 'CANVAS';
+}
+
+/**
+ * The XR eye camera under the mouse, and the mouse x in that eye's view (NDC). One view (the
+ * emulator's mono preview) fills the canvas; two views (stereo) share it left | right.
+ */
+export function xrEyeAt(
+  xrCamera: { cameras?: THREE.Camera[] } | undefined,
+  ndcX: number
+): { camera: THREE.Camera; x: number } | null {
+  const eyes = xrCamera?.cameras ?? [];
+  if (eyes.length === 0) return null;
+  if (eyes.length === 1) return { camera: eyes[0]!, x: ndcX };
+  const right = ndcX >= 0;
+  return { camera: eyes[right ? 1 : 0]!, x: right ? ndcX * 2 - 1 : ndcX * 2 + 1 };
 }
 
 /** Ray origin + direction of an XR target-ray space (controller or hand pointer). */
@@ -393,6 +423,8 @@ export const XRBlasterController = memo(function XRBlasterController({
   const { gl, camera, scene } = useThree();
   const hoveredRef = useRef<string | null>(null);
   const mouseNdcRef = useRef<{ x: number; y: number } | null>(null);
+  /** Last mouse move over the scene (ms): in the headset view the mouse hovers for a while. */
+  const mouseAtRef = useRef(-Infinity);
   const handsRef = useRef<
     Array<{ group: Parameters<typeof updateHandMesh>[0]; mesh: THREE.InstancedMesh }>
   >([]);
@@ -680,9 +712,13 @@ export const XRBlasterController = memo(function XRBlasterController({
   }, [gl, scene, triggerShot, tryGrab, release]);
 
   // Mouse: aim on move, shoot on left click (desktop preview and IWER emulator).
+  // Listened on the document: in the emulator the IWER DevUI draws its own full-screen canvas
+  // over ours (controller gizmos), which would swallow every click (menu, dialog buttons).
   useEffect(() => {
     const dom = gl.domElement;
     if (!dom) return;
+    const doc = dom.ownerDocument ?? (typeof document !== 'undefined' ? document : null);
+    if (!doc) return;
     const toNdc = (e: MouseEvent) => {
       const rect = dom.getBoundingClientRect();
       const w = rect.width || window.innerWidth || 800;
@@ -694,12 +730,29 @@ export const XRBlasterController = memo(function XRBlasterController({
         y: -((cy - (rect.top || 0)) / h) * 2 + 1,
       };
     };
+    const presenting = () => !!gl.xr?.isPresenting;
     const px = (e: MouseEvent) => (typeof e.clientX === 'number' ? e.clientX : 0);
     /** Last pointer x of a panel drag (px). */
     let lastX = 0;
     const py = (e: MouseEvent) => (typeof e.clientY === 'number' ? e.clientY : 0);
+    /**
+     * A press that grabbed a panel or a model owns the gesture until release: its events stop
+     * here (capture phase), so the emulator overlay (DevUI turns the headset on a mouse drag) and
+     * the desktop camera controls never turn the view while a carousel or a model is dragged.
+     */
+    let owned = false;
+    const own = (e: Event) => {
+      e.stopPropagation();
+      if (e.cancelable) e.preventDefault();
+    };
+    const onMouse = (e: Event) => {
+      if (owned) own(e);
+    };
     const onMove = (e: MouseEvent) => {
+      if (owned) own(e);
+      else if (!mouseTarget(e.target, dom, presenting())) return;
       mouseNdcRef.current = toNdc(e);
+      mouseAtRef.current = performance.now();
       const drag = dragsRef.current.get('mouse');
       if (drag) {
         dragTo(drag, drag.yaw + (px(e) - lastX) * MOUSE_PANEL_GAIN);
@@ -716,47 +769,70 @@ export const XRBlasterController = memo(function XRBlasterController({
     };
     const rayAt = (e: MouseEvent) => {
       const ndc = toNdc(e);
-      _mouse.set(ndc.x, ndc.y);
-      _raycaster.setFromCamera(_mouse, camera!);
+      // In the headset view the scene is drawn by the XR eye cameras, not the R3F camera.
+      const eye = presenting()
+        ? xrEyeAt(
+            (gl.xr as unknown as { getCamera?: () => THREE.ArrayCamera }).getCamera?.(),
+            ndc.x
+          )
+        : null;
+      _mouse.set(eye ? eye.x : ndc.x, ndc.y);
+      _raycaster.setFromCamera(_mouse, eye?.camera ?? camera!);
       _vOrigin.copy(_raycaster.ray.origin);
       _vDirection.copy(_raycaster.ray.direction);
     };
-    // A click (press + release without dragging) shoots; a drag looks around (desktop controls).
+    // A click (press + release without dragging) shoots; a drag elsewhere looks around (desktop
+    // controls, or the emulator's headset / gizmos).
     let press: { x: number; y: number } | null = null;
     const onDown = (e: MouseEvent) => {
       if ((typeof e.button === 'number' && e.button !== 0) || !camera) return;
+      if (!mouseTarget(e.target, dom, presenting())) return;
       rayAt(e);
+      press = { x: px(e), y: py(e) };
       if (tryGrab('mouse', _vOrigin, _vDirection)) {
+        owned = true;
+        own(e);
         lastX = px(e);
         const grab = grabsRef.current.get('mouse');
         if (grab) {
           grab.x = px(e);
           grab.y = py(e);
         }
-        return;
       }
-      press = { x: px(e), y: py(e) };
     };
     const onUp = (e: MouseEvent) => {
-      release('mouse');
+      if (owned) own(e);
+      owned = false;
       const p = press;
       press = null;
-      if (!p || !camera || Math.hypot(px(e) - p.x, py(e) - p.y) > CLICK_SLOP_PX) return;
+      const moved = !p || Math.hypot(px(e) - p.x, py(e) - p.y) > CLICK_SLOP_PX;
+      const drag = dragsRef.current.get('mouse');
+      const held = !!drag || grabsRef.current.has('mouse');
+      // A button pressed then dragged off (an emulator gizmo drag) is not a tap.
+      if (drag && moved && !drag.panel.onDrag) dragsRef.current.delete('mouse');
+      release('mouse');
+      if (held || moved || !camera) return;
       rayAt(e);
       triggerShot(_vOrigin, _vDirection);
     };
     const onLeave = () => {
       press = null;
+      owned = false;
       release('mouse');
     };
-    dom.addEventListener('pointermove', onMove);
-    dom.addEventListener('pointerdown', onDown);
-    dom.addEventListener('pointerup', onUp);
+    const MOUSE_EVENTS = ['mousedown', 'mousemove', 'mouseup'] as const;
+    for (const type of MOUSE_EVENTS) doc.addEventListener(type, onMouse, true);
+    doc.addEventListener('pointermove', onMove, true);
+    doc.addEventListener('pointerdown', onDown, true);
+    doc.addEventListener('pointerup', onUp, true);
+    doc.addEventListener('pointercancel', onLeave, true);
     dom.addEventListener('pointerleave', onLeave);
     return () => {
-      dom.removeEventListener('pointermove', onMove);
-      dom.removeEventListener('pointerdown', onDown);
-      dom.removeEventListener('pointerup', onUp);
+      for (const type of MOUSE_EVENTS) doc.removeEventListener(type, onMouse, true);
+      doc.removeEventListener('pointermove', onMove, true);
+      doc.removeEventListener('pointerdown', onDown, true);
+      doc.removeEventListener('pointerup', onUp, true);
+      doc.removeEventListener('pointercancel', onLeave, true);
       dom.removeEventListener('pointerleave', onLeave);
     };
   }, [gl, camera, triggerShot, tryGrab, release]);
@@ -892,6 +968,31 @@ export const XRBlasterController = memo(function XRBlasterController({
           grab.y = _vOrigin.y;
         }
         hovered = drawBeam(i, _vOrigin, _vDirection) ?? hovered;
+      }
+      // Emulator mouse: hover what it points at (no beam), so buttons light up before a click.
+      // The lasers keep priority: a mouse left still never hides what a controller aims at.
+      const ndc = mouseNdcRef.current;
+      if (!hovered && ndc && now - mouseAtRef.current < MOUSE_HOVER_MS) {
+        const eye = xrEyeAt(
+          (gl.xr as unknown as { getCamera?: () => THREE.ArrayCamera }).getCamera?.(),
+          ndc.x
+        );
+        if (eye) {
+          _mouse.set(eye.x, ndc.y);
+          _raycaster.setFromCamera(_mouse, eye.camera);
+          _vOrigin.copy(_raycaster.ray.origin);
+          _vDirection.copy(_raycaster.ray.direction);
+          const aim = aimAt(_vOrigin, _vDirection, _vEnd, {
+            targets,
+            menu,
+            miniatures,
+            surface,
+            hotspots,
+            panels,
+            photo,
+          });
+          if (aim.kind !== 'none' && aim.kind !== 'screen') hovered = aim.id ?? hovered;
+        }
       }
     } else if (camera) {
       hideBeam(1);

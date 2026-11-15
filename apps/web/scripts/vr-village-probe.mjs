@@ -2,8 +2,9 @@
 // `window.__IWER_DEVICE__.remote.dispatch`, with the sample room fed as a fake webcam.
 // The emulator shows the walkable 360° tour (VS-T14), not the webcam. Checks: session starts;
 // wrist menu; loft with 2 floor arrows; a controller shot at the fridge (no scan yet) starts ONE
-// scan, outlines it and asks « Extract to 3D? »; then 2D views carousel → build → 3D lab (a piece
-// hidden) → leave = miniature; a tap on it connects it; a hand pinch at the lamp; shooting a floor
+// scan, outlines it and asks « Extract to 3D? »; then the 3D studio: 2D views carousel + generation
+// column → build → the lab opens by itself (a piece hidden); mouse clicks through the DevUI overlay
+// (wrist menu, Help, « Cancel ») → leave = miniature; a tap on it connects it; a hand pinch at the lamp; shooting a floor
 // arrow walks to the hall; ↑ walks on. Screenshots show the photo orientation ("MARRY" letters).
 // Screenshots in <outDir>/vr-*.png.
 // Usage: node scripts/vr-village-probe.mjs <baseUrl> <outDir>   (dev server must run; needs ffmpeg)
@@ -150,6 +151,43 @@ try {
   if (m1) await fire('controller-right', m1.button, { x: 0.2, y: 1.3, z: -0.1 });
   check('a second press closes it', (await menu())?.open === false);
 
+  // Mouse (VS-T24): the IWER DevUI canvas lies over the scene; clicks must still reach it.
+  const click = async (world) => {
+    const at = await page.evaluate((p) => window.__VR_CONTROLS__?.toScreen(p) ?? null, world);
+    if (!at) return false;
+    await page.mouse.move(at.x, at.y);
+    await sleep(300);
+    await page.mouse.down();
+    await page.mouse.up();
+    await sleep(1500);
+    return true;
+  };
+  // Wrist button in plain view: head level, left controller raised in front.
+  await rc('look_at', { device: 'headset', target: { x: 0, y: 1.5, z: -2 } });
+  await rc('set_transform', { device: 'controller-left', position: { x: -0.12, y: 1.4, z: -0.4 } });
+  await sleep(1200);
+  const m2 = await menu();
+  if (m2) await click(m2.button);
+  check('a mouse click on the wrist button opens the menu', (await menu())?.open === true);
+  const helpBefore = await page.evaluate(() => window.__VR_CONTROLS__?.help);
+  const helpAt = await page.evaluate(() => {
+    const o = window.__VR_PANELS__?.objects.find(
+      (x) => x.userData.holoPanel?.id === 'holo:menu-help'
+    );
+    if (!o) return null;
+    const p = o.getWorldPosition(new o.position.constructor());
+    return { x: p.x, y: p.y, z: p.z };
+  });
+  if (helpAt) await click(helpAt);
+  check(
+    'a mouse click on Menu › Help toggles the controls help',
+    (await page.evaluate(() => window.__VR_CONTROLS__?.help)) === !helpBefore
+  );
+  await shot('0d-menu-help-clicked');
+  const m3 = await menu();
+  if (m3) await click(m3.button);
+  check('a mouse click closes the menu', (await menu())?.open === false);
+
   const tour = () => page.evaluate(() => window.__VR_TOUR__ ?? null);
   const t0tour = await tour();
   check(
@@ -202,24 +240,33 @@ try {
   await shot('3b-extract-dialog');
   await press('holo:extract-yes');
   check(
+    '« Extract in 3D » opens the 3D studio with the generation column on the right',
+    await waitFor(async () =>
+      page.evaluate(
+        () =>
+          window.__VR_CONTROLS__?.shown('xr-studio-room') === 1 &&
+          window.__VR_CONTROLS__?.shown('xr-studio-generation') === 1
+      )
+    )
+  );
+  check(
     '« Extract in 3D » draws the 2D views (main + 4 faces), shown as slides',
     await waitFor(async () => {
       const x = await extract();
       return x?.stage === 'views' && x.slides.length === 5 && x.canBuild;
-    }, 60000)
+    }, 240000)
   );
   await shot('3c-views-carousel');
   await press('holo:views-next');
   await sleep(800);
   await shot('3d-views-next-face');
   await press('holo:views-build');
+  await sleep(1500);
+  await shot('3d2-studio-building');
   check(
-    '« Validate & build » builds the model',
-    await waitFor(async () => (await extract())?.ready === true, 90000)
+    '« Validate & build » builds the model, then the lab opens by itself',
+    await waitFor(async () => (await extract())?.stage === 'lab', 240000)
   );
-  await shot('3e-built');
-  await press('holo:build-lab');
-  check('« Enter the 3D lab » opens the lab', (await extract())?.stage === 'lab');
   await waitFor(async () => ((await lab())?.names.length ?? 0) > 0, 15000);
   await shot('3f-lab');
   await press('holo:lab-piece-*');
@@ -246,12 +293,10 @@ try {
   check('a hand pinch at the lamp asks to extract it', (await extract())?.stage === 'confirm');
   await rc('set_input_mode', { mode: 'controller' });
   await sleep(600);
-  // A hand pinch on « Cancel » (the pinch moves the ray a little: still a tap).
-  await rc('set_input_mode', { mode: 'hand' });
+  // A mouse click on « Cancel », through the DevUI overlay (VS-T24 regression).
   const no = await panelAt('holo:extract-no');
-  if (no) await fire('hand-right', no, { x: 0.12, y: 1.4, z: -0.1 });
-  await rc('set_input_mode', { mode: 'controller' });
-  check('« Cancel » closes the question', (await extract())?.stage === 'idle');
+  if (no) await click(no);
+  check('a mouse click on « Cancel » closes the question', (await extract())?.stage === 'idle');
 
   // Walking after the scan: outlines stay on the objects (laid on the photo, which moves with
   // the walk), and aiming where the lamp is drawn now still finds the lamp.
@@ -264,7 +309,10 @@ try {
   await sleep(600);
   const walked = await tour();
   const off = walked?.ground?.offset ?? [0, 0, 0];
-  const lampT = walked?.targets.find((x) => /lamp/i.test(x.label));
+  // The vision model names the object over the counter « lamp », « pendant light » or « range hood ».
+  const lampT = walked?.targets.find((x) => /lamp|light|hood/i.test(x.label));
+  if (!lampT)
+    console.log(`  no lamp among: ${(walked?.targets ?? []).map((x) => x.label).join(' | ')}`);
   check(
     'walking after the scan moves the viewer off the photo spot',
     Math.hypot(off[0], off[2]) > 0.3

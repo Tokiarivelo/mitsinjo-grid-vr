@@ -1509,7 +1509,7 @@
       "vrScanAnalyzingSub": "L’IA contoure et décrit chaque objet",
       "vrExtract": {
         "title": "Extraire « {name} » en 3D ?",
-        "sub": "L’IA dessine d’abord ses vues 2D ; vous les validez, puis la 3D est construite.",
+        "sub": "Vous passez dans le studio 3D : l’IA y dessine ses vues 2D, vous les validez, puis la 3D est construite et s’ouvre dans le labo.",
         "yes": "Extraire en 3D",
         "no": "Annuler",
         "building": "Construction 3D de « {name} »",
@@ -1577,8 +1577,14 @@
         "turned": "Pivoté vers la {direction}",
         "left": "gauche",
         "right": "droite",
-        "helpShown": "Aide affichée : clic sur un stick pour la masquer",
-        "helpHidden": "Aide masquée : clic sur un stick pour l’afficher"
+        "helpShown": "Aide affichée : clic sur un stick, ou Menu › Aide, pour la masquer",
+        "helpHidden": "Aide masquée : clic sur un stick, ou Menu › Aide, pour l’afficher",
+        "helpShow": "Afficher l’aide des commandes",
+        "helpHide": "Masquer l’aide des commandes"
+      },
+      "vrStudio": {
+        "viewsTitle": "Dessin des vues 2D de « {name} »",
+        "buildSub": "Le labo 3D s’ouvre tout seul dès que le modèle est prêt"
       }
     },
     "dispatch": {

@@ -1,15 +1,17 @@
 'use client';
 
-import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
 import { useHoloPanel, type HoloPanelHandlers, type PanelRegistry } from './holo-panel';
 import {
   createHoloFrameMaterial,
+  createHoloImageMaterial,
   holoCardTexture,
   HOLO,
   type HoloCardSpec,
   type HoloFrameMaterial,
+  type HoloImageMaterial,
 } from './holo-style';
 
 type Vec3 = [number, number, number];
@@ -237,4 +239,41 @@ export function useHoloImage(url: string | undefined): {
   if (!url) return { texture: null, state: 'none' };
   if (loaded?.url !== url) return { texture: null, state: 'loading' };
   return { texture: loaded.texture, state: loaded.ok ? 'ready' : 'error' };
+}
+
+/**
+ * Hologram material of a drawn view (`createHoloImageMaterial`) showing `texture` with a `rim`
+ * colour, its scan lines animated each frame, freed on unmount. The memo'd material stays
+ * immutable: uniforms are mutated through a ref inside this hook; `setFocus` (0–1, safe in a
+ * frame loop) dims a view out of focus.
+ */
+export function useHoloImageMaterial(
+  texture: THREE.Texture | null,
+  rim: string
+): { material: THREE.ShaderMaterial; setFocus: (focus: number) => void } {
+  const material = useMemo(() => createHoloImageMaterial(null), []);
+  const live = useRef<HoloImageMaterial | null>(null);
+  useEffect(() => {
+    live.current = material;
+    return () => {
+      live.current = null;
+      material.dispose();
+    };
+  }, [material]);
+  useEffect(() => {
+    const m = live.current;
+    if (!m) return;
+    m.uniforms.uMap.value = texture;
+    m.needsUpdate = true;
+  }, [material, texture]);
+  useEffect(() => {
+    live.current?.uniforms.uRim.value.set(rim);
+  }, [material, rim]);
+  useFrame((state) => {
+    if (live.current) live.current.uniforms.uTime.value = state.clock.elapsedTime;
+  });
+  const setFocus = useCallback((focus: number) => {
+    if (live.current) live.current.uniforms.uFocus.value = focus;
+  }, []);
+  return { material, setFocus };
 }

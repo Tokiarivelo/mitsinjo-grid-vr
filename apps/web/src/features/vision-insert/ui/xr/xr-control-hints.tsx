@@ -146,8 +146,8 @@ export function legendKeys(kind: 'controller' | 'hand', handedness: XRHandedness
 }
 
 /** Legend card size (m), above each controller / hand. */
-const LEGEND_W = 0.2;
-const LEGEND_H = 0.15;
+const LEGEND_W = 0.16;
+const LEGEND_H = 0.12;
 
 /**
  * Button legend on each controller (and each hand) (VS-T23, Meta: show what each button does on

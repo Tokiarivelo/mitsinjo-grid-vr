@@ -55,7 +55,21 @@ vi.mock('../holo-extract-panels', () => ({
     panelsMock.dialog = props;
     return <div data-testid="extract-dialog" />;
   },
-  HoloBuildPanel: () => <div data-testid="build-panel" />,
+  AnchoredPanel: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
+}));
+vi.mock('../xr-extract-studio', () => ({
+  StudioRoom: () => <div data-testid="studio-room" />,
+  HoloBuildStage: () => <div data-testid="build-stage" />,
+  HoloGenerationColumn: (props: { stage: string }) => (
+    <div data-testid="generation-column" data-stage={props.stage} />
+  ),
+}));
+vi.mock('../holo-ui', () => ({
+  HoloButton: ({ label, onSelect }: { label: string; onSelect?: () => void }) => (
+    <button type="button" onClick={() => onSelect?.()}>
+      {label}
+    </button>
+  ),
 }));
 vi.mock('../holo-views-carousel', () => ({
   HoloViewsCarousel: () => <div data-testid="views-carousel" />,
@@ -280,12 +294,35 @@ describe('VillageXRStudio — 3D extraction (VS-T18–T22)', () => {
     expect(inLab.exitLab).toHaveBeenCalledOnce();
   });
 
-  it('shows the views carousel, the build panel, then the lab at each step', () => {
-    const { rerender, view, queryByTestId } = setup(false, extractAt('views'));
+  it('« Extract in 3D » opens the studio: views with the generation column, build, then lab', () => {
+    // VS-T24: the question stays in the 360° view; every later step is in the studio room.
+    const { rerender, view, queryByTestId } = setup(false, extractAt('confirm'));
     rerender(view([fridge], false));
+    expect(queryByTestId('studio-room')).toBeNull();
+
+    rerender(view([fridge], false, extractAt('views')));
+    expect(queryByTestId('studio-room')).toBeTruthy();
     expect(queryByTestId('views-carousel')).toBeTruthy();
+    expect(queryByTestId('generation-column')?.dataset.stage).toBe('views');
+
     rerender(view([fridge], false, extractAt('build')));
-    expect(queryByTestId('build-panel')).toBeTruthy();
+    expect(queryByTestId('studio-room')).toBeTruthy();
+    expect(queryByTestId('build-stage')).toBeTruthy();
+    expect(queryByTestId('generation-column')?.dataset.stage).toBe('build');
     expect(queryByTestId('views-carousel')).toBeNull();
+
+    rerender(view([fridge], false, extractAt('lab')));
+    expect(queryByTestId('studio-room')).toBeTruthy();
+    expect(queryByTestId('generation-column')).toBeNull();
+  });
+});
+
+describe('VillageXRStudio — controls help (VS-T24)', () => {
+  it('the menu « Help » button hides and shows the controls legends', () => {
+    const { getByRole } = setup();
+    act(() => blaster.props!.menu.toggle());
+    const hide = getByRole('button', { name: 'Hide the controls help' });
+    act(() => hide.click());
+    expect(getByRole('button', { name: 'Show the controls help' })).toBeTruthy();
   });
 });

@@ -54,7 +54,8 @@ export interface XrExtract {
  * The VR extraction flow (VS-T19–T22) on top of the page's 2D pipeline, nothing re-implemented:
  * the 2D view and faces come from `useFacade2d` / `useFacadeFaces` (same calls, same kept state as
  * the 2D panel), the model from the page's `requestShape`, the lab edits go to `editPieces`.
- * Confirming draws the main view, then every face once it is there (each face sees the others).
+ * Confirming draws the main view, then every face once it is there (each face sees the others);
+ * the lab opens by itself once the model is built.
  */
 export function useXrExtract({
   imageUrl,
@@ -114,6 +115,10 @@ export function useXrExtract({
   const confirm = useCallback(() => dispatch({ type: 'confirm', built: ready }), [ready]);
   const cancel = useCallback(() => dispatch({ type: 'cancel' }), []);
   const enterLab = useCallback(() => dispatch({ type: 'enterLab' }), []);
+  // The studio opens the lab by itself once the model is built (no « Enter the lab » step).
+  useEffect(() => {
+    if (state.stage === 'build' && ready) dispatch({ type: 'enterLab' });
+  }, [state.stage, ready]);
   const exitLab = useCallback(() => dispatch({ type: 'exitLab' }), []);
 
   const buildable = canBuild(slides);

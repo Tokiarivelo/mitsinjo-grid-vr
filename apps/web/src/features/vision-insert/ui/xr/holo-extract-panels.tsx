@@ -3,7 +3,6 @@
 import { memo, useMemo, useRef, type ReactNode } from 'react';
 import * as THREE from 'three';
 import { useFrame, useThree } from '@react-three/fiber';
-import { SHAPE_STEPS, type ShapeStep } from '@/lib/object-shape';
 import { useTranslations } from '@/lib/i18n';
 import type { PanelRegistry } from './holo-panel';
 import { HoloButton, HoloFrame, HoloText } from './holo-ui';
@@ -165,107 +164,6 @@ export const HoloExtractDialog = memo(function HoloExtractDialog({
         position={[0.17, -0.12, 0.006]}
         hovered={hoveredId === EXTRACT_NO_ID}
         onSelect={onCancel}
-      />
-    </AnchoredPanel>
-  );
-});
-
-export const BUILD_LAB_ID = 'holo:build-lab';
-export const BUILD_LATER_ID = 'holo:build-later';
-
-/**
- * 3D build in progress (VS-T21): the server steps lit one by one (crop → Spark → fit…, same steps
- * as the 2D panel), then « 3D model ready » with « Enter the 3D lab ».
- */
-export const HoloBuildPanel = memo(function HoloBuildPanel({
-  anchor,
-  registry,
-  hoveredId,
-  name,
-  step,
-  seconds,
-  ready,
-  outlineOnly,
-  onEnterLab,
-  onLater,
-}: {
-  anchor: PanelAnchor;
-  registry: PanelRegistry;
-  hoveredId: string | null;
-  name: string;
-  step?: ShapeStep;
-  seconds: number;
-  ready: boolean;
-  /** The AI shape failed: the model is the outline fallback. */
-  outlineOnly: boolean;
-  onEnterLab: () => void;
-  onLater: () => void;
-}) {
-  const t = useTranslations('features.visionInsert');
-  const steps = SHAPE_STEPS.filter((s) => (s !== 'check' && s !== 'code') || step === s);
-  const current = step ? steps.indexOf(step) : -1;
-  const spec = useMemo(
-    () => ({
-      glass: false,
-      accent: ready ? HOLO.green : HOLO.violet,
-      lines: [
-        {
-          text: ready ? t('vrExtract.ready', { name }) : t('vrExtract.building', { name }),
-          size: 58,
-          weight: 700 as const,
-          color: ready ? HOLO.green : HOLO.ink,
-        },
-        ...(ready
-          ? [
-              {
-                text: outlineOnly ? t('vrExtract.outlineOnly') : t('vrExtract.readySub'),
-                size: 36,
-                weight: 400 as const,
-              },
-            ]
-          : steps.map((s, i) => ({
-              text: `${i < current ? '✓' : i === current ? '▸' : '·'} ${t(`model3dStep.${s}`)}${
-                i === current ? ` — ${t('model3dSeconds', { s: seconds })}` : ''
-              }`,
-              size: 38,
-              weight: (i === current ? 700 : 400) as 400 | 700,
-              color: i < current ? HOLO.green : i === current ? HOLO.cyan : HOLO.ink,
-            }))),
-      ],
-    }),
-    [t, name, ready, outlineOnly, steps, current, seconds]
-  );
-  return (
-    <AnchoredPanel anchor={anchor} name="holo-build-panel">
-      <HoloFrame
-        width={0.72}
-        height={0.46}
-        color={ready ? HOLO.green : HOLO.violet}
-        active={!ready}
-      />
-      <HoloText spec={spec} width={0.66} height={0.3} position={[0, 0.06, 0.003]} />
-      {ready && (
-        <HoloButton
-          registry={registry}
-          id={BUILD_LAB_ID}
-          label={t('vrExtract.enterLab')}
-          color={HOLO.green}
-          width={0.34}
-          height={0.09}
-          position={[-0.15, -0.15, 0.006]}
-          hovered={hoveredId === BUILD_LAB_ID}
-          onSelect={onEnterLab}
-        />
-      )}
-      <HoloButton
-        registry={registry}
-        id={BUILD_LATER_ID}
-        label={t('vrExtract.later')}
-        width={0.24}
-        height={0.09}
-        position={[0.2, -0.15, 0.006]}
-        hovered={hoveredId === BUILD_LATER_ID}
-        onSelect={onLater}
       />
     </AnchoredPanel>
   );

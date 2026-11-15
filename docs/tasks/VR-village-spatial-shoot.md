@@ -256,3 +256,11 @@ Style : hologramme futuriste (cyan / ambre, lignes de balayage, coins lumineux, 
 - [x] Panneaux : un bouton tape toujours, glisser seulement au-delà de 4° nets (« Extraire en 3D / Annuler » ne ratent plus) ; contours fixes en marchant ; contour complet de l'objet (bande 180°).
 - [x] Docs : `vr-immersion-guide.md` § 6 réécrit, `vr-iwer-tools.md` (outils IWER, index des boutons, microgestes).
 - [x] **Done when :** `make vr-iwer-tools` 31/31 et `make vr-probe` vert.
+
+### VS-T24 : Clics dans l'émulateur, aide à la demande, studio 3D dès l'extraction
+
+- [x] Souris écoutée sur la page : le canvas de la DevUI IWER (par-dessus la scène) n'avale plus les clics (bouton du poignet, « Extraire en 3D / Annuler ») ; rayon de la caméra de l'œil XR, survol sans laser.
+- [x] Glisser le carrousel / tourner un modèle à la souris ne fait plus tourner la vue émulée (geste gardé, phase de capture).
+- [x] Menu poignet › « Afficher / Masquer l'aide des commandes » ; légendes 12 s à l'entrée, plus petites.
+- [x] « Extraire en 3D » → studio (`xr-extract-studio.tsx`) : carrousel au centre, colonne de génération + miniature à droite, hologramme sur le socle pendant la construction, labo ouvert tout seul (plus de « Entrer dans le labo 3D »).
+- [x] **Done when :** `make vr-probe` 28/28 (clics souris, studio, labo automatique).

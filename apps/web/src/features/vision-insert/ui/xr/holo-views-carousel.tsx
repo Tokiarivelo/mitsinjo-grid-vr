@@ -1,18 +1,21 @@
 'use client';
 
-import { memo, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
+import { memo, useMemo, useRef, useState, type MutableRefObject } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
 import { useTranslations } from '@/lib/i18n';
 import { snapIndex, type ViewSlide } from '../../utils/xr-extract';
 import { useHoloPanel, type PanelRegistry } from './holo-panel';
-import { HoloButton, HoloFrame, HoloText, useHoloImage } from './holo-ui';
-import { createHoloImageMaterial, HOLO, type HoloImageMaterial } from './holo-style';
+import { HoloButton, HoloFrame, HoloText, useHoloImage, useHoloImageMaterial } from './holo-ui';
+import { HOLO } from './holo-style';
 import { AnchoredPanel } from './holo-extract-panels';
 import { CAROUSEL_SPACING, SLIDE_SIZE, slidePose, type PanelAnchor } from './xr-layout';
 
-/** Slides further than this from the focused one are not drawn (overdraw on Quest). */
-const SLIDE_SHOWN = 2.3;
+/**
+ * Slides further than this from the focused one are not drawn (overdraw on Quest); one neighbour
+ * each side, so the studio's generation column on the right stays clear.
+ */
+const SLIDE_SHOWN = 1.3;
 const EASE = 9;
 
 export const VIEWS_IDS = {
@@ -56,16 +59,8 @@ const Slide = memo(function Slide({
 }: SlideProps) {
   const group = useRef<THREE.Group>(null);
   const { texture, state } = useHoloImage(slide.imageUrl);
-  const material = useMemo(() => createHoloImageMaterial(null), []);
-  useEffect(() => () => material.dispose(), [material]);
-  useEffect(() => {
-    (material as HoloImageMaterial).uniforms.uMap.value = texture;
-    material.needsUpdate = true;
-  }, [material, texture]);
   const accent = slide.validated ? HOLO.green : HOLO.cyan;
-  useEffect(() => {
-    (material as HoloImageMaterial).uniforms.uRim.value.set(accent);
-  }, [material, accent]);
+  const { material, setFocus } = useHoloImageMaterial(texture, accent);
   const panelRef = useHoloPanel(registry, VIEWS_IDS.slide(slide.id), {
     onSelect: () => onTap(index),
     onDrag,
@@ -73,7 +68,7 @@ const Slide = memo(function Slide({
   });
 
   // Placed on the arc every frame from the shared scroll offset (no React render).
-  useFrame((st) => {
+  useFrame(() => {
     const g = group.current;
     if (!g) return;
     const rel = index - offset.current;
@@ -82,9 +77,7 @@ const Slide = memo(function Slide({
     const pose = slidePose(rel);
     g.position.set(...pose.position);
     g.rotation.set(0, pose.yaw, 0);
-    const u = (material as HoloImageMaterial).uniforms;
-    u.uTime.value = st.clock.elapsedTime;
-    u.uFocus.value = pose.focus;
+    setFocus(pose.focus);
   });
 
   const showImage = state === 'ready' && texture;
@@ -153,6 +146,32 @@ export interface HoloViewsCarouselProps {
   onCancel: () => void;
 }
 
+/** Name and status line of a views slide (carousel and the studio's generation column). */
+export function useSlideText(vehicle: boolean) {
+  const t = useTranslations('features.visionInsert');
+  return useMemo(
+    () => ({
+      nameOf: (s: ViewSlide) =>
+        s.id === 'main'
+          ? vehicle
+            ? t('facade2dTabVehicle')
+            : t('facade2dTab')
+          : t(`faces.${s.id}` as 'faces.side'),
+      statusOf: (s: ViewSlide) =>
+        s.status === 'generating'
+          ? t('vrViews.drawing')
+          : s.status === 'error'
+            ? t('vrViews.error')
+            : s.status === 'idle'
+              ? t('vrViews.waiting')
+              : s.validated
+                ? t('vrViews.validated')
+                : t('vrViews.toCheck'),
+    }),
+    [t, vehicle]
+  );
+}
+
 /**
  * 2D views to validate (VS-T20), as a hologram carousel: the main view, then each face drawn
  * beside it, one slide each on an arc round the viewer. Drag anywhere on a slide sideways (held
@@ -204,22 +223,7 @@ export const HoloViewsCarousel = memo(function HoloViewsCarousel({
   );
   const go = (d: number) => setFocus((f) => snapIndex(f + d, count));
 
-  const nameOf = (s: ViewSlide) =>
-    s.id === 'main'
-      ? vehicle
-        ? t('facade2dTabVehicle')
-        : t('facade2dTab')
-      : t(`faces.${s.id}` as 'faces.side');
-  const statusOf = (s: ViewSlide) =>
-    s.status === 'generating'
-      ? t('vrViews.drawing')
-      : s.status === 'error'
-        ? t('vrViews.error')
-        : s.status === 'idle'
-          ? t('vrViews.waiting')
-          : s.validated
-            ? t('vrViews.validated')
-            : t('vrViews.toCheck');
+  const { nameOf, statusOf } = useSlideText(vehicle);
 
   const header = useMemo(
     () => ({

@@ -10,12 +10,14 @@ import type { ApplianceDetection } from '@/lib/vision';
 import { usePieceHistory } from '../../hooks/use-piece-history';
 import { VIEW_MODES, type StudioControls, type ViewMode } from '../../utils/studio';
 import { labRotate, labScale, nextOpacity, pagePieces } from '../../utils/xr-lab';
-import { ObjectModel, StudioEnvironment } from '../object-editor-3d';
+import { ObjectModel } from '../object-editor-3d';
 import { usePieceLabel } from '../piece-layers-panel';
 import { useHoloPanel, type PanelRegistry } from './holo-panel';
 import { HoloButton, HoloFrame, HoloText } from './holo-ui';
 import { HOLO } from './holo-style';
 import { AnchoredPanel, usePanelAnchor } from './holo-extract-panels';
+import { PEDESTAL_DROP, StudioPedestal } from './xr-extract-studio';
+import type { PanelAnchor } from './xr-layout';
 
 export const LAB_IDS = {
   model: 'holo:lab-model',
@@ -37,8 +39,6 @@ export const LAB_IDS = {
 
 /** Largest side of the model on the lab pedestal (m): a table-top object, held at arm's length. */
 const LAB_MODEL_SCALE = 0.55;
-/** Pedestal top under the eyes (m below the panel anchor). */
-const PEDESTAL_DROP = 0.25;
 /** Model turn per radian of pointer drag. */
 const TURN_GAIN = 3;
 const NOOP = () => {};
@@ -53,11 +53,13 @@ export interface XrObjectLabProps {
   /** Every edit, at once (the page's recipe: the 2D panel and the village see it live). */
   onEditPieces: (pieces: PieceEdits) => void;
   onExit: () => void;
+  /** Where the studio opened (the model lands where its hologram stood); else ahead of the gaze. */
+  anchor?: PanelAnchor | null;
 }
 
 /**
- * Immersive 3D lab (VS-T22): a dark holographic room (dome, grid floor, glowing pedestal) with the
- * built model 1 m ahead on its pedestal. Drag the model to turn it, shoot a piece to select it
+ * Immersive 3D lab (VS-T22), inside the studio room (`StudioRoom`, VS-T24), with the built model
+ * 1 m ahead on its pedestal. Drag the model to turn it, shoot a piece to select it
  * (or pick it in the list on the left); the tools on the right hide it, size it, turn it, fade
  * it, switch the view mode, undo / redo. Every edit goes to the recipe at once (`onEditPieces`),
  * as in the page's 3D Studio (same history, same piece edits).
@@ -71,10 +73,12 @@ export const XrObjectLab = memo(function XrObjectLab({
   hoveredId,
   onEditPieces,
   onExit,
+  anchor: studioAnchor,
 }: XrObjectLabProps) {
   const t = useTranslations('features.visionInsert');
   const pieceLabel = usePieceLabel();
-  const anchor = usePanelAnchor('lab');
+  const ownAnchor = usePanelAnchor(studioAnchor ? null : 'lab');
+  const anchor = studioAnchor ?? ownAnchor;
   const history = usePieceHistory(shape.recipe?.pieces);
   const { edits, commit } = history;
   const [selected, setSelected] = useState<string | null>(null);
@@ -185,29 +189,13 @@ export const XrObjectLab = memo(function XrObjectLab({
   const btn = (id: string) => ({ registry, id, hovered: hoveredId === id });
   return (
     <group name="xr-object-lab">
-      {/* Lab room: dark dome, grid floor, light rings (all static, one material each). */}
-      <mesh renderOrder={-1}>
-        <sphereGeometry args={[7, 32, 16]} />
-        <meshBasicMaterial color={HOLO.dome} side={THREE.BackSide} depthWrite={false} />
-      </mesh>
-      <gridHelper args={[14, 56, HOLO.cyan, HOLO.gridDim]} position={[0, 0.001, 0]} />
-      <Suspense fallback={null}>
-        <StudioEnvironment />
-      </Suspense>
-
+      {/* The room (dome, grid, lights) is the studio's: `StudioRoom`, drawn by the studio. */}
       <AnchoredPanel anchor={anchor} name="xr-lab-panels">
         <HoloText spec={header} width={0.9} height={0.13} position={[0, 0.36, 0]} />
 
         {/* Pedestal + model */}
         <group position={[0, -PEDESTAL_DROP, 0]}>
-          <mesh position={[0, -0.04, 0]}>
-            <cylinderGeometry args={[0.3, 0.34, 0.08, 48]} />
-            <meshStandardMaterial color={HOLO.pedestal} metalness={0.6} roughness={0.35} />
-          </mesh>
-          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.002, 0]}>
-            <ringGeometry args={[0.31, 0.33, 64]} />
-            <meshBasicMaterial color={HOLO.cyan} toneMapped={false} />
-          </mesh>
+          <StudioPedestal />
           <group ref={turn}>
             <group ref={modelRef} position={[0, LAB_MODEL_SCALE * 0.5, 0]}>
               <Suspense fallback={null}>
