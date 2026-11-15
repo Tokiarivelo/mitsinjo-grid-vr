@@ -1,5 +1,6 @@
 import { close } from '../recon/grid';
 import { packCrown, runsOf, type Lobe } from './tree-crown';
+import { frondCrown, type FrondCrown } from './tree-fronds';
 
 export type { Lobe };
 import type { AlignedViews, GridView } from '../recon/views';
@@ -30,6 +31,13 @@ export interface TreePlan {
   crownTop: number;
   crownBase: number;
   foot: number;
+  /** A palm's crown (`options.fronds`): the heart and its fronds; `crown` then only measures the outline. */
+  fronds?: FrondCrown;
+}
+
+export interface TreeFitOptions {
+  /** The label names a palm, a banana plant…: the crown is written as fronds round a heart. */
+  fronds?: boolean;
 }
 
 /** Closing radius of the leaf mask, cells: leaves, twigs and gaps between fronds become one mass. */
@@ -39,7 +47,7 @@ export const CROWN_TOP_SHARE = 0.03;
 export const CROWN_ROW_SHARE = 0.1;
 /** The crown reaches the ground (a bush) when the trunk would be shorter than this share of the height. */
 export const BUSH_TRUNK_SHARE = 0.12;
-export const TRUNK_BANDS = 8;
+export const TRUNK_BANDS = 10;
 /** Median window of the trunk profile, rows each side: fallen fronds and roots are shorter than this. */
 export const TRUNK_WINDOW = 20;
 /** Share of the window's widths the trunk takes (a low one: fallen fronds and roots only widen a row). */
@@ -48,7 +56,7 @@ export const TRUNK_QUANTILE = 0.3;
 export const TRUNK_WIDTH_RANGE: readonly [number, number] = [0.6, 1.8];
 /** Half-height of a lobe, in band heights: neighbours overlap deeply, so the union is a smooth column, not stacked saucers. */
 export const LOBE_REACH = 1.7;
-/** The trunk runs this share of the crown's height up into it, so the two always meet. */
+/** The trunk runs this share of the leaves above it up into the crown, so the two always meet and its tip stays hidden. */
 export const TRUNK_REACH = 0.35;
 /** A gap in a band narrower than this share of the width does not split a lobe. */
 export const LOBE_GAP = 0.06;
@@ -185,7 +193,10 @@ function meanColour(
   return n ? [r / n, g / n, b / n] : null;
 }
 
-/** Mean colour of the darker half of the trunk's own pixels (rows `y0`..`y1`, the run `centre ± width / 2`). */
+/** Luminance band of the trunk's pixels the bark colour is the mean of: the darkest are ink lines and shadow, the lightest the anti-aliased edge. */
+export const BARK_BAND: readonly [number, number] = [0.2, 0.65];
+
+/** Mean colour of the middle band (`BARK_BAND`) of the trunk's own pixels (rows `y0`..`y1`, the run `centre ± width / 2`). */
 export function barkColour(
   views: ReadonlyArray<GridView | undefined>,
   centre: ArrayLike<number>,
@@ -213,7 +224,8 @@ export function barkColour(
   if (!px.length) return FALLBACK_BARK;
   const lum = ([r, g, b]: Rgb) => 0.3 * r + 0.59 * g + 0.11 * b;
   px.sort((p, q) => lum(p) - lum(q));
-  const dark = px.slice(0, Math.max(1, Math.ceil(px.length / 2)));
+  const from = Math.floor(px.length * BARK_BAND[0]);
+  const dark = px.slice(from, Math.max(from + 1, Math.ceil(px.length * BARK_BAND[1])));
   const sum = dark.reduce<Rgb>((s, p) => [s[0] + p[0], s[1] + p[1], s[2] + p[2]], [0, 0, 0]);
   return [sum[0] / dark.length, sum[1] / dark.length, sum[2] / dark.length];
 }
@@ -241,7 +253,7 @@ function tierColours(
  * Reads the tree. Null when no crown shows (no leaf colour on the drawings): the caller then keeps
  * the generic reconstruction.
  */
-export function fitTree(aligned: AlignedViews): TreePlan | null {
+export function fitTree(aligned: AlignedViews, options: TreeFitOptions = {}): TreePlan | null {
   const { front, right, back, left } = aligned.views;
   const { W, D } = aligned;
   const rows = front.rows;
@@ -297,8 +309,16 @@ export function fitTree(aligned: AlignedViews): TreePlan | null {
       foot = rows - 1;
     } else {
       // Lobes from the foot up into the crown, whose rows give the trunk its top.
-      const reach = Math.round((base - top) * TRUNK_REACH);
-      const topRow = Math.max(top, trunkTop - reach);
+      // An umbrella crown arches over the trunk: the trunk rises to the leaves above its own column.
+      const column = (mask: Uint8Array, cols: number, x: number) => {
+        const cx = Math.min(cols - 1, Math.max(0, Math.round(x)));
+        for (let y = base; y >= top; y--) if (mask[y * cols + cx]) return y;
+        return base;
+      };
+      const mid = (arr: Float32Array) => arr.find((v, y) => y >= trunkTop && v > 0) ?? 0;
+      const under = Math.min(column(frontCrown, W, mid(fc)), column(sideCrown, D, mid(sc)));
+      const meet = Math.min(trunkTop, under);
+      const topRow = Math.max(top, meet - Math.round((meet - top) * TRUNK_REACH));
       const height = foot + 1 - topRow;
       const bands = Math.max(3, Math.min(TRUNK_BANDS, Math.round(height / 6)));
       const step = height / bands;
@@ -336,7 +356,27 @@ export function fitTree(aligned: AlignedViews): TreePlan | null {
   );
   if (!crown.length) return null;
   const views = [front, back, right, left];
+  // Fronds: the heart over the trunk (or the middle of a trunkless plant), the reach of the outline.
+  let fronds: FrondCrown | undefined;
+  if (options.fronds) {
+    const span = (mask: Uint8Array, cols: number): [number, number] => {
+      let [lo, hi] = [cols, -1];
+      for (let y = top; y <= base; y++)
+        for (let x = 0; x < cols; x++)
+          if (mask[y * cols + x]) [lo, hi] = [Math.min(lo, x), Math.max(hi, x + 1)];
+      return hi < 0 ? [0, cols] : [lo, hi];
+    };
+    const [fx, sz] = [span(frontCrown, W), span(sideCrown, D)];
+    const centre: [number, number] = trunk.length
+      ? [trunk[0]!.c[0], trunk[0]!.c[2]]
+      : [(fx[0] + fx[1]) / 2, (sz[0] + sz[1]) / 2];
+    fronds = frondCrown(top, bush ? foot : base, centre, [
+      Math.max(centre[0] - fx[0], fx[1] - centre[0]),
+      Math.max(centre[1] - sz[0], sz[1] - centre[1]),
+    ]);
+  }
   return {
+    ...(fronds ? { fronds } : {}),
     W,
     H: foot + 1,
     D,

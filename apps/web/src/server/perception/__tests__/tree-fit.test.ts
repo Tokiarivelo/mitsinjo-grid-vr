@@ -1,3 +1,4 @@
+import { FRONDS } from '../tree/tree-fronds';
 import { describe, expect, it } from 'vitest';
 import { barkColour, fitTree, hsv, isLeaf, TRUNK_WIDTH_RANGE } from '../tree/tree-fit';
 import { alignedTree, ROWS } from './tree-fixture';
@@ -72,26 +73,47 @@ describe('fitTree', () => {
 });
 
 describe('barkColour', () => {
-  it('takes the darker half of the trunk pixels and nothing outside its run', () => {
-    // 4 × 2 image: left column dark brown, right column light brown, a green pixel and one outside the run.
-    const rgb = Uint8Array.from([
-      ...[80, 60, 40],
-      ...[120, 100, 80],
-      ...[70, 140, 60],
-      ...[250, 250, 250],
-      ...[80, 60, 40],
-      ...[120, 100, 80],
-      ...[70, 140, 60],
-      ...[250, 250, 250],
-    ]);
-    const view = { cols: 4, rows: 2, rgb, mask: new Uint8Array(8).fill(1) };
-    const [r, g, b] = barkColour([view], [1, 1], [2, 2], 0, 1);
-    expect([Math.round(r), Math.round(g), Math.round(b)]).toEqual([80, 60, 40]);
+  it('takes the middle band of the trunk pixels: no ink line, no pale edge, nothing outside its run', () => {
+    // One row, the trunk run is its first 10 pixels: 2 ink black, 6 bark, 2 pale edge; then a leaf and paper.
+    const px = [
+      ...Array(2).fill([10, 10, 10]),
+      ...Array(6).fill([100, 70, 50]),
+      ...Array(2).fill([200, 200, 210]),
+      [70, 140, 60],
+      [250, 250, 250],
+    ] as number[][];
+    const view = {
+      cols: 12,
+      rows: 1,
+      rgb: Uint8Array.from(px.flat()),
+      mask: new Uint8Array(12).fill(1),
+    };
+    const [r, g, b] = barkColour([view], [5], [10], 0, 0);
+    expect([Math.round(r), Math.round(g), Math.round(b)]).toEqual([100, 70, 50]);
   });
   it('falls back to a brown without pixels', () => {
     const view = { cols: 2, rows: 2, rgb: new Uint8Array(12), mask: new Uint8Array(4) };
     const [r, g, b] = barkColour([view], [1, 1], [2, 2], 0, 1);
     expect(r).toBeGreaterThan(b);
     expect(g).toBeGreaterThan(b);
+  });
+});
+
+describe('fitTree options', () => {
+  it('reads fronds only when asked, centred on the trunk and inside the crown rows', () => {
+    expect(fitTree(alignedTree())!.fronds).toBeUndefined();
+    const plan = fitTree(alignedTree(), { fronds: true })!;
+    expect(plan.fronds!.fronds).toHaveLength(FRONDS);
+    expect(plan.fronds!.heart.c[0]).toBeCloseTo(plan.trunk[0]!.c[0], 5);
+    expect(plan.fronds!.heart.c[1]).toBeGreaterThan(plan.crownTop);
+    expect(plan.fronds!.heart.c[1]).toBeLessThan(plan.crownBase);
+  });
+
+  it('raises the trunk to the leaves above its own column under an arched crown', () => {
+    // A flat tree: the trunk's top stays inside the crown, under its top row.
+    const plan = fitTree(alignedTree())!;
+    const top = plan.trunk[0]!.c[1];
+    expect(top).toBeGreaterThan(plan.crownTop);
+    expect(top).toBeLessThan(plan.crownBase);
   });
 });

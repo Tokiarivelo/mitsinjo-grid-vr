@@ -5,6 +5,7 @@ import type { ReconReport } from '../recon/reconstruct';
 import { scoreRecipeOnViews } from '../recon/score';
 import type { AlignedViews } from '../recon/views';
 import { fitTree, type TreePlan } from './tree-fit';
+import { FROND_LABEL } from './tree-fronds';
 import { treeRecipe } from './tree-parts';
 
 /**
@@ -22,25 +23,35 @@ export interface TreeOutcome {
   plan: TreePlan;
 }
 
-export function reconstructTree(aligned: AlignedViews, palette: Palette): TreeOutcome | null {
-  const plan = fitTree(aligned);
+export function reconstructTree(
+  aligned: AlignedViews,
+  palette: Palette,
+  label = ''
+): TreeOutcome | null {
+  const plan = fitTree(aligned, { fronds: FROND_LABEL.test(label) });
   if (!plan) return null;
-  const recipe = treeRecipe(plan);
-  // Each part answers for the colour class nearest to its own: the score then reads colour as well.
   const classLab = palette.classes.map((c) => hexToLab(c.hex));
-  const classOf = recipe.parts.map((p) => {
-    const lab = hexToLab(p.color);
-    let best = 0;
-    let bestDelta = Infinity;
-    classLab.forEach((c, i) => {
-      const d = deltaE2000(lab, c);
-      if (d < bestDelta) [best, bestDelta] = [i, d];
+  const scored = (recipe: ObjectRecipe) => {
+    // Each part answers for the colour class nearest to its own: the score then reads colour as well.
+    const classOf = recipe.parts.map((p) => {
+      const lab = hexToLab(p.color);
+      let best = 0;
+      let bestDelta = Infinity;
+      classLab.forEach((c, i) => {
+        const d = deltaE2000(lab, c);
+        if (d < bestDelta) [best, bestDelta] = [i, d];
+      });
+      return best;
     });
-    return best;
-  });
-  const score = scoreRecipeOnViews(recipe, classOf, aligned, palette);
-  const ious = Object.values(score.views).map((v) => v.iou);
-  const iou = ious.length ? ious.reduce((a, b) => a + b, 0) / ious.length : 0;
+    const score = scoreRecipeOnViews(recipe, classOf, aligned, palette);
+    const ious = Object.values(score.views).map((v) => v.iou);
+    return { score, iou: ious.length ? ious.reduce((a, b) => a + b, 0) / ious.length : 0 };
+  };
+  const recipe = treeRecipe(plan);
+  const { score, iou: own } = scored(recipe);
+  // Fronds are a few leaves inside the measured outline (they never fill it): the reading is
+  // judged on the outline itself, the packed crown.
+  const iou = plan.fronds ? scored(treeRecipe({ ...plan, fronds: undefined })).iou : own;
   if (iou < TREE_MIN_IOU) {
     console.info(`[vision] tree: silhouette iou ${iou.toFixed(2)} under ${TREE_MIN_IOU}, not used`);
     return null;
@@ -58,7 +69,7 @@ export function reconstructTree(aligned: AlignedViews, palette: Palette): TreeOu
       classes: palette.classes.map((c) => ({ hex: c.hex, share: c.share })),
       counts: { volumes: recipe.parts.length, details: 0, hidden: 0 },
       // Colour classes of a twig web or a fan of fronds say little: the tree is judged on its silhouette.
-      score: { ...score, overall: iou },
+      score: { ...score, overall: own },
     },
   };
 }

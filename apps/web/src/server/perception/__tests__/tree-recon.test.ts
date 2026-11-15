@@ -19,4 +19,14 @@ describe('reconstructTree', () => {
     const aligned = alignedTree({ bare: true });
     expect(reconstructTree(aligned, buildPalette(aligned))).toBeNull();
   });
+
+  it('writes fronds for a palm label, judged on the measured outline', () => {
+    const aligned = alignedTree();
+    const palm = reconstructTree(aligned, buildPalette(aligned), 'coconut palm')!;
+    expect(palm.plan.fronds).toBeDefined();
+    expect(palm.recipe.parts.length).toBeGreaterThan(3);
+    expect(
+      reconstructTree(aligned, buildPalette(aligned), 'mango tree')!.plan.fronds
+    ).toBeUndefined();
+  }, 30_000);
 });

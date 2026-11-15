@@ -14,8 +14,9 @@ for n in "${names[@]}"; do
   [ -f "$D/view-front.png" ] && [ -f "$D/view-right.png" ] || { echo "✗ $n: no drawings in $D"; continue; }
   views=()
   for v in front right back left top; do [ -f "$D/view-$v.png" ] && views+=("${v^^}=$D/view-$v.png"); done
-  label="$n tree"
-  case "$n" in gardenia* | bush* | banana*) label="$n plant" ;; esac
+  kind="${n%%[0-9]*}"
+  label="$kind tree"
+  case "$n" in gardenia* | bush* | banana*) label="$kind plant" ;; esac
   if make -s views-3d "${views[@]}" OUT="$D/$OUT" LABEL="$label" OFFLINE=1 >"$D/$OUT.log" 2>&1; then
     echo "✓ $n: $(grep -oE '[0-9]+ parts \((no trunk|trunk).*overall [0-9.]+' "$D/$OUT.log" | head -1)"
   else

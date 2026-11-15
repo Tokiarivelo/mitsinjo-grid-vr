@@ -39,13 +39,15 @@ export function runsOf(
 /** Voxels along the longest side of the crown. */
 export const CROWN_VOXELS = 44;
 /** Most clumps (the recipe puts 12 in a part). */
-export const CLUMPS_MAX = 24;
+export const CLUMPS_MAX = 36;
 /** A clump is not smaller than this share of the crown's longest side. */
-export const CLUMP_MIN = 0.07;
+export const CLUMP_MIN = 0.05;
 /** A clump is not larger than this share of it. */
-export const CLUMP_MAX = 0.22;
+export const CLUMP_MAX = 0.16;
 /** A clump is this much larger than the room around its centre: lumps overlap and reach the outline. */
 export const CLUMP_GROW = 1.12;
+/** Share of a clump's radius the packing counts as filled: under 1, so neighbours still fill the creases. */
+export const CLUMP_COVER = 0.9;
 /** Share of the volume left uncovered when the packing stops. */
 export const UNCOVERED_STOP = 0.02;
 
@@ -157,8 +159,8 @@ export function packCrown(m: CrownMasks, top: number, base: number, gap: number)
       c: [(ci + 0.5) * v, top + (cj + 0.5) * v, (ck + 0.5) * v],
       r: [r, r, r],
     });
-    // Cover what the clump holds (a sphere a little smaller than itself, so neighbours still fill the creases).
-    const cover = (r * 0.8) / v;
+    // Cover what the clump holds.
+    const cover = (r * CLUMP_COVER) / v;
     for (let k = 0; k < nz; k++)
       for (let j = 0; j < ny; j++)
         for (let i = 0; i < nx; i++) {

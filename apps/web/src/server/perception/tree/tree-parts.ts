@@ -1,4 +1,5 @@
 import {
+  MAX_RECIPE_PARTS,
   ObjectRecipeSchema,
   SDF_BLEND_MAX,
   SDF_BLOBS_MAX,
@@ -11,9 +12,9 @@ import type { Lobe, TreePlan } from './tree-fit';
 
 /**
  * A tree plan (cells) → the recipe parts the viewer, the village and the Blender export already
- * draw (PQ-T79): the trunk and each tier of the crown are `sdf` parts, ellipsoid lobes fused by a
- * smooth union, so a crown reads as rounded foliage and a trunk as one tapered column, never as a
- * stack of boxes. Pure.
+ * draw (PQ-T79): each tier of the crown is an `sdf` part (ellipsoid lobes fused by a smooth union,
+ * rounded foliage), the trunk one turned column (`lathe`) with its measured radius at each height,
+ * never a stack of boxes. Pure.
  */
 
 /** Blend of the smooth union between lobes, unit space of the part. */
@@ -22,8 +23,10 @@ export const LOBE_BLEND = Math.min(0.05, SDF_BLEND_MAX);
 export const FRAME_MARGIN = 1 / (1 - 2 * LOBE_BLEND) + 0.002;
 /** Lobes per part (the schema's blob limit). */
 export const LOBES_PER_PART = SDF_BLOBS_MAX;
+/** Radius of the trunk's top, share of the radius just under it: a rounded shoulder, hidden in the crown. */
+export const TRUNK_TIP = 0.6;
 /** Crown tiers, each with its own leaf colour. */
-export const CROWN_TIERS = 2;
+export const CROWN_TIERS = 3;
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
@@ -77,6 +80,54 @@ export function lobePart(
   };
 }
 
+/**
+ * The trunk as one turned column (a `lathe`): its radius at each height is the one measured on the
+ * drawings (mean of the front and side half-widths), so a bottle trunk keeps its belly and a palm
+ * its taper; the foot is flat on the ground. `lobes` run top to bottom (cells); `foot` is the
+ * ground row. A leaning trunk stands at its mean place.
+ */
+export function trunkPart(
+  lobes: readonly Lobe[],
+  foot: number,
+  frame: { W: number; H: number; D: number },
+  look: Pick<RecipePart, 'color' | 'material' | 'kind'>
+): RecipePart {
+  const radius = (l: Lobe) => Math.sqrt(l.r[0] * l.r[2]);
+  const step = lobes.length > 1 ? lobes[1]!.c[1] - lobes[0]!.c[1] : lobes[0]!.r[1];
+  const top = Math.min(foot - 1e-3, lobes[0]!.c[1] - step / 2);
+  const height = foot - top;
+  const max = Math.max(...lobes.map(radius));
+  const mean = (a: 0 | 2) => lobes.reduce((s, l) => s + l.c[a], 0) / lobes.length;
+  // Foot first (y rises): cap, the measured radii, a narrower tip, cap.
+  const profile: Array<[number, number]> = [
+    [0, -0.5],
+    [radius(lobes[lobes.length - 1]!) / (2 * max), -0.5],
+  ];
+  for (let i = lobes.length - 1; i >= 0; i--)
+    profile.push([
+      radius(lobes[i]!) / (2 * max),
+      clamp((foot - lobes[i]!.c[1]) / height - 0.5, -0.5, 0.5),
+    ]);
+  profile.push([(radius(lobes[0]!) * TRUNK_TIP) / (2 * max), 0.5], [0, 0.5]);
+  const dims = [frame.W, frame.H, frame.D];
+  return {
+    shape: 'lathe',
+    at: [
+      clamp(mean(0) / dims[0]! - 0.5, -0.6, 0.6),
+      clamp(0.5 - (top + height / 2) / dims[1]!, -0.6, 0.6),
+      clamp(mean(2) / dims[2]! - 0.5, -0.6, 0.6),
+    ],
+    size: [
+      clamp((2 * max) / dims[0]!, 0.01, 1),
+      clamp(height / dims[1]!, 0.01, 1),
+      clamp((2 * max) / dims[2]!, 0.01, 1),
+    ],
+    profile,
+    status: 'measured',
+    ...look,
+  };
+}
+
 /** The tiers of a crown: lobes split by height into `n` groups, each cut to at most `LOBES_PER_PART`. */
 export function crownTiers(crown: readonly Lobe[], n: number): Lobe[][] {
   const groups: Lobe[][] = Array.from({ length: n }, () => []);
@@ -119,15 +170,32 @@ export function treeRecipe(plan: TreePlan): ObjectRecipe {
   const parts: RecipePart[] = [];
   if (plan.trunk.length)
     parts.push(
-      lobePart(plan.trunk.map(shift), frame, { color: plan.bark, material: 'wood', kind: 'trunk' })
+      trunkPart(plan.trunk.map(shift), plan.H + (frame.H - plan.H), frame, {
+        color: plan.bark,
+        material: 'wood',
+        kind: 'trunk',
+      })
     );
-  const tiers = crownTiers(plan.crown.map(shift), Math.min(CROWN_TIERS, plan.crown.length));
-  tiers.forEach((lobes, i) => {
-    const tier = Math.min(plan.leaf.length - 1, Math.floor((i / tiers.length) * plan.leaf.length));
+  const leaves = (lobes: Lobe[], tier: number) =>
     parts.push(
-      lobePart(lobes, frame, { color: plan.leaf[tier]!, material: 'foliage', kind: 'crown' })
+      lobePart(lobes.map(shift), frame, {
+        color: plan.leaf[Math.min(plan.leaf.length - 1, tier)]!,
+        material: 'foliage',
+        kind: 'crown',
+      })
     );
-  });
+  if (plan.fronds) {
+    // A palm: opposite fronds two by two (a part holds 12 lobes); they meet on the trunk's tip.
+    const { fronds } = plan.fronds;
+    const half = Math.ceil(fronds.length / 2);
+    for (let k = 0; k < half && parts.length < MAX_RECIPE_PARTS; k++) {
+      const pair = [fronds[k]!, fronds[k + half]].filter((f) => f !== undefined);
+      leaves(pair.flatMap((f) => f.lobes).slice(0, LOBES_PER_PART), k % plan.leaf.length);
+    }
+  } else {
+    const tiers = crownTiers(plan.crown, Math.min(CROWN_TIERS, plan.crown.length));
+    tiers.forEach((lobes, i) => leaves(lobes, Math.floor((i / tiers.length) * plan.leaf.length)));
+  }
   const max = Math.max(frame.W, frame.H, frame.D);
   return ObjectRecipeSchema.parse({
     proportions: {

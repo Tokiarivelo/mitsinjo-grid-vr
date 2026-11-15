@@ -379,7 +379,7 @@ export async function reconstructObject(
     }
     // A tree or a bush is one crown on one trunk (PQ-T79): read on the drawings, not carved into boxes.
     if (archetype === 'tree' || archetype === 'bush') {
-      const tree = reconstructTree(reading.aligned, reading.palette);
+      const tree = reconstructTree(reading.aligned, reading.palette, target.label);
       if (tree) {
         console.info(
           `${tag}: ${tree.recipe.parts.length} parts (${tree.plan.bush ? 'no trunk' : `trunk ${tree.plan.trunk.length} lobes`}, crown ${tree.plan.crown.length} lobes)${drawn.length ? `, drawn here: ${drawn.join(', ')}` : ''}; ${reportLine(tree.report)}`
