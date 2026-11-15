@@ -6,6 +6,7 @@ import {
   houseBaseLooks,
   houseGeometry,
   houseMaterials,
+  houseSlotLooks,
   PAINTED_SHEET_METALNESS,
 } from '../utils/house-projection';
 
@@ -75,6 +76,24 @@ describe('house projection (PQ-T72)', () => {
     expect(at('front').bumpMap).toBeNull();
     expect(at('roof').map).toBeInstanceOf(THREE.Texture);
     expect(at('roof').bumpMap).toBe(at('roof').map);
+  });
+
+  it('gives a thatched roof its own strand pattern, not the drawn swatch (PQ-T74)', () => {
+    const swatches = { wall: { image: ATLAS, size: 0.05 }, roof: { image: ATLAS, size: 0.1 } };
+    const thatched = {
+      ...recipe,
+      house: {
+        ...plan,
+        look: { ...plan.look, roof: { material: 'thatch' as const, color: '#8a7a5a' }, swatches },
+      },
+    };
+    const looks = houseSlotLooks(thatched);
+    const of = (s: (typeof HOUSE_SLOTS)[number]) => looks[HOUSE_SLOTS.indexOf(s)]!;
+    expect(of('roof').swatch).toBeNull();
+    expect(of('roof').surface).toBe('thatch');
+    // A second roofing with no look of its own falls back on the thatch too.
+    expect(of('roof2').swatch).toBeNull();
+    expect(of('front').swatch).toEqual(swatches.wall);
   });
 
   it('repeats the swatches cut on the drawings over the walls and the roof', () => {

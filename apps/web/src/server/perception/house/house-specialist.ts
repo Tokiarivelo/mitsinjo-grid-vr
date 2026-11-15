@@ -12,13 +12,14 @@ import {
 import type { PerceptionClient } from '../client';
 import type { HouseReadResult } from '../schemas';
 import type { AlignedViews, GridView, ViewFrame, ViewName } from '../recon/views';
-import { cleanSwatch, fitHouse, housePatches, type HousePatch } from './house-fit';
+import { cleanSwatch, fitHouse, housePatches, swatchOblique, type HousePatch } from './house-fit';
 import { buildHouseQuestion, type HouseReading } from './house-prompt';
 import {
   HOUSE_TOOL_SPECS,
   HOUSE_TOOLS_ALWAYS,
   HOUSE_TOOLS_REQUIRED,
   mergeToolAnswers,
+  patchReading,
   parseBrief,
   PILOT_JSON_SCHEMA,
   PILOT_SYSTEM_PROMPT,
@@ -87,7 +88,12 @@ export async function readHouseParts(
   images: ReadonlyArray<string>,
   signal?: AbortSignal,
   timeoutMs = HOUSE_TOOL_TIMEOUT_MS
-): Promise<{ reading: HouseReading | null; brief: HouseBrief | null }> {
+): Promise<{
+  reading: HouseReading | null;
+  brief: HouseBrief | null;
+  /** The specialists' raw answers (PQ-T74: they complete the single reading that takes over). */
+  answers?: Partial<Record<HouseTool, string | null>>;
+}> {
   // Each call ends with the request or at its own deadline, whichever comes first.
   const ask: AskHouseTool = (tool, system, schema, img, question, refs, outer) => {
     const deadline = AbortSignal.timeout(timeoutMs);
@@ -177,7 +183,7 @@ export async function readHouseParts(
   const missing = HOUSE_TOOLS_REQUIRED.filter((t) => !toolAnswered(t, byTool[t]));
   if (missing.length) {
     console.info(`${tag}: no ${missing.join(', ')} after a retry: the single reading takes over`);
-    return { reading: null, brief };
+    return { reading: null, brief, answers: byTool };
   }
   const reading = mergeToolAnswers(byTool, brief);
   console.info(
@@ -242,6 +248,9 @@ export async function cropPatch(
       .raw()
       .toBuffer({ resolveWithObject: true });
     const { width: w, height: h } = raw.info;
+    // PQ-T74: an oblique pattern cannot be repeated: the finish keeps its material's own pattern.
+    if (swatchOblique(new Uint8Array(raw.data.buffer, raw.data.byteOffset, w * h * 3), w, h))
+      return null;
     const clean = cleanSwatch(
       new Uint8Array(raw.data.buffer, raw.data.byteOffset, w * h * 3),
       w,
@@ -385,9 +394,12 @@ export async function readHousePlan(
       return null;
     }
     const piloted = ask ? await readHouseParts(ask, label, order, images, signal) : null;
-    const answer = piloted?.reading
+    let answer: Pick<HouseReadResult, 'reading'> = piloted?.reading
       ? { reading: piloted.reading }
       : await read(images[0]!, buildHouseQuestion(label, order), images.slice(1), signal);
+    // PQ-T74: the specialists that answered complete the single reading that took over.
+    if (!piloted?.reading && piloted?.answers && answer.reading)
+      answer = { reading: patchReading(answer.reading, piloted.answers, piloted.brief) };
     onReading?.(answer.reading);
     if (!answer.reading) return null;
     const views = {
