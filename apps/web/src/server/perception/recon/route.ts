@@ -15,7 +15,7 @@ import type { ObjectRecipe, ShapeTarget } from '@/lib/object-shape';
 import type { ClassMaterialsResult } from '../schemas';
 import { FACE_ORDER, buildFacePrompt, buildTopPrompt } from '../facade-faces';
 import { buildFacadePrompt } from '../facade-specialist';
-import { readHousePlan, type ReadHouse } from '../house/house-specialist';
+import { readHousePlan, type AskHouseTool, type ReadHouse } from '../house/house-specialist';
 import { inlineImageUrl } from '../inline-image';
 import { grow, type ViewImage } from './grid';
 import { buildLabelQuestion } from './label-classes';
@@ -66,6 +66,8 @@ export interface ReconDeps {
   ) => Promise<ClassMaterialsResult>;
   /** The house specialist (PQ-T72); absent = houses keep their drawn hull. */
   readHouse?: ReadHouse;
+  /** The piloted part specialists (PQ-T73); absent = the single reading. */
+  askHouseTool?: AskHouseTool;
 }
 
 export interface ReconOptions {
@@ -389,6 +391,7 @@ export async function reconstructObject(
         },
         ...(signal ? { signal } : {}),
         ...(onHouseReading ? { onReading: onHouseReading } : {}),
+        ...(deps.askHouseTool ? { ask: deps.askHouseTool } : {}),
       });
       if (house) recipe.house = house;
     }

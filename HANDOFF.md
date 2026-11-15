@@ -1,38 +1,38 @@
 # HANDOFF — read first, overwrite at end of session (≤40 lines)
 
-**Updated:** 2026-11-14 · **By:** Claude Code · **Branch:** `feat/pq-t67-step-models`
-(from `d61ee81`, not re-branched from `main`; rebase before the PR)
+**Updated:** 2026-11-14 · **By:** Claude Code · **Branch:** `feat/pq-t73-house-parts`
+(from `feat/pq-t67-step-models` @ `5a129af`, PQ-T67–T72 not on `main` yet; rebase before the PR)
 
-## NEXT: try PQ-T72 on `/village` in the browser, then open the phase PR
+## NEXT: try PQ-T73 on `/village` (V328–V333), then open the phase PR (PQ-T67 → PQ-T73)
 
-`make dev` + `LLM_PROVIDER=meta` → `/village` → validate a house's 2D faces → 3D (scenarios V314–V327).
-Offline: `make views-3d FRONT=… RIGHT=… BACK=… LEFT=… TOP=… OUT=… [READING=house-reading.json]`.
+`make dev` + `LLM_PROVIDER=meta` → `/village` → validate a house's 2D faces → 3D.
+Offline: `make views-3d FRONT=… RIGHT=… BACK=… LEFT=… TOP=… OUT=… [READING=…] [SINGLE=1]`.
 
-## PQ-T72 — house specialist (2026-11-14)
+## PQ-T73 — piloted part specialists (2026-11-14)
 
-- `readHouse` (Spark, high effort, streamed, sent through `longFetch` = `node:https`: fetch drops a
-  silent call after 300 s) reads the validated drawings → `HouseReading` → `fitHouse` snaps it on the
-  pixels (outline steps, ridge, shed fall front first, openings on their frames, owner block, footprint
-  annexes from the view from above, low decks) → `recipe.house` (`lib/house-plan.ts`).
-- `lib/house-mesh.ts`: openings with reveal / frame / sill / bars, one roof per volume, walls up to
-  their roof line, verandas (hosted = recess), balconies, chimneys, a plinth under every closed block.
-- Look: a clean swatch of wall (front) and of roof (top) cut on the drawings (`housePatches` on a
-  480-col grid, `cropPatch`, `cleanSwatch` = boards to their median profile), mirrored-repeated; the whole
-  drawing only when the operator picks « Dessin ». Viewer / village / Blender share `houseSlotLooks`.
-- Boards: `~/Téléchargements/generated-view/<name>/maison-3d.jpg` (8 houses).
-
-## Three.js duplicate fix
-
-`@iwer/devui` brings its own three 0.184: the DevUI loads only on « enter VR » (`installDevXRPanels`).
+- `house/house-tools.ts`: pilot (`housePilot`, medium) → `HouseBrief` (type, parts, focus note per tool);
+  tools `massing` / `openings` / `structure` / `finishes` (`houseTool`, high, streamed) in parallel,
+  merged into one `HouseReading` (replayable). Massing retried once; 12 min deadline per call
+  (`HOUSE_TOOL_TIMEOUT_MS`: a hung stream held a whole house 18 min). No massing → PQ-T72 single reading.
+- Plan parts: piers (stone, cap, course; replace posts on their side when ≥ half the beam height),
+  heads arch / segment / bracket + arcade bays, gable trusses, galleries (balcony with posts under the
+  main eave; flat skirt when no roof covers it), `wallFinish` / `roofFinish`, finishes wall2 / stone /
+  roof2 / timber with colour + swatch measured in the specialist's sample box. New slots appended.
+- Fit: balcony keeps its storey (DECK_MAX was pinning it to the deck), a balcony without floor stands on
+  the veranda under it, post bases (< 8 % high) are not piers.
+- Results: `~/Téléchargements/generated-view/{lodge-stone-t73, mg-arcades, mg-varangue, mg-balcony, mg-earth}`
+  (Malagasy photos in `resources/refine-3d/mg-*.jpg`, credits in `SOURCES-refine.md`).
 
 ## Decisions
 
-- One reading for the whole house (not per room): coherent volumes, openings owned by block.
-- One wall swatch per house (the front's dominant cladding); mixed claddings become one.
+- New parts optional: a plan without them builds byte for byte as PQ-T72 (`house-mesh.test.ts` hashes);
+  bungalow and school readings replayed on old and new code → identical `house.json` and render.
+- Specialists as structured-output tools (one call each), not a multi-turn tool loop: images sent once
+  per call, parallel, each answer validated alone.
 - No Neon migration (recipes not stored). No HF republish (bench unchanged).
 
 ## Open
 
-- Arched heads, dormers and glazed gables are rectangles.
-- Generated views that disagree (house-detached: front vs top) still misplace blocks.
-- Blender export colours swatch slots (no swatch image).
+- Timber knees read as `arcade: bracket` only; a stone arcade wears the wall / stone swatch.
+- Dormers and bellcast eaves are still blocks; a structure specialist may list timber posts as piers.
+- Meta network was flaky this session (socket hang up, header timeouts): a run can lose a view.

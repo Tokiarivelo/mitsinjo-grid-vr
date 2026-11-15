@@ -6,7 +6,11 @@
  */
 
 /** Call kinds asked as a stream (long answers only: a short one gains nothing). */
-export const STREAMED_KINDS: ReadonlySet<string> = new Set(['readHouse']);
+export const STREAMED_KINDS: ReadonlySet<string> = new Set([
+  'readHouse',
+  'housePilot',
+  'houseTool',
+]);
 
 /** The completion as a non-streamed call returns it. */
 export interface ChatCompletion {

@@ -33,8 +33,8 @@ describe('streamed chat completions (PQ-T72)', () => {
     expect(await readCompletion(plain)).toEqual({ choices: [{ message: { content: 'ok' } }] });
   });
 
-  it('streams the house specialist only', () => {
-    expect([...STREAMED_KINDS]).toEqual(['readHouse']);
+  it('streams the house specialist, its pilot and its part specialists only', () => {
+    expect([...STREAMED_KINDS]).toEqual(['readHouse', 'housePilot', 'houseTool']);
   });
 });
 

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { HULL_SURFACES, type HullSurface } from '@/lib/face-hull';
 import { HOUSE_SLOTS, houseMesh, type HouseSlot } from '@/lib/house-mesh';
-import type { HousePlan, HouseSwatch } from '@/lib/house-plan';
+import { finishLook, type HousePlan, type HouseSwatch } from '@/lib/house-plan';
 import type { ObjectRecipe, RecipeMaterial } from '@/lib/object-shape';
 import {
   atlasTexture,
@@ -44,6 +44,12 @@ function swatchOf(recipe: HouseRecipe, slot: HouseSlot): HouseSwatch | null {
   const set = isSurface(slot) ? recipe.faces?.surfaces?.[slot] : undefined;
   if (set?.material || set?.drawing) return null;
   if (slot === 'roof') return swatches?.roof ?? null;
+  // The other finishes (PQ-T73): their own swatch, else the one of the finish they fall back on.
+  const { look } = recipe.house;
+  if (slot === 'roof2') return swatches?.roof2 ?? (look.roof2 ? null : (swatches?.roof ?? null));
+  if (slot === 'wall2' || slot === 'stone')
+    return swatches?.[slot] ?? (look[slot] ? null : (swatches?.wall ?? null));
+  if (slot === 'timber') return swatches?.timber ?? null;
   return WALL_SLOTS.has(slot) ? (swatches?.wall ?? null) : null;
 }
 
@@ -90,7 +96,7 @@ export function houseGeometry(recipe: HouseRecipe): THREE.BufferGeometry {
     const swatch = swatchOf(recipe, slot);
     // A swatch repeats at its own size on the drawing; a material pattern at the house's scale.
     return {
-      slopes: slot === 'roof',
+      slopes: slot === 'roof' || slot === 'roof2',
       scale: swatch ? MAP_TILE / Math.max(swatch.size * w, 1e-3) : HOUSE_PATTERN_SCALE,
     };
   });
@@ -130,6 +136,11 @@ export function houseSlotLooks(recipe: HouseRecipe): HouseSlotLook[] {
     glass: { surface: 'glass', color: look.glass },
     door: { surface: 'wood', color: look.door },
     base: { surface: 'concrete', color: look.base },
+    // PQ-T73: the other finishes, each on its own look or the one it falls back on.
+    wall2: { surface: finishLook(look, 'wall2').material, color: finishLook(look, 'wall2').color },
+    stone: { surface: finishLook(look, 'stone').material, color: finishLook(look, 'stone').color },
+    roof2: { surface: finishLook(look, 'roof2').material, color: finishLook(look, 'roof2').color },
+    timber: { surface: 'wood', color: finishLook(look, 'timber').color },
   };
   return HOUSE_SLOTS.map((slot) => {
     const set = isSurface(slot) ? recipe.faces?.surfaces?.[slot] : undefined;
@@ -181,7 +192,7 @@ export function houseMaterials(
         metalness: 0,
         ...glow,
       });
-      if (slot === 'roof') m.side = THREE.DoubleSide;
+      if (slot === 'roof' || slot === 'roof2') m.side = THREE.DoubleSide;
       return m;
     }
     const { surface } = slotLook;
@@ -196,7 +207,7 @@ export function houseMaterials(
       ...glow,
     });
     // Seen from under the eaves, the roof shows its covering, not the sky.
-    if (slot === 'roof') m.side = THREE.DoubleSide;
+    if (slot === 'roof' || slot === 'roof2') m.side = THREE.DoubleSide;
     // Roofing sheets are painted: they keep their colour instead of mirroring the studio.
     if (surface === 'metal') {
       m.metalness = PAINTED_SHEET_METALNESS;

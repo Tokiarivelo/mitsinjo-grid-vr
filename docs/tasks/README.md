@@ -30,6 +30,7 @@ Meta feature and carries external-API risk; 3D is local work and easy to time-bo
 | —   | PV-G 3D by script, piece by piece, loop vs 2D elevation                               | `PV-shape-script.md`          | 🟡 G0–G1 done                    |
 | —   | PV-H Any object from its 2D view (hull + AI check)                                    | `PV-any-object.md`            | 🟡 H1–H2 done                    |
 | —   | PV-Q Strongest photo → 3D (real set, detail score, Muse skill cards, photo loop)      | `PV-vision-quality.md`        | ❌ planned                       |
+| —   | PV-H House generation: limits and next steps (brief for Claude Fable)                 | `PV-house-generation-next.md` | ❌ planned                       |
 | —   | PV-C Instant capture, elastic grab, hologram, 3D Lab + AI assistant (screen and VR)   | `PV-capture-lab.md`           | ❌ planned                       |
 | —   | PA AI dispatch (autonomous mode, event log, chat scenarios)                           | `PA-ai-dispatch.md`           | ❌ planned                       |
 | —   | PI 3D object in harmony with the village (clearing, red ground, poles to its branch)  | `PI-village-integration.md`   | ❌ planned (after PA)            |

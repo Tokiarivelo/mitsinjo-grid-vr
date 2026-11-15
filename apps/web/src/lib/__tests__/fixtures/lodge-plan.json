@@ -1,0 +1,645 @@
+{
+  "volumes": [
+    {
+      "kind": "body",
+      "plan": [0.059, 0.922, 0.18, 0.82],
+      "eave": 0.65,
+      "ridge": 0.875,
+      "roof": "hip",
+      "ridgeAxis": "x",
+      "bands": [0.415]
+    },
+    {
+      "kind": "bay",
+      "plan": [0.335, 0.665, 0.612, 1],
+      "eave": 0.74,
+      "ridge": 0.938,
+      "roof": "gable",
+      "ridgeAxis": "z"
+    },
+    {
+      "kind": "bay",
+      "plan": [0.335, 0.665, 0, 0.396],
+      "eave": 0.74,
+      "ridge": 0.938,
+      "roof": "gable",
+      "ridgeAxis": "z"
+    },
+    {
+      "kind": "bay",
+      "plan": [0.78, 1, 0.35, 0.656],
+      "eave": 0.69,
+      "ridge": 0.859,
+      "roof": "gable",
+      "ridgeAxis": "x"
+    },
+    {
+      "kind": "bay",
+      "plan": [0, 0.242, 0.35, 0.656],
+      "eave": 0.69,
+      "ridge": 0.805,
+      "roof": "gable",
+      "ridgeAxis": "x"
+    },
+    {
+      "kind": "wing",
+      "plan": [0.012, 0.285, 0.612, 0.924],
+      "eave": 0.635,
+      "ridge": 0.73,
+      "roof": "shed",
+      "ridgeAxis": "x",
+      "fall": "left"
+    },
+    {
+      "kind": "wing",
+      "plan": [0.715, 0.973, 0.088, 0.396],
+      "eave": 0.635,
+      "ridge": 0.73,
+      "roof": "shed",
+      "ridgeAxis": "x",
+      "fall": "right"
+    },
+    {
+      "kind": "veranda",
+      "plan": [0.012, 0.98, 0.8, 1],
+      "eave": 0.395,
+      "ridge": 0.395,
+      "roof": "flat",
+      "ridgeAxis": "x",
+      "open": ["front"],
+      "columns": 6,
+      "floor": 0.125,
+      "rail": true
+    },
+    {
+      "kind": "balcony",
+      "plan": [0.012, 0.98, 0.8, 1],
+      "eave": 0.415,
+      "ridge": 0.415,
+      "roof": "none",
+      "ridgeAxis": "x",
+      "open": ["front"],
+      "columns": 0,
+      "floor": 0.15,
+      "rail": true
+    },
+    {
+      "kind": "veranda",
+      "plan": [0.012, 0.98, 0, 0.2],
+      "eave": 0.395,
+      "ridge": 0.395,
+      "roof": "flat",
+      "ridgeAxis": "x",
+      "open": ["back"],
+      "columns": 6,
+      "floor": 0.125,
+      "rail": true
+    },
+    {
+      "kind": "balcony",
+      "plan": [0.012, 0.98, 0, 0.2],
+      "eave": 0.415,
+      "ridge": 0.415,
+      "roof": "none",
+      "ridgeAxis": "x",
+      "open": ["back"],
+      "columns": 0,
+      "floor": 0.15,
+      "rail": true
+    },
+    {
+      "kind": "veranda",
+      "plan": [0.8, 1, 0.2, 0.8],
+      "eave": 0.395,
+      "ridge": 0.395,
+      "roof": "flat",
+      "ridgeAxis": "x",
+      "open": ["right"],
+      "columns": 4,
+      "floor": 0.125,
+      "rail": true
+    }
+  ],
+  "openings": [
+    {
+      "volume": 0,
+      "wall": "front",
+      "kind": "window",
+      "along": [0.108, 0.148],
+      "rise": [0.634, 0.672],
+      "panes": [1, 1]
+    },
+    {
+      "volume": 0,
+      "wall": "front",
+      "kind": "window",
+      "along": [0.155, 0.195],
+      "rise": [0.634, 0.672],
+      "panes": [1, 1]
+    },
+    {
+      "volume": 0,
+      "wall": "front",
+      "kind": "window",
+      "along": [0.198, 0.238],
+      "rise": [0.634, 0.672],
+      "panes": [1, 1]
+    },
+    {
+      "volume": 5,
+      "wall": "front",
+      "kind": "door",
+      "along": [0.094, 0.16],
+      "rise": [0.414, 0.617],
+      "panes": [1, 2]
+    },
+    {
+      "volume": 5,
+      "wall": "front",
+      "kind": "door",
+      "along": [0.155, 0.195],
+      "rise": [0.468, 0.622],
+      "panes": [1, 2]
+    },
+    {
+      "volume": 5,
+      "wall": "front",
+      "kind": "door",
+      "along": [0.184, 0.25],
+      "rise": [0.414, 0.617],
+      "panes": [1, 2]
+    },
+    {
+      "volume": 1,
+      "wall": "front",
+      "kind": "door",
+      "along": [0.305, 0.359],
+      "rise": [0.414, 0.523],
+      "panes": [2, 2]
+    },
+    {
+      "volume": 1,
+      "wall": "front",
+      "kind": "door",
+      "along": [0.451, 0.482],
+      "rise": [0.455, 0.578],
+      "panes": [1, 2]
+    },
+    {
+      "volume": 1,
+      "wall": "front",
+      "kind": "door",
+      "along": [0.486, 0.531],
+      "rise": [0.455, 0.578],
+      "panes": [2, 2]
+    },
+    {
+      "volume": 1,
+      "wall": "front",
+      "kind": "door",
+      "along": [0.535, 0.566],
+      "rise": [0.455, 0.578],
+      "panes": [1, 2]
+    },
+    {
+      "volume": 1,
+      "wall": "front",
+      "kind": "window",
+      "along": [0.445, 0.605],
+      "rise": [0.594, 0.695],
+      "panes": [5, 3]
+    },
+    {
+      "volume": 0,
+      "wall": "front",
+      "kind": "door",
+      "along": [0.684, 0.715],
+      "rise": [0.455, 0.578],
+      "panes": [1, 2]
+    },
+    {
+      "volume": 0,
+      "wall": "front",
+      "kind": "door",
+      "along": [0.719, 0.76],
+      "rise": [0.455, 0.578],
+      "panes": [1, 2]
+    },
+    {
+      "volume": 0,
+      "wall": "front",
+      "kind": "window",
+      "along": [0.746, 0.789],
+      "rise": [0.633, 0.656],
+      "panes": [1, 1]
+    },
+    {
+      "volume": 0,
+      "wall": "front",
+      "kind": "window",
+      "along": [0.793, 0.82],
+      "rise": [0.633, 0.656],
+      "panes": [1, 1]
+    },
+    {
+      "volume": 0,
+      "wall": "front",
+      "kind": "window",
+      "along": [0.816, 0.852],
+      "rise": [0.633, 0.656],
+      "panes": [1, 1]
+    },
+    {
+      "volume": 0,
+      "wall": "front",
+      "kind": "door",
+      "along": [0.746, 0.789],
+      "rise": [0.531, 0.656],
+      "panes": [1, 2]
+    },
+    {
+      "volume": 0,
+      "wall": "front",
+      "kind": "door",
+      "along": [0.773, 0.82],
+      "rise": [0.523, 0.633],
+      "panes": [1, 2]
+    },
+    {
+      "volume": 0,
+      "wall": "front",
+      "kind": "door",
+      "along": [0.814, 0.84],
+      "rise": [0.468, 0.622],
+      "panes": [1, 2]
+    },
+    {
+      "volume": 5,
+      "wall": "front",
+      "kind": "door",
+      "along": [0.117, 0.188],
+      "rise": [0.055, 0.258],
+      "panes": [2, 2]
+    },
+    {
+      "volume": 1,
+      "wall": "front",
+      "kind": "door",
+      "along": [0.305, 0.355],
+      "rise": [0.047, 0.211],
+      "panes": [2, 2]
+    },
+    {
+      "volume": 1,
+      "wall": "front",
+      "kind": "window",
+      "along": [0.45, 0.57],
+      "rise": [0.115, 0.32],
+      "panes": [6, 3]
+    },
+    {
+      "volume": 0,
+      "wall": "front",
+      "kind": "door",
+      "along": [0.685, 0.76],
+      "rise": [0.108, 0.308],
+      "panes": [2, 2]
+    },
+    {
+      "volume": 0,
+      "wall": "front",
+      "kind": "door",
+      "along": [0.835, 0.89],
+      "rise": [0.108, 0.308],
+      "panes": [1, 2]
+    },
+    {
+      "volume": 6,
+      "wall": "back",
+      "kind": "window",
+      "along": [0.828, 0.855],
+      "rise": [0.477, 0.516],
+      "panes": [1, 1]
+    },
+    {
+      "volume": 6,
+      "wall": "back",
+      "kind": "window",
+      "along": [0.793, 0.816],
+      "rise": [0.477, 0.523],
+      "panes": [1, 1]
+    },
+    {
+      "volume": 6,
+      "wall": "back",
+      "kind": "window",
+      "along": [0.762, 0.805],
+      "rise": [0.477, 0.516],
+      "panes": [1, 1]
+    },
+    {
+      "volume": 6,
+      "wall": "back",
+      "kind": "window",
+      "along": [0.739, 0.764],
+      "rise": [0.495, 0.534],
+      "panes": [1, 1]
+    },
+    {
+      "volume": 2,
+      "wall": "back",
+      "kind": "door",
+      "along": [0.52, 0.555],
+      "rise": [0.395, 0.502],
+      "panes": [1, 2]
+    },
+    {
+      "volume": 2,
+      "wall": "back",
+      "kind": "door",
+      "along": [0.477, 0.516],
+      "rise": [0.395, 0.502],
+      "panes": [2, 2]
+    },
+    {
+      "volume": 2,
+      "wall": "back",
+      "kind": "door",
+      "along": [0.438, 0.473],
+      "rise": [0.395, 0.502],
+      "panes": [1, 2]
+    },
+    {
+      "volume": 2,
+      "wall": "back",
+      "kind": "window",
+      "along": [0.426, 0.531],
+      "rise": [0.539, 0.633],
+      "panes": [5, 3]
+    },
+    {
+      "volume": 2,
+      "wall": "back",
+      "kind": "door",
+      "along": [0.344, 0.379],
+      "rise": [0.422, 0.555],
+      "panes": [1, 2]
+    },
+    {
+      "volume": 0,
+      "wall": "back",
+      "kind": "door",
+      "along": [0.305, 0.328],
+      "rise": [0.359, 0.508],
+      "panes": [1, 2]
+    },
+    {
+      "volume": 0,
+      "wall": "back",
+      "kind": "window",
+      "along": [0.203, 0.223],
+      "rise": [0.544, 0.573],
+      "panes": [1, 1]
+    },
+    {
+      "volume": 0,
+      "wall": "back",
+      "kind": "window",
+      "along": [0.177, 0.197],
+      "rise": [0.544, 0.573],
+      "panes": [1, 1]
+    },
+    {
+      "volume": 0,
+      "wall": "back",
+      "kind": "window",
+      "along": [0.151, 0.171],
+      "rise": [0.544, 0.573],
+      "panes": [1, 1]
+    },
+    {
+      "volume": 0,
+      "wall": "back",
+      "kind": "window",
+      "along": [0.211, 0.23],
+      "rise": [0.469, 0.508],
+      "panes": [1, 1]
+    },
+    {
+      "volume": 0,
+      "wall": "back",
+      "kind": "window",
+      "along": [0.168, 0.195],
+      "rise": [0.484, 0.523],
+      "panes": [1, 1]
+    },
+    {
+      "volume": 0,
+      "wall": "back",
+      "kind": "window",
+      "along": [0.151, 0.171],
+      "rise": [0.49, 0.52],
+      "panes": [1, 1]
+    },
+    {
+      "volume": 0,
+      "wall": "back",
+      "kind": "door",
+      "along": [0.203, 0.223],
+      "rise": [0.39, 0.475],
+      "panes": [1, 2]
+    },
+    {
+      "volume": 0,
+      "wall": "back",
+      "kind": "door",
+      "along": [0.168, 0.207],
+      "rise": [0.359, 0.414],
+      "panes": [1, 2]
+    },
+    {
+      "volume": 6,
+      "wall": "back",
+      "kind": "door",
+      "along": [0.816, 0.867],
+      "rise": [0.094, 0.281],
+      "panes": [1, 2]
+    },
+    {
+      "volume": 6,
+      "wall": "back",
+      "kind": "door",
+      "along": [0.781, 0.832],
+      "rise": [0.094, 0.281],
+      "panes": [1, 2]
+    },
+    {
+      "volume": 6,
+      "wall": "back",
+      "kind": "door",
+      "along": [0.746, 0.797],
+      "rise": [0.094, 0.281],
+      "panes": [1, 2]
+    },
+    {
+      "volume": 2,
+      "wall": "back",
+      "kind": "window",
+      "along": [0.427, 0.557],
+      "rise": [0.148, 0.32],
+      "panes": [6, 3]
+    },
+    {
+      "volume": 2,
+      "wall": "back",
+      "kind": "door",
+      "along": [0.359, 0.387],
+      "rise": [0.188, 0.281],
+      "panes": [1, 2]
+    },
+    {
+      "volume": 2,
+      "wall": "back",
+      "kind": "door",
+      "along": [0.305, 0.363],
+      "rise": [0.094, 0.281],
+      "panes": [1, 2]
+    },
+    {
+      "volume": 0,
+      "wall": "right",
+      "kind": "window",
+      "along": [0.652, 0.684],
+      "rise": [0.477, 0.523],
+      "panes": [1, 1]
+    },
+    {
+      "volume": 3,
+      "wall": "right",
+      "kind": "door",
+      "along": [0.512, 0.544],
+      "rise": [0.375, 0.522],
+      "panes": [1, 2]
+    },
+    {
+      "volume": 3,
+      "wall": "right",
+      "kind": "door",
+      "along": [0.476, 0.508],
+      "rise": [0.375, 0.522],
+      "panes": [1, 2]
+    },
+    {
+      "volume": 1,
+      "wall": "right",
+      "kind": "door",
+      "along": [0.872, 0.912],
+      "rise": [0.117, 0.273],
+      "panes": [1, 2]
+    },
+    {
+      "volume": 3,
+      "wall": "right",
+      "kind": "door",
+      "along": [0.5, 0.556],
+      "rise": [0.117, 0.289],
+      "panes": [1, 2]
+    },
+    {
+      "volume": 3,
+      "wall": "right",
+      "kind": "door",
+      "along": [0.476, 0.508],
+      "rise": [0.168, 0.322],
+      "panes": [1, 2]
+    },
+    {
+      "volume": 6,
+      "wall": "right",
+      "kind": "window",
+      "along": [0.236, 0.3],
+      "rise": [0.141, 0.266],
+      "panes": [2, 2]
+    },
+    {
+      "volume": 0,
+      "wall": "left",
+      "kind": "window",
+      "along": [0.198, 0.233],
+      "rise": [0.415, 0.464],
+      "panes": [1, 1]
+    },
+    {
+      "volume": 4,
+      "wall": "left",
+      "kind": "door",
+      "along": [0.432, 0.488],
+      "rise": [0.32, 0.492],
+      "panes": [1, 2]
+    },
+    {
+      "volume": 4,
+      "wall": "left",
+      "kind": "door",
+      "along": [0.468, 0.524],
+      "rise": [0.328, 0.492],
+      "panes": [1, 2]
+    },
+    {
+      "volume": 0,
+      "wall": "left",
+      "kind": "window",
+      "along": [0.222, 0.292],
+      "rise": [0.128, 0.242],
+      "panes": [2, 2]
+    },
+    {
+      "volume": 4,
+      "wall": "left",
+      "kind": "door",
+      "along": [0.444, 0.476],
+      "rise": [0.088, 0.242],
+      "panes": [1, 2]
+    },
+    {
+      "volume": 4,
+      "wall": "left",
+      "kind": "door",
+      "along": [0.48, 0.512],
+      "rise": [0.088, 0.242],
+      "panes": [1, 2]
+    },
+    {
+      "volume": 5,
+      "wall": "left",
+      "kind": "door",
+      "along": [0.876, 0.908],
+      "rise": [0.039, 0.211],
+      "panes": [1, 2]
+    }
+  ],
+  "chimneys": [
+    {
+      "plan": [0.185, 0.235, 0.35, 0.41],
+      "top": 1
+    },
+    {
+      "plan": [0.585, 0.635, 0.35, 0.41],
+      "top": 0.985
+    }
+  ],
+  "look": {
+    "wall": {
+      "material": "wood",
+      "color": "#644a39"
+    },
+    "roof": {
+      "material": "slate",
+      "color": "#47403e"
+    },
+    "trim": "#3b2a20",
+    "glass": "#19120f",
+    "door": "#2e211a",
+    "base": "#7d746a"
+  }
+}

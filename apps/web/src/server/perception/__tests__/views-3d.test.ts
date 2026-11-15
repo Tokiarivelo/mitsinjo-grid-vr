@@ -7,6 +7,7 @@ vi.mock('server-only', () => ({}));
 import { museImage, museImageReady } from '../facade-specialist';
 import { renderFlat, THREE_QUARTER } from '../flat-render';
 import { getPerceptionClient } from '../client';
+import { houseToolAsk } from '../house/house-specialist';
 import { reconstructObject, reportLine, type ViewName } from '../recon';
 import { reconstructFromViews } from '../recon/reconstruct';
 import { decodeView } from '../recon/route';
@@ -67,7 +68,11 @@ describe.runIf(process.env.VIEWS_3D_FRONT || process.env.VIEWS_3D_PHOTO)('make v
               }),
             }
           : perception && !process.env.VIEWS_3D_NO_HOUSE
-            ? { readHouse: perception.readHouse.bind(perception) }
+            ? {
+                readHouse: perception.readHouse.bind(perception),
+                // PQ-T73: the pilot and its part specialists (`SINGLE=1` = the PQ-T72 single reading).
+                ...(process.env.VIEWS_3D_SINGLE ? {} : { askHouseTool: houseToolAsk(perception) }),
+              }
             : {}),
         // Offline: materials given by hand, largest class first (`MATERIALS=slate,wood,…`).
         ...(process.env.VIEWS_3D_MATERIALS
