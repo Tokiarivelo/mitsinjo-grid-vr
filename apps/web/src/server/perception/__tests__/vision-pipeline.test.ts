@@ -1,3 +1,4 @@
+import sharp from 'sharp';
 import { describe, expect, it, vi } from 'vitest';
 import { MOCK_DETECTIONS } from '../mock';
 import type { DetectionResult, SegmentResult } from '../schemas';
@@ -75,6 +76,8 @@ describe('runVisionPipeline (PV-T6)', () => {
         {
           phase: 'boxes',
           detections: [],
+          // PQ-T47: without pixels the refusal carries the generic cause.
+          route: { imageType: 'none', family: 'parametric', action: 'refuse', cause: 'no_object' },
           ms: expect.any(Number),
           source: 'meta',
           model: 'muse-spark-1.3',
@@ -82,6 +85,81 @@ describe('runVisionPipeline (PV-T6)', () => {
       ],
     ]);
     expect(segmentImage).not.toHaveBeenCalled();
+  });
+
+  it('nothing listed on a minuscule photo: refused too_small', async () => {
+    const emit = vi.fn();
+    const buffer = await sharp({
+      create: { width: 40, height: 30, channels: 3, background: { r: 200, g: 200, b: 200 } },
+    })
+      .jpeg()
+      .toBuffer();
+    await runVisionPipeline(
+      { detectAppliances: async () => meta([]), segmentImage: vi.fn() },
+      'data:x',
+      emit,
+      undefined,
+      { buffer, width: 40, height: 30 }
+    );
+    expect(emit.mock.calls[0]![1].route).toEqual({
+      imageType: 'none',
+      family: 'parametric',
+      action: 'refuse',
+      cause: 'too_small',
+    });
+  });
+
+  it('nothing listed on a flat photo: refused too_blurry; on a sharp one: no_object', async () => {
+    const flat = await sharp({
+      create: { width: 320, height: 240, channels: 3, background: { r: 200, g: 200, b: 200 } },
+    })
+      .jpeg()
+      .toBuffer();
+    // Checkerboard: edges everywhere, sharpness high.
+    const board = await sharp({
+      create: {
+        width: 320,
+        height: 240,
+        channels: 3,
+        background: { r: 0, g: 0, b: 0 },
+      },
+    })
+      .composite([
+        {
+          input: Buffer.from(
+            `<svg width="320" height="240">${Array.from({ length: 8 }, (_, j) =>
+              Array.from({ length: 8 }, (_, i) =>
+                (i + j) % 2
+                  ? `<rect x="${i * 40}" y="${j * 30}" width="40" height="30" fill="white"/>`
+                  : ''
+              ).join('')
+            ).join('')}</svg>`
+          ),
+        },
+      ])
+      .jpeg()
+      .toBuffer();
+    const perception = (detections: never[]) => ({
+      detectAppliances: async () => meta(detections),
+      segmentImage: vi.fn(),
+    });
+    const emitFlat = vi.fn();
+    await runVisionPipeline(perception([]), 'data:x', emitFlat, undefined, {
+      buffer: flat,
+      width: 320,
+      height: 240,
+    });
+    expect(emitFlat.mock.calls[0]![1].route.cause).toBe('too_blurry');
+    const emitBoard = vi.fn();
+    await runVisionPipeline(perception([]), 'data:x', emitBoard, undefined, {
+      buffer: board,
+      width: 320,
+      height: 240,
+    });
+    expect(emitBoard.mock.calls[0]![1].route).toMatchObject({
+      action: 'refuse',
+      cause: 'no_object',
+    });
   });
 
   it('an unexpected error becomes vision_error, never a throw', async () => {

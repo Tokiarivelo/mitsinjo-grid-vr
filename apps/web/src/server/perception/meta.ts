@@ -18,6 +18,7 @@ import {
   DETECT_QUESTION,
   DETECT_SYSTEM_PROMPT,
   parseDetections,
+  parseImageType,
 } from './detect';
 import {
   parseFreeParts,
@@ -355,7 +356,7 @@ export class MetaPerceptionBackend implements PerceptionBackend {
       // Helps tell « nothing seen » from a reply shape we do not read.
       console.info(`[vision] ${model} listed no object: ${content.slice(0, 300)}`);
     }
-    return { model, usage, result: { detections } };
+    return { model, usage, result: { detections, imageType: parseImageType(content) } };
   }
 
   async identifyRegion(

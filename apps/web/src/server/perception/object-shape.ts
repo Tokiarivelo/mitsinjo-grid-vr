@@ -84,6 +84,7 @@ import { scoreRecipe } from './score-shape';
 import { timeoutSignal } from './abort';
 import { voteKits } from './kit-vote';
 import { askFamilies, asFamily } from './kit-ask';
+import { familyOf } from './routing';
 import type { ShapeResult } from './schemas';
 import { env } from '@/lib/env';
 import { generateImaginedViews } from './views-generation';
@@ -797,6 +798,7 @@ export async function runObjectShape(
           kit: found.kit,
           ...(shaped.outline ? { outline: shaped.outline } : {}),
           ...(facadeConditions ? { conditions: facadeConditions } : {}),
+          ...(found.kit ? { family: familyOf(found.kit.archetype) } : {}),
           ...source,
         };
       }
@@ -891,6 +893,7 @@ export async function runObjectShape(
             kit: found.kit,
             ...(shaped.outline ? { outline: shaped.outline } : {}),
             ...(viewsConditions ? { conditions: viewsConditions } : {}),
+            ...(found.kit ? { family: familyOf(found.kit.archetype) } : {}),
             ...source,
           };
         }
@@ -1348,6 +1351,7 @@ export async function runObjectShape(
         ...(shaped.outline ? { outline: shaped.outline } : {}),
         ...(coverage ? { coverage } : {}),
         ...(conditions ? { conditions } : {}),
+        ...(found.kit ? { family: familyOf(found.kit.archetype) } : {}),
         ...source,
       };
     }

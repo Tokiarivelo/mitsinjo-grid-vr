@@ -54,7 +54,8 @@ export async function POST(req: NextRequest) {
         withExpectedDetections(perception, expected),
         visionImage,
         send,
-        req.signal
+        req.signal,
+        await photoSize(photo.buffer)
       );
     }
   });

@@ -518,8 +518,16 @@ One task = one commit, with its Vitest test, its `contracts.md` update and its m
       body re-sent), richer writer sheet (photo crop only, v1). Live measure pending (no key): valid-code
       rate, gain vs route A, tour duration (Vercel/OVHcloud).
 - [ ] **PQ-T46 `anatomy` in kit, cards and score** (§12.3, §5, E5, E9).
-- [ ] **PQ-T47 Image type, representation family, routing** (§12.4, §4), with motivated refusal and the
+- [x] **PQ-T47 Image type, representation family, routing** (§12.4, §4), with motivated refusal and the
       operator question under 0.82.
+      _Built 2026-11-12:_ `routing.ts` (`routeImage`: image type + family + pipeline/ask/refuse;
+      `familyOf`: templates library, tree/bush procedural, person/animal sdf, other parametric),
+      `image_type` in the detect call (lenient `parseImageType`, default photo) → `DetectionResult` + boxes event, `family` on every recipe answer, E2 refusal on an empty list (cause measured
+      on the frame: tiny < 64 px / blurry / nothing found, streamed as `route`, existing empty
+      state presents it), ask gate 0.5 → 0.82; contracts + V268. Shape-level refusal tried and
+      reverted: 21 tests model every selected object (graceful degradation is the contract), so the
+      blur/tiny branches of `routeImage` engage only at E2. Live check pending (no key): drawing
+      answers, refusal causes on real photos.
 - [ ] **PQ-T48 New detail kinds + assemblies** (§12.5, §7.2), identical in the viewer and the judge render.
 - [ ] **PQ-T49 Parallelism, draft / refine, cache** (§12.6, E12).
 - [ ] **PQ-T50 Organic generators + `plant` family** (§12.7, §7.3: `sweep, branch, scatter, drape`).

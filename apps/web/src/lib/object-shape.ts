@@ -420,6 +420,13 @@ export const PHOTO_LEVELS = ['low', 'medium', 'high'] as const;
 export type PhotoLevel = (typeof PHOTO_LEVELS)[number];
 export const PHOTO_VIEWS = ['front', 'three_quarter', 'side'] as const;
 export type PhotoView = (typeof PHOTO_VIEWS)[number];
+/**
+ * Representation families (PQ-T47, universal pipeline §4.1): how the geometry is built. `library` =
+ * a named, tested template chosen by archetype; `parametric` = template-less free parts; `procedural`
+ * = generators grown by code (PQ-T50); `sdf` = smooth shapes (later). Recorded on every recipe answer.
+ */
+export const REPRESENTATION_FAMILIES = ['parametric', 'procedural', 'sdf', 'library'] as const;
+export type RepresentationFamily = (typeof REPRESENTATION_FAMILIES)[number];
 export const PhotoConditionsSchema = z.object({
   widthPx: z.number().int().min(0),
   heightPx: z.number().int().min(0),
@@ -456,6 +463,8 @@ export const ObjectShapeSchema = z.object({
   coverage: z.array(PartCoverageSchema).optional(),
   /** Photo conditions of the object (PQ-T7): size, sharpness, exposure, hidden share, view. Computed, not AI. */
   conditions: PhotoConditionsSchema.optional(),
+  /** Representation family the recipe was built in (PQ-T47, §4.1). Computed from the archetype. */
+  family: z.enum(REPRESENTATION_FAMILIES).optional(),
   /** The model doubts the family (PQ-T41): the two to choose from, best first. Computed from the kit, not AI text. */
   ask: z.object({ archetypes: z.array(z.string().max(16)).length(2) }).optional(),
 });

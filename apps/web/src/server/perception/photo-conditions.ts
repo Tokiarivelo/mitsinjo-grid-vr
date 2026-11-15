@@ -100,6 +100,11 @@ export function viewClass(yaw: number): PhotoView {
 const level = (v: number, medium: number, high: number): PhotoLevel =>
   v >= high ? 'high' : v >= medium ? 'medium' : 'low';
 
+/** Laplacian variance → sharpness class (same calibration as `measurePhotoConditions`). */
+export function sharpnessLevel(variance: number): PhotoLevel {
+  return level(variance, SHARP_LOW_VAR, SHARP_HIGH_VAR);
+}
+
 export interface PhotoConditionsInput {
   /** Object box in photo pixels. */
   widthPx: number;
@@ -120,8 +125,7 @@ export function measurePhotoConditions(input: PhotoConditionsInput): PhotoCondit
   const { widthPx, heightPx, grid, nativeGrid, hasOutline, archetype, yaw } = input;
   const out: PhotoConditions = { widthPx: Math.round(widthPx), heightPx: Math.round(heightPx) };
   // Sharpness only on the photo's own pixels: a resized grid hides the blur of a large object.
-  if (nativeGrid)
-    out.sharpness = level(laplacianVariance(nativeGrid), SHARP_LOW_VAR, SHARP_HIGH_VAR);
+  if (nativeGrid) out.sharpness = sharpnessLevel(laplacianVariance(nativeGrid));
   if (grid) {
     // Exposure is a problem level: low = fine, high = mostly clipped.
     out.exposure = level(clippedShare(grid), EXPOSURE_MEDIUM, EXPOSURE_HIGH);

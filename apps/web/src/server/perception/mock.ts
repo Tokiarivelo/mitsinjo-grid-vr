@@ -242,7 +242,10 @@ export class MockPerceptionBackend implements PerceptionBackend {
     return {
       model: MOCK_PERCEPTION_MODEL,
       usage: {},
-      result: { detections: MOCK_DETECTIONS.map((d) => ({ ...d, box: { ...d.box } })) },
+      result: {
+        detections: MOCK_DETECTIONS.map((d) => ({ ...d, box: { ...d.box } })),
+        imageType: 'photo',
+      },
     };
   }
 

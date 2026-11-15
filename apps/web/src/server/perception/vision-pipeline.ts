@@ -1,8 +1,12 @@
 import type { ApplianceDetection } from '@/lib/vision';
-import { formatDuration } from '@/lib/object-shape';
+import { formatDuration, type PhotoConditions } from '@/lib/object-shape';
 import type { VisionImage } from '@/server/storage/media';
 import type { PerceptionClient } from './client';
 import { refineDetections } from './outline';
+import { laplacianVariance, sharpnessLevel } from './photo-conditions';
+import type { PhotoForRegions } from './region';
+import { routeImage, type ImageRoute } from './routing';
+import { sampleNativeGray } from './shape-colors';
 
 export type VisionEmit = (
   event: 'vision_detections' | 'vision_regions' | 'vision_error',
@@ -10,8 +14,29 @@ export type VisionEmit = (
 ) => void;
 
 /**
+ * Size + sharpness of the whole frame (PQ-T47): only what the refusal needs. Null without pixels
+ * or when the sample fails (the refusal then carries the generic cause).
+ */
+async function wholePhotoConditions(
+  photo: PhotoForRegions | null
+): Promise<PhotoConditions | null> {
+  if (!photo) return null;
+  try {
+    const grid = await sampleNativeGray(photo, { x: 0, y: 0, w: 1, h: 1 });
+    return {
+      widthPx: photo.width,
+      heightPx: photo.height,
+      sharpness: sharpnessLevel(laplacianVariance(grid)),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Photo → appliances (PV-T6). Emits `vision_detections` twice: `phase: 'boxes'` as soon as Muse
  * answers, then `phase: 'outlines'` once SAM refined them (Meta only; the mock fixture is final).
+ * Nothing listed → the boxes event also carries the routed refusal (`route`, PQ-T47 §4.2).
  * Hosted link first; on a Meta failure the inline photo is tried once. Never throws: an unexpected
  * error becomes `vision_error`.
  */
@@ -19,7 +44,8 @@ export async function runVisionPipeline(
   perception: Pick<PerceptionClient, 'detectAppliances' | 'segmentImage'>,
   image: string | VisionImage,
   emit: VisionEmit,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  photo: PhotoForRegions | null = null
 ): Promise<void> {
   const { url, inlineUrl } =
     typeof image === 'string' ? { url: image, inlineUrl: undefined } : image;
@@ -40,9 +66,21 @@ export async function runVisionPipeline(
       model: found.model,
       ...(found.fallback ? { fallback: found.fallback } : {}),
     };
+    // PQ-T47 (§4.2 last row): nothing listed → motivated refusal, cause measured on the frame.
+    let route: ImageRoute | null = null;
+    if (found.detections.length === 0) {
+      route = routeImage({
+        detections: 0,
+        conditions: await wholePhotoConditions(photo),
+        ...(found.imageType ? { imageKind: found.imageType } : {}),
+      });
+      console.info(`[vision] detections refused: ${route.cause}`);
+    }
     emit('vision_detections', {
       phase: 'boxes',
       detections: found.detections,
+      ...(found.imageType ? { imageType: found.imageType } : {}),
+      ...(route ? { route } : {}),
       ms: boxesMs,
       ...source,
     });
