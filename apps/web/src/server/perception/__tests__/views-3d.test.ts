@@ -313,6 +313,7 @@ describe.runIf(
         tyre: '#222222',
         rim: '#c8c8c8',
         under: '#6b4f2a',
+        mirror: '#b04fc4',
       };
       const atlasUrl = recipe.faces?.atlas;
       const decodedAtlas = atlasUrl

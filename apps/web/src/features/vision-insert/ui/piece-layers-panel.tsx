@@ -31,6 +31,7 @@ const PIECE_KEYS = new Set([
   'tyre',
   'rim',
   'under',
+  'mirror',
   'painted',
 ]);
 const MATERIALS = new Set<string>(RECIPE_MATERIALS);

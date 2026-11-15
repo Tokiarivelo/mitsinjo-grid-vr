@@ -17,7 +17,7 @@ import type { CarReading } from './car-tools';
 /**
  * The car fitted on its drawings (PQ-T76), pure. The pixels decide every shape: the body's profile
  * is the side silhouette (top and underside per station, wheel arches cut over the measured
- * wheels), its cross-section the front silhouette (mirrors capped), its taper the view from above.
+ * wheels), its cross-section the front silhouette (the mirrors' rows left out), its taper the view from above.
  * The team's reading only adds what pixels cannot name: the windows (converted into the model's
  * frame, kept inside the silhouette), the kind, and where to sample the paint and the glass.
  *
@@ -99,13 +99,23 @@ export function fitProfile(
 }
 
 /**
- * Half-width per level on the front (share of the width, ground → top). Rows of the upper half are
- * capped at the widest row of the lower half: wing mirrors stick out there, the body does not.
+ * Half-width per level on the front (share of the width, ground → top). The rows the wing mirrors
+ * take (`skip`, from `fitMirrors`) read the body across them: the line between the rows just
+ * above and just below. Rows of the upper half stay capped at the widest row of the lower half.
  */
-export function fitSection(front: GridView, levels = CAR_LEVELS): number[] | null {
-  const width = (r: number) => {
+export function fitSection(
+  front: GridView,
+  levels = CAR_LEVELS,
+  skip: readonly [number, number] | null = null
+): number[] | null {
+  const drawn = (r: number) => {
     const s = rowSpan(front, r);
     return s ? (s[1] - s[0] + 1) / front.cols : 0;
+  };
+  const width = (r: number) => {
+    if (!skip || r < skip[0] || r > skip[1]) return drawn(r);
+    const [a, b] = [Math.max(0, skip[0] - 1), Math.min(front.rows - 1, skip[1] + 1)];
+    return drawn(a) + ((drawn(b) - drawn(a)) * (r - a)) / Math.max(1, b - a);
   };
   let low = 0;
   for (let r = Math.floor(front.rows / 2); r < front.rows; r++) low = Math.max(low, width(r));
@@ -143,10 +153,11 @@ export function fitCarBody(
   side: GridView,
   front: GridView | null,
   top: GridView | null,
-  wheels: ReadonlyArray<CarWheel>
+  wheels: ReadonlyArray<CarWheel>,
+  mirrorRows: readonly [number, number] | null = null
 ): CarBody | null {
   const profile = fitProfile(side, wheels);
-  const half = front ? fitSection(front) : null;
+  const half = front ? fitSection(front, CAR_LEVELS, mirrorRows) : null;
   if (!profile || !half) return null;
   const taper = top ? fitTaper(top, profile.z0, profile.z1) : null;
   return { ...profile, half, ...(taper ? { taper } : {}) };

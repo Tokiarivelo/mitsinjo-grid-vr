@@ -93,7 +93,7 @@ function slice(src: THREE.BufferGeometry, start: number, count: number): THREE.B
  * each wheel face is a piece of its own (`glass-1`, `tyre-3`…), so one window moves without the
  * others. The body's surfaces stay one piece each.
  */
-export const CAR_ITEM_SLOTS: ReadonlySet<string> = new Set(['glass', 'tyre', 'rim']);
+export const CAR_ITEM_SLOTS: ReadonlySet<string> = new Set(['glass', 'tyre', 'rim', 'mirror']);
 /** Past this many separate things in a slot it stays one piece (a shattered slot is not a list). */
 export const ITEMS_MAX = 12;
 /** Vertices closer than this (model units) are one: triangles sharing one are the same thing. */

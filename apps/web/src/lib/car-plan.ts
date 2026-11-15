@@ -50,7 +50,7 @@ export const CAR_LEVELS = 32;
 /**
  * The body measured on the drawings (PQ-T76): its profile on the side (top and underside per
  * station, back → front, the wheel arches cut out), its cross-section on the front (half-width per
- * level, ground → top, the mirrors left out) and, from the view from above, how the width narrows
+ * level, ground → top, the mirrors left out: they are `CarPlan.mirrors`) and, from the view from above, how the width narrows
  * toward the nose and the tail (1 = full width).
  */
 export const CarBodySchema = z.object({
@@ -80,6 +80,23 @@ export const CarWindowSchema = z.object({
 });
 export type CarWindow = z.infer<typeof CarWindowSchema>;
 
+/** Levels of a wing mirror's outline, bottom → top. */
+export const CAR_MIRROR_LEVELS = 8;
+
+/**
+ * The wing mirrors measured on the front drawing (PQ-T80): the bump they make on its outline, the
+ * same on both sides. `reach` is how far the outline stands from the car's centre line at each
+ * level from `y0` to `y1` (share of the box width, 0–0.5).
+ */
+export const CarMirrorSchema = z.object({
+  /** Where the mirrors stand along the car (their middle), back (0) → front (1). */
+  z: share,
+  y0: share,
+  y1: share,
+  reach: z.array(z.number().min(0).max(0.5)).min(2).max(32),
+});
+export type CarMirror = z.infer<typeof CarMirrorSchema>;
+
 export const CarPlanSchema = z.object({
   kind: z.enum(CAR_KINDS).optional(),
   /** Axles back → front, as measured on the profile. */
@@ -92,6 +109,8 @@ export const CarPlanSchema = z.object({
   body: CarBodySchema.optional(),
   /** Windows read by the car team, in the model's frame (glass slot). */
   windows: z.array(CarWindowSchema).max(24).optional(),
+  /** The wing mirrors, one on each side (mirror slot); absent when the front shows none. */
+  mirrors: CarMirrorSchema.optional(),
   /** Colours measured on the drawings. */
   look: z
     .object({

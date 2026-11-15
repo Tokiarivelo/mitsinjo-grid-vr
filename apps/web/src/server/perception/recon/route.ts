@@ -526,6 +526,9 @@ export async function reconstructObject(
         reading,
       });
       if (car) recipe.car = car;
+      // A fitted body is a share of the whole front drawing, mirrors included (PQ-T80): the box
+      // takes the drawing's full width, or the body would be narrowed twice.
+      if (car?.body) recipe.proportions = profileProportions(recon.aligned.aspects);
       console.info(
         `${tag}: car ${car ? `${car.kind ?? 'kind ?'}, body ${car.body ? car.body.top.length : 0} stations, ${car.windows?.length ?? 0} windows, ${car.wheels.length} axles (${car.wheels.map((w) => `z ${w.z} r ${w.r}`).join(', ')}), clearance ${car.clearance ?? '?'}, track ${car.track ? `${car.track.x0}–${car.track.x1}` : '?'}` : 'not measured'}`
       );

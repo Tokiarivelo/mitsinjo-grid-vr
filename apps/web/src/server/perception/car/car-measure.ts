@@ -4,13 +4,15 @@ import type { CarPlan } from '@/lib/car-plan';
 import { sharpView } from '../house/house-specialist';
 import type { AlignedViews, GridView, ViewFrame, ViewName } from '../recon/views';
 import { applyCarReading, fitCarBody } from './car-fit';
+import { fitMirrors, mirrorStation } from './car-mirrors';
 import type { CarReading } from './car-tools';
 import { dropShadow, measureCar } from './car-wheels';
 
 /**
  * The measured car plan (PQ-T76): the profile and the front cut from their validated drawings at
  * their own resolution (square cells, about `CAR_MEASURE_ROWS` rows: the reading grid's 128 rows
- * leave a tyre's lower arc a few cells high), then `measureCar`. Never throws: null = no plan.
+ * leave a tyre's lower arc a few cells high), then `measureCar`, the wing mirrors (`fitMirrors`) and
+ * the body without them. Never throws: null = no plan.
  */
 
 /** Rows of the sharp views the wheels are measured on. */
@@ -50,14 +52,19 @@ export async function measureCarPlan(
     const front = sharpFront && frontFrame ? dropShadow(sharpFront, frontFrame.paper) : null;
     const measured = measureCar(side, front);
     if (!measured) return null;
-    const body = fitCarBody(side, front, top, measured.wheels);
+    // The wing mirrors first: their rows of the front are not the body's.
+    const mirrors = front ? fitMirrors(front) : null;
+    const body = fitCarBody(side, front, top, measured.wheels, mirrors?.rows ?? null);
     const plan: CarPlan = { ...measured, ...(body ? { body } : {}) };
     const mirrored = Object.fromEntries(
       (['front', 'right', 'back', 'left'] as const).flatMap((v) =>
         aligned.frames[v] ? [[v, aligned.frames[v]!.mirrored]] : []
       )
     );
-    return applyCarReading(plan, reading, side, mirrored);
+    const read = applyCarReading(plan, reading, side, mirrored);
+    // They stand at the front corner of the side glass the team read, else where the cabin rises.
+    const z = mirrors && body ? mirrorStation(read, mirrors.outline) : null;
+    return mirrors && z !== null ? { ...read, mirrors: { z, ...mirrors.outline } } : read;
   } catch (err) {
     console.warn('[vision] car measure failed:', err instanceof Error ? err.message : err);
     return null;

@@ -364,3 +364,39 @@ describe('ring parts (PQ-T78)', () => {
     for (const f of roof) expect(f.centre[1]!).toBeGreaterThan(0.65);
   });
 });
+
+describe('wing mirrors (PQ-T80)', () => {
+  /** Mirrors beside the cabin, reaching the edge of the box past a flank at 0.45. */
+  const mirrors = { z: 0.6, y0: 0.6, y1: 0.7, reach: [0.47, 0.5, 0.5, 0.47] };
+
+  it('builds one closed piece on each side, standing out of the flank', () => {
+    const m = carMesh({ ...plan, mirrors }, dims)!;
+    const own = faces(m).filter((f) => f.slot === 'mirror');
+    expect(own.length).toBeGreaterThan(40);
+    for (const sx of [1, -1]) {
+      const side = own.filter((f) => (f.centre[0]! - 0.5) * sx > 0);
+      expect(side).toHaveLength(own.length / 2);
+      const xs = side.map((f) => Math.abs(f.centre[0]! - 0.5));
+      // From the flank to the tip measured on the front, at the mirror's height and station.
+      expect(Math.min(...xs)).toBeLessThan(0.46);
+      expect(Math.max(...xs)).toBeGreaterThan(0.48);
+      expect(Math.max(...xs)).toBeLessThanOrEqual(0.5 + 1e-6);
+      for (const f of side) {
+        expect(f.centre[1]!).toBeGreaterThan(0.59);
+        expect(f.centre[1]!).toBeLessThan(0.71);
+        expect(Math.abs(f.centre[2]! - 0.6)).toBeLessThan(0.03);
+      }
+      // The tip is closed: faces turned straight out.
+      expect(side.some((f) => f.normal[0]! * sx > 0.95)).toBe(true);
+    }
+    // The rest of the car is unchanged.
+    const bare = carMesh(plan, dims)!;
+    expect(m.slot.length - own.length).toBe(bare.slot.length);
+  });
+
+  it('builds none without a measured mirror, or when it does not clear the flank', () => {
+    expect(slotCount(carMesh(plan, dims)!.slot).mirror).toBe(0);
+    const inside = { ...mirrors, reach: [0.44, 0.45, 0.45, 0.44] };
+    expect(slotCount(carMesh({ ...plan, mirrors: inside }, dims)!.slot).mirror).toBe(0);
+  });
+});

@@ -12,14 +12,15 @@ import { atlasUv, faceSlot, type AtlasView, type FaceView } from './face-atlas';
  * a crease (windscreen base, roof edge), so flat panels stay flat. Every triangle
  * reads the drawing that faces it (atlas uvs, `lib/face-atlas.ts`), so the model wears its
  * validated drawings; the windows the team read become the glass slot; a wheel's outer face reads
- * the drawn wheel. Shared by the 3D views, the village and the Blender export.
+ * the drawn wheel; the wing mirrors measured on the front stand out of the flanks as their own
+ * pieces (PQ-T80). Shared by the 3D views, the village and the Blender export.
  *
  * Frame as `lib/house-mesh.ts`: centred, x right as seen from the front, y up, z toward the front.
  */
 
 /**
  * Slots: the five drawn surfaces first (`HULL_SURFACES` order: the surface editor picks them),
- * then the glass, the tyres, the wheel faces (rims) and the underside.
+ * then the glass, the tyres, the wheel faces (rims), the underside and the wing mirrors.
  */
 export const CAR_SLOTS = [
   'roof',
@@ -31,6 +32,7 @@ export const CAR_SLOTS = [
   'tyre',
   'rim',
   'under',
+  'mirror',
 ] as const;
 export type CarSlot = (typeof CAR_SLOTS)[number];
 
@@ -100,6 +102,15 @@ export const AXLE_SEGMENTS = 12;
 /** A station this close to a wheel's span (share of its radius) is over the wheel. */
 export const ARCH_MARGIN = 1.08;
 export const DEFAULT_TRACK_SHARE = 0.94;
+/** A wing mirror: stations from the flank to its tip, and segments round each. */
+export const MIRROR_RINGS = 6;
+export const MIRROR_SEGMENTS = 10;
+/** Its depth along the car over its height; its arm's share of that depth; its flat back's. */
+export const MIRROR_DEPTH = 1.1;
+export const MIRROR_ARM = 0.5;
+export const MIRROR_BACK = 0.4;
+/** It starts this far inside the flank (share of the width) and must stand out by as much. */
+export const MIRROR_ROOT = 0.01;
 
 type V3 = [number, number, number];
 const sub = (a: V3, b: V3): V3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
@@ -708,6 +719,94 @@ export function carMesh(
         });
       }
     }
+
+  // ---------------------------------------------------------------- wing mirrors
+  const mirror = plan.mirrors;
+  if (mirror && mirror.y1 > mirror.y0) {
+    const at = Math.round(((mirror.z - body.z0) / Math.max(1e-6, body.z1 - body.z0)) * (N - 1));
+    const i = Math.max(0, Math.min(N - 1, at));
+    const mid = Math.min((mirror.y0 + mirror.y1) / 2, body.top[i]!);
+    const root = section(body.top[i]!, mid) * taperAt(i) - MIRROR_ROOT;
+    const reach = mirror.reach;
+    const tip = Math.max(...reach);
+    const L = reach.length;
+    const yAt = (j: number) => mirror.y0 + ((mirror.y1 - mirror.y0) * j) / (L - 1);
+    /** The heights between which the outline reaches `x` from the centre line. */
+    const spanAt = (x: number): [number, number] => {
+      const edge = (from: number, step: 1 | -1) => {
+        for (let j = from; j >= 0 && j < L; j += step) {
+          if (reach[j]! < x) continue;
+          const p = j - step;
+          if (p < 0 || p >= L || reach[j] === reach[p]) return yAt(j);
+          return yAt(p) + (yAt(j) - yAt(p)) * clamp01((x - reach[p]!) / (reach[j]! - reach[p]!));
+        }
+        return yAt(reach.indexOf(tip));
+      };
+      return [edge(0, 1), edge(L - 1, -1)];
+    };
+    const depth = ((mirror.y1 - mirror.y0) * h * MIRROR_DEPTH) / 2;
+    const face = { slot: 'mirror' as const, view: 'front' as UvView };
+    if (tip - root > 2 * MIRROR_ROOT)
+      for (const sx of [1, -1] as const) {
+        const loops: V3[][] = [];
+        const around: V3[][] = [];
+        for (let k = 0; k <= MIRROR_RINGS; k++) {
+          const u = k / MIRROR_RINGS;
+          const x = root + (tip - root) * u;
+          const [lo, hi] = spanAt(x);
+          const ry = Math.max(1e-5, ((hi - lo) * h) / 2);
+          // A thin arm at the flank, the housing from mid-way, rounded in at the tip.
+          const grow = clamp01(u / 0.5);
+          const rz =
+            depth *
+            (MIRROR_ARM + (1 - MIRROR_ARM) * grow * grow * (3 - 2 * grow)) *
+            (k < MIRROR_RINGS ? 1 : 0.6);
+          const loop: V3[] = [];
+          const ns: V3[] = [];
+          for (let s = 0; s < MIRROR_SEGMENTS; s++) {
+            const a = (2 * Math.PI * s) / MIRROR_SEGMENTS;
+            const [ca, sa] = [Math.cos(a), Math.sin(a)];
+            // The housing bulges toward the front of the car; its back (the glass) is flatter.
+            loop.push([
+              X(0.5 + sx * x),
+              Y((lo + hi) / 2) + ry * ca,
+              Z(mirror.z) + rz * sa * (sa < 0 ? MIRROR_BACK : 1),
+            ]);
+            ns.push(unit([sx * 0.4 * u * Math.hypot(ry, rz), ca * rz, sa * ry]));
+          }
+          loops.push(loop);
+          around.push(ns);
+        }
+        for (let k = 0; k < MIRROR_RINGS; k++)
+          for (let s = 0; s < MIRROR_SEGMENTS; s++) {
+            const q = (s + 1) % MIRROR_SEGMENTS;
+            const [A, B, C, D] = [
+              loops[k]![s]!,
+              loops[k + 1]![s]!,
+              loops[k + 1]![q]!,
+              loops[k]![q]!,
+            ];
+            const [nA, nB, nC, nD] = [
+              around[k]![s]!,
+              around[k + 1]![s]!,
+              around[k + 1]![q]!,
+              around[k]![q]!,
+            ];
+            tri([A, B, C], [nA, nB, nC], face);
+            tri([A, C, D], [nA, nC, nD], face);
+          }
+        // The tip, closed.
+        const end = loops[MIRROR_RINGS]!;
+        const c: V3 = [
+          end[0]![0],
+          end.reduce((sum, p) => sum + p[1], 0) / MIRROR_SEGMENTS,
+          end.reduce((sum, p) => sum + p[2], 0) / MIRROR_SEGMENTS,
+        ];
+        const out: V3 = [sx, 0, 0];
+        for (let s = 0; s < MIRROR_SEGMENTS; s++)
+          tri([c, end[s]!, end[(s + 1) % MIRROR_SEGMENTS]!], [out, out, out], face);
+      }
+  }
 
   return {
     position: new Float32Array(pos),
