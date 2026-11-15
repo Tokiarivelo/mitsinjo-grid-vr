@@ -332,7 +332,41 @@
       "panMode": "Fitaovana tanana: sintony hamindrana ny fijery",
       "panModeOff": "Miverina amin’ny fihodinana: sintony hampihodina ny fijery",
       "focusAppliance": "Asehoy ao amin’ny fijery 3D ny {name}",
-      "hint3dPan": "Tsindrio ny trano iray hijerena azy · Sintony hamindrana ny fijery · Ahodino ny kodiarana hanakaikezana"
+      "hint3dPan": "Tsindrio ny trano iray hijerena azy · Sintony hamindrana ny fijery · Ahodino ny kodiarana hanakaikezana",
+      "vrSector": {
+        "simulated": "ANGONA SIMULÉ · valin’ny motera",
+        "served": "Nomena {served} amin’ny {demand} nangatahina",
+        "coverage": "Fandrakofana {pct}",
+        "capNone": "Tsy misy fetra : araka ny paikady",
+        "capActive": "Fetra {kw} manomboka amin’ny {from} ora",
+        "capCut": "Tapaka : 0 kW manomboka amin’ny {from} ora",
+        "refusedClinic": "Nolavina : tsy tapahina mihitsy ny toeram-pitsaboana (lalàm-panorenan’ny tanàna)",
+        "less": "− {step}",
+        "more": "+ {step}",
+        "cut": "Tapaho daholo",
+        "restore": "Averina",
+        "enter": "Hiditra",
+        "door": "Mankany am-baravarana",
+        "exit": "Hivoaka",
+        "undo": "Foanana",
+        "close": "Hidiana ✕"
+      },
+      "vrControls": {
+        "legendTitleLeft": "Fanaraha-maso havia",
+        "legendTitleRight": "Fanaraha-maso havanana",
+        "legendTitleHand": "Tanana",
+        "legendTrigger": "Gâchette : misafidy (marika, trano, bokotra)",
+        "legendStickWalk": "Stick : mandeha (manakana ny rindrina)",
+        "legendStickTurn": "Stick ←/→ : mihodina · ↑/↓ : dingana iray",
+        "legendX": "X : aseho / afenina ny marika",
+        "legendY": "Y : miverina (manidy ny tontonana, mivoaka)",
+        "legendA": "A : aseho / afenina ny marika",
+        "legendB": "B : miverina (manidy ny tontonana, mivoaka)",
+        "legendStickPress": "Tsindrio ny stick : afenina ity fanampiana ity",
+        "legendPinch": "Tsongoy : misafidy marika, trano, bokotra",
+        "legendThumbTurn": "Ankihibe ←/→ : mihodina · ↑/↓ : dingana iray",
+        "legendThumbTap": "Kitiho ny ankihibe : aseho / afenina ny marika"
+      }
     },
     "strategyLab": {
       "title": "Paikady fizarana",
@@ -1475,7 +1509,7 @@
       "vrScanAnalyzingSub": "Ny IA no manoritra sy mamaritra ny zavatra tsirairay",
       "vrExtract": {
         "title": "Havoaka amin’ny 3D ve « {name} » ?",
-        "sub": "Ny IA aloha no manao ny sary 2D; hamarinao ireo, avy eo atao ny 3D.",
+        "sub": "Miditra ao amin’ny studio 3D ianao : ao ny IA no manao ny sary 2D, hamarinao ireo, avy eo atao ny 3D ary misokatra ao amin’ny labo.",
         "yes": "Avoahy amin’ny 3D",
         "no": "Foano",
         "building": "Manamboatra ny 3D an’i « {name} »",
@@ -1543,8 +1577,14 @@
         "turned": "Nitodika {direction}",
         "left": "havia",
         "right": "havanana",
-        "helpShown": "Miseho ny fanampiana : tsindrio ny stick hanafenana azy",
-        "helpHidden": "Miafina ny fanampiana : tsindrio ny stick hanehoana azy"
+        "helpShown": "Miseho ny fanampiana : tsindrio ny stick, na Menu › Fanampiana, hanafenana azy",
+        "helpHidden": "Miafina ny fanampiana : tsindrio ny stick, na Menu › Fanampiana, hanehoana azy",
+        "helpShow": "Asehoy ny fanampiana momba ny fanaraha-maso",
+        "helpHide": "Afeno ny fanampiana momba ny fanaraha-maso"
+      },
+      "vrStudio": {
+        "viewsTitle": "Manao ny sary 2D an’i « {name} »",
+        "buildSub": "Misokatra ho azy ny labo 3D raha vao vonona ny modely"
       }
     },
     "dispatch": {

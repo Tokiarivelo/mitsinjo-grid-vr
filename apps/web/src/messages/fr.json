@@ -332,7 +332,41 @@
       "panMode": "Outil main : glissez pour déplacer la vue",
       "panModeOff": "Revenir à la rotation : glissez pour pivoter la vue",
       "focusAppliance": "Montrer {name} dans la vue 3D",
-      "hint3dPan": "Cliquez sur un bâtiment pour l’inspecter · Glissez pour déplacer la vue · Molette pour zoomer"
+      "hint3dPan": "Cliquez sur un bâtiment pour l’inspecter · Glissez pour déplacer la vue · Molette pour zoomer",
+      "vrSector": {
+        "simulated": "DONNÉES SIMULÉES · résultat du moteur",
+        "served": "Servi {served} sur {demand} demandés",
+        "coverage": "Couverture {pct}",
+        "capNone": "Sans limite : servi par la stratégie",
+        "capActive": "Limite {kw} dès {from} h",
+        "capCut": "Coupé : 0 kW dès {from} h",
+        "refusedClinic": "Refusé : la clinique n’est jamais coupée (constitution du village)",
+        "less": "− {step}",
+        "more": "+ {step}",
+        "cut": "Couper tout",
+        "restore": "Rétablir",
+        "enter": "Entrer",
+        "door": "Aller à la porte",
+        "exit": "Sortir",
+        "undo": "Annuler",
+        "close": "Fermer ✕"
+      },
+      "vrControls": {
+        "legendTitleLeft": "Manette gauche",
+        "legendTitleRight": "Manette droite",
+        "legendTitleHand": "Mains",
+        "legendTrigger": "Gâchette : sélectionner (étiquette, bâtiment, bouton)",
+        "legendStickWalk": "Stick : marcher (les murs vous arrêtent)",
+        "legendStickTurn": "Stick ←/→ : pivoter · ↑/↓ : un pas",
+        "legendX": "X : afficher / masquer les étiquettes",
+        "legendY": "Y : retour (fermer le panneau, sortir)",
+        "legendA": "A : afficher / masquer les étiquettes",
+        "legendB": "B : retour (fermer le panneau, sortir)",
+        "legendStickPress": "Clic sur un stick : masquer cette aide",
+        "legendPinch": "Pincer : sélectionner une étiquette, un bâtiment, un bouton",
+        "legendThumbTurn": "Pouce glissé ←/→ : pivoter · ↑/↓ : un pas",
+        "legendThumbTap": "Tap du pouce : afficher / masquer les étiquettes"
+      }
     },
     "strategyLab": {
       "title": "Labo Stratégies",
@@ -1475,7 +1509,7 @@
       "vrScanAnalyzingSub": "L’IA contoure et décrit chaque objet",
       "vrExtract": {
         "title": "Extraire « {name} » en 3D ?",
-        "sub": "L’IA dessine d’abord ses vues 2D ; vous les validez, puis la 3D est construite.",
+        "sub": "Vous passez dans le studio 3D : l’IA y dessine ses vues 2D, vous les validez, puis la 3D est construite et s’ouvre dans le labo.",
         "yes": "Extraire en 3D",
         "no": "Annuler",
         "building": "Construction 3D de « {name} »",
@@ -1543,8 +1577,14 @@
         "turned": "Pivoté vers la {direction}",
         "left": "gauche",
         "right": "droite",
-        "helpShown": "Aide affichée : clic sur un stick pour la masquer",
-        "helpHidden": "Aide masquée : clic sur un stick pour l’afficher"
+        "helpShown": "Aide affichée : clic sur un stick, ou Menu › Aide, pour la masquer",
+        "helpHidden": "Aide masquée : clic sur un stick, ou Menu › Aide, pour l’afficher",
+        "helpShow": "Afficher l’aide des commandes",
+        "helpHide": "Masquer l’aide des commandes"
+      },
+      "vrStudio": {
+        "viewsTitle": "Dessin des vues 2D de « {name} »",
+        "buildSub": "Le labo 3D s’ouvre tout seul dès que le modèle est prêt"
       }
     },
     "dispatch": {

@@ -332,7 +332,41 @@
       "panMode": "Hand tool: drag to move the view",
       "panModeOff": "Back to orbit: drag to rotate the view",
       "focusAppliance": "Show {name} in the 3D view",
-      "hint3dPan": "Click a building to inspect · Drag to move the view · Scroll to zoom"
+      "hint3dPan": "Click a building to inspect · Drag to move the view · Scroll to zoom",
+      "vrSector": {
+        "simulated": "SIMULATED DATA · engine result",
+        "served": "Served {served} of {demand} asked",
+        "coverage": "Coverage {pct}",
+        "capNone": "No limit: served by the strategy",
+        "capActive": "Limit {kw} from {from}:00",
+        "capCut": "Cut: 0 kW from {from}:00",
+        "refusedClinic": "Refused: the clinic is never cut (village constitution)",
+        "less": "− {step}",
+        "more": "+ {step}",
+        "cut": "Cut all",
+        "restore": "Restore",
+        "enter": "Enter",
+        "door": "Go to the door",
+        "exit": "Go outside",
+        "undo": "Undo",
+        "close": "Close ✕"
+      },
+      "vrControls": {
+        "legendTitleLeft": "Left controller",
+        "legendTitleRight": "Right controller",
+        "legendTitleHand": "Hands",
+        "legendTrigger": "Trigger: select (label, building, button)",
+        "legendStickWalk": "Stick: walk (walls stop you)",
+        "legendStickTurn": "Stick ←/→: turn · ↑/↓: one step",
+        "legendX": "X: show / hide labels",
+        "legendY": "Y: back (close panel, leave room)",
+        "legendA": "A: show / hide labels",
+        "legendB": "B: back (close panel, leave room)",
+        "legendStickPress": "Click a stick: hide this help",
+        "legendPinch": "Pinch: select a label, building or button",
+        "legendThumbTurn": "Thumb swipe ←/→: turn · ↑/↓: one step",
+        "legendThumbTap": "Thumb tap: show / hide labels"
+      }
     },
     "strategyLab": {
       "title": "Strategy Lab",
@@ -1475,7 +1509,7 @@
       "vrScanAnalyzingSub": "The AI outlines and describes every object",
       "vrExtract": {
         "title": "Extract « {name} » in 3D?",
-        "sub": "The AI first draws its 2D views; you check them, then the 3D is built.",
+        "sub": "You go into the 3D studio: the AI draws its 2D views there, you check them, then the 3D is built and opens in the lab.",
         "yes": "Extract in 3D",
         "no": "Cancel",
         "building": "Building « {name} » in 3D",
@@ -1543,8 +1577,14 @@
         "turned": "Turned {direction}",
         "left": "left",
         "right": "right",
-        "helpShown": "Help shown: click a stick to hide it",
-        "helpHidden": "Help hidden: click a stick to show it"
+        "helpShown": "Help shown: click a stick, or Menu › Help, to hide it",
+        "helpHidden": "Help hidden: click a stick, or Menu › Help, to show it",
+        "helpShow": "Show the controls help",
+        "helpHide": "Hide the controls help"
+      },
+      "vrStudio": {
+        "viewsTitle": "Drawing the 2D views of « {name} »",
+        "buildSub": "The 3D lab opens by itself as soon as the model is ready"
       }
     },
     "dispatch": {

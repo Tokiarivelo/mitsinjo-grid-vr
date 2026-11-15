@@ -27,6 +27,11 @@ vi.mock('@react-three/drei', () => ({
   },
 }));
 
+// The XR buttons driver (VSIM-T1) reads live gamepads each frame: covered by xr-controls tests.
+vi.mock('@/features/vision-insert/ui/xr/xr-controls-driver', () => ({
+  XrControlsDriver: () => null,
+}));
+
 import {
   CAMERA_PRESETS,
   CameraController,

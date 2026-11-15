@@ -11,6 +11,8 @@ type Vec3 = [number, number, number];
  */
 export const MENU_SCAN_OFFSET: Vec3 = [0, 0.06, 0];
 export const MENU_GUIDE_OFFSET: Vec3 = [0, -0.25, 0];
+/** « Show the controls help » button, under the guide (Meta: let people recall the help). */
+export const MENU_HELP_OFFSET: Vec3 = [0, -0.37, 0];
 export const MENU_HUD_OFFSET: Vec3 = [-0.66, 0.06, 0.22];
 export const MENU_HUD_ROTATION: Vec3 = [-0.1, 0.55, 0];
 /** Ray-pick radius around the scan button (its panel is 0.62 × 0.38 m). */
@@ -107,3 +109,10 @@ export function slidePose(rel: number): { position: Vec3; yaw: number; focus: nu
     focus: Math.max(0, 1 - Math.abs(rel)),
   };
 }
+
+/**
+ * 3D studio (VS-T24): the generation column (progress card + miniature) on the right of the panel
+ * anchor, past the carousel's right neighbour, turned toward the viewer (~45° to the right).
+ */
+export const STUDIO_COLUMN_POSITION: Vec3 = [0.95, 0, 0.2];
+export const STUDIO_COLUMN_YAW = 0.8;

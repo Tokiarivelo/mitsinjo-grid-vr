@@ -66,18 +66,15 @@ Lorsque vous lancez l'immersion sur PC sans casque physique, l'émulateur **Meta
    - Les repères 3D au centre de votre vision (axes rouge = $X$, vert = $Y$, bleu = $Z$ et cubes transparents) représentent les positions des mains dans l'espace virtuel.
    - Vous pouvez basculer entre le mode Mains nues (_Hand Tracking_) et le mode Manettes (_Touch Controllers_) via les icônes de la barre d'outils supérieure de l'émulateur.
 
-2. **Marcher dans le village (Système de Locomotion) :**
-   Vous pouvez vous déplacer librement à pied sur les chemins de terre rouge du village :
-   - **Au clavier (PC) :**
-     - **Avancer :** Touche **`Z`** (clavier français AZERTY) ou **`W`** (clavier QWERTY) ou **`Flèche Haut`**.
-     - **Reculer :** Touche **`S`** ou **`Flèche Bas`**.
-     - **Pas latéral gauche (Strafe) :** Touche **`Q`** (AZERTY) ou **`A`** (QWERTY) ou **`Flèche Gauche`**.
-     - **Pas latéral droite :** Touche **`D`** ou **`Flèche Droite`**.
-     - **Courir / Vitesse accélérée :** Maintenir la touche **`Shift`**.
-   - **Aux manettes VR / Joysticks de l'émulateur :**
-     - **Joystick Gauche (Stick [L]) :** Pousser vers le haut pour avancer, vers le bas pour reculer, vers les côtés pour le pas latéral.
-     - **Joystick Droit (Stick [R]) :** Rotation horizontale fluide ou par paliers.
-   - **Suivi automatique du relief :** Pendant votre marche, vos pieds restent automatiquement collés au relief du sol (`terrainHeight`), que vous marchiez sur la place plate ou montiez vers les collines boisées.
+2. **Marcher dans le village (VSIM-T1/T2, mêmes commandes que `/village`) :**
+   - **Manettes :** stick gauche = marcher dans la direction du regard ; stick droit ←/→ = pivoter de 30° d'un
+     coup (autour de la tête, avec un petit son), ↑/↓ = un pas de 0,8 m. Plus de rotation continue (confort).
+   - **Mains :** pouce glissé ←/→ = pivoter, avant / arrière = un pas.
+   - **Clavier (PC) :** `Z`/`W`/`↑` avancer, `S`/`↓` reculer, `Q`/`A`/`←` et `D`/`→` de côté, `Shift` = courir.
+   - **On ne traverse plus les objets :** maisons, école, clinique, troncs d'arbres, panneaux, véhicules et
+     modèles posés arrêtent la marche ; on glisse le long des murs. Buissons, herbes et petits rochers se
+     traversent. Grille construite depuis la scène à l'entrée (`utils/walk-grid.ts`).
+   - **Suivi du relief :** les pieds restent collés au sol (`terrainHeight`).
 
 3. **Orienter le regard (Tourner la tête) :**
    - **Sur PC :** Cliquez dans la vue 3D avec le bouton gauche de la souris et glissez pour orienter la tête à 360°.
@@ -155,20 +152,34 @@ Baladez-vous dans les différents quartiers du village pour comparer leur statut
 
 ---
 
-## 5. Tableau récapitulatif des commandes
+## 5. Tableau récapitulatif des commandes (`/simulation`)
 
-| Action souhaitée                    | Sur PC (Clavier / DevUI)                                           | Sur Casque VR (Meta Quest)                   |
-| :---------------------------------- | :----------------------------------------------------------------- | :------------------------------------------- |
-| **Passer en vrai plein écran**      | Bouton « Plein écran » HUD + touche `F11`                          | Automatique à 360° dans le casque            |
-| **Lancer la session VR**            | Clic sur le bouton « Voir en VR » (lunettes)                       | Clic sur « Voir en VR » dans Quest Browser   |
-| **Marcher / Avancer / Reculer**     | Touches **`Z` / `S`** (AZERTY) ou **`W` / `S`** (QWERTY) / Flèches | Pousser / tirer le joystick gauche           |
-| **Pas latéraux (gauche/droite)**    | Touches **`Q` / `D`** (AZERTY) ou **`A` / `D`** (QWERTY)           | Déplacer le joystick gauche latéralement     |
-| **Courir / Accélérer**              | Maintenir **`Shift`**                                              | Pousser le joystick à fond                   |
-| **Tourner le regard**               | Déplacer la souris (clic gauche maintenu)                          | Tourner la tête librement à 360°             |
-| **Viser un bouton / cible 3D**      | Survol direct à la souris OU visée laser IWER                      | Viser avec le faisceau laser cyan            |
-| **Cliquer sur un bouton en l'air**  | Clic gauche souris OU `Alt` + Clic / `Espace` (IWER)               | Gâchette Index (Manette) ou Pincement (Main) |
-| **Tirer sur une cible / Raccorder** | Clic gauche souris OU gâchette IWER                                | Gâchette Index (Manette) ou Pincement (Main) |
-| **Quitter l'immersion VR**          | Clic sur **« Quitter la VR »**                                     | Bouton Oculus/Meta ou bouton Quitter         |
+Mêmes boutons que `/village` (§ 6) ; seul A/X change de rôle (pas d'analyse ici). Les légendes s'affichent
+au-dessus de chaque manette 25 s à l'entrée, puis d'un clic de stick.
+
+| Action                               | Manettes Meta Quest                  | Mains                        | PC (clavier / souris)           |
+| :----------------------------------- | :----------------------------------- | :--------------------------- | :------------------------------ |
+| **Marcher**                          | Stick gauche                         | —                            | `Z Q S D` / `W A S D` / flèches |
+| **Pivoter de 30°**                   | Stick droit ← / →                    | Pouce glissé ← / →           | Regard à la souris (émulateur)  |
+| **Un pas de 0,8 m**                  | Stick droit ↑ / ↓                    | Pouce glissé avant / arrière | —                               |
+| **Sélectionner** (étiquette, bouton) | Gâchette                             | Pincer                       | Clic gauche                     |
+| **Étiquettes du village**            | A / X                                | Tap du pouce                 | Balise flottante à l'entrée     |
+| **Retour**                           | B / Y : ferme le panneau, sinon sort | —                            | « Fermer ✕ » / « Sortir »       |
+| **Aide (légendes)**                  | Clic sur un stick                    | —                            | —                               |
+| **Quitter la VR**                    | Bouton Meta                          | Geste système                | « Quitter la VR »               |
+
+### Piloter l'énergie d'un bâtiment (VSIM-T3/T4)
+
+1. Visez l'étiquette d'un bâtiment (ou le bâtiment) et sélectionnez : un **panneau holographique** s'ouvre
+   devant vous avec ce que le moteur lui sert (kW servis / demandés, couverture) et sa limite.
+2. **« − 0,5 kW » / « + 0,5 kW »** : limite la puissance entrante de l'heure affichée à minuit ;
+   **« Couper tout »** : 0 kW ; **« Rétablir »** : plus de limite ; **« Annuler »** : défait le dernier changement.
+   Chaque action relance le moteur (limite de secteur, `sectorCaps`) : tout le village le voit.
+   La **clinique n'est jamais coupée** (constitution du village) : « Refusé ».
+3. **« Aller à la porte »** : vous place devant l'entrée. **« Entrer »** : vous êtes dans la pièce (maison,
+   classe, salle de soins, local pompe, étal, atelier) ; les lampes et appareils brillent selon la couverture,
+   tout s'éteint si on coupe. Le même panneau est au mur ; **« Sortir »**, la porte ou B/Y vous ramènent dehors.
+4. La limite porte sur le **secteur** (« Ménages » = toutes les maisons d'habitation), comme dans le moteur.
 
 ---
 
@@ -176,8 +187,9 @@ Baladez-vous dans les différents quartiers du village pour comparer leur statut
 
 Un seul principe partout : **on vise, on valide** (gâchette, pincement ou clic). Une **bulle ambre** près du
 bout du laser dit ce que fera la validation (« Gâchette · Extraire « Réfrigérateur » en 3D », « Pincer · Aller à
-Cuisine »…). Une **carte légende** au-dessus de chaque manette ou main liste ses boutons : affichée 25 s à
-l'entrée, puis rappelée d'un clic de stick.
+Cuisine »…). Une **carte légende** au-dessus de chaque manette ou main liste ses boutons : affichée 12 s à
+l'entrée, puis rappelée d'un clic de stick ou du bouton **Menu › « Afficher l'aide des commandes »** (Meta :
+laisser rappeler l'aide depuis un menu, VS-T24).
 
 ### 6.1 Manettes Touch
 
@@ -210,15 +222,21 @@ sinon le pincement suffit pour tout (bouton « Analyser », flèches au sol, men
 
 ### 6.3 Navigateur PC (souris, clavier, émulateur IWER)
 
-| Action                          | Comment                                                                               |
-| :------------------------------ | :------------------------------------------------------------------------------------ |
-| Viser / valider                 | Survol + **clic gauche** (sans casque, le plus simple)                                |
-| Marcher dans la visite 360°     | **↑ ↓ ← →**, **W A S D** ou **Z Q S D** (souris au-dessus de la scène)                |
-| Changer de lieu                 | Marcher sur la flèche au sol, ou la viser et valider                                  |
-| Manettes / mains de l'émulateur | Barre DevUI : bascule ✋ / 🎮 ; panneaux `Controller [L/R]` (A, B, X, Y, Trig, Stick) |
-| Bouger une manette              | Cliquer dessus → gizmo (flèches = déplacer, anneaux = tourner) ou champs Pos / Rot    |
+| Action                          | Comment                                                                                 |
+| :------------------------------ | :-------------------------------------------------------------------------------------- |
+| Viser / valider                 | Survol + **clic gauche**, aussi pendant la session émulée (bouton du poignet, panneaux) |
+| Marcher dans la visite 360°     | **↑ ↓ ← →**, **W A S D** ou **Z Q S D** (souris au-dessus de la scène)                  |
+| Changer de lieu                 | Marcher sur la flèche au sol, ou la viser et valider                                    |
+| Manettes / mains de l'émulateur | Barre DevUI : bascule ✋ / 🎮 ; panneaux `Controller [L/R]` (A, B, X, Y, Trig, Stick)   |
+| Bouger une manette              | Cliquer dessus → gizmo (flèches = déplacer, anneaux = tourner) ou champs Pos / Rot      |
 
 Sous Linux, `Alt + clic` est souvent pris par le bureau : utilisez le gizmo ou la souris directe.
+La DevUI d'IWER dessine son propre canvas plein écran par-dessus la scène : la souris est donc écoutée sur la
+page (un clic sur ce canvas vise la scène avec la caméra de l'œil XR) ; un clic sur un panneau HTML ou un glisser
+de gizmo ne tire jamais.
+Glisser le carrousel des vues ou tourner un modèle à la souris garde le geste pour lui : la DevUI (qui tourne
+le casque émulé quand on glisse dans le vide) ne reçoit rien, la vue reste fixe. Glisser dans le vide tourne
+toujours la vue.
 Pilotage scripté (MCP IWER ou `remote.dispatch`) : voir [`vr-iwer-tools.md`](vr-iwer-tools.md).
 
 ### 6.4 Déroulé type
@@ -227,8 +245,12 @@ Pilotage scripté (MCP IWER ou `remote.dispatch`) : voir [`vr-iwer-tools.md`](vr
    au-dessus de chaque objet de la partie visible (bande de 180° × 112°).
 2. Marcher : les contours restent **collés aux objets** (ils sont posés sur la photo, pas devant les yeux).
 3. **Viser un objet et valider** → « Extraire en 3D ? » → _Extraire_ / _Annuler_ (ou B/Y pour annuler).
-4. Valider les vues 2D dans le carrousel hologramme (glisser, flèches, ou viser une vue latérale), puis le **labo 3D** s'ouvre :
-   grip pour attraper / tourner, B/Y pour en sortir.
+4. **Studio 3D** (VS-T24) : dès « Extraire en 3D », la vue 360° laisse place au studio (dôme, grille, socle).
+   Au centre le carrousel des vues 2D (glisser, flèches, ou viser la vue voisine) ; **à droite** une colonne
+   hologramme liste la génération (chaque vue, puis chaque étape 3D avec ses secondes) au-dessus de l'objet en
+   **miniature** tournante sur un petit socle. « Valider et construire la 3D » → l'hologramme passe sur le socle
+   central ; le **labo 3D s'ouvre tout seul** au même endroit quand le modèle est prêt : grip pour attraper /
+   tourner, B/Y pour en sortir.
 
 ## 7. Confort visuel et prévention du vertige : Écran panoramique à focus plat (`/village`)
 
@@ -274,7 +296,7 @@ L'architecture du composant `<LiveWebcamBackdrop />` a été entièrement refond
 | Problème rencontré                                          | Explication                                                                                           | Action corrective                                                                                                                                        |
 | :---------------------------------------------------------- | :---------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **La scène reste dans une petite boîte centrale**           | Le mode plein écran automatique a été bloqué par la politique du navigateur (ex. iframe).             | Cliquez directement sur l'icône **« Plein écran »** dans la barre HUD en haut à droite du viewport 3D pour forcer le plein écran.                        |
-| **Je ne sais plus quel bouton fait quoi (`/village`)**      | Les légendes se masquent après 25 s.                                                                  | Cliquez un stick : les cartes légende réapparaissent au-dessus des manettes / mains.                                                                     |
+| **Je ne sais plus quel bouton fait quoi (`/village`)**      | Les légendes se masquent après 12 s.                                                                  | Cliquez un stick, ou Menu › « Afficher l'aide des commandes » : les cartes légende réapparaissent au-dessus des manettes / mains.                        |
 | **Mes touches clavier ne font pas bouger la caméra**        | Le curseur n'est pas verrouillé dans le mode FPS.                                                     | Cliquez sur **Play Mode** dans l'overlay DevUI, puis cliquez dans la fenêtre 3D pour verrouiller le pointeur.                                            |
 | **Le clavier avance de travers (clavier français AZERTY)**  | Les raccourcis par défaut de l'émulateur sont en QWERTY (WASD).                                       | Utilisez **W/A/S/D**, ou cliquez sur le menu de mapping clavier de DevUI pour réassigner **Z/Q/S/D**.                                                    |
 | **Le bouton « Voir en VR » n'apparaît pas**                 | WebXR requiert obligatoirement un contexte sécurisé (`localhost` ou HTTPS).                           | Vérifiez que l'URL commence bien par `http://localhost:...` ou `https://...`. En HTTP avec une adresse IP locale, WebXR est désactivé par le navigateur. |

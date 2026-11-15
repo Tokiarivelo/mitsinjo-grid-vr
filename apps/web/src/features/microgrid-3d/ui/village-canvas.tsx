@@ -69,6 +69,14 @@ import { FireEffects } from './fire-effects';
 import { WeatherEffects } from './weather-effects';
 import { BakedContactShadows, ResumeOnVisible, ShadowBake } from './render-control';
 import { ImmersionLabels } from './immersion-labels';
+import { SimXrSectorPanel } from './sim-xr-sector-panel';
+import { SimXrInterior } from './sim-xr-interior';
+import { SimXrDevProbe } from './sim-xr-dev-probe';
+import { useSimXr } from '../hooks/use-sim-xr';
+import { primeXrInputs } from '../utils/xr-hands';
+import { interiorPanelPose, simLegendKeys } from '../utils/sim-xr-place';
+import { sectorCapOf } from '../utils/sector-power';
+import { XrControlLegend } from '@/features/vision-insert/ui/xr/xr-control-hints';
 import { VillageScenePlaceholder } from './scene-placeholder';
 import { CanvasCreationBoundary } from './canvas-creation-boundary';
 
@@ -351,6 +359,9 @@ function CelestialLighting({
   );
 }
 
+/** Stable pose of the power panel inside a room (no re-placement on each render). */
+const INTERIOR_PANEL_POSE = interiorPanelPose();
+
 /** Trees are cleared a bit past the yard so their canopies don't hang over it. */
 const TREE_CANOPY_MARGIN = 0.8;
 /** Smallest drawn yard (scene units): the red ground must show around a small object. */
@@ -407,6 +418,9 @@ export function VillageCanvas({
   const tDispatch = useTranslations('features.dispatch');
   const aiInControl = useSimulationStore((s) => s.dispatchMode === 'autonomous');
   const feeders = useFeederLabels(model);
+  // VR: label / building click → power panel, room, door teleports, controls (VSIM-T1–T4).
+  const simXr = useSimXr({ xrActive, model, onSelectSector });
+  const xrSector = simXr.inside ?? simXr.panel;
 
   const reducedMotion = useReducedMotion();
   // A modified scenario shows the last result frozen: no flow animation.
@@ -552,6 +566,7 @@ export function VillageCanvas({
           onCreated={({ gl, get, scene, camera }) => {
             contextLoss.attach(gl.domElement, () => get().internal.active);
             if (rendererRef) rendererRef.current = gl;
+            primeXrInputs(gl);
             setWarmTarget({ gl, scene, camera });
           }}
           className={cn(
@@ -663,7 +678,7 @@ export function VillageCanvas({
           <VillageBuildings
             buildings={model.buildings}
             selectedSector={selectedSector}
-            onSelectSector={onSelectSector}
+            onSelectSector={simXr.selectSector}
             sectorNames={sectorNames}
             priorityLabels={priorityLabels}
             disconnectedLabel={tDiagram('status.disconnected')}
@@ -677,10 +692,57 @@ export function VillageCanvas({
             <ImmersionLabels
               model={model}
               selectedSector={selectedSector}
-              onSelectSector={onSelectSector}
+              onSelectSector={simXr.selectSector}
               sectorNames={sectorNames}
               priorityLabels={priorityLabels}
               xrActive={xrActive}
+              showLabels={xrActive ? simXr.labels : undefined}
+              onToggleLabels={xrActive ? simXr.toggleLabels : undefined}
+            />
+          )}
+
+          {xrActive && simXr.inside && (
+            <SimXrInterior
+              sector={simXr.inside}
+              servedKw={model.buildings[simXr.inside].servedKw}
+              coveragePct={model.buildings[simXr.inside].coveragePct}
+              onExit={simXr.exit}
+            />
+          )}
+          {xrActive && xrSector && (
+            <SimXrSectorPanel
+              sector={xrSector}
+              building={model.buildings[xrSector]}
+              cap={sectorCapOf(simXr.caps, xrSector)}
+              inside={simXr.inside === xrSector}
+              refused={simXr.refused === xrSector}
+              canUndo={simXr.canUndo}
+              pose={simXr.inside ? INTERIOR_PANEL_POSE : undefined}
+              onPower={(action) => simXr.power(xrSector, action)}
+              onEnter={() => simXr.enter(xrSector)}
+              onDoor={() => simXr.goToDoor(xrSector)}
+              onExit={simXr.exit}
+              onUndo={simXr.undo}
+              onClose={() => simXr.setPanel(null)}
+            />
+          )}
+          {xrActive && process.env.NODE_ENV !== 'production' && (
+            <SimXrDevProbe
+              state={{
+                panel: simXr.panel,
+                inside: simXr.inside,
+                labels: simXr.labels,
+                help: simXr.help,
+                refused: simXr.refused,
+              }}
+              walkGridRef={simXr.walkGridRef}
+            />
+          )}
+          {xrActive && (
+            <XrControlLegend
+              visible={simXr.help}
+              namespace="features.simulation.vrControls"
+              keysFor={simLegendKeys}
             />
           )}
 
@@ -701,6 +763,9 @@ export function VillageCanvas({
             preset={cameraPreset}
             resetKey={cameraResetKey}
             xrActive={xrActive}
+            xrPlace={simXr.place}
+            onXrAction={simXr.onXrAction}
+            walkGridRef={simXr.walkGridRef}
             focusSector={selectedSector}
             focusPoint={model.appliances.find((a) => a.id === focusApplianceId)?.position ?? null}
             panMode={panMode}

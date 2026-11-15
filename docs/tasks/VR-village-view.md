@@ -77,6 +77,24 @@ contrôleur dans ce lot (lot suivant).
   - [x] Tests `context-loss-hook` (cycle création) + `canvas-creation-boundary` (throw → null + report)
   - [x] **Done when** : `typecheck` 0 erreur, lint 0 erreur, tests ciblés verts.
 
+## Commandes /village, murs, pouvoir sur chaque bâtiment (VSIM-T1 → T4)
+
+- [x] **VSIM-T1** Mêmes commandes que `/village` (carte `xr-controls.ts` partagée, `XrControlsDriver`) :
+      stick gauche = marcher, stick droit ←/→ = pivot 30° autour de la tête (`turnRigAboutHead`), ↑/↓ = pas de
+      0,8 m · A/X = étiquettes · B/Y = retour (fermer le panneau, sortir de la pièce) · clic de stick = légendes
+      (sur chaque manette, 25 s à l'entrée) · mains : pincer, gestes de pouce. Plus de rotation continue.
+- [x] **VSIM-T2** On ne traverse plus les objets 3D : grille d'occupation (`utils/walk-grid.ts`) construite à
+      l'entrée depuis les vrais triangles de la scène (bande 0,35–1,8 m au-dessus du sol), reconstruite après 3 s ;
+      la marche glisse le long des murs, n'enferme jamais (départ dans un mur = libre).
+- [x] **VSIM-T3** Clic sur l'étiquette (ou le bâtiment) en VR → panneau holo : servi / demandé / couverture
+      (moteur), « − / + 0,5 kW », « Couper tout » / « Rétablir », « Entrer », « Aller à la porte », « Annuler ».
+      Limite de secteur (`sectorCaps`, de l'heure affichée à 24 h) via `approveChange` (annulable) ; la clinique
+      n'est jamais coupée (`clinicGuard` + constitution) → « Refusé ».
+- [x] **VSIM-T4** « Entrer » → pièce modélisée du secteur (maison, classe, salle de soins, local pompe, étal,
+      atelier) : lampes et appareils éclairés selon la couverture du moteur (noir si coupé), panneau au mur,
+      murs qui retiennent, porte / « Sortir » / B-Y → devant la porte.
+- [x] **Done when :** `make vr-sim-probe` vert ; tests `sim-xr-walk`, `sector-power`, `use-sim-xr` ; i18n EN/FR/MG.
+
 ## Notes de vérification (2026-11-06)
 
 - `metavr ssim` (SpatialSim) écarté avec preuves : doc Meta « for 2D Android apps

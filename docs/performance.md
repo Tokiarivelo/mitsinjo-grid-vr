@@ -130,6 +130,14 @@ them after mount (re-targeting races React root unmounts and can leave a label e
 - Vercel: copilot route `runtime = 'nodejs'`, `maxDuration = 30`.
 - Docker Compose (`compose.yaml` + `Dockerfile`, `make docker-up` / `docker-down` / `docker-logs`): one `web` service, `pnpm install --frozen-lockfile` → `next build` → `next start` on :3000 (host `HOST_PORT`, default 3000), healthcheck on `/overview`; root `.env` optional, `LLM_PROVIDER=mock` without it.
 
+## /simulation VR walk & building panel (VSIM-T1–T4)
+
+- Walk grid: built once on XR entry (and once more after 3 s for late meshes) by sampling every solid triangle
+  inside the 0.35–1.8 m slab into a 0.25 m `Uint8Array` (528² cells, ≈ 280 kB); short scattered instances
+  (< 1.2 m: bushes, grass, rocks) skipped. Per frame: ≤ 9 cell reads per move, no allocation.
+- Power panel: 1 info plane + ≤ 7 button planes, cached `holoCardTexture` (redrawn only when engine numbers or
+  labels change). Room: ≈ 15 boxes/planes + 1 point light, mounted only while inside.
+
 ## /village 360° tour (VS-T14)
 
 - Photos 4K (4096×2048 JPEG, sans mipmaps à cause de la couture u) : seules la pièce courante et ses voisines restent en mémoire GPU, les autres sont `dispose()`.

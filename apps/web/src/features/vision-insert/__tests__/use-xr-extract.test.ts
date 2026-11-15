@@ -135,7 +135,35 @@ describe('useXrExtract (VS-T19–T22)', () => {
     expect(result.current.stage).toBe('build');
   });
 
-  it('skips the views when the model is already built, then opens the lab', () => {
+  it('opens the lab by itself when the build finishes', () => {
+    facade.state = {
+      status: 'ready',
+      facade: { imageUrl: 'data:image/png;base64,F', fileKey: 'k-front' },
+    };
+    let shape: Parameters<typeof useXrExtract>[0]['shape'] = { status: 'loading' };
+    const r = renderHook(
+      (props: { target: ShapeRequest | null }) =>
+        useXrExtract({
+          imageUrl: 'data:image/jpeg;base64,PHOTO',
+          target: props.target,
+          shape,
+          requestShape: vi.fn(),
+          editPieces: vi.fn(),
+          select: vi.fn(),
+        }),
+      { initialProps: { target: null as ShapeRequest | null } }
+    );
+    act(() => r.result.current.ask('det-1'));
+    r.rerender({ target: fridge });
+    act(() => r.result.current.confirm());
+    act(() => r.result.current.build());
+    expect(r.result.current.stage).toBe('build');
+    shape = { status: 'ready', shape: { detectionId: 'det-1', mode: 'recipe' } as never };
+    r.rerender({ target: fridge });
+    expect(r.result.current.stage).toBe('lab');
+  });
+
+  it('skips the views when the model is already built and opens the lab by itself', () => {
     const { result, rerender } = setup({
       status: 'ready',
       shape: { detectionId: 'det-1', mode: 'recipe' } as never,
@@ -144,10 +172,9 @@ describe('useXrExtract (VS-T19–T22)', () => {
     rerender({ target: fridge });
     expect(result.current.ready).toBe(true);
     act(() => result.current.confirm());
-    expect(result.current.stage).toBe('build');
-    expect(facade.generate).not.toHaveBeenCalled();
-    act(() => result.current.enterLab());
+    // Already built: straight into the lab, no « Enter the lab » press.
     expect(result.current.stage).toBe('lab');
+    expect(facade.generate).not.toHaveBeenCalled();
     act(() => result.current.exitLab());
     expect(result.current.stage).toBe('idle');
   });

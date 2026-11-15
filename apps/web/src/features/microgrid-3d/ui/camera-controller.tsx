@@ -14,6 +14,21 @@ import {
 import { SECTOR_POSITIONS } from '../utils/to-scene-model';
 import { terrainHeight } from '../utils/landscape';
 import { setupXRHandsAndControllers, type XRHandsHandle } from '../utils/xr-hands';
+import { buildWalkGrid, resolveWalk, type WalkGrid } from '../utils/walk-grid';
+import {
+  clampToInterior,
+  INTERIOR_ORIGIN,
+  turnRigAboutHead,
+  type XrSpot,
+} from '../utils/sim-xr-place';
+import {
+  isWalkStick,
+  SNAP_TURN,
+  STEP_DISTANCE,
+  type XrControlAction,
+} from '@/features/vision-insert/ui/xr/xr-controls';
+import { XrControlsDriver } from '@/features/vision-insert/ui/xr/xr-controls-driver';
+import { playSnapSound } from '@/features/vision-insert/ui/xr/xr-audio-fx';
 import * as THREE from 'three';
 import type { CameraPreset } from '../types';
 
@@ -78,7 +93,26 @@ export interface CameraControllerProps {
   damping?: boolean;
   /** An XR session is presenting: orbit input off, camera on `XR_VIEWPOINT`. */
   xrActive?: boolean;
+  /**
+   * XR teleport (VSIM-T3/T4): bump `key` to put the head on `spot` facing its yaw; `interior` = the
+   * walker is in a building's room (room floor, walls instead of the village walk grid).
+   */
+  xrPlace?: { spot: XrSpot; interior: boolean; key: number } | null;
+  /** XR buttons other than turn / step (A/X, B/Y, stick click, thumb tap): VSIM-T1. */
+  onXrAction?: (action: XrControlAction) => void;
+  /** Filled with the walk grid while in XR (door spots, probe). */
+  walkGridRef?: { current: WalkGrid | null };
 }
+
+/** Village walk limit (m from the centre), as before collisions. */
+const WALK_LIMIT = 65;
+/** Snap step glide speed (m/s), like /village. */
+const STEP_SPEED = 3.2;
+/** Late-loading meshes (trees, models): the grid is rebuilt once after entry. */
+const GRID_REBUILD_MS = 3000;
+const _head = new THREE.Vector3();
+const _local = new THREE.Vector3();
+const _euler = new THREE.Euler();
 
 export function CameraController({
   preset,
@@ -90,6 +124,9 @@ export function CameraController({
   reducedMotion = false,
   damping = true,
   xrActive = false,
+  xrPlace = null,
+  onXrAction,
+  walkGridRef,
 }: CameraControllerProps) {
   const camera = useThree((s) => s.camera);
   const scene = useThree((s) => s.scene);
@@ -114,6 +151,11 @@ export function CameraController({
   const xrCamFwd = useRef(new THREE.Vector3());
   const xrCamRight = useRef(new THREE.Vector3());
   const xrKeysDown = useRef<Set<string>>(new Set());
+  const walkGrid = useRef<WalkGrid | null>(null);
+  const interior = useRef(false);
+  /** Snap step left to glide (m) and its heading (unit XZ). */
+  const stepLeft = useRef(0);
+  const stepDir = useRef(new THREE.Vector3());
 
   useEffect(() => {
     if (!xrActive) {
@@ -258,6 +300,98 @@ export function CameraController({
     invalidate();
   }, [xrActive, focusKey, moveTo, moveToFocusTarget, camera, scene, gl, invalidate]);
 
+  // Walk grid (VSIM-T2): built from the scene on entry, once more after late meshes load.
+  useEffect(() => {
+    if (!xrActive) {
+      walkGrid.current = null;
+      if (walkGridRef) walkGridRef.current = null;
+      return;
+    }
+    const build = () => {
+      const skip = new Set<THREE.Object3D>(xrRig.current ? [xrRig.current] : []);
+      walkGrid.current = buildWalkGrid(scene, terrainHeight, WALK_LIMIT + 1, 0.25, skip);
+      if (walkGridRef) walkGridRef.current = walkGrid.current;
+    };
+    const first = window.setTimeout(build, 0);
+    const again = window.setTimeout(build, GRID_REBUILD_MS);
+    return () => {
+      window.clearTimeout(first);
+      window.clearTimeout(again);
+    };
+  }, [xrActive, scene, walkGridRef]);
+
+  // Teleport (door, room, back out): head on the spot, looking along its yaw.
+  const placeKey = xrPlace?.key;
+  useEffect(() => {
+    const rig = xrRig.current;
+    if (!xrActive || !rig || !xrPlace) return;
+    interior.current = xrPlace.interior;
+    stepLeft.current = 0;
+    const headYaw = _euler.setFromQuaternion(camera.quaternion, 'YXZ').y;
+    rig.rotation.set(0, xrPlace.spot.yaw - headYaw, 0);
+    _local.set(camera.position.x, 0, camera.position.z).applyAxisAngle(UP, rig.rotation.y);
+    rig.position.x = xrPlace.spot.position[0] - _local.x;
+    rig.position.z = xrPlace.spot.position[2] - _local.z;
+    invalidate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-place only when `key` changes
+  }, [placeKey, xrActive]);
+
+  const onAction = useCallback(
+    (a: XrControlAction) => {
+      const rig = xrRig.current;
+      if (a.type === 'turn' && rig) {
+        camera.getWorldPosition(_head);
+        const t = turnRigAboutHead(
+          rig.position.x,
+          rig.position.z,
+          rig.rotation.y,
+          _head.x,
+          _head.z,
+          -a.direction * SNAP_TURN
+        );
+        rig.position.x = t.x;
+        rig.position.z = t.z;
+        rig.rotation.y = t.yaw;
+        playSnapSound();
+        return;
+      }
+      if (a.type === 'step' && rig) {
+        camera.getWorldDirection(stepDir.current);
+        stepDir.current.y = 0;
+        if (stepDir.current.lengthSq() < 1e-6) return;
+        stepDir.current.normalize().multiplyScalar(a.direction);
+        stepLeft.current = STEP_DISTANCE;
+        playSnapSound();
+        return;
+      }
+      onXrAction?.(a);
+    },
+    [camera, onXrAction]
+  );
+
+  /**
+   * Moves the rig so the head goes by (dx, dz), stopped by walls (walk grid) or the room, within the
+   * village limit. Returns the distance actually walked.
+   */
+  const walkRig = (rig: THREE.Group, dx: number, dz: number): number => {
+    camera.getWorldPosition(_head);
+    let tx = _head.x + dx;
+    let tz = _head.z + dz;
+    if (interior.current) {
+      [tx, tz] = clampToInterior(tx, tz);
+    } else {
+      const r = Math.hypot(tx, tz);
+      if (r > WALK_LIMIT) {
+        tx *= WALK_LIMIT / r;
+        tz *= WALK_LIMIT / r;
+      }
+      if (walkGrid.current) [tx, tz] = resolveWalk(walkGrid.current, _head.x, _head.z, tx, tz);
+    }
+    rig.position.x += tx - _head.x;
+    rig.position.z += tz - _head.z;
+    return Math.hypot(tx - _head.x, tz - _head.z);
+  };
+
   useFrame((state, delta) => {
     if (xrActive) {
       xrHandsHandle.current?.update();
@@ -266,7 +400,6 @@ export function CameraController({
 
       let moveX = 0;
       let moveZ = 0;
-      let turnYaw = 0;
       let isRunning = false;
 
       // 1. Keyboard controls (WASD / ZQSD / Arrows)
@@ -298,23 +431,12 @@ export function CameraController({
             stickY = Math.abs(ay) > 0.15 ? ay : 0;
           }
 
-          if (source.handedness === 'left') {
-            if (stickX !== 0) moveX += stickX;
-            if (stickY !== 0) moveZ += stickY;
-          } else if (source.handedness === 'right') {
-            if (stickX !== 0) turnYaw -= stickX;
-          } else {
-            if (stickX !== 0) moveX += stickX;
-            if (stickY !== 0) moveZ += stickY;
+          // Left stick walks; the right stick snap-turns / steps (XrControlsDriver, VSIM-T1).
+          if (isWalkStick(source)) {
+            moveX += stickX;
+            moveZ += stickY;
           }
         }
-      }
-
-      // 3. Smooth turn (right stick) - maintains pure yaw (pitch/roll remain 0)
-      if (turnYaw !== 0) {
-        state.invalidate();
-        const turnSpeed = 1.8; // rad/s
-        rig.rotation.y += turnYaw * turnSpeed * Math.min(delta, 0.1);
       }
 
       // 4. Locomotion along horizontal camera direction
@@ -335,14 +457,15 @@ export function CameraController({
 
         const baseSpeed = isRunning ? 6.0 : 3.0; // m/s
         const step = baseSpeed * Math.min(delta, 0.1);
-        rig.position.addScaledVector(xrMoveDir.current, step);
+        walkRig(rig, xrMoveDir.current.x * step, xrMoveDir.current.z * step);
+      }
 
-        // Clamp inside village terrain bounds
-        const dist = Math.hypot(rig.position.x, rig.position.z);
-        if (dist > 65) {
-          rig.position.x *= 65 / dist;
-          rig.position.z *= 65 / dist;
-        }
+      // Snap step glide (right stick ↑/↓, thumb swipe): stops at a wall.
+      if (stepLeft.current > 0) {
+        state.invalidate();
+        const d = Math.min(stepLeft.current, STEP_SPEED * Math.min(delta, 0.1));
+        const moved = walkRig(rig, stepDir.current.x * d, stepDir.current.z * d);
+        stepLeft.current = moved < d * 0.5 ? 0 : stepLeft.current - d;
       }
 
       // Always maintain standing eye height above terrain relief
@@ -350,7 +473,9 @@ export function CameraController({
       if (camera.position.y > 0.5) {
         hasFloorTracking.current = true;
       }
-      const groundY = terrainHeight(rig.position.x, rig.position.z);
+      const groundY = interior.current
+        ? INTERIOR_ORIGIN[1]
+        : terrainHeight(rig.position.x, rig.position.z);
       const eyeOffset = hasFloorTracking.current ? 0 : EYE_HEIGHT;
       rig.position.y = groundY + eyeOffset;
 
@@ -402,32 +527,35 @@ export function CameraController({
   });
 
   return (
-    <OrbitControls
-      ref={controlsRef}
-      enabled={!xrActive}
-      enableDamping={damping}
-      dampingFactor={0.05}
-      maxPolarAngle={Math.PI / 2.15}
-      minDistance={panMode ? 2.5 : 4}
-      maxDistance={70}
-      // Pan along the ground (not the screen) so the view never dives under the terrain.
-      screenSpacePanning={false}
-      mouseButtons={
-        panMode
-          ? { LEFT: THREE.MOUSE.PAN, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.ROTATE }
-          : { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN }
-      }
-      touches={
-        panMode
-          ? { ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_ROTATE }
-          : { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN }
-      }
-      onStart={() => {
-        // The user takes over: stop any tween or orbit.
-        isTransitioning.current = false;
-        isOrbiting.current = false;
-        orbitAfterTween.current = false;
-      }}
-    />
+    <>
+      {xrActive && <XrControlsDriver onAction={onAction} />}
+      <OrbitControls
+        ref={controlsRef}
+        enabled={!xrActive}
+        enableDamping={damping}
+        dampingFactor={0.05}
+        maxPolarAngle={Math.PI / 2.15}
+        minDistance={panMode ? 2.5 : 4}
+        maxDistance={70}
+        // Pan along the ground (not the screen) so the view never dives under the terrain.
+        screenSpacePanning={false}
+        mouseButtons={
+          panMode
+            ? { LEFT: THREE.MOUSE.PAN, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.ROTATE }
+            : { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN }
+        }
+        touches={
+          panMode
+            ? { ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_ROTATE }
+            : { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN }
+        }
+        onStart={() => {
+          // The user takes over: stop any tween or orbit.
+          isTransitioning.current = false;
+          isOrbiting.current = false;
+          orbitAfterTween.current = false;
+        }}
+      />
+    </>
   );
 }

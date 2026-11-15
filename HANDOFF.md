@@ -1,40 +1,39 @@
 # HANDOFF — read first, overwrite at end of session (≤40 lines)
 
-**Updated:** 2026-11-15 · **By:** Claude Code · **Branch:** `feat/pq-t76-cars` (PQ-T67–T82 not on `main`)
+**Updated:** 2026-11-15 · **By:** Claude Code · **Branch:** `feat/vsim-controls-houses` (stacked on PR #17
+`feat/vs-t17-xr-extract`); the shape stream (PQ-T67–T82) lives on `feat/pq-t76-cars`.
 
-## NEXT: plants still open (PQ-T82), then the phase PR (PQ-T67 → T82)
+## NEXT
 
-Re-run live with the `leaves` specialist: lemongrass, aloe, bamboo, jacaranda (`make plants-live PLANTS=…`).
-
-## Rules set by the user (2026-11-14)
-
-- Live Meta calls cost money: house non-regression is **offline only**, `make house-regress` (~30 s, free).
-- Car code lives in `server/perception/car/` + `lib/car-*.ts`, tree code in `server/perception/tree/`; never
-  edit `house/` or `lib/house-*.ts`; shared `recon/` changes gated on the archetype.
-- Go live once per object to get its drawings, then replay: `make car-replay` / `make tree-replay OUT=r13` (free).
+1. Merge PR #17 (VS-T17–T23, /village extraction + controls), then rebase this branch on `main` and open its PR
+   (VSIM-T1–T4 + VS-T24).
+2. Play V412–V416 on a headset / the emulator by hand (carousel drag no longer turns the view).
+3. Shape stream (other branch): plants PQ-T82 live re-runs, then the PQ phase PR.
 
 ## Done this session
 
-- **PQ-T82 plants:** `PlantPlan` / `plantMesh` / `buildPlant` per habit; plant team of five (pilot +
-  trunk, branches, foliage, flowers, `leaves` = each big leaf traced); front drawing as skin (holes
-  filled). Live v005: coconut 0.14 → 0.61, banana 0.05 → 0.66, agave 0.26 → 0.52. Results to look at:
-  `resources/generated-view/plants/` + `VERSIONS.md` (`make plant-gallery`); `house-regress` reads there.
-
-- **PQ-T80 wing mirrors:** `car/car-mirrors.ts` measures them on the front's outline, else takes the car
-  team's `mirror` details, else `standardMirrors` (never a kind `other`); `carMesh` builds one piece per
-  side (slot `mirror`, a Studio layer each, glass on its back) and `mirrorFit` narrows the car (≤ 3 % on
-  the bench) so a mirror moved out stays in the box. `make car-replay OUT=r8`: 11 / 11 with mirrors.
-- **PQ-T81:** `sdf` parts were meshed inside out (one saw into every clump): fixed for all. A tree / bush
-  draws no other view (`PLANT_FACES`; side = front), `CLUMP_MAX` 0.24: willow 0.63 → 0.75 (`OUT=f2`).
+- **/village VS-T24:**
+  - Mouse clicks reach the scene during the emulated session: the IWER DevUI full-screen canvas used to
+    swallow them (wrist « Menu », « Extract in 3D / Cancel »). The mouse is listened on the document
+    (capture), aimed with the XR eye camera (`xrEyeAt`), never through HTML panels.
+  - A drag that grabbed a panel or a model keeps its events, so the DevUI no longer turns the view.
+  - Menu › « Show / Hide the controls help » (Meta: recall help from a menu); legends 12 s on entry, smaller.
+  - « Extract in 3D » opens the studio room (`xr-extract-studio.tsx`): carousel in the centre, generation
+    column + turning miniature on the right, hologram on the pedestal while building, and the lab opens by
+    itself when the model is ready (`HoloBuildPanel` and « Enter the 3D lab » removed). Shared hooks:
+    `useHoloImageMaterial`, `useSlideText`. `make vr-probe` 28/28 (lamp check accepts « range hood »).
+- **/simulation (VSIM-T1–T4, earlier, committed):** /village control map, walls stop the walker, holo power
+  panel per building (undo via `approveChange`), rooms; panel buttons (`userData.xrUi`) win the select ray
+  over a wall it crosses first; `make vr-sim-probe` 19/19.
 
 ## Decisions
 
-- Measured on pixels, models only draw and name. A mirror nobody saw is standard. A tree needs its front.
+- Power control is per **sector** (engine `sectorCaps`); direct VR power actions apply via `approveChange`.
+- The studio shares the extraction's anchor: the question, studio and lab open in one place.
+- Emulator mouse hover never overrides what a controller laser aims at.
 
 ## Open
 
-- Plants: agave tips don't curl, pads float apart, conifers are regular tiers, side IoU 0.15–0.3;
-  V373–V381, V392–V399 not played.
-- Cars: body = extruded profile (spoilers, bull bars, open cabins solid); profile direction trusts the prompt;
-  standard mirrors on a body that fills its box narrow it up to 9 %; no user Mini in the bench.
-- Not played: V335–V343 (houses), V382–V391 (cars); phase PR not opened; door snap + views check pending.
+- `make vr-probe` depends on live Muse calls (2D views, Spark build): waits are 240 s; a slow call cascades.
+- /simulation probe on software GL is slow (minutes).
+- Not played on a headset: S125–S132, V400–V416.
