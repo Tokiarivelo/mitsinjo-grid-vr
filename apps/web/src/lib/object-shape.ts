@@ -22,6 +22,7 @@ import {
  * = half-hip: the ends stand as vertical gables up to that share of the roof height, hipped above.
  * `hull` = visual hull (PV-H): front ring `points` (x, y) extruded along z ∩ side ring `section`
  * (z toward the front, y) extruded along x, both measured on the validated 2D view and its side.
+ * `sdf` = smooth union (§8, PQ-T53) of ≤ 12 `blobs`, meshed at fixed resolution.
  */
 export const RECIPE_SHAPES = [
   'box',
@@ -33,6 +34,7 @@ export const RECIPE_SHAPES = [
   'lathe',
   'hip',
   'hull',
+  'sdf',
 ] as const;
 /** Polygon points of an `extrude` part (PR-2.1): closed ring, simplified before storing. */
 export const EXTRUDE_POINTS_MAX = 64;
@@ -335,6 +337,80 @@ export const InsetParamsSchema = z.object({
   /** What the pocket is (a grille on a body): stamped on the slab, the host keeps its kind. */
   kind: PartKindSchema.optional(),
 });
+/**
+ * One blob of an `sdf` part (§8, PQ-T53): a smooth primitive in the part's unit space
+ * (fractions of the part size, centred, y up — the `extrude` / `lathe` convention). The
+ * model lists ≤ 12 of them with their position, relative size and blend radius `k`
+ * (bounded numbers, never code); the smooth-min union fuses them, marching cubes meshes
+ * the field at fixed resolution (`sdf-field.ts`, `sdf-mesh.ts`).
+ */
+export const SDF_BLOBS_MAX = 12;
+/**
+ * Smallest blob radius / half-extent: under one 24³ cell (1/24 ≈ 0.042) a blob can fall
+ * between grid vertices and vanish (measured: r = 0.04 survives its worst offset, 0.035
+ * does not). Boxes keep twice this on every side (their thinnest side is the dropout risk).
+ */
+export const SDF_RADIUS_MIN = 0.04;
+/** Largest blend radius: past it, features melt instead of fuse. */
+export const SDF_BLEND_MAX = 0.1;
+const sdfCenter = z.tuple([
+  z.number().min(-0.5).max(0.5),
+  z.number().min(-0.5).max(0.5),
+  z.number().min(-0.5).max(0.5),
+]);
+const sdfRadius = z.number().min(SDF_RADIUS_MIN).max(0.5);
+const sdfBlend = z.number().min(0).max(SDF_BLEND_MAX).optional();
+export const SphereBlobSchema = z.object({
+  kind: z.literal('sphere'),
+  c: sdfCenter,
+  r: sdfRadius,
+  /** Blend radius with the union so far (0 = hard union); the first blob's is unused. */
+  k: sdfBlend,
+});
+export const CapsuleBlobSchema = z.object({
+  kind: z.literal('capsule'),
+  c: sdfCenter,
+  /** Segment axis through the centre; half-length 0 = a sphere. */
+  axis: z.enum(['x', 'y', 'z']),
+  halfLen: z.number().min(0).max(0.5),
+  r: sdfRadius,
+  k: sdfBlend,
+});
+export const EllipsoidBlobSchema = z.object({
+  kind: z.literal('ellipsoid'),
+  c: sdfCenter,
+  radii: z.tuple([sdfRadius, sdfRadius, sdfRadius]),
+  k: sdfBlend,
+});
+export const BoxBlobSchema = z.object({
+  kind: z.literal('box'),
+  c: sdfCenter,
+  size: z.tuple([
+    z
+      .number()
+      .min(2 * SDF_RADIUS_MIN)
+      .max(1),
+    z
+      .number()
+      .min(2 * SDF_RADIUS_MIN)
+      .max(1),
+    z
+      .number()
+      .min(2 * SDF_RADIUS_MIN)
+      .max(1),
+  ]),
+  /** Corner radius (0 = sharp box; past half the thinnest side is refused below). */
+  r: z.number().min(0).max(0.25),
+  k: sdfBlend,
+});
+export const SdfBlobSchema = z.discriminatedUnion('kind', [
+  SphereBlobSchema,
+  CapsuleBlobSchema,
+  EllipsoidBlobSchema,
+  BoxBlobSchema,
+]);
+export type SdfBlob = z.infer<typeof SdfBlobSchema>;
+
 export const GeneratorParamsSchema = z.discriminatedUnion('op', [
   SweepParamsSchema,
   BranchParamsSchema,
@@ -372,6 +448,8 @@ export const RecipePartSchema = z
     section: z.array(unitPoint).min(3).max(EXTRUDE_POINTS_MAX).optional(),
     /** Lathe only (PR-2.3): radius-vs-height profile, 2–32 points, y never decreases. */
     profile: z.array(unitProfilePoint).min(2).max(LATHE_PROFILE_MAX).optional(),
+    /** Sdf only (§8, PQ-T53): the smooth primitives, 1–12, fused by the smooth-min union. */
+    blobs: z.array(SdfBlobSchema).min(1).max(SDF_BLOBS_MAX).optional(),
     color: z.string().regex(/^#[0-9a-f]{6}$/i),
     /** What the part is made of (AI), sets its surface in the 3D view. */
     material: RecipeMaterialSchema.optional(),
@@ -441,8 +519,57 @@ export const RecipePartSchema = z
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'profile needs lathe' });
     if (p.profile && !p.profile.every((pt, i) => i === 0 || pt[1] >= p.profile![i - 1]![1]))
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'profile y must not fall' });
+    if (p.shape === 'sdf' && !p.blobs)
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'sdf needs blobs' });
+    if (p.shape !== 'sdf' && p.blobs)
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'blobs need sdf' });
+    // Extent rule: each blob's outer box plus its blend margin stays in unit space, so the
+    // meshed surface never reaches the grid boundary (a smooth-min bulge stays under k / 4).
+    p.blobs?.forEach((blob, i) => {
+      const { half, k } = sdfBlobOuter(blob);
+      const out = ([0, 1, 2] as const).some((a) => Math.abs(blob.c[a]) + half[a] + k > 0.5 + 1e-9);
+      if (out)
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `blobs[${i}] reaches past unit space`,
+        });
+      // A refined box schema cannot join the discriminated union: the corner rule lives here.
+      if (blob.kind === 'box' && blob.r * 2 > Math.min(blob.size[0], blob.size[1], blob.size[2]))
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `blobs[${i}] r past half its thinnest side`,
+        });
+    });
   });
 export type RecipePart = z.infer<typeof RecipePartSchema>;
+
+/**
+ * Outer half-extent of one SDF blob on each axis, blend margin included: the schema's
+ * extent rule keeps it inside the part's unit box, so the meshed surface never touches the
+ * grid boundary (a clipped field would leave the mesh open).
+ */
+export function sdfBlobOuter(blob: SdfBlob): { half: [number, number, number]; k: number } {
+  const k = blob.k ?? 0;
+  switch (blob.kind) {
+    case 'sphere':
+      return { half: [blob.r, blob.r, blob.r], k };
+    case 'capsule': {
+      const axial = blob.halfLen + blob.r;
+      return {
+        half: [
+          blob.axis === 'x' ? axial : blob.r,
+          blob.axis === 'y' ? axial : blob.r,
+          blob.axis === 'z' ? axial : blob.r,
+        ],
+        k,
+      };
+    }
+    case 'ellipsoid':
+      return { half: [...blob.radii], k };
+    case 'box':
+      return { half: [blob.size[0] / 2, blob.size[1] / 2, blob.size[2] / 2], k };
+  }
+}
 
 /** Face geometry of a box: normal axis, its sign, and the in-face u axis. */
 export function faceAxes(face: Face): { n: 0 | 1 | 2; sign: 1 | -1; u: 0 | 2; uSign: 1 | -1 } {

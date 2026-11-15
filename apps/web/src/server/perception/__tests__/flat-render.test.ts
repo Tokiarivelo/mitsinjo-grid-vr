@@ -9,6 +9,7 @@ import { hexToRgb } from '../color-measure';
 import { facadeHouseRecipe, measureElevation } from '../facade-house';
 import { GOLDEN_ELEVATIONS } from '../__fixtures__/elevation';
 import { FLAT_AMBIENT, FLAT_LIGHT, renderFlat, THREE_QUARTER } from '../flat-render';
+import { SDF_BALL, SDF_PERSON, sdfPart } from '@/test/sdf-blobs';
 import { iou, renderRecipe } from '../silhouette-fit';
 import { GOLDEN_SHAPES } from '../__fixtures__/shape';
 
@@ -282,6 +283,56 @@ describe('lathe body (PR-2.3)', () => {
     b.mask.data.forEach((v, i) => {
       if (v) expect(t.mask.data[i]).toBe(1);
     });
+  });
+});
+
+describe('sdf union (PQ-T53 §8)', () => {
+  const filled = (r: ReturnType<typeof renderFlat>) => r.mask.data.reduce((s, v) => s + v, 0);
+
+  it('a ball renders its colour, lit, naming its part', () => {
+    const r = renderFlat(recipe([sdfPart(SDF_BALL)]), 1, 40, 40);
+    expect(filled(r)).toBeGreaterThan(0);
+    expect(r.mask.data[0]).toBe(0); // corner outside the disc
+    const c = pixel(r, 20, 20, 40);
+    expect(c[0]).toBeGreaterThan(0);
+    expect(r.part[20 * 40 + 20]).toBe(0);
+  });
+
+  it('the ball mask is symmetric: mirrored halves match (shading follows the light)', () => {
+    const r = renderFlat(recipe([sdfPart(SDF_BALL)]), 1, 40, 40);
+    for (let row = 0; row < 40; row++)
+      for (let c = 0; c < 20; c++)
+        expect(r.mask.data[row * 40 + c]).toBe(r.mask.data[row * 40 + 39 - c]);
+    // Lit upper-left like the analytic sphere: brighter there than lower-right.
+    expect(pixel(r, 14, 12, 40)[0]).toBeGreaterThan(pixel(r, 28, 30, 40)[0]!);
+  });
+
+  it('a fused pair fills its neck: more pixels than the hard pair', () => {
+    const pair = (k: number) =>
+      sdfPart([
+        { kind: 'sphere', c: [-0.2, 0, 0], r: 0.2 },
+        { kind: 'sphere', c: [0.2, 0, 0], r: 0.2, k },
+      ]);
+    const hard = renderFlat(recipe([pair(0)]), 1, 64, 64);
+    const soft = renderFlat(recipe([pair(0.1)]), 1, 64, 64);
+    expect(filled(hard)).toBeGreaterThan(0);
+    expect(filled(soft)).toBeGreaterThan(filled(hard));
+  });
+
+  it('judge and fit read one surface: flat mask matches the fit hull (IoU)', () => {
+    const flat = renderFlat(recipe([sdfPart(SDF_BALL)]), 1, 64, 64);
+    const hull = renderRecipe(recipe([sdfPart(SDF_BALL)]), 1, 64, 64);
+    expect(iou(flat.mask, hull)).toBeGreaterThan(0.95);
+  });
+
+  it('a person-like union renders connected pixels for its part', () => {
+    const r = renderFlat(recipe([sdfPart(SDF_PERSON)]), 1, 64, 64);
+    expect(filled(r)).toBeGreaterThan(100);
+    let named = 0;
+    r.part.forEach((v) => {
+      if (v === 0) named++;
+    });
+    expect(named).toBe(filled(r));
   });
 });
 

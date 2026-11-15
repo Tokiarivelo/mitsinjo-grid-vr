@@ -211,4 +211,31 @@ describe('code-sandbox (PQ-T45, §8bis)', () => {
     expect(estimateTriangles(part('lathe'))).toBe(96);
     expect(MAX_TRIANGLES).toBe(5000);
   });
+
+  it('sdf estimates at its per-part cap; guest code builds one, stamped estimated (PQ-T53)', async () => {
+    expect(
+      estimateTriangles({
+        shape: 'sdf',
+        at: [0, 0, 0],
+        size: [1, 1, 1],
+        color: '#ffffff',
+        blobs: [{ kind: 'sphere', c: [0, 0, 0], r: 0.3 }],
+      })
+    ).toBe(3000);
+    const out = await runSandboxedCode(
+      `return [api.sdf({ at: [0, 0, 0], size: [1, 1, 1], color: '#ffffff', blobs: [{ kind: 'sphere', c: [0, 0, 0], r: 0.3 }] })];`,
+      PARAMS
+    );
+    expect(out.ok).toBe(true);
+    if (out.ok) {
+      expect(out.recipe.parts[0]?.shape).toBe('sdf');
+      expect(out.recipe.parts[0]?.status).toBe('estimated');
+      expect(out.stats.triangles).toBe(3000);
+    }
+    const bad = await runSandboxedCode(
+      `return [api.sdf({ at: [0, 0, 0], size: [1, 1, 1], color: '#ffffff', blobs: [{ kind: 'sphere', c: [0, 0, 0], r: 0.01 }] })];`,
+      PARAMS
+    );
+    expect(bad.ok).toBe(false);
+  });
 });

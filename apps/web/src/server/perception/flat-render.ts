@@ -10,6 +10,7 @@
 import { expandAssemblies } from '@/features/vision-insert/utils/assembly-parts';
 import type { WallHole } from '@/features/vision-insert/utils/openings';
 import { HIP_CLIP_MAX, wallTintFor, type ObjectRecipe, type RecipePart } from '@/lib/object-shape';
+import { sdfNormal, sdfUnion, type SdfPoint } from '@/lib/sdf-field';
 import { hexToRgb } from './color-measure';
 import {
   applyTransform,
@@ -350,6 +351,38 @@ function clipLathe(s: Span, o: V3, d: V3, profile: ReadonlyArray<Pt2>): void {
   s.n = bestN;
 }
 
+/** Marching steps of one SDF ray (an exact field converges in a dozen or so). */
+const SDF_MARCH_STEPS = 64;
+/** Field distance under which the ray has reached the surface (unit space). */
+const SDF_MARCH_EPS = 2e-4;
+
+/**
+ * Sphere tracing on the shared union field (PQ-T53): the same blobs the viewer meshes,
+ * so judge and viewer read one surface. `t` keeps the ray parameter (unit-space `t` is
+ * view-space `t`: the part transform is affine), stepped by distance / |d|.
+ */
+function marchSdf(s: Span, o: V3, d: V3, blobs: RecipePart['blobs']): void {
+  if (!blobs?.length) {
+    s.tout = -Infinity;
+    return;
+  }
+  const dl = Math.hypot(d[0], d[1], d[2]) || 1;
+  let t = Number.isFinite(s.tin) ? Math.max(s.tin, 0) : 0;
+  for (let i = 0; i < SDF_MARCH_STEPS; i++) {
+    if (t > s.tout) break;
+    const p: SdfPoint = [o[0] + d[0] * t, o[1] + d[1] * t, o[2] + d[2] * t];
+    const dist = sdfUnion(blobs, p);
+    // At or inside the surface (a reused span may start inside): the entry is the hit.
+    if (dist < SDF_MARCH_EPS) {
+      s.tin = t;
+      s.n = sdfNormal(blobs, p);
+      return;
+    }
+    t += Math.max(dist / dl, SDF_MARCH_EPS / dl);
+  }
+  s.tout = -Infinity;
+}
+
 /** Ray (unit space) through one unit primitive (1 × 1 × 1 bounds, as the viewer's `unitPart`). */
 function intersect(p: RecipePart, o: V3, d: V3): Span | null {
   const s: Span = { tin: -Infinity, tout: Infinity, n: null };
@@ -430,6 +463,9 @@ function intersect(p: RecipePart, o: V3, d: V3): Span | null {
       break;
     case 'lathe':
       clipLathe(s, o, d, p.profile ?? []);
+      break;
+    case 'sdf':
+      marchSdf(s, o, d, p.blobs);
       break;
     case 'hull': {
       // Front ring along z ∩ side ring along x (PV-H): the side clip runs in swapped (z, y, x) space.

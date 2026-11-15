@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import type { ObjectKit } from '@/lib/object-kit';
+import { SDF_BALL, SDF_PERSON, sdfPart, sdfRecipe } from '@/test/sdf-blobs';
 import { nelderMead } from '../nelder-mead';
 import {
   chamfer,
@@ -238,5 +239,43 @@ describe('extrude points (PR-2.1)', () => {
       32
     );
     expect([...lathe.data]).toEqual([...cone.data]);
+  });
+});
+
+describe('sdf outline (PQ-T53 §8)', () => {
+  it('an sdf ball hulls like the same-sized sphere', () => {
+    const ball = renderRecipe(sdfRecipe(SDF_BALL), 1, 64, 64);
+    const sphere = renderRecipe(
+      {
+        proportions: { w: 1, h: 1, d: 1 },
+        parts: [{ shape: 'sphere', at: [0, 0, 0], size: [0.7, 0.7, 0.7], color: '#cccccc' }],
+      },
+      1,
+      64,
+      64
+    );
+    expect(iou(ball, sphere)).toBeGreaterThan(0.98);
+  });
+
+  it('a person-like union fills the grid centre, deterministically', () => {
+    const a = renderRecipe(sdfRecipe(SDF_PERSON), 1, 64, 64);
+    const b = renderRecipe(sdfRecipe(SDF_PERSON), 1, 64, 64);
+    expect([...a.data]).toEqual([...b.data]);
+    expect(a.data.reduce((s, v) => s + v, 0)).toBeGreaterThan(500);
+    expect(a.data[32 * 64 + 32]).toBe(1);
+  });
+
+  it('without blobs the fit falls back to the host box', () => {
+    const m = renderRecipe(
+      {
+        proportions: { w: 1, h: 1, d: 1 },
+        parts: [{ ...sdfPart(SDF_BALL), blobs: undefined }],
+      },
+      1,
+      32,
+      32
+    );
+    // The full box hull: every pixel filled.
+    expect(m.data.every((v) => v === 1)).toBe(true);
   });
 });
