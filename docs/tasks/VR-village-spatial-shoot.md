@@ -272,3 +272,11 @@ Style : hologramme futuriste (cyan / ambre, lignes de balayage, coins lumineux, 
 - [x] Marcher dans le studio : stick gauche, pas de 80 cm (stick droit ↑/↓, swipe du pouce), molette ; remis à zéro à la sortie.
 - [x] Vues 2D plus grandes (0,6 m, espacées de 32°), colonne de génération décalée à droite.
 - [x] Plante en pot : le pot dessiné est lu (`tree/plant-pot.ts`) et tourné sous la plante, posée sur la terre ; boîte à la hauteur du dessin (avant : pot coupé comme des racines, plante aplatie).
+
+### VS-T26 : Vraies mains, vraies manettes, laser Meta, studio navigable
+
+- [x] Main articulée réelle (`generic-hand`, peau + liseré) et modèle de manette du profil d'entrée (`microgrid-3d/utils/xr-input-models.ts`), repli hors ligne ; aussi sur `/simulation`.
+- [x] Laser selon Meta « Ray casting » : faisceau court qui s'efface, curseur anneau à taille angulaire constante, blanc / bleu nuit à l'appui (`xr-ray-visual.ts`), sur `/village` et `/simulation`.
+- [ ] Menu poignet cliquable (main, laser, souris) et qui ne tourne plus avec la souris.
+- [ ] Bouton « Quitter le studio » / « Revenir au studio » ; l'objet du labo est gardé tant qu'on n'en extrait pas un autre.
+- [ ] Calques dans le labo immersif, liste défilable verticalement (comme le carrousel).

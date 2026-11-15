@@ -259,6 +259,14 @@ Pilotage scripté (MCP IWER ou `remote.dispatch`) : voir [`vr-iwer-tools.md`](vr
    mouvement de souris. Pendant qu'une manette tient le carrousel ou un modèle, ce mouvement est intercepté
    (`window`, phase de capture) et tourne l'objet tenu, pas la vue (comme sur un casque, Meta « one-point
    manipulation »). Hors mode Play, clic gauche = gâchette du regard, clic droit glissé = tourner la tête.
+7. **Mains, manettes, laser** (VS-T26, `/village` et `/simulation`) : la main est le modèle articulé
+   `generic-hand` des WebXR input profiles (celui que dessine le Quest), peau mate + liseré clair (fresnel) ; la
+   manette est celle que le navigateur annonce (Touch / Touch Plus). Chargés depuis le CDN des input profiles :
+   hors ligne, les sphères / la manette simple restent. Laser selon Meta « Ray casting » : rayon de visée long et
+   invisible ; on voit un faisceau fin de 25 cm (main) / 35 cm (manette) qui part à 10 cm et s'efface vers son
+   bout, et un **curseur anneau** à l'impact, de taille angulaire constante, blanc au survol, bleu nuit
+   (`#001E78`) et à 83 % quand on appuie ; le point central garde la couleur de ce qui est visé. Rien d'utilisable
+   sous le rayon → faisceau et curseur s'effacent (0,25 s).
 
 ## 7. Confort visuel et prévention du vertige : Écran panoramique à focus plat (`/village`)
 

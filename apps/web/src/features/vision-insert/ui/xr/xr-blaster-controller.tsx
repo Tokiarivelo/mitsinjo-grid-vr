@@ -8,6 +8,8 @@ import {
   createHandMesh,
   updateHandMesh,
 } from '@/features/microgrid-3d/utils/xr-hands';
+import { attachInputModels } from '@/features/microgrid-3d/utils/xr-input-models';
+import { createRayVisual } from '@/features/microgrid-3d/utils/xr-ray-visual';
 import type { SpatialTarget } from './spatial-projection';
 import { photoRay, type PhotoGround } from './tour/grounded';
 import {
@@ -207,16 +209,6 @@ function createImpactRing(): THREE.Mesh {
   );
   mesh.visible = false;
   return mesh;
-}
-
-function createPointerLine(): THREE.Line {
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
-  const mat = new THREE.LineBasicMaterial({ color: BEAM_IDLE, transparent: true, opacity: 0.65 });
-  const line = new THREE.Line(geo, mat);
-  line.visible = false;
-  line.frustumCulled = false;
-  return line;
 }
 
 /**
@@ -438,9 +430,15 @@ export const XRBlasterController = memo(function XRBlasterController({
   /** Last mouse move over the scene (ms): in the headset view the mouse hovers for a while. */
   const mouseAtRef = useRef(-Infinity);
   const handsRef = useRef<
-    Array<{ group: Parameters<typeof updateHandMesh>[0]; mesh: THREE.InstancedMesh }>
+    Array<{
+      group: Parameters<typeof updateHandMesh>[0];
+      mesh: THREE.InstancedMesh;
+      /** The real hand model (VS-T26) has loaded: the joint spheres hide. */
+      real: () => boolean;
+    }>
   >([]);
-  const gripsRef = useRef<THREE.Object3D[]>([]);
+  /** Fallback controller bodies: shown in the headset until the real model loads (it hides them). */
+  const gripsRef = useRef<Array<{ model: THREE.Object3D; real: () => boolean }>>([]);
   const lastTouchRef = useRef(0);
   const inputKindsRef = useRef<['controller' | 'hand', 'controller' | 'hand']>([
     'controller',
@@ -451,6 +449,8 @@ export const XRBlasterController = memo(function XRBlasterController({
   const dragsRef = useRef(new Map<InputKey, PanelDrag>());
   /** Locked mouse turn (Play mode) kept off the headset while a controller holds something. */
   const heldTurnRef = useRef({ yaw: 0, pitch: 0 });
+  /** Select held on each XR pointer: the cursor turns dark blue and shrinks (Meta ray spec). */
+  const pressedRef = useRef<[boolean, boolean]>([false, false]);
   const blastRef = useRef<{ origin: THREE.Vector3; to: THREE.Vector3; progress: number } | null>(
     null
   );
@@ -458,18 +458,18 @@ export const XRBlasterController = memo(function XRBlasterController({
   // Imperative Three objects, mutated in the frame loop without React renders.
   const fx = useMemo(
     () => ({
-      pointers: [createPointerLine(), createPointerLine()] as const,
-      pips: [createDot(0.022, BEAM_IDLE), createDot(0.022, BEAM_IDLE)] as const,
+      rays: [createRayVisual(), createRayVisual()] as const,
       projectile: createDot(0.035, BEAM_IDLE),
       impact: createImpactRing(),
     }),
     []
   );
-  const { pointers, pips, projectile, impact } = fx;
+  const { rays, projectile, impact } = fx;
 
   useEffect(
     () => () => {
-      for (const o of [...fx.pointers, ...fx.pips, fx.projectile, fx.impact]) {
+      for (const r of fx.rays) r.dispose();
+      for (const o of [fx.projectile, fx.impact]) {
         o.geometry.dispose();
         (o.material as THREE.Material).dispose();
       }
@@ -649,6 +649,7 @@ export const XRBlasterController = memo(function XRBlasterController({
   useEffect(() => {
     if (!gl?.xr?.getController) return;
     const added: Array<{ parent: THREE.Object3D; child: THREE.Object3D }> = [];
+    const models: Array<{ dispose: () => void }> = [];
     const listeners: Array<{
       space: THREE.XRTargetRaySpace;
       type: 'selectstart' | 'selectend' | 'squeezestart' | 'squeezeend' | 'connected';
@@ -659,12 +660,16 @@ export const XRBlasterController = memo(function XRBlasterController({
       const space = gl.xr.getController(i);
       scene?.add(space);
       const onStart = (e: THREE.Event) => {
+        pressedRef.current[i] = true;
         rayFrom(space, _vOrigin, _vDirection);
         const gamepad = (e as { data?: XRInputSource }).data?.gamepad ?? null;
         if (tryGrab(i, _vOrigin, _vDirection, gamepad)) return;
         triggerShot(_vOrigin, _vDirection, gamepad);
       };
-      const onEnd = () => release(i);
+      const onEnd = () => {
+        pressedRef.current[i] = false;
+        release(i);
+      };
       // Grip (squeeze) held on a miniature turns it, like Meta's grab (VS-T23).
       const gripKey = (i + 2) as InputKey;
       const onSqueezeStart = (e: THREE.Event) => {
@@ -689,26 +694,36 @@ export const XRBlasterController = memo(function XRBlasterController({
       listeners.push({ space, type: 'squeezeend', fn: onSqueezeEnd });
       listeners.push({ space, type: 'connected', fn: onConnected });
 
-      if (gl.xr.getHand && scene) {
-        const hand = gl.xr.getHand(i) as Parameters<typeof updateHandMesh>[0];
-        const mesh = createHandMesh();
-        hand.add(mesh);
-        scene.add(hand);
-        handsRef.current.push({ group: hand, mesh });
-        added.push({ parent: hand, child: mesh });
+      const hand =
+        typeof gl.xr.getHand === 'function' && scene
+          ? (gl.xr.getHand(i) as Parameters<typeof updateHandMesh>[0])
+          : null;
+      const handMesh = hand ? createHandMesh() : null;
+      if (hand && handMesh) {
+        hand.add(handMesh);
+        scene?.add(hand);
+        added.push({ parent: hand, child: handMesh });
       }
 
       const getGrip = (gl.xr as unknown as { getControllerGrip?: (idx: number) => THREE.Group })
         .getControllerGrip;
-      if (typeof getGrip === 'function' && scene) {
-        const grip = getGrip.call(gl.xr, i);
-        const model = createControllerGripModel();
-        model.visible = false;
-        grip.add(model);
-        scene.add(grip);
-        gripsRef.current.push(model);
-        added.push({ parent: grip, child: model });
+      const grip = typeof getGrip === 'function' && scene ? getGrip.call(gl.xr, i) : null;
+      const gripModel = grip ? createControllerGripModel() : null;
+      if (grip && gripModel) {
+        gripModel.visible = false;
+        grip.add(gripModel);
+        scene?.add(grip);
+        added.push({ parent: grip, child: gripModel });
       }
+      // Real hand and controller models (VS-T26); the simple ones stay until they load.
+      const real = attachInputModels(gl, i, {
+        ...(hand ? { hand } : {}),
+        ...(grip ? { grip } : {}),
+      });
+      models.push(real);
+      if (hand && handMesh)
+        handsRef.current.push({ group: hand, mesh: handMesh, real: real.handLoaded });
+      if (gripModel) gripsRef.current.push({ model: gripModel, real: real.gripLoaded });
     }
 
     return () => {
@@ -720,6 +735,7 @@ export const XRBlasterController = memo(function XRBlasterController({
         parent.remove(child);
         scene?.remove(parent);
       }
+      for (const m of models) m.dispose();
       handsRef.current = [];
       gripsRef.current = [];
     };
@@ -871,7 +887,8 @@ export const XRBlasterController = memo(function XRBlasterController({
   const drawBeam = (
     index: 0 | 1,
     origin: THREE.Vector3,
-    direction: THREE.Vector3
+    direction: THREE.Vector3,
+    dt: number
   ): string | null => {
     const aim = aimAt(origin, direction, _vEnd, {
       targets,
@@ -882,32 +899,34 @@ export const XRBlasterController = memo(function XRBlasterController({
       panels,
       photo,
     });
-    const pointer = pointers[index];
-    const pip = pips[index];
-    const color = beamColor(aim.kind);
-    const attr = pointer.geometry.attributes.position as THREE.BufferAttribute;
-    attr.setXYZ(0, origin.x, origin.y, origin.z);
-    attr.setXYZ(1, _vEnd.x, _vEnd.y, _vEnd.z);
-    attr.needsUpdate = true;
-    (pointer.material as THREE.LineBasicMaterial).color.set(color);
-    pointer.visible = true;
-    pip.visible = true;
-    pip.position.copy(_vEnd);
-    (pip.material as THREE.MeshBasicMaterial).color.set(color);
+    const input = gl.xr?.isPresenting ? inputKindsRef.current[index] : 'mouse';
+    const pressed =
+      input === 'mouse'
+        ? dragsRef.current.has('mouse') || grabsRef.current.has('mouse')
+        : pressedRef.current[index];
+    rays[index].update({
+      origin,
+      direction,
+      end: _vEnd,
+      usable: aim.kind !== 'none',
+      input,
+      pressed,
+      tint: beamColor(aim.kind),
+      dt,
+    });
     const out = aimOut?.pointers[index];
     if (out) {
       out.visible = true;
       out.kind = aim.kind;
       out.id = aim.id;
       out.end.copy(_vEnd);
-      out.input = gl.xr?.isPresenting ? inputKindsRef.current[index] : 'mouse';
+      out.input = input;
     }
     return aim.id;
   };
 
   const hideBeam = (index: 0 | 1) => {
-    pointers[index].visible = false;
-    pips[index].visible = false;
+    rays[index].hide();
     const out = aimOut?.pointers[index];
     if (out) out.visible = false;
   };
@@ -922,7 +941,8 @@ export const XRBlasterController = memo(function XRBlasterController({
     let anyHand = false;
     handsRef.current.forEach((h, index) => {
       const tracked = updateHandMesh(h.group, h.mesh) > 0 && presenting;
-      h.mesh.visible = tracked;
+      // Joint spheres only until the real hand has loaded (offline: they stay).
+      h.mesh.visible = tracked && !h.real();
       if (!tracked) return;
       anyHand = true;
       const tip = h.group.joints?.['index-finger-tip'];
@@ -946,7 +966,7 @@ export const XRBlasterController = memo(function XRBlasterController({
         pressButton();
       }
     });
-    for (const grip of gripsRef.current) grip.visible = presenting && !anyHand;
+    for (const g of gripsRef.current) g.model.visible = presenting && !anyHand && !g.real();
 
     // 2. Projectile and impact ring.
     const blast = blastRef.current;
@@ -1004,7 +1024,7 @@ export const XRBlasterController = memo(function XRBlasterController({
           grab.x = _vOrigin.x;
           grab.y = _vOrigin.y;
         }
-        hovered = drawBeam(i, _vOrigin, _vDirection) ?? hovered;
+        hovered = drawBeam(i, _vOrigin, _vDirection, delta) ?? hovered;
       }
       // Emulator mouse: hover what it points at (no beam), so buttons light up before a click.
       // The lasers keep priority: a mouse left still never hides what a controller aims at.
@@ -1042,7 +1062,7 @@ export const XRBlasterController = memo(function XRBlasterController({
         _vOrigin.copy(camera.position);
         camera.getWorldDirection(_vDirection);
       }
-      hovered = drawBeam(0, _vOrigin, _vDirection) ?? hovered;
+      hovered = drawBeam(0, _vOrigin, _vDirection, delta) ?? hovered;
     }
 
     if (hovered !== hoveredRef.current) {
@@ -1054,10 +1074,8 @@ export const XRBlasterController = memo(function XRBlasterController({
 
   return (
     <group name="xr-blaster-controller-root">
-      <primitive object={pointers[0]} />
-      <primitive object={pointers[1]} />
-      <primitive object={pips[0]} />
-      <primitive object={pips[1]} />
+      <primitive object={rays[0].group} />
+      <primitive object={rays[1].group} />
       <primitive object={projectile} />
       <primitive object={impact} />
     </group>
