@@ -1,11 +1,17 @@
 import { describe, expect, it } from 'vitest';
+import { mirrorFit, mirrorStand } from '@/lib/car-mesh';
+import { CarMirrorSchema } from '@/lib/car-plan';
 import { fitSection } from '../car/car-fit';
 import {
   fitMirrors,
+  MIRROR_BELT,
   MIRROR_COLOR,
+  MIRROR_HIGH,
+  MIRROR_WIDE,
   mirrorStation,
   placeMirrors,
   readMirrors,
+  standardMirrors,
 } from '../car/car-mirrors';
 import type { GridView } from '../recon/views';
 import { Canvas, COLORS } from './fixtures/draw-views';
@@ -173,8 +179,72 @@ describe('placeMirrors', () => {
     expect(placeMirrors({ body }, seen, { z: 0.95, outline: null })!.z).toBeCloseTo(0.5, 3);
   });
 
-  it('is null when nobody saw a mirror', () => {
+  it('is null when nobody saw a mirror and no standard one is asked', () => {
     expect(placeMirrors({ body }, null, { z: 0.5, outline: null })).toBeNull();
     expect(placeMirrors({ body }, null, null)).toBeNull();
+  });
+
+  it('gives standard mirrors to a car nobody saw any on, never to a kind « other »', () => {
+    const m = placeMirrors({ body }, null, null, 0.75)!;
+    expect(m.color).toBe(MIRROR_COLOR);
+    expect(m.z).toBeCloseTo(0.5, 3);
+    expect(placeMirrors({ body, kind: 'other' }, null, null, 0.75)).toBeNull();
+    // A mirror somebody saw is kept.
+    expect(placeMirrors({ body }, seen, null, 0.75)!.reach).toEqual(seen.reach);
+  });
+});
+
+describe('standardMirrors', () => {
+  const body = {
+    z0: 0,
+    z1: 1,
+    top: [0.5, 1, 1, 1, 0.9, 0.7, 0.5, 0.5, 0.5],
+    bottom: Array(9).fill(0.2),
+    half: [0.4, 0.4, 0.4, 0.3, 0.3],
+  };
+  const wide = MIRROR_HIGH * 0.75 * MIRROR_WIDE;
+
+  it('sits on the shoulder, out of the body by its width', () => {
+    const m = standardMirrors({ body }, 0.75)!;
+    expect(m.y0).toBeCloseTo(0.5, 3);
+    expect(m.y1 - m.y0).toBeCloseTo(MIRROR_HIGH, 3);
+    expect(m.root).toBeCloseTo(0.4, 3);
+    expect(Math.max(...m.reach)).toBeCloseTo(0.4 + wide, 3);
+    expect(CarMirrorSchema.safeParse({ z: 0.5, ...m }).success).toBe(true);
+  });
+
+  it('starts at the foot of the side glass when the team read it', () => {
+    const windows = [
+      {
+        view: 'right' as const,
+        points: [
+          [0.3, 0.62],
+          [0.6, 0.62],
+          [0.6, 0.8],
+        ] as [number, number][],
+      },
+    ];
+    expect(standardMirrors({ body, windows }, 0.75)!.y0).toBeCloseTo(0.62, 3);
+  });
+
+  it('keeps its size on a body that fills the box: the mesh moves it out', () => {
+    const full = { ...body, half: [0.5, 0.5, 0.5, 0.4, 0.4] };
+    const m = standardMirrors({ body: full }, 0.75)!;
+    expect(Math.max(...m.reach)).toBe(0.5);
+    expect(m.root).toBeCloseTo(0.5 - wide, 3);
+    const mirrors = { z: 0.5, ...m };
+    // Moved out of a flank at 0.5, the car narrows and the mirror stays in the box.
+    expect(mirrorStand(mirrors, full)!.out).toBeGreaterThan(0);
+    expect(mirrorFit(mirrors, full)).toBeLessThan(1);
+    expect(mirrorFit(mirrors, full)).toBeGreaterThan(0.85);
+  });
+
+  it('stays under the roof on a side with no shoulder (a van)', () => {
+    const m = standardMirrors({ body: { ...body, half: [0.4, 0.4] } }, 0.75)!;
+    expect(m.y0).toBeCloseTo(MIRROR_BELT[1], 3);
+  });
+
+  it('is null without a body', () => {
+    expect(standardMirrors({}, 0.75)).toBeNull();
   });
 });

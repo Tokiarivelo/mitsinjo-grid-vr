@@ -924,5 +924,9 @@ scripts/object-viewer-shot.mjs …` (1440 + 390, dark + light).
       the model only finds. (2) stalk mirrors narrower than the wings (beetle, 1950s cabriolet):
       `CarMirror.root` = the body's edge under the mirror; the mesh moves the mirror out with its
       flank and keeps its measured width. (3) the back of the housing reads a side window: glass.
-      Bench `make car-replay OUT=r7`: all eleven cars carry two mirrors. Still open: a mirror moved
-      out may pass the box's side by a few percent; a car with no reading and no bump has none.
+      Bench `make car-replay OUT=r7`: all eleven cars carry two mirrors. Third pass
+      (user, same day: fix what was left): (1) a mirror moved out no longer passes the box:
+      `mirrorFit` narrows the whole car until the tips stand on the box's side (`make car-replay
+  OUT=r8`: hatchback 0.970, SUVs 0.976 / 0.984, pick-up 0.997, the others 1; widest point of
+      every mesh ≤ 0.5). (2) a car nobody saw a mirror on gets `standardMirrors` (plain colour, on
+      the shoulder), never a kind `other`. (3) `make dev-fresh` for a stale module in the dev server.

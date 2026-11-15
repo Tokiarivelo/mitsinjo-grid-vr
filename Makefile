@@ -49,6 +49,11 @@ port: ## Print the web app port (PORT from shell or .env, default 3000)
 dev-stop: ## Stop the dev server on $(PORT) for good (next dev respawns a killed next-server; this stops turbo/pnpm too)
 	@bash scripts/dev-stop.sh $(PORT)
 
+dev-fresh: ## Stop the dev server, drop its build cache (apps/web/.next), start it again: cures a stale module after a new export (« x is not a function », « export x was not found ») [MOCK=1 = offline LLM]
+	@bash scripts/dev-stop.sh $(PORT)
+	rm -rf apps/web/.next
+	@$(MAKE) $(if $(MOCK),dev-mock,dev)
+
 dev-mock: ## Run dev with the offline mock LLM provider
 	$(need_ws)
 	LLM_PROVIDER=mock $(PNPM) dev
@@ -369,5 +374,5 @@ clean: ## Remove build/test output (keeps node_modules)
 clean-all: clean ## Also remove node_modules
 	rm -rf node_modules apps/*/node_modules packages/*/node_modules
 
-.PHONY: code-dump blender-render help install env setup-claude browsers dev port dev-mock build start test test-engine test-web test-shape family-photos shape-capture shape-judge sam-probe part-probe views-3d tree-replay eval-code shape-report shape-shots improve-shot test-watch coverage e2e \
+.PHONY: code-dump blender-render help install env setup-claude browsers dev port dev-stop dev-fresh dev-mock build start test test-engine test-web test-shape family-photos shape-capture shape-judge sam-probe part-probe views-3d tree-replay eval-code shape-report shape-shots improve-shot test-watch coverage e2e \
         typecheck lint bridge bridge-sim test-bridge format format-check format-changed git-hooks check ci shots mockups scenarios-publish analyze scene-audit scene-audit-gpu lighthouse claude env-export mcp status todo deploy-link deploy clean clean-all video-tts-setup video-voice video-sfx video-capture video-canvas video-build video-thumbnail hf-dataset hf-publish

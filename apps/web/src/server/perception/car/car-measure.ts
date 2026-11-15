@@ -64,11 +64,10 @@ export async function measureCarPlan(
     const read = applyCarReading(plan, reading, side, mirrored);
     if (!body) return read;
     // The team looked for the mirrors on every drawing: where they stand along the car, and their
-    // outline when the front's pixels do not show one.
-    const told = reading
-      ? readMirrors(reading, mirrored, front ? front.rows / front.cols : 0.75)
-      : null;
-    const placed = placeMirrors(read, mirrors?.outline ?? null, told);
+    // outline when the front's pixels do not show one. Seen by nobody, they are standard ones.
+    const frontBox = front ? front.rows / front.cols : 0.75;
+    const told = reading ? readMirrors(reading, mirrored, frontBox) : null;
+    const placed = placeMirrors(read, mirrors?.outline ?? null, told, frontBox);
     return placed ? { ...read, mirrors: placed } : read;
   } catch (err) {
     console.warn('[vision] car measure failed:', err instanceof Error ? err.message : err);

@@ -10,6 +10,8 @@ import {
   EDGE_IN,
   floorLine,
   inPolygon,
+  mirrorFit,
+  mirrorStand,
   stationTaper,
   TAPER_MIN,
 } from '../car-mesh';
@@ -400,17 +402,31 @@ describe('wing mirrors (PQ-T80)', () => {
     expect(slotCount(carMesh({ ...plan, mirrors: flat }, dims)!.slot).mirror).toBe(0);
   });
 
-  it('moves a stalk mirror out with the flank: narrower than the wings, it keeps its size', () => {
-    // Drawn from 0.3 to 0.38 of the centre line, inside a flank at 0.45.
+  it('moves a stalk mirror out with the flank and narrows the car to keep it in the box', () => {
+    // Drawn from 0.3 to 0.38 of the centre line, inside a flank at 0.45: moved out, its tip would
+    // stand at 0.53 of the box.
     const stalk = { z: 0.6, y0: 0.6, y1: 0.7, reach: [0.36, 0.38, 0.38, 0.36], root: 0.3 };
-    const own = faces(carMesh({ ...plan, mirrors: stalk }, dims)!).filter(
-      (f) => f.slot === 'mirror'
-    );
+    const fit = mirrorFit(stalk, plan.body!);
+    expect(fit).toBeCloseTo(0.5 / 0.53, 6);
+    expect(mirrorStand(stalk, plan.body!)).toMatchObject({ tip: 0.38, out: 0.45 - 0.3 });
+    const all = faces(carMesh({ ...plan, mirrors: stalk }, dims)!);
+    const own = all.filter((f) => f.slot === 'mirror');
     expect(own.length).toBeGreaterThan(40);
-    const xs = own.flatMap((f) => f.corners.map((c) => Math.abs(c[0]! - 0.5)));
-    // It stands out of the flank by what it measures on the drawing (0.08), no more.
-    expect(Math.max(...xs)).toBeGreaterThan(0.5);
-    expect(Math.max(...xs)).toBeLessThan(0.45 + 0.08 + 0.005);
+    const reach = (list: typeof all) =>
+      Math.max(...list.flatMap((f) => f.corners.map((c) => Math.abs(c[0]! - 0.5))));
+    // Its tip stands on the side of the box, never past it.
+    expect(reach(own)).toBeCloseTo(0.5, 5);
+    expect(reach(all)).toBeLessThanOrEqual(0.5 + 1e-6);
+    // The flank came in by the same share: the mirror still stands out by what it measures.
+    const flank = reach(all.filter((f) => f.slot !== 'mirror' && f.slot !== 'tyre'));
+    expect(flank).toBeCloseTo(0.45 * fit, 2);
+    expect(reach(own) - flank).toBeCloseTo(0.08 * fit, 2);
+  });
+
+  it('leaves the car as wide as its box when the mirrors fit', () => {
+    expect(mirrorFit(mirrors, plan.body!)).toBe(1);
+    expect(mirrorFit(undefined, plan.body!)).toBe(1);
+    expect(mirrorStand({ ...mirrors, reach: [0.45, 0.45], root: 0.45 }, plan.body!)).toBeNull();
   });
 
   it('turns the back of the housing into glass: it reads a side window, the rest the front', () => {

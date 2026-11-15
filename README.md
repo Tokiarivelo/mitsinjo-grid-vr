@@ -324,6 +324,9 @@ make dev-mock
 # Stop the dev server on $PORT for good (killing next-server alone: next dev respawns it)
 make dev-stop
 
+# Stale module after a new export (« x is not a function »): stop, drop apps/web/.next, start again (MOCK=1 = offline LLM)
+make dev-fresh
+
 # /village VR check in the IWER emulator: wrist menu, scan and shoot in the 360° rooms, walk between rooms (dev server running, ffmpeg)
 make vr-probe
 

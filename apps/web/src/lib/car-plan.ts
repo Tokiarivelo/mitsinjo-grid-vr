@@ -97,8 +97,9 @@ export const CarMirrorSchema = z.object({
   /** The body's edge under the mirror on the drawing, from the centre line (share of the width). */
   root: z.number().min(0).max(0.5).optional(),
   /**
-   * Set when the outline was read by the car team, not measured on the front's pixels (a front
-   * drawn without its mirrors): the mirrors take this colour instead of wearing the drawing.
+   * Set when the outline was read by the car team or is a standard one, not measured on the
+   * front's pixels (a front drawn without its mirrors): the mirrors take this colour instead of
+   * wearing the drawing.
    */
   color: hex.optional(),
 });
@@ -116,7 +117,7 @@ export const CarPlanSchema = z.object({
   body: CarBodySchema.optional(),
   /** Windows read by the car team, in the model's frame (glass slot). */
   windows: z.array(CarWindowSchema).max(24).optional(),
-  /** The wing mirrors, one on each side (mirror slot); absent when the front shows none. */
+  /** The wing mirrors, one on each side (mirror slot): measured, read by the team, else standard ones. */
   mirrors: CarMirrorSchema.optional(),
   /** Colours measured on the drawings. */
   look: z

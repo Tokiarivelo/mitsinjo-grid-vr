@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { carShoulder } from '@/lib/car-mesh';
 import { CAR_MIRROR_LEVELS, type CarMirror, type CarPlan } from '@/lib/car-plan';
 import type { GridView } from '../recon/views';
 import type { CarReading } from './car-tools';
@@ -155,6 +156,14 @@ export const MIRROR_COLOR = '#202225';
 /** The team's place along the car is kept within this of the one the body gives. */
 export const MIRROR_Z_SLACK = 0.15;
 
+/** A rounded housing between the body's edge and the tip, bottom → top. */
+function housing(root: number, tip: number, levels: number): number[] {
+  return Array.from({ length: levels }, (_, j) => {
+    const t = (2 * j) / (levels - 1) - 1;
+    return round3(root + (tip - root) * (0.55 + 0.45 * Math.sqrt(1 - t * t)));
+  });
+}
+
 export interface MirrorTold {
   /** Their place along the car, from the side drawings (model frame); null when not read there. */
   z: number | null;
@@ -208,11 +217,7 @@ export function readMirrors(
     ends ? mean(ends.map(far)) : root + (y1 - y0) * heightOverWidth * MIRROR_WIDE
   );
   if (!(tip > root)) return { z, outline: null };
-  // A rounded housing between the box's edges.
-  const reach = Array.from({ length: levels }, (_, j) => {
-    const t = (2 * j) / (levels - 1) - 1;
-    return round3(root + (tip - root) * (0.55 + 0.45 * Math.sqrt(1 - t * t)));
-  });
+  const reach = housing(root, tip, levels);
   const color = from.find((d) => d.color)?.color?.toLowerCase() ?? MIRROR_COLOR;
   return {
     z,
@@ -220,17 +225,64 @@ export function readMirrors(
   };
 }
 
+/** A standard mirror is this high, share of the car's height. */
+export const MIRROR_HIGH = 0.08;
+/** Heights (ground → top) the foot of a standard mirror is kept in: a van's side has no shoulder. */
+export const MIRROR_BELT = [0.45, 0.7] as const;
+
 /**
- * The mirrors of a plan: the outline measured on the front's pixels, else the one the team read;
- * along the car where the team saw them on a side drawing when that agrees with the body
- * (`MIRROR_Z_SLACK`), else where the body puts them. Null when nobody saw a mirror.
+ * The mirrors of a car nobody saw any on (no bump on the front's outline, no reading by the team,
+ * or a team that named none): a road vehicle carries them, so it gets standard ones in a plain
+ * colour. They sit on the shoulder (the foot of the side glass when the team read it), `MIRROR_HIGH`
+ * high and `MIRROR_WIDE` × that wide, out of the body's side there. Null for a kind `other` (a
+ * tractor, a cart) and without a body. `heightOverWidth` = the front's box.
+ */
+export function standardMirrors(
+  plan: Pick<CarPlan, 'body' | 'windows' | 'kind'>,
+  heightOverWidth: number,
+  levels = CAR_MIRROR_LEVELS
+): Omit<CarMirror, 'z'> | null {
+  const body = plan.body;
+  if (!body || plan.kind === 'other') return null;
+  const { widest, shoulder, roof } = carShoulder(body);
+  let belt = shoulder;
+  let glass: number | null = null;
+  for (const w of plan.windows ?? [])
+    if (w.view === 'right' || w.view === 'left')
+      for (const [, y] of w.points) glass = Math.min(glass ?? 1, y);
+  if (glass !== null) belt = glass;
+  const y0 = Math.min(Math.max(belt, MIRROR_BELT[0]), MIRROR_BELT[1], roof - MIRROR_HIGH);
+  if (!(y0 > 0)) return null;
+  const wide = MIRROR_HIGH * heightOverWidth * MIRROR_WIDE;
+  // A body that fills the box leaves no room on the drawing: the outline keeps its size inside
+  // the body's edge, and the mesh moves it out with the flank (`mirrorStand`).
+  const tip = Math.min(0.5, body.half[widest]! + wide);
+  const root = Math.max(0, tip - wide);
+  return {
+    y0: round3(y0),
+    y1: round3(y0 + MIRROR_HIGH),
+    reach: housing(root, tip, levels),
+    root: round3(root),
+    color: MIRROR_COLOR,
+  };
+}
+
+/**
+ * The mirrors of a plan: the outline measured on the front's pixels, else the one the team read,
+ * else standard ones (`standardMirrors`, when `heightOverWidth` is given); along the car where the
+ * team saw them on a side drawing when that agrees with the body (`MIRROR_Z_SLACK`), else where
+ * the body puts them. Null when they cannot be placed, or for a kind that carries none.
  */
 export function placeMirrors(
-  plan: Pick<CarPlan, 'body' | 'windows'>,
+  plan: Pick<CarPlan, 'body' | 'windows' | 'kind'>,
   seen: Omit<CarMirror, 'z'> | null,
-  told: MirrorTold | null
+  told: MirrorTold | null,
+  heightOverWidth?: number
 ): CarMirror | null {
-  const outline = seen ?? told?.outline ?? null;
+  const outline =
+    seen ??
+    told?.outline ??
+    (heightOverWidth === undefined ? null : standardMirrors(plan, heightOverWidth));
   if (!outline) return null;
   const built = mirrorStation(plan, outline);
   const read = told?.z ?? null;
