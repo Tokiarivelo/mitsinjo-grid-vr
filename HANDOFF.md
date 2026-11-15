@@ -1,39 +1,38 @@
 # HANDOFF — read first, overwrite at end of session (≤40 lines)
 
-**Updated:** 2026-11-15 · **By:** Claude Code · **Branch:** `feat/vsim-controls-houses` (stacked on PR #17
-`feat/vs-t17-xr-extract`); the shape stream (PQ-T67–T82) lives on `feat/pq-t76-cars`.
+**Updated:** 2026-11-15 · **By:** Claude Code · **Branch:** `fix/vs-t25-studio-text-pot-highlights` (pushed;
+VS-T25 + VS-T26 in `docs/tasks/VR-village-spatial-shoot.md`).
 
 ## NEXT
 
-1. Merge PR #17 (VS-T17–T23, /village extraction + controls), then rebase this branch on `main` and open its PR
-   (VSIM-T1–T4 + VS-T24).
-2. Play V412–V416 on a headset / the emulator by hand (carousel drag no longer turns the view).
+1. Open the PR for this branch (VS-T25–T26) after `make rebase-main`; play V417–V428 in the emulator by hand.
+2. Highlights misplaced after turning during an analysis (user report): not reproduced; the projection
+   chain checks out. Need the exact repro (Play vs cursor mode, real Muse vs mock, during « refining »).
 3. Shape stream (other branch): plants PQ-T82 live re-runs, then the PQ phase PR.
 
 ## Done this session
 
-- **/village VS-T24:**
-  - Mouse clicks reach the scene during the emulated session: the IWER DevUI full-screen canvas used to
-    swallow them (wrist « Menu », « Extract in 3D / Cancel »). The mouse is listened on the document
-    (capture), aimed with the XR eye camera (`xrEyeAt`), never through HTML panels.
-  - A drag that grabbed a panel or a model keeps its events, so the DevUI no longer turns the view.
-  - Menu › « Show / Hide the controls help » (Meta: recall help from a menu); legends 12 s on entry, smaller.
-  - « Extract in 3D » opens the studio room (`xr-extract-studio.tsx`): carousel in the centre, generation
-    column + turning miniature on the right, hologram on the pedestal while building, and the lab opens by
-    itself when the model is ready (`HoloBuildPanel` and « Enter the 3D lab » removed). Shared hooks:
-    `useHoloImageMaterial`, `useSlideText`. `make vr-probe` 28/28 (lamp check accepts « range hood »).
-- **/simulation (VSIM-T1–T4, earlier, committed):** /village control map, walls stop the walker, holo power
-  panel per building (undo via `approveChange`), rooms; panel buttons (`userData.xrUi`) win the select ray
-  over a wall it crosses first; `make vr-sim-probe` 19/19.
+- **VS-T25:** hologram cards shrink every line together (no clipped titles); walk in the studio (left stick,
+  80 cm steps, mouse wheel; `studio-walk.tsx`); Play-mode mouse turns the held carousel / model, not the view;
+  bigger 2D views; potted plants keep their pot (`server/perception/tree/plant-pot.ts`, `PlantPot` in the plan).
+- **VS-T26:**
+  - Real articulated hand (`generic-hand`, skin + pale fresnel rim) and the runtime's controller model,
+    from the WebXR input profiles CDN, simple models offline (`microgrid-3d/utils/xr-input-models.ts`).
+    three's factories are re-exported from plain JS + a `.d.ts` (`three-xr-factories.*`): their typings
+    pull three `src/` types and broke `tsc` project-wide.
+  - Laser per Meta « Ray casting »: short fading beam (25 / 35 cm, 10 cm gap) + constant-angle cursor ring,
+    white / `#001E78` at 83 % on press (`xr-ray-visual.ts`), on /village and /simulation.
+  - Wrist « Menu » floats in the room in the emulator or with no left wrist (was head-locked, unreachable).
+  - « Leave the studio » / « Back to the studio · name » (`FollowGroup`); the same object resumes its step
+    and its lab (`away` in `utils/xr-extract.ts`).
+  - Lab layers list scrolls with a vertical pinch-and-drag (panel `axis: 'y'`).
 
 ## Decisions
 
-- Power control is per **sector** (engine `sectorCaps`); direct VR power actions apply via `approveChange`.
-- The studio shares the extraction's anchor: the question, studio and lab open in one place.
-- Emulator mouse hover never overrides what a controller laser aims at.
+- No Neon migration (plant `pot` is an optional field of a JSONB plan); no HF dataset change.
+- Emulator detection (`isDevXREmulated`) decides only where the Menu button sits.
 
 ## Open
 
-- `make vr-probe` depends on live Muse calls (2D views, Spark build): waits are 240 s; a slow call cascades.
-- /simulation probe on software GL is slow (minutes).
-- Not played on a headset: S125–S132, V400–V416.
+- `make check`: green except the `recon` time-budget test under full-suite load (passes alone).
+- Not played on a headset: S125–S132, V400–V428.
