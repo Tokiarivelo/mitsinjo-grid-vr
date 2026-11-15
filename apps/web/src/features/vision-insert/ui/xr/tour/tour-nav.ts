@@ -12,10 +12,17 @@ import type { TourRoom, TourRoomId } from './tour-data';
 export const TOUR_EYE: Vec3 = [0, 1.6, 0];
 /** Photo sphere radius (m): beyond every panel, label and target, so nothing is ever cut. */
 export const TOUR_SPHERE_RADIUS = 9;
-/** Scan photo: 80° wide, 16:9, like a phone camera. */
-export const TOUR_CAPTURE_HFOV = (80 * Math.PI) / 180;
-export const TOUR_CAPTURE_ASPECT = 16 / 9;
-/** Plane the scan photo is laid on for targets (`surfaceFromView`), in front of the sphere. */
+/**
+ * Scan photo: a panorama strip 180° wide, 112.5° tall (16:10, linear in yaw and pitch), centred
+ * on the gaze. Wider than the headset's view (≈ 110° × 96°): everything the viewer sees is
+ * analysed, and an object only partly in sight is still whole in the photo, so its outline is
+ * complete.
+ */
+export const TOUR_CAPTURE_HFOV = Math.PI;
+export const TOUR_CAPTURE_ASPECT = 16 / 10;
+/** Highest gaze pitch a strip is centred on, so it never runs past the zenith / nadir. */
+const TOUR_CAPTURE_MAX_PITCH = Math.PI / 2 - TOUR_CAPTURE_HFOV / TOUR_CAPTURE_ASPECT / 2;
+/** Sphere the scan strip is laid on for targets (`surfaceFromStrip`), in front of the photo. */
 export const TOUR_SURFACE_DISTANCE = 3;
 /** Floor arrows indoors: distance from the photo spot and pick radius (m). */
 export const TOUR_ARROW_DISTANCE = 1.7;
@@ -161,9 +168,15 @@ export function stickWalkAxes(axes: readonly number[] | undefined): WalkAxes {
 
 /** Scan photo of the 360° view centred on a heading (head gaze, or a shot direction). */
 export function captureViewAt(yaw: number, pitch: number): CaptureView {
-  // Keep the photo level-ish: very steep looks would only see floor or ceiling.
-  const p = Math.max(-0.6, Math.min(0.6, pitch));
-  return { yaw, pitch: p, hfov: TOUR_CAPTURE_HFOV, aspect: TOUR_CAPTURE_ASPECT };
+  // Keep the strip level-ish: within the panorama, never past straight up / down.
+  const p = Math.max(-TOUR_CAPTURE_MAX_PITCH, Math.min(TOUR_CAPTURE_MAX_PITCH, pitch));
+  return {
+    yaw,
+    pitch: p,
+    hfov: TOUR_CAPTURE_HFOV,
+    aspect: TOUR_CAPTURE_ASPECT,
+    projection: 'equirect',
+  };
 }
 
 /** Labelled objects of the room visible in a scan photo, as detections (offline ground truth). */

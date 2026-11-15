@@ -324,11 +324,17 @@ make dev-mock
 # Stop the dev server on $PORT for good (killing next-server alone: next dev respawns it)
 make dev-stop
 
+# « Failed to reconnect to iwer: CONNECTION_CLOSED »: Antigravity's IWER bridge holds :8723; stop it, then /mcp reconnect (ALL=1 = every bridge)
+make iwer-bridge-stop
+
 # Stale module after a new export (« x is not a function »): stop, drop apps/web/.next, start again (MOCK=1 = offline LLM)
 make dev-fresh
 
-# /village VR check in the IWER emulator: wrist menu, scan and shoot in the 360° rooms, walk between rooms (dev server running, ffmpeg)
+# /village VR check in the IWER emulator: wrist menu, scan and shoot in the 360° rooms, walk between rooms, extract to 3D (dev server running, ffmpeg)
 make vr-probe
+
+# Every IWER emulator tool + the /village controls (A/B/X/Y, sticks, thumb gestures, legends); tools reference: docs/vr-iwer-tools.md
+make vr-iwer-tools
 
 # Apply pending Neon migrations (also automatic on the app's first DB call; no DATABASE_URL → no-op)
 make db-migrate
@@ -521,7 +527,8 @@ make deploy        # Manual production deployment from clean origin/main
 ### Future Roadmap
 
 - **VR control room (this fork)**: browser-delivered VR (WebXR) targeting Meta Quest — walkable village twin, hand-operated EMS dispatch shelter and feeder breakers, in-place copilot proposal approvals, and strategy comparison inside VR. Same deterministic engine, same simulated-data guarantees.
-- **/village VR test space**: without a real headset (desktop or IWER emulator), the VR view is a walkable 360° tour of six real rooms plus an outdoor walk (terrace with solar panels, street of houses, garden, tree-lined road, forest; CC0 photos, walk for real: hold ↑/W/Z or the stick, the floor slides under you with parallax, walk onto a floor arrow to go through to the next place); scans photograph the view you aim at. On a real Quest the webcam stays (flat screen).
+- **/village VR test space**: without a real headset (desktop or IWER emulator), the VR view is a walkable 360° tour of six real rooms plus an outdoor walk (terrace with solar panels, street of houses, garden, tree-lined road, forest; CC0 photos, walk for real: hold ↑/W/Z or the stick, the floor slides under you with parallax, walk onto a floor arrow to go through to the next place); scans analyse the whole visible half-view you face (180° strip). On a real Quest the webcam stays (flat screen).
+- **/village extract to 3D in VR**: each detected object gets a full outline that stays on it while you walk, plus a one-line description (EN / FR / MG); shoot it → « Extract in 3D? » → validate its 2D views in a hologram carousel → the 3D builds and opens in an immersive 3D lab for live edits. Controls: trigger / pinch selects, left stick walks, right stick snap-turns 30° and steps 0.8 m, A/X analyses, B/Y goes back, a stick click shows the button legends; thumb microgestures on hands. Guide: `docs/vr-immersion-guide.md` § 6, emulator tools: `docs/vr-iwer-tools.md`.
 - **Hardware Gateway (SCADA/IoT)**: MQTT / Modbus TCP ingestion adapters for physical microgrid telemetry in Madagascar.
 
 ---

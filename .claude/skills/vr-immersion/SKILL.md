@@ -18,7 +18,8 @@ Ask the tools before touching code; cite what they returned in your plan.
   - On a headset: `metavr_device`, `device_screenshot`, `device_logcat`, `perf_trace_capture` + `perf_trace_analyze`.
 - **IWER MCP** (`iwer` in `.mcp.json`, `@iwer/extension-bridge`, port 8723) — drive the emulated Quest 3
   (pose, controllers, buttons). If it fails with `EADDRINUSE 127.0.0.1:8723`, another bridge (other session)
-  holds the port: ask the user before killing it, or set `IWER_MCP_PORT`, then `/mcp` reconnect. Fallback:
+  holds the port: ask the user before killing it (`make iwer-bridge-stop` stops Antigravity's), or set
+  `IWER_MCP_PORT`, then `/mcp` reconnect. Fallback:
   in-app IWER devui (`make dev-mock`).
 - **Meta VR skills** when relevant: `meta-vr:hz-quest-verify-first` (any Quest-specific claim),
   `meta-vr:hz-immersive-designer` (comfort, layout, interaction), `meta-vr:hz-iwsdk-webxr`

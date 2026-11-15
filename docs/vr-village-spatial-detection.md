@@ -224,45 +224,32 @@ flowchart TD
 - **Quand :** hors vrai casque (pas de session XR, ou émulateur IWER `isDevXREmulated()`), la webcam est remplacée par une visite de **6 pièces réelles** (photos équirectangulaires 4K, Poly Haven CC0, `public/tour/CREDITS.md`) : loft cuisine, hall, chambre, salle de bain, salon, séjour, reliées en boucle. Sur un vrai Quest, la webcam (écran plat) reste.
 - **Rendu :** sphère r = 9 m centrée sur l'œil (`TOUR_EYE` 1,6 m), shader équirect (`tour/equirect.ts`, lacet 0 = −Z, u croît vers la droite), dessinée en dernier sans écriture de profondeur : panneaux, étiquettes et cibles ne sont jamais coupés. Pièce courante + voisines chargées, les autres libérées.
 - **Dehors (VS-T15) :** par la fenêtre du hall (« Aller : Terrasse ») : terrasse avec champ de panneaux solaires, rue de maisons, façade de maison, jardin, allée d'arbres, forêt et sous-bois (7 lieux réels CC0, reliés en une promenade, `public/tour/outdoor/`). Maisons, voitures, arbres = décor (`kind: 'scenery'`, sans charge) ; panneaux solaires, lampadaire, applique = objets.
-- **Marcher pour de vrai (VS-T16) :** photo « posée au sol » (shader : sol à 1,6 m sous l'œil + mur à 4 m dedans, 14 m dehors) : en s'éloignant du point de prise de vue, le sol glisse sous les pieds et le proche bouge plus que le lointain (parallaxe ; la tête dans le casque aussi). Maintenir ↑ / W / Z (S recule, A / Q / D de côté, flèches clavier) ou le stick = marche continue à 1,4 m/s dans la direction du regard, dans un disque de 2,1 m (4 m dehors). Clavier sur PC : seulement pointeur sur la scène (sinon la page défile) ; Play Mode de l'émulateur (pointeur verrouillé) : l'émulateur déplace lui-même le casque. Marcher sur une flèche au sol (ou la viser et tirer/cliquer : on y marche) = traverser : l'ancienne photo continue d'avancer pendant que la suivante arrive de derrière (fondu enchaîné 0,75 s, pas de noir). On arrive dos à la porte d'où l'on vient. Confort : vitesse constante, vignette pendant la marche (plus forte dans un vrai casque), balancement de tête seulement hors vrai casque. Limites : les cadres de scan restent là où le scan les a posés (photo de scan prise depuis le point de prise de vue), et la photo s'étire si l'on va loin du point (d'où le disque).
+- **Marcher pour de vrai (VS-T16) :** photo « posée au sol » (shader : sol à 1,6 m sous l'œil + mur à 4 m dedans, 14 m dehors) : en s'éloignant du point de prise de vue, le sol glisse sous les pieds et le proche bouge plus que le lointain (parallaxe ; la tête dans le casque aussi). Maintenir ↑ / W / Z (S recule, A / Q / D de côté, flèches clavier) ou le stick = marche continue à 1,4 m/s dans la direction du regard, dans un disque de 2,1 m (4 m dehors). Clavier sur PC : seulement pointeur sur la scène (sinon la page défile) ; Play Mode de l'émulateur (pointeur verrouillé) : l'émulateur déplace lui-même le casque. Marcher sur une flèche au sol (ou la viser et tirer/cliquer : on y marche) = traverser : l'ancienne photo continue d'avancer pendant que la suivante arrive de derrière (fondu enchaîné 0,75 s, pas de noir). On arrive dos à la porte d'où l'on vient. Confort : vitesse constante, vignette pendant la marche (plus forte dans un vrai casque), balancement de tête seulement hors vrai casque. Les contours restent collés aux objets en marchant : ils sont posés sur la photo elle-même (`tour/grounded.ts` : même mur + sol que le shader, `PhotoAnchored` les décale de −offset), et la visée passe par `photoRay` (le rayon du monde → le point de la photo touché). Pas d'avancement (VS-T23) : `PhotoGround.step` (stick droit ↑/↓, geste de pouce) glisse de 0,8 m à 3,2 m/s. Limite : la photo s'étire si l'on va loin du point (d'où le disque).
 - **Regarder (PC sans session) :** glisser = tourner la tête (`OrbitControls`, pas de zoom/pan), boutons zoom = champ de vision 30–90°, clic sans glisser (≤ 6 px) = tir.
-- **Scanner :** bouton du menu (regard) ou tir direct sur la photo avant tout scan (`onShootOutside`) → photo 1280×720, 80° de champ, centrée sur la visée (`renderView`, projection gnomonique) ; les cibles sont posées sur un plan à 3 m dans cette direction (`surfaceFromView`). Un objet tiré avant le scan est résolu à la fin du scan.
+- **Scanner (VS-T18) :** bouton en l'air, A/X ou tap du pouce → une **bande équirectangulaire 180° × 112,5°** (2048×1280, 16:10, `captureViewAt` `projection: 'equirect'`, lacet / tangage linéaires) centrée sur la visée : toute la partie visible est analysée d'un coup. Les cibles sont posées sur une sphère de 3 m (`surfaceFromStrip`, `ImageSurface.strip`) puis projetées au sol de la photo (`spatial-projection` option `ground`). Le contour SAM couvre l'objet entier (un canapé à moitié dans la bande est contouré en entier). Un objet tiré avant le scan est résolu à la fin du scan.
 - **Vérité terrain hors ligne :** chaque pièce porte des objets délimités à la main sur la photo (`tour-data.ts`) ; `tourExpectedDetections` les projette dans la photo du scan et les envoie dans `expected` à `/api/vision` (mock seulement).
 - **Page web masquée en immersion émulée :** `markEmulatedImmersion` pose `data-xr-emulated` sur `<html>` ; `[data-app-root]` passe en `visibility: hidden` sauf le canvas. Le bouton « Quitter l'immersion VR » reste visible en haut à droite (`EmulatedXRExit`, porté sur `<body>` au-dessus de la couche plein écran d'IWER, z 999).
 - **Panneaux de l'émulateur :** l'overlay DevUI s'installe par `device.installDevUI(DevUI)` (pas `new DevUI(device)` : IWER ne monte alors jamais les panneaux Controller [L]/[R], Play Mode, gizmos). Installation unique partagée par les appels concurrents (effets React doublés en dev).
 
-## 4. Modalités de contrôle & Interaction (Casque VR, Hand Tracking & Émulateur PC)
+## 4. Commandes (VS-T23) et extraction 3D
 
-Le système supporte 4 manières complètes d'interagir avec les boutons flottants dans les airs et les cibles 3D :
+Tableaux complets (manettes, mains, PC) : [`vr-immersion-guide.md` § 6](vr-immersion-guide.md) ; outils de
+l'émulateur : [`vr-iwer-tools.md`](vr-iwer-tools.md).
 
-| Plateforme / Équipement            | Représentation Visuelle                                | Déplacement / Orientation                | Visée & Clic dans les Airs                                                              |
-| :--------------------------------- | :----------------------------------------------------- | :--------------------------------------- | :-------------------------------------------------------------------------------------- |
-| **Meta Quest (Manettes Touch)**    | Modèle 3D complet de manette Touch avec anneau et grip | Suivi 6DoF dans l'espace physique        | Viser avec le laser cyan + presser la gâchette index (_Trigger_) ou bouton A/X          |
-| **Meta Quest (Hand Tracking)**     | Main 3D articulée 25 articulations (sphères cyan)      | Suivi optique direct des mains           | Rayon système de la main + pincer pouce et index ; toucher le bouton du bout de l'index |
-| **PC (Émulateur IWER DevUI)**      | Manette virtuelle 3D / Mains                           | Touches `ZQSD` / `WASD` pour se déplacer | Maintenir `Alt` (manette droite) ou `Shift` (manette gauche) + Clic gauche / `Espace`   |
-| **PC (Navigation Souris Directe)** | Pointeur souris standard                               | Clic glissé pour tourner la vue          | Survol direct du bouton 3D + Clic gauche (détection unprojectée caméra)                 |
-
-### Comment tester sur PC sans casque physique :
-
-1. **Lancer le serveur en mode mock :**
-   ```bash
-   make dev-mock
-   ```
-2. **Accéder à `/village` :**
-   - Le script `installDevXREmulator()` s'exécute automatiquement en environnement `development` dès qu'aucun casque n'est branché.
-   - Le bouton VR (« Voir en VR » avec l'icône lunettes) devient actif dans l'en-tête.
-3. **Méthode 1 — Le Clic Direct à la Souris (Le plus simple, recommandé sur Linux/PC) :**
-   - Déplacez simplement votre curseur de souris sur le bouton flottant au centre (_« Scanner la pièce et détecter »_).
-   - Le bouton s'allume en surbrillance d'énergie violette et le réticule d'impact se verrouille dessus.
-   - Faites un **simple clic gauche** pour lancer le scan radar et faire apparaître les cibles 3D !
-4. **Méthode 2 — Simuler les contrôleurs physiques dans l'émulateur DevUI :**
-   - Cliquez sur l'icône **`(✋) / (🎮)`** dans la barre d'outils supérieure pour basculer entre mode Mains et mode Manettes.
-   - **Manette droite :** Maintenez la touche **`Alt`** (ou `Option`) et bougez votre souris pour viser. Clic gauche ou `Espace` pour actionner la gâchette.
-   - **Manette gauche :** Maintenez la touche **`Shift`** et bougez votre souris.
-   - **Profondeur Z :** Tournez la molette de la souris tout en maintenant `Alt`.
-   - _(Note : Sous Linux GNOME, si la touche `Alt` est interceptée par votre gestionnaire de fenêtres, utilisez la Méthode 1 ou les boutons du panneau 2D `Controller [R]` en bas à droite)._
-
----
+- **Carte unique** (`xr-controls.ts`, lue chaque image par `XrControlsDriver`, fronts montants seulement) :
+  gâchette / pincement = valider · grip = attraper · stick gauche = marcher · stick droit ←/→ = pivot 30°
+  (`xr-rig.ts`, `getOffsetReferenceSpace` autour de la tête), ↑/↓ = pas de 0,8 m · A/X = analyser · B/Y = retour
+  (annuler le dialogue, quitter le labo, sinon menu) · clic de stick = légendes. Mains : microgestes de pouce
+  (← / → pivot, avant / arrière pas, tap analyser) quand le navigateur les expose.
+- **Aide visible** : bulle ambre au bout du laser (`xr-aim-hint.ts` + `XrAimHint`, ce que fera la validation,
+  texte redessiné seulement si la cible change) et carte légende sur chaque manette / main (`XrControlLegend`,
+  attachée à `getControllerGrip(i)`, affichée 25 s à l'entrée).
+- **Panneaux** (`holo-panel.ts`) : un bouton tape toujours ; un panneau glissable ne devient glisser qu'au-delà
+  de 4° de rotation nette depuis l'appui (le tremblement de la main ne mange plus les clics « Extraire » /
+  « Annuler »). Fond sombre opaque derrière chaque cadre (`HoloFrame backplate`), étiquettes masquées pendant
+  un dialogue.
+- **Extraction** : tir sur un objet → « Extraire en 3D ? » → vues 2D en carrousel → construction → labo 3D
+  (VS-T19 → T22, `docs/tasks/VR-village-spatial-shoot.md`).
 
 ## 5. Architecture des fichiers & Modules
 
@@ -278,7 +265,14 @@ Le système supporte 4 manières complètes d'interagir avec les boutons flottan
 | `xr-wrist-menu.tsx`             | Bouton du poignet (icône + étiquette) et panneau du menu qui suit l'utilisateur.                   | [x]  |
 | `spatial-projection.ts`         | Algorithme de projection des boîtes 2D normalisées en coordonnées sphériques/arc 3D.               | [x]  |
 | `holo-detection-target.tsx`     | Cible holographique 3D réactive au tir, avec texture billboard et mode raccordement.               | [x]  |
-| `holo-target-texture.ts`        | Générateur de texture canvas pour les cibles de détection et statuts de raccordement réseau.       | [x]  |
+| `tour/grounded.ts`              | Photo posée au sol (`PhotoGround`) : point d'une direction, rayon du monde → point de la photo.    | [x]  |
+| `tour/photo-anchored.tsx`       | Groupe qui suit la photo pendant la marche (contours fixes sur les objets).                        | [x]  |
+| `xr-controls.ts`                | Carte des boutons / sticks / microgestes → actions (pivot, pas, analyser, retour, aide).           | [x]  |
+| `xr-controls-driver.tsx`        | Lit les entrées XR chaque image et transmet les actions au studio.                                 | [x]  |
+| `xr-rig.ts`                     | Pivot par paliers autour de la tête (espace de référence décalé).                                  | [x]  |
+| `xr-aim-hint.ts`                | Texte « Gâchette · Extraire … » selon ce qui est visé et l'entrée.                                 | [x]  |
+| `xr-control-hints.tsx`          | Bulle au bout du laser + cartes légende sur manettes / mains.                                      | [x]  |
+| `holo-panel.ts`                 | Registre des panneaux holographiques : survol, tap, glisser (seuil 4°).                            | [x]  |
 | `xr-blaster-controller.tsx`     | Rayon laser continu, réticule d'impact, raycast d'intersections et décharges de tir à la gâchette. | [x]  |
 | `xr-audio-fx.ts`                | Synthétiseur procédural Web Audio API (tir, impact, radar, connexion/déconnexion réseau).          | [x]  |
 | `spawned-object-3d.tsx`         | Miniature 3D : vol depuis la vidéo vers son socle, rotation auto, agrandie au survol / en main.    | [x]  |
@@ -292,7 +286,7 @@ Le système supporte 4 manières complètes d'interagir avec les boutons flottan
 
 ## 6. Vérifications et critères de succès
 
-Vérification automatique dans l'émulateur (serveur dev lancé, ffmpeg requis) : `make vr-probe` (webcam simulée = pièce d'exemple ; tir manette sur le frigo sans scan, raccordement, pincement main sur le ventilateur, manette gauche sur la TV ; captures dans `test-results/vr-probe/`). En dev, l'appareil IWER est exposé sur `window.__IWER_DEVICE__` (`remote.dispatch`, comme l'IWER MCP).
+Vérification automatique dans l'émulateur (serveur dev lancé, ffmpeg requis) : `make vr-probe` (parcours complet, dont la marche avec contours fixes et l'extraction) et `make vr-iwer-tools` (outils IWER + commandes VS-T23) (webcam simulée = pièce d'exemple ; tir manette sur le frigo sans scan, raccordement, pincement main sur le ventilateur, manette gauche sur la TV ; captures dans `test-results/vr-probe/`). En dev, l'appareil IWER est exposé sur `window.__IWER_DEVICE__` (`remote.dispatch`, comme l'IWER MCP).
 
 - [x] `make dev-mock` permet d'entrer en VR sur `/village` via l'émulateur IWER sans erreur console.
 - [x] Le bouton 3D « Scanner la pièce » flotte dans le champ de vision et réagit au survol du curseur.

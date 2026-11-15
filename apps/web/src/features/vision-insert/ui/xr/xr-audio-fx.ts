@@ -163,3 +163,40 @@ export function playScanRadarSound(): void {
     // Audio non-critical
   }
 }
+
+/** Short sine blip on `freq` Hz (hover ticks, panel presses). */
+function blip(freq: number, seconds: number, peak: number, endFreq = freq): void {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+  try {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    const now = ctx.currentTime;
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(freq, now);
+    if (endFreq !== freq) osc.frequency.exponentialRampToValueAtTime(endFreq, now + seconds);
+    gain.gain.setValueAtTime(peak, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + seconds);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + seconds);
+  } catch {
+    // Audio non-critical
+  }
+}
+
+/** Faint tick when the pointer enters a holographic panel (Meta: feedback on every hover). */
+export function playHoverTick(): void {
+  blip(1900, 0.03, 0.03);
+}
+
+/** Holographic button press confirmation (hands have no haptics: the sound confirms). */
+export function playPanelSelectSound(): void {
+  blip(1200, 0.09, 0.08, 1800);
+}
+
+/** Snap turn / step confirmation: a soft low swoosh (the view jumped, the ear knows why). */
+export function playSnapSound(): void {
+  blip(520, 0.07, 0.05, 380);
+}

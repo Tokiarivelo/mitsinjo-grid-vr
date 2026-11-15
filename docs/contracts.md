@@ -554,6 +554,7 @@ R2 off or mock mode: base64 only, nothing stored. Mock: `MOCK_DETECTIONS`, drawn
 Shared Zod (client + server): `@/lib/vision` (`NormBoxSchema`, `ApplianceDetectionSchema`, `VisionDetectionsEventSchema`).
 `ApplianceDetection.label` = English name from the model (also SAM's text prompt) or the operator's text; `labels?: { fr?, mg? }` =
 same name translated by the model in the same call; the page shows `localLabel(d, locale)` (switching language needs no new call).
+`description?` (EN) + `descriptions?: { fr?, mg? }` (each ≤ `DESCRIPTION_MAX` = 90 chars, VS-T17) = brief description from the same call, shown by `localDescription(d, locale)` above the object's outline in VR; absent → name + category.
 `ApplianceDetection` adds `kind?: 'appliance'|'scenery'` (absent = appliance) and `scenery?: 'building'|'vehicle'|'tree'|'plant'|'person'|'animal'|'water'|'other'`;
 scenery is outlined and selectable, no load until the operator inserts it (`category: 'other'` by default, PV-T11).
 Vision lines in the store: `Appliance.id = vision-<photoKey(photo)>-<detection id>` (≤ 64; `photoKey` = FNV-1a of the photo data URL),

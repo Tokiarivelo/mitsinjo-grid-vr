@@ -197,6 +197,8 @@ export interface StudioPiecesProps {
   edits: PieceEdits | undefined;
   scale: number;
   studio?: StudioControls;
+  /** The camera is not ours to move (VR lab: the headset drives it): no presets, no framing. */
+  fixedCamera?: boolean;
   /** Outside the studio, a click names the piece's slot (surface editor). */
   onPickSlot?: (slot: number) => void;
 }
@@ -213,6 +215,7 @@ export function StudioPieces({
   edits,
   scale,
   studio,
+  fixedCamera = false,
   onPickSlot,
 }: StudioPiecesProps) {
   const pieces = useMemo(() => splitPieces(mesh, names), [mesh, names]);
@@ -258,7 +261,9 @@ export function StudioPieces({
           <axesHelper args={[0.5]} position={[0, floorY + 0.001, 0]} />
         </>
       )}
-      {studio && <StudioCamera studio={studio} pieces={pieces} box={box} scale={scale} />}
+      {studio && !fixedCamera && (
+        <StudioCamera studio={studio} pieces={pieces} box={box} scale={scale} />
+      )}
     </>
   );
 }

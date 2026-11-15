@@ -1,7 +1,8 @@
 import { render } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '@/lib/i18n';
-import type { SpatialTarget } from '../spatial-projection';
+import type { ApplianceDetection } from '@/lib/vision';
+import { projectDetectionsTo3D } from '../spatial-projection';
 import { HoloDetectionTarget } from '../holo-detection-target';
 
 vi.mock('@react-three/drei', () => ({
@@ -14,52 +15,60 @@ vi.mock('@react-three/fiber', () => ({
   useFrame: vi.fn(),
 }));
 
-vi.mock('../holo-target-texture', () => ({
-  getHoloTargetTexture: vi.fn(() => ({})),
+const cardTexts: string[][] = [];
+vi.mock('../holo-ui', () => ({
+  HoloText: ({ spec }: { spec: { lines: Array<{ text: string }> } }) => {
+    cardTexts.push(spec.lines.map((l) => l.text));
+    return <div data-testid="holo-card">{spec.lines.map((l) => l.text).join(' | ')}</div>;
+  },
 }));
 
-describe('HoloDetectionTarget (VS-T4)', () => {
-  const mockTarget: SpatialTarget = {
+describe('HoloDetectionTarget (VS-T4, outline VS-T18)', () => {
+  const detection: ApplianceDetection = {
     id: 'target-fridge',
-    detection: {
-      id: 'target-fridge',
-      label: 'Fridge',
-      category: 'fridge',
-      box: { x: 0.2, y: 0.3, w: 0.4, h: 0.5 },
-    },
-    position: [0.5, 1.2, -2.0],
-    dimensions: [0.5, 0.7, 0.4],
-    hitRadius: 0.45,
-    spawnPosition: [0.3, 1.3, -1.2],
-    spawnDimensions: [0.4, 0.6, 0.3],
+    label: 'Fridge',
+    category: 'fridge',
+    box: { x: 0.2, y: 0.3, w: 0.4, h: 0.5 },
+    description: 'Tall white fridge with two doors',
   };
+  const [target] = projectDetectionsTo3D([detection]);
 
   const renderTarget = (isMaterialized: boolean) =>
     render(
       <I18nProvider>
-        <HoloDetectionTarget target={mockTarget} hovered={false} isMaterialized={isMaterialized} />
+        <HoloDetectionTarget target={target!} hovered={false} isMaterialized={isMaterialized} />
       </I18nProvider>
     );
 
-  it('renders the hologram frame and label over its object', () => {
-    const { container } = renderTarget(false);
+  it('traces the outline on the view and labels it with name + brief description', () => {
+    const { container, getByTestId } = renderTarget(false);
     const group = container.querySelector('[name="holo-target-target-fridge"]');
-    expect(group).toBeTruthy();
-    expect(group?.querySelector('lineSegments')).toBeTruthy();
-    expect(container.querySelector('[data-testid="mock-billboard"]')).toBeTruthy();
+    expect(group?.querySelector('[name="holo-outline"] lineLoop')).toBeTruthy();
+    expect(getByTestId('holo-card').textContent).toContain('Fridge');
+    expect(getByTestId('holo-card').textContent).toContain('Tall white fridge with two doors');
   });
 
   it('has no click collider of its own: XRBlasterController is the single input source', () => {
-    // Regression: an R3F onClick here plus the blaster's pointerdown fired two shots
-    // per click (materialize, then connect at once).
+    // Regression: an R3F onClick here plus the blaster's pointerdown fired two shots per click.
     const { container } = renderTarget(false);
     const meshes = container.querySelectorAll('[name="holo-target-target-fridge"] > mesh');
     expect(meshes).toHaveLength(0);
   });
 
-  it('hides the wireframe once materialized and keeps the label', () => {
+  it('drops the outline once materialized and keeps the label', () => {
     const { container } = renderTarget(true);
-    expect(container.querySelector('lineSegments')).toBeNull();
+    expect(container.querySelector('lineLoop')).toBeNull();
     expect(container.querySelector('[data-testid="mock-billboard"]')).toBeTruthy();
+  });
+
+  it('hides its label card under an open panel, keeps the outline', () => {
+    // Regression: the card drew over the « Extract in 3D? » dialog (both without depth).
+    const { container } = render(
+      <I18nProvider>
+        <HoloDetectionTarget target={target!} hovered={false} isMaterialized={false} hideLabel />
+      </I18nProvider>
+    );
+    expect(container.querySelector('[data-testid="mock-billboard"]')).toBeNull();
+    expect(container.querySelector('lineLoop')).toBeTruthy();
   });
 });

@@ -20,6 +20,7 @@ import {
 } from '@/features/microgrid-3d';
 import { TOUR_EYE } from './tour/tour-nav';
 import { VillageXRStudio } from './village-xr-studio';
+import type { XrExtract } from '../../hooks/use-xr-extract';
 
 export interface VillageXRViewportProps {
   detections: ApplianceDetection[];
@@ -31,6 +32,10 @@ export interface VillageXRViewportProps {
   onEnterVR?: () => void;
   onExitVR: () => void;
   photoKey?: string;
+  /** 3D extraction flow (VS-T19–T22), from the page. */
+  extract?: XrExtract;
+  /** Photo the objects were found on. */
+  imageUrl?: string | null;
 }
 
 /**
@@ -49,6 +54,8 @@ export const VillageXRViewport = memo(function VillageXRViewport({
   onEnterVR,
   onExitVR,
   photoKey,
+  extract,
+  imageUrl,
 }: VillageXRViewportProps) {
   const t = useTranslations('features.visionInsert');
   const tCommon = useTranslations('common');
@@ -253,6 +260,8 @@ export const VillageXRViewport = memo(function VillageXRViewport({
             onSelectAppliance={onSelectAppliance}
             photoKey={photoKey}
             tourMode={tourMode}
+            {...(extract ? { extract } : {})}
+            imageUrl={imageUrl ?? null}
           />
         </Canvas>
       </CanvasCreationBoundary>

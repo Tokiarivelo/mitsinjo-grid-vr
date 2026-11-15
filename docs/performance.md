@@ -136,7 +136,9 @@ them after mount (re-targeting races React root unmounts and can leave a label e
 - Sphère dessinée en dernier (`renderOrder` 1000, `depthWrite: false`) : pas de surdessin derrière les panneaux, rien n'est coupé.
 - Extérieur : 7 photos 4096×2048 JPEG q72 (0,7–2,3 Mo, feuillages lourds) ; même règle pièce courante + voisines (le jardin en a 4).
 - Marche (VS-T16) : tout dans le shader de la sphère (intersection rayon / sol + mur, 2 textures seulement pendant la traversée), aucune géométrie ni allocation par image ; positions des flèches mutées sur place.
-- Photo de scan (1280×720) calculée sur CPU au tir seulement (pixels de la pièce mis en cache), jamais par image.
+- Bande de scan (2048×1280, 180° × 112,5°) calculée sur CPU à l'analyse seulement (pixels de la pièce mis en cache), jamais par image.
+- Contours fixes en marchant : un seul groupe décalé par image (`PhotoAnchored`), points du contour calculés une fois ; visée `photoRay` sur vecteurs de travail réutilisés.
+- Commandes (VS-T23) : `readControls` sans allocation hors fronts ; bulle de visée = 2 plans (texture redessinée seulement quand la cible change, cache `holoCardTexture`) ; légendes = 2 plans attachés aux grips, texture faite à la connexion. Fond des cadres holo : 1 plan opaque à 82 % par cadre (moins de surdessin additif lisible).
 
 - **Placed models that wear their drawings (PQ-T71):** each one is its own mesh (`PlacedDrawnModelMesh`: one atlas texture ≤ 1536 × 1024, one draw call per surface kind in use) instead of joining the merged placed-models mesh. High tier only and at most `PLACED_DRAWN_MAX` = 8; the others and the whole low tier stay in the merged flat-colour mesh (≤ +2 draw calls rule unchanged for them).
 - **Houses built from their plan (PQ-T72):** `houseMesh` is non-indexed triangles (≈ 2–8 k for a house with 20–60 openings; window bars, frames and balusters are small boxes), one draw call per slot in use (≤ 10), built once per recipe (`useMemo`). Same cap and tier as the drawn models above; the low tier keeps the parts recipe.

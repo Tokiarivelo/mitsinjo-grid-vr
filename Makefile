@@ -49,6 +49,9 @@ port: ## Print the web app port (PORT from shell or .env, default 3000)
 dev-stop: ## Stop the dev server on $(PORT) for good (next dev respawns a killed next-server; this stops turbo/pnpm too)
 	@bash scripts/dev-stop.sh $(PORT)
 
+iwer-bridge-stop: ## Stop the IWER MCP bridge Antigravity started on :8723 (cures « Failed to reconnect to iwer: CONNECTION_CLOSED »; then /mcp reconnect) [ALL=1 = every bridge, this session's too]
+	@ALL=$(ALL) bash scripts/iwer-bridge-stop.sh
+
 dev-fresh: ## Stop the dev server, drop its build cache (apps/web/.next), start it again: cures a stale module after a new export (« x is not a function », « export x was not found ») [MOCK=1 = offline LLM]
 	@bash scripts/dev-stop.sh $(PORT)
 	rm -rf apps/web/.next
@@ -102,9 +105,13 @@ shape-shots: ## Real 3D viewer shots of the shape-report recipes, dark + light (
 	$(need_ws)
 	@$(PNPM) --filter $(WEB) exec node scripts/object-viewer-shot.mjs $(URL) $(CURDIR)/test-results/shape-report
 
-vr-probe: ## /village VR check in the IWER emulator: wrist menu, shoot objects in the fake-webcam video with controllers + hands (dev server must run; needs ffmpeg)
+vr-probe: ## /village VR check in the IWER emulator: menu, scan, walk-stable outlines, extract to 3D, controllers + hands (dev server must run; needs ffmpeg)
 	$(need_ws)
 	@$(PNPM) --filter $(WEB) exec node scripts/vr-village-probe.mjs $(URL) $(CURDIR)/test-results/vr-probe
+
+vr-iwer-tools: ## Exercise every IWER emulator tool + the /village controls (A/B/X/Y, sticks, thumb gestures, legends, hints) (dev server must run)
+	$(need_ws)
+	@$(PNPM) --filter $(WEB) exec node scripts/vr-iwer-tools.mjs $(URL) $(CURDIR)/test-results/vr-iwer-tools
 
 improve-shot: ## Improvement chip shots (running + finalised), desktop + mobile, dark + light (dev server; stubbed API)
 	$(need_ws)
