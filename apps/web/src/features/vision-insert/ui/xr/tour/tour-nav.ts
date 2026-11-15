@@ -120,6 +120,35 @@ export function stepWalk(
   return [x, z];
 }
 
+/** A snap step glides at this speed (m/s): short, but never a jump cut. */
+export const STEP_GLIDE_SPEED = 3.2;
+
+/**
+ * One frame of a snap step (VS-T23): glides up to `STEP_GLIDE_SPEED · dt` of the `pending` metres
+ * (> 0 forward along the gaze) off, inside the walkable disc. Returns the new ground and what is
+ * left to glide (0 once done).
+ */
+export function glideStep(
+  ground: Ground,
+  pending: number,
+  headYaw: number,
+  dt: number,
+  walkRadius: number
+): { ground: Ground; pending: number } {
+  if (pending === 0) return { ground, pending };
+  const move = Math.sign(pending) * Math.min(Math.abs(pending), STEP_GLIDE_SPEED * dt);
+  let left = pending - move;
+  if (Math.abs(left) < 1e-3) left = 0;
+  let x = ground[0] + Math.sin(headYaw) * move;
+  let z = ground[1] - Math.cos(headYaw) * move;
+  const r = Math.hypot(x, z);
+  if (r > walkRadius) {
+    x *= walkRadius / r;
+    z *= walkRadius / r;
+  }
+  return { ground: [x, z], pending: left };
+}
+
 /** Arrow the viewer stands on (within reach), if any. `ground` is relative to the photo spot. */
 export function arrowAt(arrows: readonly TourArrow[], ground: Ground): TourArrow | null {
   for (const a of arrows) {

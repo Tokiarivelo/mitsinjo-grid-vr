@@ -264,3 +264,10 @@ Style : hologramme futuriste (cyan / ambre, lignes de balayage, coins lumineux, 
 - [x] Menu poignet › « Afficher / Masquer l'aide des commandes » ; légendes 12 s à l'entrée, plus petites.
 - [x] « Extraire en 3D » → studio (`xr-extract-studio.tsx`) : carrousel au centre, colonne de génération + miniature à droite, hologramme sur le socle pendant la construction, labo ouvert tout seul (plus de « Entrer dans le labo 3D »).
 - [x] **Done when :** `make vr-probe` 28/28 (clics souris, studio, labo automatique).
+
+### VS-T25 : Studio lisible, marche dans le studio, rotation sans tourner la vue
+
+- [x] Cartes de texte hologramme : toutes les lignes rétrécissent ensemble quand le titre passe sur 2 lignes (« Construction 3D de « plante en pot » » n'est plus coupé en haut).
+- [x] Mode Play de l'émulateur : tenir le carrousel / un modèle à la gâchette et bouger la souris tourne l'objet, plus la vue.
+- [x] Marcher dans le studio : stick gauche, pas de 80 cm (stick droit ↑/↓, swipe du pouce), molette ; remis à zéro à la sortie.
+- [x] Vues 2D plus grandes (0,6 m, espacées de 32°), colonne de génération décalée à droite.

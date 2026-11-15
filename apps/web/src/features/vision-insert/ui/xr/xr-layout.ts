@@ -87,10 +87,13 @@ export function anchorAhead(
   };
 }
 
-/** Views carousel: slides on an arc round the viewer, this far apart (rad, ~26°). */
-export const CAROUSEL_SPACING = 0.45;
+/**
+ * Views carousel: slides on an arc round the viewer, this far apart (rad, ~32°). 0.6 m slides at
+ * 1.25 m (~27° wide, VS-T25: they read from where the studio opens, without walking up).
+ */
+export const CAROUSEL_SPACING = 0.56;
 export const CAROUSEL_RADIUS = 1.25;
-export const SLIDE_SIZE = 0.46;
+export const SLIDE_SIZE = 0.6;
 
 /**
  * Position and turn of a slide `rel` steps from the focused one (rel 0 = straight ahead), on an
@@ -112,7 +115,7 @@ export function slidePose(rel: number): { position: Vec3; yaw: number; focus: nu
 
 /**
  * 3D studio (VS-T24): the generation column (progress card + miniature) on the right of the panel
- * anchor, past the carousel's right neighbour, turned toward the viewer (~45° to the right).
+ * anchor, past the carousel's right neighbour, turned toward the viewer (~65° to the right).
  */
-export const STUDIO_COLUMN_POSITION: Vec3 = [0.95, 0, 0.2];
-export const STUDIO_COLUMN_YAW = 0.8;
+export const STUDIO_COLUMN_POSITION: Vec3 = [1.25, 0, 0.55];
+export const STUDIO_COLUMN_YAW = 1.1;

@@ -251,6 +251,14 @@ Pilotage scripté (MCP IWER ou `remote.dispatch`) : voir [`vr-iwer-tools.md`](vr
    **miniature** tournante sur un petit socle. « Valider et construire la 3D » → l'hologramme passe sur le socle
    central ; le **labo 3D s'ouvre tout seul** au même endroit quand le modèle est prêt : grip pour attraper /
    tourner, B/Y pour en sortir.
+5. **Marcher dans le studio** (VS-T25) : stick gauche (glisse, relatif à la tête), stick droit ↑/↓ ou swipe du
+   pouce (un pas de 80 cm), molette de la souris dans l'émulateur (25 cm par cran) ; la marche réelle marche aussi.
+   Le studio glisse à l'inverse (dôme, carrousel, colonne, labo ensemble, rayon 2,4 m) et reprend sa place à la
+   sortie : l'espace de référence XR, la visite et le mur webcam ne bougent pas. Vues 2D de 0,6 m (~27°).
+6. **Émulateur, mode Play** (pointeur verrouillé) : la DevUI tourne le casque — manettes comprises — à chaque
+   mouvement de souris. Pendant qu'une manette tient le carrousel ou un modèle, ce mouvement est intercepté
+   (`window`, phase de capture) et tourne l'objet tenu, pas la vue (comme sur un casque, Meta « one-point
+   manipulation »). Hors mode Play, clic gauche = gâchette du regard, clic droit glissé = tourner la tête.
 
 ## 7. Confort visuel et prévention du vertige : Écran panoramique à focus plat (`/village`)
 

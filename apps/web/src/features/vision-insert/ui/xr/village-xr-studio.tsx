@@ -27,7 +27,12 @@ import { projectDetectionsTo3D, type SpatialTarget } from './spatial-projection'
 import { SpatialAirButton } from './spatial-air-button';
 import { HoloDetectionTarget } from './holo-detection-target';
 import { SpawnedObject3D } from './spawned-object-3d';
-import { AIR_BUTTON_ID, XRBlasterController, type MiniatureHandle } from './xr-blaster-controller';
+import {
+  AIR_BUTTON_ID,
+  mouseTarget,
+  XRBlasterController,
+  type MiniatureHandle,
+} from './xr-blaster-controller';
 import { createTurntable, type Turntable } from './turntable';
 import { playGridConnectSound, playGridDisconnectSound, playSnapSound } from './xr-audio-fx';
 import { VillageSpatialHUD } from './village-spatial-hud';
@@ -47,6 +52,7 @@ import { XrAimHint, XrControlLegend } from './xr-control-hints';
 import { XrControlsDriver } from './xr-controls-driver';
 import { SNAP_TURN, snapshotSources, STEP_DISTANCE, type XrControlAction } from './xr-controls';
 import { snapTurn } from './xr-rig';
+import { newStudioWalk, StudioWalk, wheelStep } from './studio-walk';
 import type { AimHintContext } from './xr-aim-hint';
 import { WristMenuButton, WristMenuPanel } from './xr-wrist-menu';
 
@@ -118,6 +124,23 @@ export const VillageXRStudio = memo(function VillageXRStudio({
   const modal = stage !== 'idle';
   /** « Extract in 3D » said: the studio room replaces the 360° view until the lab is left. */
   const studio = stage === 'views' || stage === 'build' || stage === 'lab';
+  /** Where the viewer walked in the studio (VS-T25); back at its door each time it opens. */
+  const studioWalk = useRef(newStudioWalk());
+  useEffect(() => {
+    if (!studio) studioWalk.current = newStudioWalk();
+  }, [studio, studioWalk]);
+  // Mouse wheel over the headset view walks in the studio (emulator, desktop preview).
+  useEffect(() => {
+    const dom = gl?.domElement;
+    const doc = dom?.ownerDocument;
+    if (!studio || !dom || !doc) return;
+    const onWheel = (e: WheelEvent) => {
+      if (!mouseTarget(e.target, dom, !!gl.xr?.isPresenting)) return;
+      studioWalk.current.step = wheelStep(studioWalk.current.step, e.deltaY);
+    };
+    doc.addEventListener('wheel', onWheel, { capture: true, passive: true });
+    return () => doc.removeEventListener('wheel', onWheel, { capture: true });
+  }, [studio, studioWalk, gl]);
   /** Wrist menu: closed on entry; the wrist button toggles it (read by the input controller). */
   const [menuOpen, setMenuOpen] = useState(false);
   const menu = useMemo(() => {
@@ -416,8 +439,9 @@ export const VillageXRStudio = memo(function VillageXRStudio({
           if (snapTurn(gl.xr, headRef.current, action.direction * SNAP_TURN)) playSnapSound();
           return;
         case 'step':
-          if (!tourMode) return;
-          tour.ground.step += action.direction * STEP_DISTANCE;
+          if (studio) studioWalk.current.step += action.direction * STEP_DISTANCE;
+          else if (tourMode) tour.ground.step += action.direction * STEP_DISTANCE;
+          else return;
           playSnapSound();
           return;
         case 'analyse':
@@ -437,6 +461,8 @@ export const VillageXRStudio = memo(function VillageXRStudio({
     [
       camera,
       gl,
+      studio,
+      studioWalk,
       tourMode,
       tour.ground,
       modal,
@@ -655,7 +681,6 @@ export const VillageXRStudio = memo(function VillageXRStudio({
 
       {/* 6c. 3D extraction: question, then the studio room (VS-T24): 2D views carousel with the
           generation column on the right, build hologram, lab (VS-T19–T22) */}
-      {studio && <StudioRoom />}
       {extract && anchor && stage === 'confirm' && (
         <HoloExtractDialog
           anchor={anchor}
@@ -669,53 +694,58 @@ export const VillageXRStudio = memo(function VillageXRStudio({
           onCancel={extract.cancel}
         />
       )}
-      {extract && anchor && stage === 'views' && (
-        <HoloViewsCarousel
-          anchor={anchor}
-          registry={panels}
-          hoveredId={hoveredTargetId}
-          slides={extract.slides}
-          vehicle={extract.slides.some((s) => s.id === 'bottom')}
-          canBuild={extract.canBuild}
-          onRedraw={extract.redraw}
-          onToggleValidated={extract.toggleValidated}
-          onBuild={extract.build}
-          onCancel={extract.cancel}
-        />
-      )}
-      {extract && anchor && (stage === 'views' || stage === 'build') && (
-        <AnchoredPanel anchor={anchor} name="xr-studio-panels">
-          {stage === 'build' && (
-            <HoloBuildStage
-              name={extractName}
-              {...(extract.slides[0]?.imageUrl ? { imageUrl: extract.slides[0].imageUrl } : {})}
+      {studio && (
+        <StudioWalk walk={studioWalk}>
+          <StudioRoom />
+          {extract && anchor && stage === 'views' && (
+            <HoloViewsCarousel
+              anchor={anchor}
+              registry={panels}
+              hoveredId={hoveredTargetId}
+              slides={extract.slides}
+              vehicle={extract.slides.some((s) => s.id === 'bottom')}
+              canBuild={extract.canBuild}
+              onRedraw={extract.redraw}
+              onToggleValidated={extract.toggleValidated}
+              onBuild={extract.build}
+              onCancel={extract.cancel}
             />
           )}
-          <HoloGenerationColumn
-            stage={stage}
-            name={extractName}
-            slides={extract.slides}
-            vehicle={extract.slides.some((s) => s.id === 'bottom')}
-            {...(extract.shape.step ? { step: extract.shape.step } : {})}
-            seconds={buildSeconds}
-            registry={panels}
-            hoveredId={hoveredTargetId}
-            onCancel={extract.cancel}
-          />
-        </AnchoredPanel>
-      )}
-      {extract && stage === 'lab' && extract.shape.shape && extractTarget && imageUrl && (
-        <XrObjectLab
-          shape={extract.shape.shape}
-          detection={extractTarget.detection}
-          imageUrl={imageUrl}
-          label={extractName}
-          registry={panels}
-          hoveredId={hoveredTargetId}
-          onEditPieces={extract.editPieces}
-          onExit={leaveLab}
-          anchor={anchor}
-        />
+          {extract && anchor && (stage === 'views' || stage === 'build') && (
+            <AnchoredPanel anchor={anchor} name="xr-studio-panels">
+              {stage === 'build' && (
+                <HoloBuildStage
+                  name={extractName}
+                  {...(extract.slides[0]?.imageUrl ? { imageUrl: extract.slides[0].imageUrl } : {})}
+                />
+              )}
+              <HoloGenerationColumn
+                stage={stage}
+                name={extractName}
+                slides={extract.slides}
+                vehicle={extract.slides.some((s) => s.id === 'bottom')}
+                {...(extract.shape.step ? { step: extract.shape.step } : {})}
+                seconds={buildSeconds}
+                registry={panels}
+                hoveredId={hoveredTargetId}
+                onCancel={extract.cancel}
+              />
+            </AnchoredPanel>
+          )}
+          {extract && stage === 'lab' && extract.shape.shape && extractTarget && imageUrl && (
+            <XrObjectLab
+              shape={extract.shape.shape}
+              detection={extractTarget.detection}
+              imageUrl={imageUrl}
+              label={extractName}
+              registry={panels}
+              hoveredId={hoveredTargetId}
+              onEditPieces={extract.editPieces}
+              onExit={leaveLab}
+              anchor={anchor}
+            />
+          )}
+        </StudioWalk>
       )}
 
       {/* 7. 3D miniatures in reach: spin, hold to rotate, tap to connect */}

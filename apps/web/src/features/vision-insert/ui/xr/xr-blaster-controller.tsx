@@ -169,6 +169,18 @@ const MOUSE_GAIN = 0.012;
 const MOUSE_PANEL_GAIN = 0.004;
 const BEAM_PANEL = '#67e8f9';
 
+/** Head turn per pixel of locked mouse move in the IWER DevUI Play mode (its own gain, rad). */
+export const LOCKED_TURN_GAIN = 0.002;
+
+/**
+ * Turn a locked mouse move (IWER DevUI Play mode) would give the headset — and the controllers
+ * carried with it — as a ray yaw / pitch step (yaw > 0 = right, pitch > 0 = up). While a
+ * controller holds a panel or a model, the studio applies it to the held thing instead of the view.
+ */
+export function lockedTurn(movementX: number, movementY: number): { yaw: number; pitch: number } {
+  return { yaw: movementX * LOCKED_TURN_GAIN, pitch: -movementY * LOCKED_TURN_GAIN };
+}
+
 /** Horizontal / vertical angle of a ray direction. */
 const yawOf = (d: THREE.Vector3) => Math.atan2(d.x, -d.z);
 const pitchOf = (d: THREE.Vector3) => Math.asin(Math.max(-1, Math.min(1, d.y)));
@@ -437,6 +449,8 @@ export const XRBlasterController = memo(function XRBlasterController({
   const grabsRef = useRef(new Map<InputKey, Grab>());
   /** Selects held on a panel: a tap on release, or a sideways drag (carousel). */
   const dragsRef = useRef(new Map<InputKey, PanelDrag>());
+  /** Locked mouse turn (Play mode) kept off the headset while a controller holds something. */
+  const heldTurnRef = useRef({ yaw: 0, pitch: 0 });
   const blastRef = useRef<{ origin: THREE.Vector3; to: THREE.Vector3; progress: number } | null>(
     null
   );
@@ -820,6 +834,22 @@ export const XRBlasterController = memo(function XRBlasterController({
       owned = false;
       release('mouse');
     };
+    // Emulator Play mode (pointer locked): the DevUI turns the headset, controllers included, on
+    // every mouse move. While a controller holds a panel or a model, the move turns that instead
+    // (stopped before the DevUI's document listener), so the view stays still, as on a headset.
+    const view = doc.defaultView;
+    const onLockedMove = (e: MouseEvent) => {
+      if (!doc.pointerLockElement || !presenting()) return;
+      const holding = [...dragsRef.current.keys(), ...grabsRef.current.keys()].some(
+        (k) => k !== 'mouse'
+      );
+      if (!holding) return;
+      own(e);
+      const step = lockedTurn(e.movementX || 0, e.movementY || 0);
+      heldTurnRef.current.yaw += step.yaw;
+      heldTurnRef.current.pitch += step.pitch;
+    };
+    view?.addEventListener('mousemove', onLockedMove, true);
     const MOUSE_EVENTS = ['mousedown', 'mousemove', 'mouseup'] as const;
     for (const type of MOUSE_EVENTS) doc.addEventListener(type, onMouse, true);
     doc.addEventListener('pointermove', onMove, true);
@@ -828,6 +858,7 @@ export const XRBlasterController = memo(function XRBlasterController({
     doc.addEventListener('pointercancel', onLeave, true);
     dom.addEventListener('pointerleave', onLeave);
     return () => {
+      view?.removeEventListener('mousemove', onLockedMove, true);
       for (const type of MOUSE_EVENTS) doc.removeEventListener(type, onMouse, true);
       doc.removeEventListener('pointermove', onMove, true);
       doc.removeEventListener('pointerdown', onDown, true);
@@ -942,6 +973,12 @@ export const XRBlasterController = memo(function XRBlasterController({
     // 3. Beams: both XR pointers in the headset, the mouse/camera ray otherwise.
     //    A pointer holding a miniature turns its motion into rotation instead.
     if (presenting) {
+      // The Play-mode mouse turn applies only while something is held; it restarts at 0.
+      const held = heldTurnRef.current;
+      if (![...dragsRef.current.keys(), ...grabsRef.current.keys()].some((k) => k !== 'mouse')) {
+        held.yaw = 0;
+        held.pitch = 0;
+      }
       for (const i of [0, 1] as const) {
         const space = gl.xr.getController(i);
         if (!space || !space.visible || space.matrixWorld.elements[15] === 0) {
@@ -952,11 +989,11 @@ export const XRBlasterController = memo(function XRBlasterController({
         }
         rayFrom(space, _vOrigin, _vDirection);
         const drag = dragsRef.current.get(i);
-        if (drag) dragTo(drag, yawOf(_vDirection));
+        if (drag) dragTo(drag, yawOf(_vDirection) + held.yaw);
         const grab = grabsRef.current.get(i) ?? grabsRef.current.get((i + 2) as InputKey);
         if (grab) {
-          const yaw = yawOf(_vDirection);
-          const pitch = pitchOf(_vDirection);
+          const yaw = yawOf(_vDirection) + held.yaw;
+          const pitch = pitchOf(_vDirection) + held.pitch;
           rotateTurntable(
             grab.miniature.turntable,
             wrapPi(yaw - grab.yaw) * RAY_GAIN + (_vOrigin.x - grab.x) * MOVE_GAIN,

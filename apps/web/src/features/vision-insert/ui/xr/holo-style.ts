@@ -194,12 +194,55 @@ export function wrapText(
   return kept;
 }
 
+export const holoFont = (size: number, weight: HoloLine['weight']) =>
+  `${weight ?? 600} ${size}px "Inter", "Segoe UI", system-ui, sans-serif`;
+
+const LINE_HEIGHT = 1.22;
+
+export interface HoloCardBlock {
+  line: HoloLine;
+  size: number;
+  font: string;
+  rows: string[];
+}
+
+/**
+ * Lays the lines out on a `w`×`h` canvas: each wraps to at most 2 rows, and when the stack is
+ * taller than the card every size shrinks together until it fits (a long object name used to push
+ * the title's first row off the top of the card). `measure` gives a string's width in a font.
+ */
+export function layoutHoloCard(
+  measure: (font: string, s: string) => number,
+  lines: HoloLine[],
+  w: number,
+  h: number
+): { blocks: HoloCardBlock[]; total: number } {
+  const pad = w * 0.05;
+  const room = h * 0.94;
+  let scale = 1;
+  for (;;) {
+    const blocks = lines.map((line) => {
+      const size = Math.max(8, Math.round((line.size ?? 44) * scale));
+      const font = holoFont(size, line.weight);
+      return {
+        line,
+        size,
+        font,
+        rows: wrapText((s) => measure(font, s), line.text, w - 2 * pad, 2),
+      };
+    });
+    const total = blocks.reduce((acc, b) => acc + b.rows.length * b.size * LINE_HEIGHT, 0);
+    if (total <= room || scale <= 0.3) return { blocks, total };
+    scale *= Math.max(0.6, Math.min(0.95, room / total));
+  }
+}
+
 const cardCache = new Map<string, THREE.CanvasTexture>();
 const CARD_CACHE_MAX = 96;
 
 /**
  * Canvas texture of a holographic text card (cached by content; redrawn only on change, never per
- * frame). Each line wraps to at most 2 lines. Glass + thin rim + corner ticks when `glass`.
+ * frame). Each line wraps to at most 2 lines, all shrunk together to fit. Glass + thin rim + corner ticks when `glass`.
  */
 export function holoCardTexture(spec: HoloCardSpec): THREE.CanvasTexture {
   const key = JSON.stringify(spec);
@@ -237,17 +280,15 @@ export function holoCardTexture(spec: HoloCardSpec): THREE.CanvasTexture {
       }
     }
     const pad = w * 0.05;
-    const blocks = spec.lines.map((l) => {
-      const size = l.size ?? 44;
-      ctx.font = `${l.weight ?? 600} ${size}px "Inter", "Segoe UI", system-ui, sans-serif`;
-      return {
-        line: l,
-        size,
-        font: ctx.font,
-        rows: wrapText((s) => ctx.measureText(s).width, l.text, w - 2 * pad, 2),
-      };
-    });
-    const total = blocks.reduce((acc, b) => acc + b.rows.length * b.size * 1.22, 0);
+    const { blocks, total } = layoutHoloCard(
+      (font, s) => {
+        ctx.font = font;
+        return ctx.measureText(s).width;
+      },
+      spec.lines,
+      w,
+      h
+    );
     let y = (h - total) / 2;
     ctx.textBaseline = 'top';
     ctx.textAlign = spec.align === 'left' ? 'left' : 'center';
@@ -259,7 +300,7 @@ export function holoCardTexture(spec: HoloCardSpec): THREE.CanvasTexture {
       ctx.shadowBlur = 14;
       for (const row of b.rows) {
         ctx.fillText(row, x, y);
-        y += b.size * 1.22;
+        y += b.size * LINE_HEIGHT;
       }
     }
   }

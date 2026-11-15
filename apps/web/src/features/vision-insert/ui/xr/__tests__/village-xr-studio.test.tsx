@@ -31,6 +31,10 @@ vi.mock('../tour/panorama-tour', () => ({
   },
 }));
 vi.mock('../spatial-air-button', () => ({ SpatialAirButton: () => null }));
+vi.mock('../studio-walk', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../studio-walk')>()),
+  StudioWalk: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}));
 const panelsMock = vi.hoisted(() => ({ dialog: null as Record<string, unknown> | null }));
 vi.mock('../xr-control-hints', () => ({
   XrAimHint: () => null,
