@@ -41,6 +41,8 @@ Reference visuals: `design/reference/Mitsinjo Grid_ Village at Sunset.png` (mast
 - Inserted appliances get their own chip (plug icon, name) after the sector chips; the bar wraps instead of scrolling. A chip flies the camera closer to the object (`APPLIANCE_FOCUS_SCALE`); a sector chip, a building click or a preset takes it back.
 - Hand tool (hand icon next to reset, `aria-pressed`): left drag / one finger pans along the ground instead of orbiting (right drag still orbits). Without it, right drag / two fingers pan. Pan stays on the ground plane (`screenSpacePanning={false}`).
 - XR session (`immersive-vr`, /simulation only): orbit off, post-processing off, camera parented to a rig group at `XR_VIEWPOINT` (the headset pose applies relative to it); on exit the camera detaches and tweens back to its 2D target.
+- XR controls (VSIM-T1): the /village map (left stick walk, right stick snap turn 30° about the head / 0.8 m step, A/X labels, B/Y back, stick click legends); walls stop the walker (walk grid, VSIM-T2).
+- XR building panel (VSIM-T3): hologram card (cyan rim, amber accents, `holo-style`) 1.2 m ahead, 18 cm under the eyes, yaw-facing; info card (sector, SIMULATED DATA, served / demand, coverage, limit, red refusal line) over two rows of 31 × 10 cm buttons; drawn on top (no depth test). Room (VSIM-T4): 6 × 5 × 2.7 m closed box off-map, lamps and appliance glow = engine coverage, panel on the wall facing the entry.
 
 ## Energy visual mapping (render only; never compute flows here)
 
