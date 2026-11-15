@@ -19,8 +19,14 @@ export const WRIST_RAY_RADIUS = 0.06;
 export const WRIST_OFFSET_HAND: [number, number, number] = [0, 0.03, 0.035];
 /** Wrist button offset in the left controller grip space (+Y up, +Z toward the forearm). */
 export const WRIST_OFFSET_GRIP: [number, number, number] = [0, 0.035, 0.11];
-/** Fallback when no left hand / controller is tracked (desktop, mouse): camera space, bottom-left. */
+/** Fallback when not presenting (desktop, mouse): camera space, bottom-left. */
 export const WRIST_OFFSET_CAMERA: [number, number, number] = [-0.24, -0.16, -0.6];
+/**
+ * In the headset with no left wrist to wear it (no left input, or the emulator, whose hands and
+ * controllers turn with the head and can't touch each other): the button floats in the world, left of where the menu opens, and
+ * lazy-follows like the menu (VS-T26). Head-locked, it turned with the mouse and no ray could reach it.
+ */
+export const WRIST_OFFSET_FLOAT: [number, number, number] = [-0.42, 0.06, 0];
 
 /** Menu distance in front of the viewer (Meta ray range 0.8–3 m) and drop below the eyes. */
 export const MENU_DISTANCE = 0.9;
@@ -142,10 +148,11 @@ export function placeWristButton(
   xr: WristXR | undefined,
   handedness: readonly (string | null)[],
   camera: THREE.Object3D,
-  out: THREE.Vector3
+  out: THREE.Vector3,
+  float?: { pose: MenuPose; worn: boolean }
 ): 0 | 1 | null {
   const i = handedness.indexOf('left');
-  if (xr?.isPresenting && (i === 0 || i === 1)) {
+  if (xr?.isPresenting && (i === 0 || i === 1) && (float?.worn ?? true)) {
     const hand = xr.getHand?.(i);
     const wrist = hand?.joints?.['wrist'];
     if (hand?.visible && wrist?.visible) {
@@ -158,8 +165,24 @@ export function placeWristButton(
       return i;
     }
   }
+  if (xr?.isPresenting && float) {
+    menuPointToWorld(float.pose, 1, WRIST_OFFSET_FLOAT, out);
+    return null;
+  }
   pointIn(camera, WRIST_OFFSET_CAMERA, out);
   return null;
+}
+
+/**
+ * Handedness of the inputs: from their `connected` events, else read off the session (a
+ * component mounted after the inputs connected has missed the events). Mutates `known`.
+ */
+export function fillHandedness(
+  known: [string | null, string | null],
+  sources: ArrayLike<{ handedness?: string }> | undefined
+): [string | null, string | null] {
+  for (const i of [0, 1] as const) known[i] ??= sources?.[i]?.handedness ?? null;
+  return known;
 }
 
 /** World position of `offset` inside the menu drawn at `pose` with uniform `scale` (into `out`). */

@@ -222,14 +222,19 @@ sinon le pincement suffit pour tout (bouton « Analyser », flèches au sol, men
 
 ### 6.3 Navigateur PC (souris, clavier, émulateur IWER)
 
-| Action                          | Comment                                                                                 |
-| :------------------------------ | :-------------------------------------------------------------------------------------- |
-| Viser / valider                 | Survol + **clic gauche**, aussi pendant la session émulée (bouton du poignet, panneaux) |
-| Marcher dans la visite 360°     | **↑ ↓ ← →**, **W A S D** ou **Z Q S D** (souris au-dessus de la scène)                  |
-| Changer de lieu                 | Marcher sur la flèche au sol, ou la viser et valider                                    |
-| Manettes / mains de l'émulateur | Barre DevUI : bascule ✋ / 🎮 ; panneaux `Controller [L/R]` (A, B, X, Y, Trig, Stick)   |
-| Bouger une manette              | Cliquer dessus → gizmo (flèches = déplacer, anneaux = tourner) ou champs Pos / Rot      |
+| Action                          | Comment                                                                                    |
+| :------------------------------ | :----------------------------------------------------------------------------------------- |
+| Viser / valider                 | Survol + **clic gauche**, aussi pendant la session émulée (bouton du poignet, panneaux)    |
+| Marcher dans la visite 360°     | **↑ ↓ ← →**, **W A S D** ou **Z Q S D** (souris au-dessus de la scène)                     |
+| Changer de lieu                 | Marcher sur la flèche au sol, ou la viser et valider                                       |
+| Manettes / mains de l'émulateur | Barre DevUI : bascule ✋ / 🎮 ; panneaux `Controller [L/R]` (A, B, X, Y, Trig, Stick)      |
+| Bouger une manette              | Cliquer dessus → gizmo (flèches = déplacer, anneaux = tourner) ou champs Pos / Rot         |
+| Menu (bouton « Menu »)          | Flotte à gauche de la vue (il ne suit plus la tête) : le viser au laser ou au clic, ou B/Y |
 
+Dans l'émulateur, mains et manettes tournent avec la tête (mode Play) et ne peuvent pas se toucher : le bouton
+« Menu » n'est donc pas porté au poignet mais flotte dans la pièce, à gauche de l'endroit où le menu s'ouvre, et
+ne se recentre que si l'on regarde à plus de 35° ailleurs (VS-T26). Sur un casque, il reste au poignet gauche
+(main) ou sur la manette gauche ; sans entrée gauche suivie, il flotte de la même façon.
 Sous Linux, `Alt + clic` est souvent pris par le bureau : utilisez le gizmo ou la souris directe.
 La DevUI d'IWER dessine son propre canvas plein écran par-dessus la scène : la souris est donc écoutée sur la
 page (un clic sur ce canvas vise la scène avec la caméra de l'œil XR) ; un clic sur un panneau HTML ou un glisser

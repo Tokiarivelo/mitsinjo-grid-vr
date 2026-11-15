@@ -277,6 +277,6 @@ Style : hologramme futuriste (cyan / ambre, lignes de balayage, coins lumineux, 
 
 - [x] Main articulée réelle (`generic-hand`, peau + liseré) et modèle de manette du profil d'entrée (`microgrid-3d/utils/xr-input-models.ts`), repli hors ligne ; aussi sur `/simulation`.
 - [x] Laser selon Meta « Ray casting » : faisceau court qui s'efface, curseur anneau à taille angulaire constante, blanc / bleu nuit à l'appui (`xr-ray-visual.ts`), sur `/village` et `/simulation`.
-- [ ] Menu poignet cliquable (main, laser, souris) et qui ne tourne plus avec la souris.
+- [x] Menu poignet cliquable (main, laser, souris) et qui ne tourne plus avec la souris : bouton flottant dans l'émulateur ou sans poignet gauche suivi, latéralité lue sur la session.
 - [ ] Bouton « Quitter le studio » / « Revenir au studio » ; l'objet du labo est gardé tant qu'on n'en extrait pas un autre.
 - [ ] Calques dans le labo immersif, liste défilable verticalement (comme le carrousel).

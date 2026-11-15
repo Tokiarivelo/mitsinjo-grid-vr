@@ -6,6 +6,8 @@ import {
   menuSpawnScale,
   placeWristButton,
   WRIST_OFFSET_CAMERA,
+  WRIST_OFFSET_FLOAT,
+  fillHandedness,
   WRIST_OFFSET_GRIP,
   WRIST_OFFSET_HAND,
   createWristMenu,
@@ -110,6 +112,39 @@ describe('placeWristButton', () => {
     };
     expect(placeWristButton(xr, ['left', 'right'], camera, out)).toBe(0);
     expect(out.z).toBeCloseTo(-0.3 + WRIST_OFFSET_GRIP[2]);
+  });
+
+  it('no left wrist in the headset: floats in the world, not on the view (VS-T26, regression)', () => {
+    // Before: head-locked bottom-left, it turned with the mouse and no laser could reach it.
+    const pose = updateLazyFollow(createMenuPose(), 0, 1.6, 0, 0, 0.016, true);
+    const xr = { isPresenting: true };
+    const out = new THREE.Vector3();
+    expect(placeWristButton(xr, [null, null], camera, out, { pose, worn: true })).toBeNull();
+    const at = menuPointToWorld(pose, 1, WRIST_OFFSET_FLOAT, new THREE.Vector3());
+    expect(out.distanceTo(at)).toBeCloseTo(0);
+    // The head turns a little: the button stays where it was.
+    const turned = new THREE.PerspectiveCamera();
+    turned.position.set(0, 1.6, 0);
+    turned.rotation.y = 0.3;
+    updateLazyFollow(pose, 0, 1.6, 0, -0.3, 0.016);
+    expect(placeWristButton(xr, [null, null], turned, out, { pose, worn: true })).toBeNull();
+    expect(out.distanceTo(at)).toBeCloseTo(0);
+  });
+
+  it('emulator: never worn on a hand or controller (they turn with the head)', () => {
+    const pose = updateLazyFollow(createMenuPose(), 0, 1.6, 0, 0, 0.016, true);
+    const xr = { isPresenting: true, getControllerGrip: () => tracked(-0.2, 1.0, -0.3) };
+    const out = new THREE.Vector3();
+    expect(placeWristButton(xr, ['left', 'right'], camera, out, { pose, worn: false })).toBeNull();
+  });
+});
+
+describe('fillHandedness', () => {
+  it('reads the session when the connected events were missed, keeps what it knew', () => {
+    const known: [string | null, string | null] = [null, 'left'];
+    fillHandedness(known, [{ handedness: 'left' }, { handedness: 'right' }]);
+    expect(known).toEqual(['left', 'left']);
+    expect(fillHandedness([null, null], undefined)).toEqual([null, null]);
   });
 });
 

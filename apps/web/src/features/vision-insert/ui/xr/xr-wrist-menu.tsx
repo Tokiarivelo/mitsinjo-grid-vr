@@ -4,8 +4,10 @@ import { memo, useEffect, useMemo, useRef, type ReactNode } from 'react';
 import * as THREE from 'three';
 import { useFrame, useThree } from '@react-three/fiber';
 import { useTranslations } from '@/lib/i18n';
+import { isDevXREmulated } from '@/features/microgrid-3d/utils/dev-xr-emulator';
 import {
   createMenuPose,
+  fillHandedness,
   menuPointToWorld,
   menuSpawnScale,
   placeWristButton,
@@ -46,6 +48,9 @@ export const WristMenuButton = memo(function WristMenuButton({
   const groupRef = useRef<THREE.Group>(null);
   const ringRef = useRef<THREE.Mesh>(null);
   const handednessRef = useRef<[string | null, string | null]>([null, null]);
+  /** Where the button floats when no wrist can wear it (lazy-follows, like the menu). */
+  const floatPose = useMemo(() => createMenuPose(), []);
+  const floatAgeRef = useRef(-1);
 
   // Which input is the left one: from the XR `connected` events (data = XRInputSource).
   useEffect(() => {
@@ -77,15 +82,32 @@ export const WristMenuButton = memo(function WristMenuButton({
     [open, t]
   );
 
-  useFrame((state) => {
+  useFrame((state, delta) => {
     const g = groupRef.current;
     if (!g) return;
-    const wearer = placeWristButton(
-      gl?.xr as unknown as WristXR | undefined,
-      handednessRef.current,
-      camera,
-      _v
-    );
+    const xr = gl?.xr as unknown as (WristXR & { getSession?: () => XRSession | null }) | undefined;
+    fillHandedness(handednessRef.current, xr?.getSession?.()?.inputSources);
+    if (xr?.isPresenting) {
+      camera.getWorldPosition(_eye);
+      camera.getWorldDirection(_dir);
+      const first = floatAgeRef.current < 0;
+      floatAgeRef.current = first ? 0 : floatAgeRef.current + delta;
+      updateLazyFollow(
+        floatPose,
+        _eye.x,
+        _eye.y,
+        _eye.z,
+        yawOfDirection(_dir.x, _dir.z),
+        delta,
+        first
+      );
+    } else floatAgeRef.current = -1;
+    // The emulator's hands and controllers turn with the head (Play mode): a button worn on them
+    // could never be aimed at nor touched.
+    const wearer = placeWristButton(xr, handednessRef.current, camera, _v, {
+      pose: floatPose,
+      worn: !isDevXREmulated(),
+    });
     menu.button.copy(_v);
     menu.buttonVisible = true;
     menu.wearer = wearer;
