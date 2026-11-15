@@ -50,14 +50,21 @@ export async function fetchPreferringContributor(
   preferContributor: boolean,
   send: (model: string) => Promise<Response>
 ): Promise<{ res: Response; model: string }> {
-  const model = chooseModel(base, preferContributor);
+  // A contributor id chosen on purpose (3D step defaults): its standard id is the fallback.
+  const chosen = isContributorModel(base);
+  const standard = chosen ? base.slice(0, -'-contributor'.length) : base;
+  const model = chosen
+    ? (pausedUntil.get(base) ?? 0) > Date.now()
+      ? standard
+      : base
+    : chooseModel(base, preferContributor);
   const res = await send(model);
-  if (res.ok || model === base || !CONTRIBUTOR_FALLBACK_STATUSES.has(res.status)) {
+  if (res.ok || model === standard || !CONTRIBUTOR_FALLBACK_STATUSES.has(res.status)) {
     return { res, model };
   }
   console.warn(
-    `[copilot:contributor] ${model} refused (${res.status}); retrying with ${base} and pausing it`
+    `[copilot:contributor] ${model} refused (${res.status}); retrying with ${standard} and pausing it`
   );
   pauseContributor(model, res.status);
-  return { res: await send(base), model: base };
+  return { res: await send(standard), model: standard };
 }

@@ -13,6 +13,7 @@ import {
   liveApplianceIds,
   sceneScale,
   usePlacedModelsStore,
+  withoutDrawings,
   PLACED_MODELS_STORAGE_KEY,
   type PlacedModel,
 } from '../placed-models.store';
@@ -245,5 +246,27 @@ describe('placed-models.store (PI-T1)', () => {
       expect(useSimulationStore.getState().input.appliances?.map((a) => a.id)).toEqual([pump.id]);
       expect(usePlacedModelsStore.getState().getModel(pump.id)).toBeDefined();
     });
+  });
+});
+
+describe('withoutDrawings (PQ-T71)', () => {
+  it('drops the drawings of every model and keeps everything else', () => {
+    const drawn: PlacedModel = {
+      applianceId: 'a',
+      recipe: {
+        ...SAMPLE_RECIPE,
+        faces: {
+          atlas: 'data:image/png;base64,AAAA',
+          views: ['front'],
+          hull: { grid: [4, 4, 4], boxes: [[0, 4, 0, 4, 0, 4]] },
+        },
+      },
+      yaw: 0.2,
+    };
+    const out = withoutDrawings({ a: drawn });
+    expect(out.a!.recipe.faces).toBeUndefined();
+    expect(out.a!.recipe.parts).toEqual(SAMPLE_RECIPE.parts);
+    expect(out.a!.yaw).toBe(0.2);
+    expect(drawn.recipe.faces).toBeDefined();
   });
 });

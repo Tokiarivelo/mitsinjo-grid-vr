@@ -37,8 +37,16 @@ import type { ObjectShapeState } from '../hooks/use-object-shape';
 import { recipeMaterials } from '../utils/surface-look';
 import { ImproveChip } from './improve-chip';
 import { ObjectDisplayControls } from './object-display-controls';
+import { SurfaceEditor } from './surface-editor';
+import { houseBaseLooks } from '../utils/house-projection';
+import type { HullSurface } from '@/lib/face-hull';
+import type { FaceSurface } from '@/lib/object-shape';
 import { Facade2dPanel } from './facade-2d-panel';
+import { FacadeFacesPanel } from './facade-faces-panel';
+import { BlenderExportButton } from './blender-export-button';
+import { StepModelsGear } from './step-models-gear';
 import { useFacade2d, validatedFacade, type ValidatedFacade } from '../hooks/use-facade-2d';
+import { useFacadeFaces, validatedFaces } from '../hooks/use-facade-faces';
 
 /** Placeholder while the viewer chunk loads or Spark builds the recipe. */
 function ViewerSkeleton() {
@@ -189,6 +197,10 @@ export interface ObjectShapePanelProps extends ObjectShapeState {
   sessionId?: string;
   /** Keeps the 2D facade across page visits (see `useKeptState`). */
   scope?: string;
+  /** The step-model choice was saved: drop kept shapes built with the previous one. */
+  onStepModelsSaved?: () => void;
+  /** The operator restyles a surface of a drawn model (PQ-T71); null = back to its drawing. */
+  onRestyle?: (surface: HullSurface, look: FaceSurface | null) => void;
 }
 
 type ShapeTab = 'model' | 'facade';
@@ -216,6 +228,8 @@ export function ObjectShapePanel({
   onGenerate,
   sessionId,
   scope,
+  onStepModelsSaved,
+  onRestyle,
 }: ObjectShapePanelProps) {
   const t = useTranslations('features.visionInsert');
   const webgl = useWebGLAvailable();
@@ -228,6 +242,7 @@ export function ObjectShapePanel({
   const liveViewer =
     ready || (loading && (preview !== undefined || detection.outline !== undefined));
   const seconds = useElapsedSeconds(startedAt, status === 'loading');
+  const faceViews = useFacadeFaces(detection, facade.facade);
   const showTabs = ready && Boolean(facade.facade);
   // Tab choice is per object: a new detection restarts on the model tab.
   const [tabState, setTabState] = useState({ id: detection.id, tab: 'model' as ShapeTab });
@@ -242,6 +257,22 @@ export function ObjectShapePanel({
   const shown = display.id === detection.id ? display : { id: detection.id, scale: 1, tint: null };
   const setDisplay = (patch: Partial<{ scale: number; tint: string | null }>) =>
     setDisplayState({ id: detection.id, scale: shown.scale, tint: shown.tint, ...patch });
+  // Surface picked in the surface editor (PQ-T71), per object.
+  const [picked, setPicked] = useState<{ id: string; surface: HullSurface | null }>({
+    id: detection.id,
+    surface: null,
+  });
+  const surface = picked.id === detection.id ? picked.surface : null;
+  const pickSurface = (next: HullSurface | null) => setPicked({ id: detection.id, surface: next });
+  const drawnFaces =
+    shape?.mode === 'recipe' && shape.recipe?.faces && !shape.recipe.yaw
+      ? shape.recipe.faces
+      : null;
+  // A house read by its specialist: the roof starts as its covering, not as the drawing.
+  const houseBase =
+    shape?.mode === 'recipe' && shape.recipe?.house && !shape.recipe.yaw
+      ? houseBaseLooks(shape.recipe.house, Boolean(drawnFaces))
+      : undefined;
   const activeTab: ShapeTab = ready ? userTab : 'model';
 
   return (
@@ -327,9 +358,21 @@ export function ObjectShapePanel({
               onValidate={() => {
                 facade.validate();
                 setTab('model');
-                onGenerate?.(validatedFacade(facade.facade));
+                onGenerate?.(validatedFacade(facade.facade, validatedFaces(faceViews.faces)));
               }}
               isValidating3D={loading}
+              faces={
+                <FacadeFacesPanel
+                  faces={faceViews.faces}
+                  onGenerate={(face, details) => void faceViews.generate(face, details)}
+                  onGenerateAll={() => void faceViews.generateAll()}
+                  onDetailsChange={faceViews.setUserPrompt}
+                  onValidate={faceViews.validate}
+                  onValidateAll={faceViews.validateAll}
+                  disabled={loading}
+                />
+              }
+              modelsGear={<StepModelsGear sessionId={sessionId} onSaved={onStepModelsSaved} />}
             />
           ) : (
             <div className="relative">
@@ -347,6 +390,9 @@ export function ObjectShapePanel({
                     scale={shown.scale}
                     tint={shown.tint}
                     {...(improve ? { improve } : {})}
+                    {...(ready && drawnFaces && onRestyle
+                      ? { selectedSurface: surface, onPickSurface: pickSurface }
+                      : {})}
                   />
                 ) : (
                   <ViewerSkeleton />
@@ -376,6 +422,15 @@ export function ObjectShapePanel({
               onReset={() => setDisplay({ scale: 1, tint: null })}
             />
           )}
+          {webgl && drawnFaces && onRestyle && (
+            <SurfaceEditor
+              surfaces={drawnFaces.surfaces ?? {}}
+              {...(houseBase ? { base: houseBase } : {})}
+              selected={surface}
+              onSelect={pickSurface}
+              onChange={onRestyle}
+            />
+          )}
 
           {shape.mode === 'silhouette' && (
             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -400,7 +455,11 @@ export function ObjectShapePanel({
             </div>
           )}
           {shape.mode === 'recipe' && (onRegenerate ?? onRetry) && (
-            <div className="flex justify-end pt-1">
+            <div className="flex items-center justify-end gap-2 pt-1">
+              <StepModelsGear sessionId={sessionId} onSaved={onStepModelsSaved} />
+              {shape.recipe && (
+                <BlenderExportButton recipe={shape.recipe} label={detection.label} />
+              )}
               <button
                 type="button"
                 onClick={onRegenerate ?? onRetry}

@@ -35,7 +35,7 @@ non-localhost, `navigator.xr` n'existe pas et le bouton VR reste masqué — c'e
 4. Cliquer → la session émulée démarre : le bouton passe à « Quitter la VR »
    (enfoncé cyan), la caméra se place sur le surplomb du village, la boucle passe
    en continu et les post-traitements se coupent (requis pour le stéréo).
-5. L'**overlay DevUI** permet de déplacer le casque/contrôleurs émulés, de jouer
+5. L'**overlay DevUI** (chargé au clic sur « Entrer en VR », pas avec la page : il embarque son propre Three.js) permet de déplacer le casque/contrôleurs émulés, de jouer
    des poses de mains et d'entrer en **Play Mode** (déplacement type FPS
    clavier/souris, pointeur verrouillé).
 6. Quitter via le bouton (ou l'overlay) : retour 2D, caméra restaurée sur le

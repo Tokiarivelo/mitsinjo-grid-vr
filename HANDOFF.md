@@ -1,39 +1,38 @@
 # HANDOFF — read first, overwrite at end of session (≤40 lines)
 
-**Updated:** 2026-11-12 · **By:** Muse Code · **Branch:** `feat/pq-t55-b-vs-a-eval`
-(stacked on T54 `6aee64e`)
+**Updated:** 2026-11-14 · **By:** Claude Code · **Branch:** `feat/pq-t67-step-models`
+(from `d61ee81`, not re-branched from `main`; rebase before the PR)
 
-## PRIORITY NEXT: PQ-T56+ or Q6 exit
+## NEXT: try PQ-T72 on `/village` in the browser, then open the phase PR
 
-PQ-T55 done (§12.13, commit `feat/pq-t55-b-vs-a-eval`).
-First follow-up: clamp guest `generator.seed` into
-0–2147483647 in `code-sandbox.ts` (willow B valid
-0/3, all parts fail on the seed only), then re-run
-`make eval-code IDS=willow` (~$0.5). Then Vercel tour
-after merge (see Open).
+`make dev` + `LLM_PROVIDER=meta` → `/village` → validate a house's 2D faces → 3D (scenarios V314–V327).
+Offline: `make views-3d FRONT=… RIGHT=… BACK=… LEFT=… TOP=… OUT=… [READING=house-reading.json]`.
 
-## Current state (PQ-T55 done)
+## PQ-T72 — house specialist (2026-11-14)
 
-- B-vs-A eval (`eval-code.ts`, `make eval-code`,
-  one yardstick, verdict = gain/$): willow tie 51,
-  car A 52→55, house B 48→54, fridge tie 92; mean
-  tour 68.4 s (writer ≈ 100 %); A $0.17 + B $2.11.
-- Writer v2 opt-in (live stays v1); round timings
-  on `CodeRound`; capture budget 600 s / 900 s.
-- Report frozen (synth 92, real 53, ΔE 10.1).
+- `readHouse` (Spark, high effort, streamed, sent through `longFetch` = `node:https`: fetch drops a
+  silent call after 300 s) reads the validated drawings → `HouseReading` → `fitHouse` snaps it on the
+  pixels (outline steps, ridge, shed fall front first, openings on their frames, owner block, footprint
+  annexes from the view from above, low decks) → `recipe.house` (`lib/house-plan.ts`).
+- `lib/house-mesh.ts`: openings with reveal / frame / sill / bars, one roof per volume, walls up to
+  their roof line, verandas (hosted = recess), balconies, chimneys, a plinth under every closed block.
+- Look: a clean swatch of wall (front) and of roof (top) cut on the drawings (`housePatches` on a
+  480-col grid, `cropPatch`, `cleanSwatch` = boards to their median profile), mirrored-repeated; the whole
+  drawing only when the operator picks « Dessin ». Viewer / village / Blender share `houseSlotLooks`.
+- Boards: `~/Téléchargements/generated-view/<name>/maison-3d.jpg` (8 houses).
 
-## Verify (this session)
+## Three.js duplicate fix
 
-- 1141 pass (perception+lib); tsc + lint green;
-  goldens 5/5 non-strict; strict-timing +
-  view-stages round-tags fail on base too (worktree).
-- Live: willow captured (51); 4-id eval to natural
-  stop; willow seed cause proven by probe (deleted).
-- Push: no push (task said commit only). Unsigned.
+`@iwer/devui` brings its own three 0.184: the DevUI loads only on « enter VR » (`installDevXRPanels`).
+
+## Decisions
+
+- One reading for the whole house (not per room): coherent volumes, openings owned by block.
+- One wall swatch per house (the front's dominant cladding); mixed claddings become one.
+- No Neon migration (recipes not stored). No HF republish (bench unchanged).
 
 ## Open
 
-- Vercel tour: merge → main auto-deploys → house
-  shape request → SSE `shape_timing{code}` (~$1).
-- OVHcloud: no infra in repo (no docs/SSH/CLI).
-- Scratch in /tmp: `pq55-*` + prior files.
+- Arched heads, dormers and glazed gables are rectangles.
+- Generated views that disagree (house-detached: front vs top) still misplace blocks.
+- Blender export colours swatch slots (no swatch image).

@@ -652,6 +652,56 @@ One task = one commit, with its Vitest test, its `contracts.md` update and its m
 
 **Exit Q6:** no object is finished by fixed code; every phase is timed and the slowness is located.
 
+## Q7. Views reconstruction (2026-11-13)
+
+- [x] **PQ-T71 Surface editor, plan validated in the UI, drawings in the village.** Surface editor under
+      the 3D view of a drawn model (`ui/surface-editor.tsx`, click on the model or chips: roof, four walls;
+      drawing / tint / material + colour; `faces.surfaces`, `restyleSurface`, `useObjectShape().restyle`), kept
+      with the model into the simulation. View from above as a fourth card of the 2D faces panel
+      (`FACE_NAMES` + `top`). Village / simulation scene draws those models with their drawings
+      (`PlacedDrawnModelMesh`, cap 8, high tier); Blender export builds the textured hull (`drawnGroups`,
+      embedded atlas). Ghost chimneys dropped with the plan (`dropGhosts`), relief by bump map, roof class
+      read on the geometry (`roofClassOf`). Open: a chimney seen on one elevation only still makes a thin fin
+      across the roof; openings (arcades, balconies) are lit relief, not geometry; the spatial-shoot
+      miniature in VR is still the generic kit; the flat-parts `hip` and the score are unchanged.
+- [x] **PQ-T70 The model wears its drawings.** Flat colour classes lost every detail of the drawings and the
+      real 3D view (procedural textures, ink) looked nothing like them while the flat-render score said 0.85–0.89.
+      Now `recipe.faces` = face atlas (the validated drawings, never the photo) + silhouette hull
+      (`lib/face-atlas.ts`, `lib/face-hull.ts`, `recon/texture.ts`, `buildFaceAtlas`); the 3D object view draws
+      the hull wearing the drawings (`face-projection.ts`). Checked in the real viewer
+      (`object-viewer-shot.mjs`, `SHOT_SCALE`, `SHOT_DRAG`) on a lodge, a brick house and a bungalow drawn
+      from its photo (`make views-3d PHOTO=`).
+      _Refine 2026-11-14 on eight photos of `resources/refine-3d` (results in `~/Téléchargements/generated-view/`):_
+      pale blue paper, no forced symmetry, `ROOF_AGREEMENT` between elevations, view from above (footprint +
+      top texture, `TOP=` in `make views-3d`), roof ended at the eave of the silhouettes (`eaveRow`), depth of the model from the plan (`depthFromPlan`), roof class
+      asked to the naming call. Open: village / VR / Blender export still draw the flat parts;
+      two silhouettes leave ghosts (a chimney repeated at each run crossing) and nothing in the depth of a
+      face (balconies, recesses); the score still reads the flat parts.
+- [x] **PQ-T69 Any object from its 2D views, by computation.** `server/perception/recon/`: object mask per
+      view, one frame for front / right / back / left, colour classes shared by the views, per-class visual
+      hull, surface slabs, score per view; one contributor call names the materials. Replaces the house
+      facade path, the per-archetype views path and their code routes (deleted).
+      **Test:** `recon.test.ts` (house, car, two views, mirrored view), `object-shape.test.ts` (route, fallback).
+      **Tool:** `make views-3d FRONT=… [RIGHT= BACK= LEFT=] OUT=…`.
+      _Rework 2026-11-13 (same day, user's live lodge came out as loose pieces):_ closed silhouette hull
+      first, colour bands and slabs second; ground line removed; pitched roof and gables from the named
+      roofing class; 96 parts, 128 rows. Live on the user's four lodge faces: 84 parts, overall 0.85.
+      _Open:_ fidelity is a stylised mass (one colour per band, flat slabs); the contributor's material
+      names vary between runs (walls named stone or wood).
+
+- [x] **PQ-T72 House specialist.** One Spark reading of the validated drawings of a house or a building
+      (`readHouse`, streamed) → `recipe.house` (`lib/house-plan.ts`), fitted on the pixels (`house-fit.ts`) and
+      built block by block (`lib/house-mesh.ts`): walls with real openings (reveal, frame, sill, glass, glazing
+      bars, door leaf, garage grooves), one roof per volume (hip, gable, shed in 4 directions, flat), walls
+      that follow their roof line, verandas open on posts (under the main roof: recess walls, openings moved
+      to the back), balconies with railings, chimneys, bands. Walls and roof repeat a clean swatch of their
+      drawing (`housePatches`, `cleanSwatch`), every closed block stands on a plinth; the footprint the reading left out becomes an annex
+      (view from above), decks stay low (`DECK_MAX`), shed falls read on the front first; the surface editor
+      starts walls and roof from the swatches; the village and the Blender export
+      build the same mesh (`houseSlotLooks`, one Blender object per slot). Tried on 8 houses (lakeside
+      lodge, bungalow, detached, rural, school, small apartments, lodge, shop). Open: curved / arched heads
+      and dormers are rectangles; a glazed gable is clipped to its rake.
+
 ## Exit criteria
 
 Every real object meets methodology §9 · every prompt has a version and an eval behind it · the report, the
@@ -661,4 +711,4 @@ loop log and the docs agree · mock mode and the offline tests need no API key.
 
 Non-Meta image-to-3D models · Muse-written code run outside the §8bis sandbox (`eval`, Node `vm` and networked
 workers stay forbidden) · dense meshes or GLB export · projecting the photo on the model · generated top-down
-or back views · tuning a threshold so that one object passes.
+views · tuning a threshold so that one object passes.

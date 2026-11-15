@@ -70,8 +70,8 @@ flowchart TD
 | Fusion and fit  | Pure TypeScript             | `fusion.ts`, `silhouette-fit.ts`, `nelder-mead.ts`, `part-fit.ts`               | Shape maths ≤ 300 ms per object                                                  |
 | Score           | Pure TypeScript             | `flat-render.ts`, `model-score.ts`, `score-shape.ts`                            | 0.40 silhouette IoU + 0.35 edge F1 + 0.25 colour ΔE                              |
 | Critic          | Spark 1.3                   | `spark-critic.ts`, `shape.ts` (`CRITIC_SYSTEM_PROMPT`)                          | 256 px sheet, only under 70 / 100, 1 round                                       |
-| 2D path         | SAM 3.1, Muse Image 1.0     | `facade-*.ts`, `object-views.ts`, `views-check.ts`                              | Side view kept only when it differs from the front and its depth is plausible    |
-| Staged loop     | Spark 1.3, then Wonder 1.0  | `lib/shape-script.ts`, `shape-stages*.ts`, `shape-script-prompt.ts`             | ≤ 3 rounds per stage, ≤ 12 ops, each op tried alone, kept only on gain           |
+| 2D path         | SAM 3.1, Muse Image 1.0     | `facade-specialist.ts`, `facade-faces.ts`, `recon/`                             | Geometry computed from the drawings (PQ-T69); kept when the view score ≥ 0.5     |
+| Staged loop     | Spark 1.3, then Wonder 1.0  | `lib/shape-script.ts` (stage loop removed 2026-11-13)                           | ≤ 3 rounds per stage, ≤ 12 ops, each op tried alone, kept only on gain           |
 | Viewer          | React Three Fiber           | `features/vision-insert/utils/object-geometry.ts`, `surface-look.ts`            | ≤ 5 000 triangles, 12 parts (photo) or 32 components (2D path)                   |
 
 Vocabulary the geometry engine can build: `box, cylinder, sphere, cone, prism, extrude, lathe, hip, hull`, 15
@@ -229,7 +229,7 @@ Same runner as the 2D path (`runShapeStages`), new target:
 
 - Target image = the tight crop; target parts = SAM masks on the photo; view = measured yaw.
 - Stage score = silhouette IoU at that view plus the detail score of the stage's part kinds.
-- Stages per archetype from `view-stages.ts` (vehicle: body → glass → wheels → details).
+- Stages per archetype (vehicle: body → glass → wheels → details); `view-stages.ts` was removed with PQ-T69.
 - Runs in the background after the first answer, with the existing chip, checkpoints and « keep only gains » rule.
 - Parts the photo cannot see are locked, as side walls are locked on a front elevation.
 
@@ -259,7 +259,7 @@ its Vitest test in `__tests__/` in the same commit.
 | `server/perception/skills/index.ts`                                       | `skillFor(call, archetype)`, versions, size cap                       | PQ-T11     |
 | `server/perception/skills/{base,archetypes,critic,stages,views,judge}.ts` | The cards of `vision-to-3d-muse-skills.md` as versioned string arrays | PQ-T11–T16 |
 | `server/perception/photo-stages.ts`                                       | Target and scorer of the photo-path staged loop                       | PQ-T19     |
-| `server/perception/view-candidates.ts`                                    | Consistency score between a generated view and the front              | PQ-T16     |
+| `server/perception/view-candidates.ts` (removed, PQ-T69)                  | Consistency score between a generated view and the front              | PQ-T16     |
 | `server/perception/gloss-measure.ts`                                      | Gloss estimate per region from highlight statistics                   | PQ-T26     |
 | `features/vision-insert/utils/vertex-ao.ts`                               | Baked ambient shadow at part joints                                   | PQ-T27     |
 | `scripts/shape-judge.mjs` + Makefile target `shape-judge`                 | Run the rubric judge on the real set, on demand                       | PQ-T4      |
@@ -276,14 +276,14 @@ its Vitest test in `__tests__/` in the same commit.
 | `server/perception/free-recipe.ts`                                              | Skill card and evidence for free parts                                                      | PQ-T12              |
 | `server/perception/spark-critic.ts`                                             | 2 × 2 sheet, ≥ 512 px tiles, difference tile, gate on the detail score, 2 background rounds | PQ-T14              |
 | `server/perception/views-check.ts`, `shape-script-prompt.ts`                    | Skill cards, versions                                                                       | PQ-T5, PQ-T15       |
-| `server/perception/object-views.ts`, `facade-views.ts`                          | View card, two candidates, consistency pick                                                 | PQ-T16              |
+| `object-views.ts`, `facade-views.ts` (removed, PQ-T69)                          | View card, two candidates, consistency pick                                                 | PQ-T16              |
 | `server/perception/meta.ts`, `client.ts`, `mock.ts`, `backend.ts`               | Reasoning effort per call, second image, kit samples, `judgeShape`                          | PQ-T4, T8, T17, T18 |
 | `server/perception/shape-crop.ts`                                               | Tight object image next to the context crop                                                 | PQ-T8               |
 | `server/perception/outline.ts`, `part-masks.ts`                                 | Use `sam-consensus`; unbounded by default                                                   | PQ-T9               |
 | `server/perception/color-measure.ts`, `region-colors.ts`                        | Lit-share colour, shadow apart                                                              | PQ-T10              |
 | `server/perception/fusion.ts`                                                   | Confidences from photo conditions and from `evidence.unsure`                                | PQ-T7, PQ-T12       |
 | `server/perception/object-shape.ts`                                             | Wire conditions, consensus, photo stages, samples; new log lines                            | PQ-T7–T19           |
-| `server/perception/shape-stages-spark.ts`, `view-stages.ts`                     | `photoStageLoop`, stage kinds for detail parts                                              | PQ-T19, PQ-T20      |
+| `shape-stages-spark.ts`, `view-stages.ts` (removed)                             | `photoStageLoop`, stage kinds for detail parts                                              | PQ-T19, PQ-T20      |
 | `server/perception/hidden-sides.ts`                                             | Mirror measured sides to hidden ones, status `inferred`                                     | PQ-T22              |
 | `lib/object-kit.ts`, `lib/object-shape.ts`, `lib/shape-script.ts`               | Detail kinds, evidence schema, component budget on the photo path                           | PQ-T12, T20, T21    |
 | `features/vision-insert/utils/view-assemblies.ts`, `object-geometry.ts`         | Detail assemblies, ambient shadow                                                           | PQ-T20, PQ-T27      |
@@ -310,17 +310,17 @@ its Vitest test in `__tests__/` in the same commit.
 
 ## 8. Verification: commands that exist
 
-| Question                                       | Command                                                                                                                          | Passes when                                                |
-| ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| Does the shape pipeline still work offline?    | `make test-shape`                                                                                                                | Golden set green                                           |
-| How good is every object, and which is worst?  | `make shape-report` → `test-results/shape-report/index.md` (synthetic + « Real » tables, real = local captures of `REAL_SHAPES`) | Stop criteria met on the real table (§9)                   |
-| What does the user really see?                 | `make shape-shots` (dev server running)                                                                                          | Viewer shots, dark and light, reviewed with `/designer-3d` |
-| Did a prompt change help the kit?              | `make eval-shape MODEL=…` (live, costs API calls)                                                                                | Agreement not lower; median latency reported, not gated    |
-| Did a prompt change help the staged loop?      | `make eval-stages` (offline replay)                                                                                              | Stage scores not lower                                     |
-| Does the 2D path work end to end on live Meta? | `make facade-e2e FRONT=… OUT=…` (costs API calls)                                                                                | Model built, stages logged                                 |
-| Add a real photo to the reference set          | `make shape-capture PHOTO=… ID=… [LABEL=…]` (costs API calls)                                                                    | Capture and crop written to `__fixtures__/shape/real/`     |
-| Why does a capture have no outline?            | `make sam-probe ID=… CONCEPTS="a,b"` (costs SAM calls)                                                                           | A word with best IoU ≥ 0.3 on photo or crop                |
-| Everything before handoff                      | `make check`                                                                                                                     | Typecheck, lint, tests green                               |
+| Question                                              | Command                                                                                                                          | Passes when                                                |
+| ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| Does the shape pipeline still work offline?           | `make test-shape`                                                                                                                | Golden set green                                           |
+| How good is every object, and which is worst?         | `make shape-report` → `test-results/shape-report/index.md` (synthetic + « Real » tables, real = local captures of `REAL_SHAPES`) | Stop criteria met on the real table (§9)                   |
+| What does the user really see?                        | `make shape-shots` (dev server running)                                                                                          | Viewer shots, dark and light, reviewed with `/designer-3d` |
+| Did a prompt change help the kit?                     | `make eval-shape MODEL=…` (live, costs API calls)                                                                                | Agreement not lower; median latency reported, not gated    |
+| Did a prompt change help the staged loop?             | removed with the stage loop (2026-11-13)                                                                                         | Stage scores not lower                                     |
+| Does the 2D path rebuild an object from its drawings? | `make views-3d FRONT=… [RIGHT= BACK= LEFT=] OUT=…` (offline)                                                                     | recipe.json, report.txt, model.png; overall ≥ 0.5          |
+| Add a real photo to the reference set                 | `make shape-capture PHOTO=… ID=… [LABEL=…]` (costs API calls)                                                                    | Capture and crop written to `__fixtures__/shape/real/`     |
+| Why does a capture have no outline?                   | `make sam-probe ID=… CONCEPTS="a,b"` (costs SAM calls)                                                                           | A word with best IoU ≥ 0.3 on photo or crop                |
+| Everything before handoff                             | `make check`                                                                                                                     | Typecheck, lint, tests green                               |
 
 ---
 

@@ -1043,6 +1043,28 @@
       "facade2dGenerate": "Imaginer la façade 2D",
       "facade2dGenerating": "Imagination de la façade 2D…",
       "facade2dRetry": "Réessayer avec des détails",
+      "facesTitle": "Les autres vues (droite, arrière, gauche, dessus)",
+      "facesHint": "Chaque vue est dessinée à partir de la façade et des vues déjà là, pour qu'elles concordent ; la vue de dessus donne le plan, le toit vu d'en haut et la profondeur du modèle. Vérifie-les une par une ; une vue laissée de côté est dessinée par l'étape 3D elle-même.",
+      "facesGenerateAll": "Dessiner toutes les vues",
+      "facesValidateAll": "Valider toutes les vues",
+      "faces": {
+        "side": "Côté droit",
+        "back": "Arrière",
+        "left": "Côté gauche",
+        "top": "Vue de dessus"
+      },
+      "facesValidated": "Validée",
+      "facesToCheck": "À vérifier",
+      "facesNone": "Non dessinée",
+      "facesGenerating": "Dessin en cours…",
+      "facesEmpty": "Pas encore dessinée",
+      "facesError": "Cette face n'a pas pu être dessinée. Réessaie.",
+      "facesDetailsLabel": "Détails pour la face {face}",
+      "facesDetailsPlaceholder": "Modifier : ex. ajouter une fenêtre, même couleur de porte…",
+      "facesGenerate": "Dessiner cette face",
+      "facesRegenerate": "Redessiner cette face",
+      "facesValidate": "Valider",
+      "facesUnvalidate": "Annuler la validation",
       "facade2dDelete": "Supprimer l'image",
       "facade2dDeleting": "Suppression…",
       "facade2dValidate": "Valider et générer la 3D",
@@ -1074,6 +1096,29 @@
       "model3dGenerateHint": "Ajustez d'abord le cadre si besoin. Muse Spark construit ensuite le modèle 3D (15 à 40 s).",
       "model3dGenerate": "Générer le modèle 3D",
       "model3dRegenerate": "Régénérer le modèle 3D",
+      "model3dBlenderExport": "Exporter vers Blender (.py)",
+      "model3dBlenderError": "Impossible d'exporter le modèle.",
+      "stepModels": {
+        "gearLabel": "Choisir le modèle IA de chaque étape 3D",
+        "title": "Modèles des étapes 3D",
+        "subtitle": "Quel modèle répond à chaque étape. Défaut = réglage du serveur. Enregistré pour les prochaines générations.",
+        "defaultOption": "Défaut ({model})",
+        "reset": "Revenir aux défauts",
+        "cancel": "Annuler",
+        "save": "Enregistrer",
+        "saving": "Enregistrement…",
+        "loadError": "Choix des modèles illisible.",
+        "saveError": "Choix des modèles non enregistré.",
+        "steps": {
+          "kit": "Décrire l'objet (kit)",
+          "parts": "Lister les pièces",
+          "critic": "Contrôle visuel (critique)",
+          "viewsCheck": "Vérifier les vues 2D",
+          "askPart": "Questions courtes par pièce",
+          "code": "Écrire le code 3D",
+          "judge": "Notation hors ligne"
+        }
+      },
       "model3dTimeoutNote": "Muse Spark n'a pas répondu à temps : forme construite à partir du contour de l'objet.",
       "model3dSpendNote": "Le plafond de dépense Meta est atteint : forme construite à partir du contour de l'objet.",
       "model3dNetworkNote": "Le serveur de l'application est injoignable : forme construite à partir du contour de l'objet.",
@@ -1086,7 +1131,7 @@
         "model": "Muse Spark imagine les pièces et les couleurs",
         "fit": "Ajustement des pièces aux proportions de la photo",
         "check": "Muse Spark vérifie chaque côté par rapport aux dessins et ajoute ce qui manque",
-        "code": "Muse Wonder écrit le code 3D de cet objet et l'affine contre l'image (le brouillon s'affiche en attendant, environ 1 à 2 min par tour)"
+        "code": "Le code 3D de cet objet est écrit puis affiné contre l'image (le brouillon s'affiche en attendant, environ 1 à 2 min par tour)"
       },
       "insertTitle": "Ajouter à la simulation",
       "insertSourceLabel": "Origine de la puissance",
@@ -1307,7 +1352,26 @@
       "tourRoom_garden": "Jardin",
       "tourRoom_avenue": "Allée d’arbres",
       "tourRoom_forest": "Forêt",
-      "tourRoom_woods": "Sous-bois"
+      "tourRoom_woods": "Sous-bois",
+      "surfaceEditorTitle": "Modifier les surfaces",
+      "surfaceEditorHint": "Clique le toit ou un mur sur le modèle, ou choisis-le ici, puis garde son dessin, teinte-le ou donne-lui une matière.",
+      "surfaceEditorPick": "Surface à modifier",
+      "surfaceName": {
+        "roof": "Toit",
+        "front": "Face",
+        "right": "Côté droit",
+        "back": "Arrière",
+        "left": "Côté gauche"
+      },
+      "surfaceSource": "Ce que montre la surface",
+      "surfaceMode": {
+        "drawing": "Dessin",
+        "material": "Matière"
+      },
+      "surfaceMaterial": "Matière",
+      "surfaceColor": "Couleur",
+      "surfaceTint": "Teinte",
+      "surfaceReset": "Annuler mes retouches"
     },
     "dispatch": {
       "modeLabel": "Mode de dispatch",

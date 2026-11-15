@@ -83,6 +83,7 @@ export function VillageEditorPage() {
     cancelImprove,
     reset: resetShape,
     clear: clearShapes,
+    dropShapeCache,
     ...objectShape
   } = useObjectShape(VILLAGE_SCOPE);
 
@@ -156,6 +157,7 @@ export function VillageEditorPage() {
               facadeUrl: facade.url,
               facadeKey: facade.key,
               ...(facade.clean ? { cleanFront: true } : {}),
+              ...(facade.faces ? { faceUrls: facade.faces.urls, faceKeys: facade.faces.keys } : {}),
             }
           : {}),
       });
@@ -593,8 +595,10 @@ export function VillageEditorPage() {
                         onRegenerate={regenerateShape}
                         onChooseFamily={chooseFamily}
                         onCancelImprove={cancelImprove}
+                        onRestyle={objectShape.restyle}
                         onGenerate={generateShape}
                         scope={VILLAGE_SCOPE}
+                        onStepModelsSaved={dropShapeCache}
                       />
                       <div className="flex items-center justify-between gap-2 rounded-xl border border-energy-cyan/30 bg-energy-cyan/5 p-3 text-xs">
                         <span className="text-text-secondary">

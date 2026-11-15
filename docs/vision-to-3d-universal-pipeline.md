@@ -6,6 +6,11 @@
 > nouveau n'est construit par ce fichier.
 > « Existe » = dans le code, fichier vérifié présent le 2026-11-11 (`apps/web/src/server/perception/`).
 > « À construire » = proposé ici. « À vérifier » = dépend de l'API Meta, non confirmé.
+> **Mise à jour 2026-11-13 (PQ-T69).** Dès qu'une vue 2D de face existe, le modèle 3D n'est plus un gabarit ni un
+> code écrit par Wonder : il est **mesuré sur les 4 vues** (`server/perception/recon/`, détail dans `docs/copilot.md`,
+> « Views reconstruction »). Le seul appel de modèle de langage nomme les matières (liste fermée, modèle contributor).
+> Les sections sur la maison par façade, la coque par archétype et la voie B sur vues 2D décrivent l'ancien chemin,
+> supprimé ; la voie photo (sans vue 2D) reste telle que décrite.
 > **Compagnons.** État réel et tâches PQ : `vision-to-3d-methodology.md`. Cartes de prompt :
 > `vision-to-3d-muse-skills.md`.
 > **Règles qui ne bougent pas.** Modèles Meta uniquement · le LLM n'écrit jamais de sommets ni de valeur d'énergie ; il peut écrire le code de construction, exécuté **uniquement** dans le bac à sable de §8bis ·
@@ -106,6 +111,11 @@ Tous passent par la même clé et la même URL de base (`META_API_KEY`, `server/
 | Écriture et raffinage du code de construction | `muse-wonder-1.0`  | `META_CODE_MODEL`    | `/chat/completions` | À construire (§8bis) |
 | Questions courtes oui / non par pièce         | `muse-spark-1.3`   | `META_VISION_MODEL`  | `/chat/completions` | À construire (E9)    |
 | Secours du chat (pas utilisé pour la 3D)      | `muse-glimmer-30b` | `GLIMMER_MODEL`      | —                   | Hors pipeline        |
+
+PQ-T67 : chaque étape du rôle « Voir, classer, inventorier, critiquer » a sa variable (`META_KIT_MODEL`,
+`META_PARTS_MODEL`, `META_CRITIC_MODEL`, `META_VIEWSCHECK_MODEL`, `META_ASKPART_MODEL`, vide =
+`META_VISION_MODEL`), pour essayer un modèle moins cher sur une étape et comparer ses tokens (lignes
+`[vision] 3D … (in …, out …)`, carte loguée une fois : `[vision] 3D step models: …`).
 
 ### 3.1 Paramètres d'appel
 
@@ -529,6 +539,10 @@ hauteur, le sens de chaque pente. Sans image du dessin, repli sur le score d'él
 face et côté : sur une maison à plusieurs volumes cette part n'a pas de sens (plusieurs égouts) et tout dessin de côté
 était refusé, donc la profondeur n'était jamais notée. Quand la face ou le côté est `multi`, seul un côté **copié de la
 face** est refusé (même rapport de mur et même nombre de fenêtres) ; le côté accepté pèse 30 % du score (`SIDE_WEIGHT`).
+
+**Faces validées dans le panneau 2D (PQ-T68, `facade-faces.ts`, `use-facade-faces.ts`, `FacadeFacesPanel`).** Sous la façade validée, trois cartes (côté droit, arrière, côté gauche) : « Dessiner les 3 faces » enchaîne droite → arrière → gauche, chaque face étant dessinée à partir de la façade ET des faces déjà là (3 références au plus, prompt « all four views must agree »), pour que les quatre vues soient corrélées. Chaque face se valide, se redessine ou se modifie (champ de détails) une par une ; redessiner une face la dé-valide seule. Les faces validées partent avec « Valider et générer en 3D » (`faceUrls`) : l'étape 3D les mesure telles quelles (pas de redessin, pas de rejet de cohérence) et ne dessine que les manquantes. Faces laissées de côté = comportement précédent (dessinées par le pipeline si `SHAPE_FOUR_FACES`).
+
+**Quatre faces (PQ-T68, `facade-views.ts`, `object-shape.ts`).** Pendant le dessin 2D d'une maison, Muse Image redessine aussi la face arrière et le côté gauche à partir de la façade (en parallèle du côté droit). Chaque dessin est mesuré par SAM et gardé seulement s'il est cohérent (`faceConsistent` : même largeur de mur et même égout pour l'arrière ; règles du côté + profondeur proche du côté droit pour la gauche). La route code (Wonder) est notée sur les faces dessinées : 70 % la façade, 30 % la moyenne des autres faces (`scoreDrawingSide(…, face)`, rendu `ELEVATION_VIEWS` front/side/back/left), la planche montre une ligne par face. Désactivable : `SHAPE_FOUR_FACES=false` (2 appels Muse Image de moins). Une face illisible ou incohérente est omise (log `[vision] 3D faces: front, right, back ✗, left`).
 
 **Sculpture en direct (PQ-T66, `code-progress.ts`).** Un tour gardé n'est plus échangé d'un bloc : ses pièces partent
 dans l'ordre où le code les a construites (volumes, toits, ouvertures, détails), en 6 lots à 1 s d'intervalle

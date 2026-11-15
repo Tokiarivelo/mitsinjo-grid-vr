@@ -18,7 +18,7 @@ Vous pouvez toujours basculer le plein écran manuellement à tout moment grâce
 
 ### Cause 2 : L'overlay de prévisualisation de l'émulateur Meta IWER (sur PC)
 
-En mode développement desktop, Mitsinjo Grid charge automatiquement l'émulateur **Meta IWER DevUI** (`@iwer/devui`). Cet émulateur ouvre un panneau de contrôle flottant et une fenêtre miroir rectangulaire (« Headset Viewport ») au centre :
+En mode développement desktop, Mitsinjo Grid installe automatiquement le runtime émulé **Meta IWER** au chargement de la page, et son overlay **DevUI** (`@iwer/devui`) au clic sur « Entrer en VR » seulement : la DevUI embarque son propre Three.js (0.184, l'app tourne en 0.174), et la charger avec chaque page 3D mettait deux Three.js dans le navigateur (« Multiple instances of Three.js being imported », plantages occasionnels de `/village`). Cet émulateur ouvre un panneau de contrôle flottant et une fenêtre miroir rectangulaire (« Headset Viewport ») au centre :
 
 - Vous pouvez redimensionner cette fenêtre miroir en tirant ses coins ou masquer les panneaux latéraux d'outils.
 - Vous pouvez basculer votre navigateur en plein écran complet avec la touche **`F11`** de votre clavier.

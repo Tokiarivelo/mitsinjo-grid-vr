@@ -5,7 +5,7 @@ import type { ShapeRequest } from './use-object-shape';
 import { shapeKey } from './use-object-shape';
 import { prepareVisionImage } from '../utils/prepare-image';
 import { useKeptRef, useKeptState } from './use-kept-state';
-import { SHAPE_OUTLINE_MAX } from '@/lib/object-shape';
+import { SHAPE_OUTLINE_MAX, type FaceName } from '@/lib/object-shape';
 
 export interface FacadeData {
   imageUrl: string;
@@ -25,6 +25,8 @@ export interface ValidatedFacade {
   url: string;
   key: string;
   clean?: boolean;
+  /** Faces validated beside the front in the 2D panel (PQ-T68). */
+  faces?: { urls: Partial<Record<FaceName, string>>; keys: Partial<Record<FaceName, string>> };
 }
 
 /** What the kit saw of a hidden object, sent with « draw a clean front » (Clean front card blanks). */
@@ -33,8 +35,18 @@ export interface CleanFrontRequest {
   visibleParts: string[];
 }
 
-export const validatedFacade = (f?: FacadeData): ValidatedFacade | undefined =>
-  f ? { url: f.imageUrl, key: f.fileKey, ...(f.clean ? { clean: true } : {}) } : undefined;
+export const validatedFacade = (
+  f?: FacadeData,
+  faces?: ValidatedFacade['faces']
+): ValidatedFacade | undefined =>
+  f
+    ? {
+        url: f.imageUrl,
+        key: f.fileKey,
+        ...(f.clean ? { clean: true } : {}),
+        ...(faces ? { faces } : {}),
+      }
+    : undefined;
 
 export interface FacadeState {
   status: 'idle' | 'generating' | 'ready' | 'deleting' | 'error';

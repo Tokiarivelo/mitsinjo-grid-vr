@@ -13,6 +13,7 @@ import type { ApplianceMarkerSceneModel } from '../types';
 import { MARKER_PLINTH_HEX, STATUS_HEX, TOKEN_HEX } from '../utils/scene-palette';
 import { APPLIANCE_FOCUS_SCALE } from '../utils/camera-focus';
 import { BADGE_DISTANCE_FACTOR, badgeY, beaconY, SceneBadge } from './scene-badge';
+import { PlacedDrawnModelMesh } from './placed-drawn-model';
 import {
   buildPlacedModelsGeometry,
   placedGeometryKey,
@@ -128,7 +129,7 @@ export function ApplianceMarkers({
 
   // Rebuild the merged mesh only when what it draws changes (not on every scene-model refresh).
   const geometryKey = placedGeometryKey(placedItems, sectorStatuses, tier);
-  const { modelsGeometry, plinths, modelBounds } = useMemo(
+  const { modelsGeometry, plinths, modelBounds, drawn } = useMemo(
     () => buildPlacedModelsGeometry(placedItems, sectorStatuses, tier),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- geometryKey covers every input
     [geometryKey]
@@ -176,6 +177,11 @@ export function ApplianceMarkers({
           <meshStandardMaterial vertexColors roughness={0.7} metalness={0.2} />
         </mesh>
       )}
+
+      {/* Models that wear their drawings (PQ-T71): one mesh each, capped (`PLACED_DRAWN_MAX`) */}
+      {drawn.map((model) => (
+        <PlacedDrawnModelMesh key={model.id} model={model} />
+      ))}
 
       {/* Plinths under models on sloped ground: one instanced draw call */}
       {plinths.length > 0 && (

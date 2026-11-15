@@ -91,6 +91,17 @@ export const MIGRATIONS: readonly Migration[] = [
       'ALTER TABLE copilot_messages ADD COLUMN IF NOT EXISTS scenario_draft JSONB',
     ],
   },
+  {
+    id: '0006_shape_step_models',
+    statements: [
+      `CREATE TABLE IF NOT EXISTS shape_step_models (
+        scope VARCHAR(128) PRIMARY KEY,
+        models JSONB NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      )`,
+    ],
+  },
 ];
 
 const ID_PATTERN = /^\d{4}_[a-z0-9_]+$/;

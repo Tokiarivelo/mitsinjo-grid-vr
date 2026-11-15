@@ -51,4 +51,17 @@ describe('contributor model preference', () => {
     await fetchPreferringContributor('muse-spark-1.3', false, std);
     expect(std).toHaveBeenCalledTimes(1);
   });
+
+  it('a contributor id chosen on purpose falls back to its standard id, even with the preference off', async () => {
+    const send = vi.fn().mockResolvedValueOnce(response(403)).mockResolvedValue(response(200));
+    const out = await fetchPreferringContributor('muse-spark-1.3-contributor', false, send);
+    expect(send.mock.calls.map((c) => c[0])).toEqual([
+      'muse-spark-1.3-contributor',
+      'muse-spark-1.3',
+    ]);
+    expect(out.model).toBe('muse-spark-1.3');
+    send.mockClear();
+    await fetchPreferringContributor('muse-spark-1.3-contributor', false, send);
+    expect(send.mock.calls.map((c) => c[0])).toEqual(['muse-spark-1.3']);
+  });
 });

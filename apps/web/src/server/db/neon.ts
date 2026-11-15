@@ -10,6 +10,7 @@ import type {
 } from '@/features/copilot/types';
 import type { DispatchLogEntry } from '@mitsinjo/engine';
 import type { ScenarioDraft } from '@/lib/scenario-draft';
+import { StepModelsSelectionSchema, type StepModelsSelection } from '@/lib/step-models';
 
 preferIpv4Fetch();
 
@@ -19,6 +20,7 @@ const inMemoryMessages = new Map<string, ChatMessageData[]>();
 const inMemorySummaries = new Map<string, SessionSummaryNote>();
 const inMemoryDispatchLog: DispatchLogEntry[] = [];
 const inMemoryScenarioDrafts = new Map<string, SavedScenarioDraft>();
+const inMemoryStepModels = new Map<string, StepModelsSelection>();
 
 export interface SavedScenarioDraft {
   id: string;
@@ -417,6 +419,40 @@ export async function deleteScenarioDraft(id: string): Promise<boolean> {
   await ensureNeonTables(sql);
   await sql`DELETE FROM scenario_drafts WHERE id = ${id};`;
   return true;
+}
+
+/** Operator's per-step 3D model choice (`shape_step_models`); null = env defaults everywhere. */
+export async function getShapeStepModels(scope: string): Promise<StepModelsSelection | null> {
+  if (!isNeonConfigured()) return inMemoryStepModels.get(scope) ?? null;
+  const sql = neon(env.DATABASE_URL!);
+  await ensureNeonTables(sql);
+  const rows = await sql`
+    SELECT models FROM shape_step_models WHERE scope = ${scope} LIMIT 1;
+  `;
+  if (!rows || rows.length === 0) return null;
+  const parsed = StepModelsSelectionSchema.safeParse((rows[0] as { models: unknown }).models);
+  return parsed.success ? parsed.data : null;
+}
+
+/** Stores the operator's per-step choice (validated); an unknown step or id is refused. */
+export async function saveShapeStepModels(
+  scope: string,
+  models: StepModelsSelection
+): Promise<StepModelsSelection> {
+  const parsed = StepModelsSelectionSchema.parse(models);
+  if (!isNeonConfigured()) {
+    inMemoryStepModels.set(scope, parsed);
+    return parsed;
+  }
+  const sql = neon(env.DATABASE_URL!);
+  await ensureNeonTables(sql);
+  const now = new Date().toISOString();
+  await sql`
+    INSERT INTO shape_step_models (scope, models, created_at, updated_at)
+    VALUES (${scope}, ${JSON.stringify(parsed)}, ${now}, ${now})
+    ON CONFLICT (scope) DO UPDATE SET models = EXCLUDED.models, updated_at = EXCLUDED.updated_at;
+  `;
+  return parsed;
 }
 
 export async function getScenarioDraft(id: string): Promise<ScenarioDraft | null> {

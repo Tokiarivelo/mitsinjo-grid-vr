@@ -4,7 +4,7 @@ vi.mock('server-only', () => ({}));
 import type { ObjectRecipe, RecipePart } from '@/lib/object-shape';
 import { codeProgress, sculptBatches, SCULPT_STEPS } from '../code-progress';
 import type { CodeRoundEvent } from '../shape-code-loop';
-import type { StageProgress } from '../shape-stages-spark';
+import type { StageProgress } from '../code-progress';
 
 const part = (kind: RecipePart['kind'], i: number): RecipePart => ({
   shape: 'box',

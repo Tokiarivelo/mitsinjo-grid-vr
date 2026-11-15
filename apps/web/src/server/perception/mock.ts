@@ -15,7 +15,6 @@ import type {
   CriticResult,
   JudgeResult,
   ViewsCheckResult,
-  ShapeOpsResult,
   DetectionResult,
   Observation,
   SegmentResult,
@@ -278,11 +277,6 @@ export class MockPerceptionBackend implements PerceptionBackend {
   ): Promise<PerceptionCall<ViewsCheckResult>> {
     // No check without Meta: the views model stays as built.
     return { model: MOCK_PERCEPTION_MODEL, usage: {}, result: { check: null } };
-  }
-
-  async proposeShapeOps(): Promise<PerceptionCall<ShapeOpsResult>> {
-    // No stage patch without Meta: the loop keeps the seed.
-    return { model: MOCK_PERCEPTION_MODEL, usage: {}, result: { ops: [] } };
   }
 
   async writeBuildCode(): Promise<PerceptionCall<CodeResult>> {

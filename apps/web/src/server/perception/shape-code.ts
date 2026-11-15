@@ -1,11 +1,9 @@
 import 'server-only';
 
 import { z } from 'zod';
-import { env } from '@/lib/env';
 import { PART_KINDS, RECIPE_MATERIALS, type ObjectRecipe } from '@/lib/object-shape';
+import { stepModel } from './step-models';
 import { CODE_MAX_BYTES } from './code-sandbox';
-import { elevationBox } from './elevation-score';
-import type { Elevation } from './facade-house';
 import type { ModelScore } from './model-score';
 
 /**
@@ -147,7 +145,7 @@ export function parseBuildCode(content: string): string | null {
 
 /** Model that writes the construction code (§8bis): `META_CODE_MODEL`, else the refine model. */
 export function codeModel(): string {
-  return env.META_CODE_MODEL ?? env.META_REFINE_MODEL;
+  return stepModel('code');
 }
 
 export interface CodeQuestionInput {
@@ -197,68 +195,12 @@ export function buildCodeQuestion(q: CodeQuestionInput): string {
 }
 
 type Pt = readonly [number, number];
-const MAX_RING_POINTS = 24;
 
 /** Thin a ring to at most `max` points, keeping the first and spreading the rest evenly. */
 function thin(ring: ReadonlyArray<Pt>, max: number): Pt[] {
   if (ring.length <= max) return [...ring];
   const step = ring.length / max;
   return Array.from({ length: max }, (_, i) => ring[Math.floor(i * step)]!);
-}
-
-/**
- * The drawing's frame in object units (PQ-T58): image point (x, y down) → object (X = (x − cx) / W,
- * Y = (cy − y) / H), so the writer copies measured numbers instead of converting by eye. Lists every
- * opening as `at [X,Y] size [w,h]` and every roof outline ring as a ready `extrude` part (centre, size
- * and a ring normalised to the part box, y up). The front face is z = +0.5·depth.
- */
-export function elevationFrameText(
-  e: Elevation,
-  rings: ReadonlyArray<ReadonlyArray<Pt>> = e.roofRings ?? []
-): string {
-  const box = elevationBox(e);
-  const cx = box.x + box.w / 2;
-  const cy = box.y + box.h / 2;
-  const f3 = (n: number) => n.toFixed(3);
-  const at = (b: { x: number; y: number; w: number; h: number }) =>
-    `at [${f3((b.x + b.w / 2 - cx) / box.w)}, ${f3((cy - (b.y + b.h / 2)) / box.h)}] size [${f3(b.w / box.w)}, ${f3(b.h / box.h)}]`;
-  const list = (
-    name: string,
-    boxes: ReadonlyArray<{ x: number; y: number; w: number; h: number }>
-  ) => (boxes.length ? `${name}: ${boxes.slice(0, 24).map(at).join(' | ')}` : `${name}: none`);
-  const lines = [
-    `Frame: the object's front face spans the image box x ${f3(box.x)}–${f3(box.x + box.w)}, y ${f3(box.y)}–${f3(box.y + box.h)} (y down). In object units x, y ∈ [−0.5, 0.5], y up; sizes are fractions of the box.`,
-    `Wall band (below the eave): ${at({ x: e.wallLeft, y: e.eave, w: e.wallRight - e.wallLeft, h: e.bottom - e.eave })}`,
-    `Roof band (ridge to eave): ${at({ x: e.left, y: e.top, w: e.right - e.left, h: e.eave - e.top })}`,
-    list('Windows', e.windows),
-    list('Doors', e.doors),
-    list('Chimneys', e.chimneys),
-    list('Glass panes', e.panes),
-    list('Beams / posts', e.beams),
-    e.plinth ? `Plinth: ${at(e.plinth)}` : 'Plinth: none',
-    list('Steps', e.steps),
-  ];
-  rings.slice(0, 6).forEach((ring, i) => {
-    const pts = thin(ring, MAX_RING_POINTS);
-    if (pts.length < 3) return;
-    const xs = pts.map((p) => p[0]);
-    const ys = pts.map((p) => p[1]);
-    const b = {
-      x: Math.min(...xs),
-      y: Math.min(...ys),
-      w: Math.max(...xs) - Math.min(...xs),
-      h: Math.max(...ys) - Math.min(...ys),
-    };
-    if (!(b.w > 0) || !(b.h > 0)) return;
-    const unit = pts.map(([x, y]) => [
-      +((x - b.x) / b.w - 0.5).toFixed(3),
-      +(0.5 - (y - b.y) / b.h).toFixed(3),
-    ]);
-    lines.push(
-      `Roof outline ${i + 1} (extrude part, depth is yours): ${at(b)} points ${JSON.stringify(unit)}`
-    );
-  });
-  return lines.join('\n');
 }
 
 /** Draft detail line for the writer question (`recall 0.70 · …`), from the fields measured. */

@@ -166,12 +166,32 @@ function loadStoredModels(): Record<string, PlacedModel> {
   }
 }
 
+/** The models without their drawings (`recipe.faces`): what fits a full storage. */
+export function withoutDrawings(models: Record<string, PlacedModel>): Record<string, PlacedModel> {
+  return Object.fromEntries(
+    Object.entries(models).map(([id, m]) => {
+      const { faces: _faces, ...recipe } = m.recipe;
+      void _faces;
+      return [id, { ...m, recipe }];
+    })
+  );
+}
+
 function saveStoredModels(models: Record<string, PlacedModel>): void {
   if (typeof window === 'undefined' || !window.localStorage) return;
   try {
     window.localStorage.setItem(PLACED_MODELS_STORAGE_KEY, JSON.stringify(models));
   } catch {
-    // quota exceeded or storage disabled
+    // Quota exceeded (a drawn model carries its drawings, PQ-T70): keep the parts at least, so a
+    // reload shows the models in flat colours instead of losing them all.
+    try {
+      window.localStorage.setItem(
+        PLACED_MODELS_STORAGE_KEY,
+        JSON.stringify(withoutDrawings(models))
+      );
+    } catch {
+      // storage disabled
+    }
   }
 }
 

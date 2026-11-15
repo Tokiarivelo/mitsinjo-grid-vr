@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Check, Image as ImageIcon, Loader2, RefreshCw, Sparkles, Trash2 } from 'lucide-react';
 import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
@@ -16,6 +16,10 @@ export interface Facade2dPanelProps {
   onDelete: () => void;
   onValidate: () => void;
   isValidating3D?: boolean;
+  /** Gear opening the per-step model modal, beside « Validate & Generate 3D ». */
+  modelsGear?: ReactNode;
+  /** The other faces (right, back, left) to draw and validate under the front (PQ-T68). */
+  faces?: ReactNode;
 }
 
 export function Facade2dPanel({
@@ -28,6 +32,8 @@ export function Facade2dPanel({
   onDelete,
   onValidate,
   isValidating3D = false,
+  modelsGear,
+  faces,
 }: Facade2dPanelProps) {
   const t = useTranslations('features.visionInsert');
   const [localPrompt, setLocalPrompt] = useState(userPrompt);
@@ -124,6 +130,8 @@ export function Facade2dPanel({
             />
           </div>
 
+          {faces}
+
           {/* Action buttons: Retry, Delete, Validate */}
           <div className="flex flex-wrap items-center gap-2 pt-1">
             <button
@@ -146,6 +154,8 @@ export function Facade2dPanel({
               <Trash2 className="h-4 w-4" aria-hidden="true" />
               <span className="sr-only md:not-sr-only md:ml-1">{t('facade2dDelete')}</span>
             </button>
+
+            {modelsGear}
 
             <button
               type="button"
