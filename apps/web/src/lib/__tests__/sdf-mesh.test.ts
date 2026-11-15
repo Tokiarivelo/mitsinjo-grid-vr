@@ -32,6 +32,34 @@ describe('sdf-mesh (PQ-T53 §8)', () => {
     expect(minDot).toBeGreaterThan(0); // outward: every normal points away from the centre
   });
 
+  it('winds every face outward: a part drawn front side only shows its outside, not its far wall', () => {
+    for (const blobs of [SDF_BALL, SDF_BOTTLE, SDF_PERSON]) {
+      const m = meshSdf(blobs);
+      let inward = 0;
+      for (let t = 0; t < m.triangles; t++) {
+        const at = (k: number, a: number) => m.positions[(t * 3 + k) * 3 + a]!;
+        const u = [0, 1, 2].map((a) => at(1, a) - at(0, a));
+        const v = [0, 1, 2].map((a) => at(2, a) - at(0, a));
+        const face = [
+          u[1]! * v[2]! - u[2]! * v[1]!,
+          u[2]! * v[0]! - u[0]! * v[2]!,
+          u[0]! * v[1]! - u[1]! * v[0]!,
+        ];
+        // Against the field's own outward normals (mean of the three corners).
+        const dot = [0, 1, 2].reduce(
+          (sum, a) =>
+            sum +
+            face[a]! *
+              (m.normals[t * 9 + a]! + m.normals[t * 9 + 3 + a]! + m.normals[t * 9 + 6 + a]!),
+          0
+        );
+        if (dot < 0) inward++;
+      }
+      // A sliver on a crease may read either way; a mesh wound inside out reads all inward.
+      expect(inward / m.triangles).toBeLessThan(0.01);
+    }
+  });
+
   it('smooth bodies stay at 24³: bottle and person-like union', () => {
     const bottle = meshSdf(SDF_BOTTLE);
     expect(bottle.grid).toBe(SDF_GRID);

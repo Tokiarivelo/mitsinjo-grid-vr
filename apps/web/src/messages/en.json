@@ -1051,6 +1051,7 @@
       "facesTitle": "The other views (right, back, left, top)",
       "facesHint": "Each view is drawn from the front and the views already there, so they all agree; the top view gives the plan, the roof seen from above and the depth of the model. Check them one by one; a view left out is drawn by the 3D step itself.",
       "facesTitleVehicle": "The other views (front, back, top, underside)",
+      "facesNonePlant": "A tree or a bush is round about its trunk: its side is its front, so no other view is drawn. The 3D is built from this drawing alone.",
       "facesHintVehicle": "A vehicle is drawn from its profile: its left side is the right one mirrored, so it is not drawn. Each view is drawn from the profile and the views already there; the top view gives the width, the underside the floor. Check them one by one; a view left out is drawn by the 3D step itself.",
       "facesGenerateAll": "Draw all views",
       "facesValidateAll": "Validate all views",

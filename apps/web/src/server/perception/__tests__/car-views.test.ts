@@ -1,6 +1,12 @@
 import sharp from 'sharp';
 import { describe, expect, it, vi } from 'vitest';
-import { facesFor, OBJECT_FACES, VEHICLE_FACES, type ShapeTarget } from '@/lib/object-shape';
+import {
+  facesFor,
+  OBJECT_FACES,
+  PLANT_FACES,
+  VEHICLE_FACES,
+  type ShapeTarget,
+} from '@/lib/object-shape';
 vi.mock('server-only', () => ({}));
 import {
   buildCarFacePrompt,
@@ -13,6 +19,7 @@ import { reconstructObject } from '../recon';
 import { FACADE_REFERENCE_LINE, PROFILE_REFERENCE_LINE, shapeQuestion } from '../shape';
 import type { DrawnView } from '../recon/route';
 import { carViews } from './fixtures/draw-views';
+import { drawTree } from './tree-fixture';
 
 const png = async (img: { cols: number; rows: number; rgb: Uint8Array }) =>
   sharp(Buffer.from(img.rgb), { raw: { width: img.cols, height: img.rows, channels: 3 } })
@@ -28,7 +35,53 @@ describe('vehicle drawings (PQ-T76): the profile first', () => {
     expect(facesFor('house')).toBe(OBJECT_FACES);
     expect(facesFor(undefined)).toBe(OBJECT_FACES);
     expect(VEHICLE_FACES).not.toContain('left');
+    // A tree or a bush is round about its trunk: its front is all the 3D needs.
+    expect(facesFor('tree')).toBe(PLANT_FACES);
+    expect(facesFor('bush')).toHaveLength(0);
   });
+
+  it(
+    'builds a tree from its front alone: nothing drawn, its side is its front',
+    async () => {
+      const tree = await png(drawTree({ crown: { top: 4, base: 80, half: 0.4 } }));
+      const draw = vi.fn(async () => tree);
+      const seen: string[] = [];
+      const built = await reconstructObject(
+        { draw },
+        {
+          id: 'tree',
+          label: 'willow tree',
+          category: 'other',
+          scenery: 'tree',
+          box: { x: 0, y: 0, w: 1, h: 1 },
+          facadeUrl: dataUrl(tree),
+        },
+        { onView: (v) => seen.push(v) }
+      );
+      expect(draw).not.toHaveBeenCalled();
+      expect(seen).toEqual(['front']);
+      expect(built?.recipe.parts.some((p) => p.kind === 'trunk')).toBe(true);
+      expect(built?.drawn).toEqual([]);
+      // A view the operator validated is still read, and still nothing is drawn.
+      const validated: string[] = [];
+      await reconstructObject(
+        { draw },
+        {
+          id: 'tree',
+          label: 'willow tree',
+          category: 'other',
+          scenery: 'tree',
+          box: { x: 0, y: 0, w: 1, h: 1 },
+          facadeUrl: dataUrl(tree),
+          faceUrls: { back: dataUrl(tree) },
+        },
+        { onView: (v) => validated.push(v) }
+      );
+      expect(validated).toEqual(['front', 'back']);
+      expect(draw).not.toHaveBeenCalled();
+    },
+    RECON_TIMEOUT
+  );
 
   it('the 2D view of a vehicle is its profile, front to the right, from any photo angle', () => {
     const prompt = buildFacadePrompt('vehicle', 'blue pickup', 'red stripe', { fromPhoto: true });

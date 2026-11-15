@@ -43,7 +43,7 @@ export const CLUMPS_MAX = 36;
 /** A clump is not smaller than this share of the crown's longest side. */
 export const CLUMP_MIN = 0.05;
 /** A clump is not larger than this share of it. */
-export const CLUMP_MAX = 0.16;
+export const CLUMP_MAX = 0.24;
 /** A clump is this much larger than the room around its centre: lumps overlap and reach the outline. */
 export const CLUMP_GROW = 1.12;
 /** Share of a clump's radius the packing counts as filled: under 1, so neighbours still fill the creases. */

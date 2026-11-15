@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '@/lib/i18n';
-import { VEHICLE_FACES } from '@/lib/object-shape';
+import { PLANT_FACES, VEHICLE_FACES } from '@/lib/object-shape';
 import type { FacesState } from '../hooks/use-facade-faces';
 import { FacadeFacesPanel } from '../ui/facade-faces-panel';
 
@@ -100,5 +100,12 @@ describe('FacadeFacesPanel (PQ-T68)', () => {
     expect(screen.getByText('Underside')).toBeTruthy();
     expect(screen.queryByText('Left side')).toBeNull();
     expect(screen.getByRole('region', { name: /front, back, top, underside/i })).toBeTruthy();
+  });
+
+  it('a tree or a bush: no other view to draw, a note says its front is enough', () => {
+    renderPanel({}, { names: PLANT_FACES });
+    expect(screen.queryAllByRole('listitem')).toHaveLength(0);
+    expect(screen.queryByRole('button', { name: 'Draw all views' })).toBeNull();
+    expect(screen.getByText(/round about its trunk/)).toBeTruthy();
   });
 });

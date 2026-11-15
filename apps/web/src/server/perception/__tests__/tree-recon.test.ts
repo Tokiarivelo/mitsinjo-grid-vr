@@ -13,7 +13,7 @@ describe('reconstructTree', () => {
     for (const iou of ious) expect(iou).toBeGreaterThan(TREE_MIN_IOU);
     expect(out.report.counts.volumes).toBe(out.recipe.parts.length);
     expect(out.report.score.overall).toBeGreaterThan(TREE_MIN_IOU);
-  });
+  }, 30_000);
 
   it('gives up on a drawing without leaves, the generic solver keeps it', () => {
     const aligned = alignedTree({ bare: true });

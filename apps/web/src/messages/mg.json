@@ -1051,6 +1051,7 @@
       "facesTitle": "Ny sary hafa (havanana, aoriana, havia, ambony)",
       "facesHint": "Alaina avy amin'ny lafiny aloha sy ireo efa misy ny sary tsirairay, mba hifanaraka izy rehetra ; ny sary avy any ambony no manome ny drafitra, ny tafo jerena avy any ambony ary ny halalin'ny modely. Hamarino iray isaky ny iray ; ny sary navela dia tsarain'ny dingana 3D mihitsy.",
       "facesTitleVehicle": "Ny sary hafa (aloha, aoriana, ambony, ambany)",
+      "facesNonePlant": "Boribory manodidina ny vatany ny hazo na ny kirihitra : ny tavany no sisiny, ka tsy misy sary hafa atao. Avy amin'ity sary ity ihany no anaovana ny 3D.",
       "facesHintVehicle": "Avy amin'ny mombamombany (sisiny) no anaovana sary ny fiara : ny ilany havia dia ny havanana amin'ny fitaratra, ka tsy tsaraina. Alaina avy amin'ny mombamomba sy ireo efa misy ny sary tsirairay ; ny sary avy any ambony no manome ny sakany, ny avy any ambany ny gorodona. Hamarino iray isaky ny iray ; ny sary navela dia tsarain'ny dingana 3D mihitsy.",
       "facesGenerateAll": "Sary ny sary rehetra",
       "facesValidateAll": "Ekeo ny sary rehetra",

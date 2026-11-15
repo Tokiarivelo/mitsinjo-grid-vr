@@ -34,6 +34,13 @@ export function FacadeFacesPanel({
   disabled = false,
 }: FacadeFacesPanelProps) {
   const t = useTranslations('features.visionInsert');
+  // A tree or a bush: its front is all the 3D needs (`PLANT_FACES`).
+  if (!names.length)
+    return (
+      <p className="rounded-md border border-border bg-surface p-3 text-[11px] text-text-muted">
+        {t('facesNonePlant')}
+      </p>
+    );
   const busy = names.some((f) => faces[f].status === 'generating');
   const allReady = names.every((f) => faces[f].status === 'ready');
   const allValidated = names.every((f) => faces[f].validated);

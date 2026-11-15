@@ -130,7 +130,9 @@ function meshPositionsAt(blobs: ReadonlyArray<SdfBlob>, grid: number): Float32Ar
           const p0 = ev[e0]!;
           const p1 = ev[SDF_TRI_TABLE[row + i + 1]!]!;
           const p2 = ev[SDF_TRI_TABLE[row + i + 2]!]!;
-          pos.push(p0[0], p0[1], p0[2], p1[0], p1[1], p1[2], p2[0], p2[1], p2[2]);
+          // The tables wind a triangle clockwise seen from outside (the field is negative inside):
+          // two corners are swapped so its face looks out, like every other part's.
+          pos.push(p0[0], p0[1], p0[2], p2[0], p2[1], p2[2], p1[0], p1[1], p1[2]);
         }
       }
   return new Float32Array(pos);

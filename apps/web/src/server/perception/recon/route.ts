@@ -353,16 +353,24 @@ export async function reconstructObject(
           onView?.(view, png);
         }
       };
-      // The right side first (it fixes the depth), then the back and the left side from both.
-      await face('side');
-      // With them the view from above: the footprint and the drawing of what faces the sky.
-      // The operator's validated plan first, then one given by the caller, else drawn here.
-      const above = async () => {
-        if (top || !fourFaces) return;
-        const known = Object.values(pngs).map(dataUrl);
-        top = await draw('top', buildTopPrompt(target.label, known.length), known);
-      };
-      await Promise.all([face('back'), face('left'), above()]);
+      if (archetype === 'tree' || archetype === 'bush') {
+        // A plant is round about its trunk: its side is its front, never drawn (a drawn side
+        // shows another tree and the crown would be cut where the two disagree). The views the
+        // operator validated are still read.
+        for (const name of FACE_ORDER) if (target.faceUrls?.[name]) await face(name);
+        if (!pngs.right && !pngs.left) pngs.right = front;
+      } else {
+        // The right side first (it fixes the depth), then the back and the left side from both.
+        await face('side');
+        // With them the view from above: the footprint and the drawing of what faces the sky.
+        // The operator's validated plan first, then one given by the caller, else drawn here.
+        const above = async () => {
+          if (top || !fourFaces) return;
+          const known = Object.values(pngs).map(dataUrl);
+          top = await draw('top', buildTopPrompt(target.label, known.length), known);
+        };
+        await Promise.all([face('back'), face('left'), above()]);
+      }
     }
     if (top) onView?.('top', top);
     const images: Partial<Record<ViewName, ViewImage>> = {};

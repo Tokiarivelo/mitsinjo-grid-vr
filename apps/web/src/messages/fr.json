@@ -1051,6 +1051,7 @@
       "facesTitle": "Les autres vues (droite, arrière, gauche, dessus)",
       "facesHint": "Chaque vue est dessinée à partir de la façade et des vues déjà là, pour qu'elles concordent ; la vue de dessus donne le plan, le toit vu d'en haut et la profondeur du modèle. Vérifie-les une par une ; une vue laissée de côté est dessinée par l'étape 3D elle-même.",
       "facesTitleVehicle": "Les autres vues (face, arrière, dessus, dessous)",
+      "facesNonePlant": "Un arbre ou un buisson est rond autour de son tronc : son côté est sa face, aucune autre vue n'est donc dessinée. La 3D est construite à partir de ce seul dessin.",
       "facesHintVehicle": "Un véhicule est dessiné à partir de son profil : son côté gauche est le droit en miroir, il n'est donc pas dessiné. Chaque vue est dessinée à partir du profil et des vues déjà là ; la vue de dessus donne la largeur, celle de dessous le plancher. Vérifie-les une par une ; une vue laissée de côté est dessinée par l'étape 3D elle-même.",
       "facesGenerateAll": "Dessiner toutes les vues",
       "facesValidateAll": "Valider toutes les vues",

@@ -748,16 +748,23 @@ export const FACADE_URL_MAX = 8_000_000;
  * The views drawn beside the main 2D view. Most objects (PQ-T68): the main view is the front,
  * then right side, back, left side and the view from above (PQ-T71). A vehicle (PQ-T76): the main
  * view is its profile, then front, back, view from above and underside; its left side is the
- * right one mirrored, never drawn. `FACE_NAMES` lists every name; `facesFor` the ones an object has.
+ * right one mirrored, never drawn. A tree or a bush: none, it is round about its trunk, so its side
+ * is its front (a drawn side shows another tree and the crown is cut where they disagree).
+ * `FACE_NAMES` lists every name; `facesFor` the ones an object has.
  */
 export const OBJECT_FACES = ['side', 'back', 'left', 'top'] as const;
 export const VEHICLE_FACES = ['front', 'back', 'top', 'bottom'] as const;
+export const PLANT_FACES = [] as const;
 export const FACE_NAMES = ['side', 'back', 'left', 'top', 'front', 'bottom'] as const;
 export type FaceName = (typeof FACE_NAMES)[number];
 
 /** The faces drawn beside the main 2D view of an object of this archetype, in drawing order. */
 export const facesFor = (archetype: string | undefined): ReadonlyArray<FaceName> =>
-  archetype === 'vehicle' ? VEHICLE_FACES : OBJECT_FACES;
+  archetype === 'vehicle'
+    ? VEHICLE_FACES
+    : archetype === 'tree' || archetype === 'bush'
+      ? PLANT_FACES
+      : OBJECT_FACES;
 
 /** An image URL accepted for a 2D view: inline image or https link, at most `FACADE_URL_MAX` characters. */
 const viewUrl = z

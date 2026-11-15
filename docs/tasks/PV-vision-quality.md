@@ -927,6 +927,22 @@ scripts/object-viewer-shot.mjs …` (1440 + 390, dark + light).
       Bench `make car-replay OUT=r7`: all eleven cars carry two mirrors. Third pass
       (user, same day: fix what was left): (1) a mirror moved out no longer passes the box:
       `mirrorFit` narrows the whole car until the tips stand on the box's side (`make car-replay
-  OUT=r8`: hatchback 0.970, SUVs 0.976 / 0.984, pick-up 0.997, the others 1; widest point of
+OUT=r8`: hatchback 0.970, SUVs 0.976 / 0.984, pick-up 0.997, the others 1; widest point of
       every mesh ≤ 0.5). (2) a car nobody saw a mirror on gets `standardMirrors` (plain colour, on
       the shoulder), never a kind `other`. (3) `make dev-fresh` for a stale module in the dev server.
+- [x] **PQ-T81 A tree is built from its front alone; its clumps are closed solids.** User
+      2026-11-15 (a weeping willow): with its views the 3D tree had nothing to do with the drawing,
+      and inside each clump one could see through; decide, as for the car, how many 2D views an
+      object needs. Causes: (1) every `sdf` part was meshed inside out (`sdf-mesh.ts`: the
+      marching-cubes tables wind clockwise seen from outside; 99.9 % of the crown's faces looked
+      in, so the viewer culled the near wall and showed the far one); (2) the side, back and left
+      drawn by Muse are another tree, and the crown is the volume both silhouettes agree on.
+      Fix: two corners swapped per triangle (every `sdf` part, not only trees: the judge's flat
+      render raymarches the field and never saw it); a tree or a bush draws no other view
+      (`PLANT_FACES`, a note in the faces panel), its side is its front, an operator's validated
+      side is still read; `CLUMP_MAX` 0.16 → 0.24. Bench `make tree-replay OUT=f2` (front only):
+      willow 0.63 → 0.75, gardenia 0.77 → 0.81, acacia 0.52 → 0.54, baobab, palms, pine unchanged
+      (front only vs. the four views of r13: −0.05 to +0.03). Drawings saved: fewer Meta calls.
+      **Still open:** a weeping curtain is round clumps, not hanging strands; a lean of the trunk
+      leans the same way seen from the side. **Test:** `sdf-mesh.test.ts` (faces wound out),
+      `car-views.test.ts` (`facesFor`, a tree built with nothing drawn), `facade-faces-panel.test.tsx`.

@@ -180,9 +180,9 @@ car-replay: ## Car offline replay (PQ-T76, no Meta call): rebuilds every c-*/ ca
 	$(need_ws)
 	./scripts/car-replay.sh $(or $(OUT),replay) $(or $(REF),$(CURDIR)/resources/refine-3d) $(NAMES)
 
-tree-replay: ## Tree offline replay (PQ-T79, no Meta call): rebuilds every t-*/ tree from its saved drawings [OUT=replay REF=resources/refine-3d NAMES="acacia palm"] → <dir>/<OUT>/recipe.json, report.txt, model.png
+tree-replay: ## Tree offline replay (PQ-T79, no Meta call): rebuilds every t-*/ tree from its saved front, like the live route [OUT=replay REF=resources/refine-3d NAMES="acacia palm" SIDES=1 = also its saved side drawings] → <dir>/<OUT>/recipe.json, report.txt, model.png
 	$(need_ws)
-	./scripts/tree-replay.sh $(or $(OUT),replay) $(or $(REF),$(CURDIR)/resources/refine-3d) $(NAMES)
+	SIDES=$(SIDES) ./scripts/tree-replay.sh $(or $(OUT),replay) $(or $(REF),$(CURDIR)/resources/refine-3d) $(NAMES)
 
 shape-report: ## 3D shape report: scores + contact sheet → test-results/shape-report/ (/shape-loop)
 	$(need_ws)
