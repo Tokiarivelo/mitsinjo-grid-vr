@@ -182,7 +182,7 @@ export function reportMarkdown(rows: ReportRow[], date: string, real?: RealSecti
   const lines = [
     `# Shape report — ${date}`,
     '',
-    `Stop criteria: IoU ≥ ${STOP.iou} · edge F1 ≥ ${STOP.edgeF1} · ΔE ≤ ${STOP.deltaE}. Sheet: \`contact-sheet.png\` (photo | flat | ¾).`,
+    `Stop criteria: IoU ≥ ${STOP.iou} · edge F1 ≥ ${STOP.edgeF1} · ΔE ≤ ${STOP.deltaE}. Sheet: \`contact-sheet.png\` (photo | flat | ¾); real rows also in \`turntable-sheet.png\` (photo | model 0° | 90° | 180° | 270°).`,
     `Detail (PQ-T6, weighted into the score when SAM part masks exist): recall ≥ ${STOP_DETAIL.partRecall} · precision ≥ ${STOP_DETAIL.partPrecision} · interior edge F1 ≥ ${STOP_DETAIL.interiorEdgeF1} · part ΔE ≤ ${STOP_DETAIL.partDeltaE}; « — » when not measured.`,
     'Ana (PQ-T46): share of the closed-list parts answered `present` the model builds (no gate yet).',
     'Band (PQ-T36): SSIM of the worst of 8 height bands inside the outline @ band (0 = top), blank bands ✗. Views: side ÷ front silhouette, ✗ thin (< 0.15) or detached at 45°. Not built (PQ-T37): SAM parts the model lacks, ✓ none.',
@@ -236,10 +236,21 @@ export function reportRow(
   };
 }
 
-/** A captured real case, re-scored offline: its row and the images for the contact sheet. */
+/** Turntable angles (PQ-T54, universal pipeline §9.1): the model straight on at each quarter turn. */
+export const TURNTABLE_YAWS = [0, 90, 180, 270] as const;
+
+export interface TurntableRow {
+  name: string;
+  crop: RgbGrid;
+  /** One render per `TURNTABLE_YAWS`, straight on (pitch 0) so faces read flat. */
+  views: FlatRender[];
+}
+
+/** A captured real case, re-scored offline: its row and the images for the sheets. */
 export interface RealScored {
   row: ReportRow;
   sheet: SheetRow;
+  turntable: TurntableRow;
 }
 
 /**
@@ -268,6 +279,7 @@ export async function scoreRealSet(
       continue;
     }
     const name = c.hard ? `${c.id} (${c.hard})` : c.id;
+    const recipe = capture.recipe;
     scored.push({
       row: reportRow(
         name,
@@ -283,6 +295,13 @@ export async function scoreRealSet(
         crop: s.crop,
         flat: s.render,
         threeQuarter: renderFlat(capture.recipe, 1, 160, 120, THREE_QUARTER),
+      },
+      turntable: {
+        name: `${name} — ${s.score.score}`,
+        crop: s.crop,
+        views: TURNTABLE_YAWS.map((deg) =>
+          renderFlat(recipe, 1, 160, 120, { yaw: (deg * Math.PI) / 180, pitch: 0 })
+        ),
       },
     });
   }
@@ -337,6 +356,48 @@ export async function contactSheet(rows: SheetRow[]): Promise<Buffer> {
   const composites: sharp.OverlayOptions[] = [];
   built.forEach((ts, i) => {
     const top = GAP + i * (LABEL + SHEET_TILE + GAP);
+    composites.push({
+      input: Buffer.from(
+        `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${LABEL}"><text x="${GAP}" y="17" font-family="sans-serif" font-size="14" fill="#222">${esc(rows[i]!.name)}</text></svg>`
+      ),
+      top,
+      left: 0,
+    });
+    let left = GAP;
+    for (const t of ts) {
+      composites.push({ input: t.input, top: top + LABEL, left });
+      left += t.width + GAP;
+    }
+  });
+  return sharp({ create: { width, height, channels: 3, background: '#eeeeee' } })
+    .composite(composites)
+    .png()
+    .toBuffer();
+}
+
+/** One PNG: a row per real object, photo | model 0° | 90° | 180° | 270° — naked faces show. */
+export async function turntableSheet(rows: TurntableRow[]): Promise<Buffer> {
+  const legend = `photo | model ${TURNTABLE_YAWS.map((d) => `${d}°`).join(' | ')}`;
+  const built = await Promise.all(
+    rows.map(async (r) => [
+      await tile(r.crop.rgb, r.crop.cols, r.crop.rows),
+      ...(await Promise.all(r.views.map((v) => tile(onWhite(v), v.mask.cols, v.mask.rows)))),
+    ])
+  );
+  const rowW = (ts: Array<{ width: number }>) => ts.reduce((a, t) => a + t.width + GAP, GAP);
+  const width = Math.max(320, ...built.map(rowW));
+  const height = LABEL + rows.length * (LABEL + SHEET_TILE + GAP) + GAP;
+  const composites: sharp.OverlayOptions[] = [
+    {
+      input: Buffer.from(
+        `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${LABEL}"><text x="${GAP}" y="17" font-family="sans-serif" font-size="14" fill="#222">${esc(legend)}</text></svg>`
+      ),
+      top: GAP,
+      left: 0,
+    },
+  ];
+  built.forEach((ts, i) => {
+    const top = GAP + LABEL + i * (LABEL + SHEET_TILE + GAP);
     composites.push({
       input: Buffer.from(
         `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${LABEL}"><text x="${GAP}" y="17" font-family="sans-serif" font-size="14" fill="#222">${esc(rows[i]!.name)}</text></svg>`

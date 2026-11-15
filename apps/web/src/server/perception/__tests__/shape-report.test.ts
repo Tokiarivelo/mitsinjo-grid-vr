@@ -14,9 +14,12 @@ import {
   reportMarkdown,
   reportRow,
   scoreRealSet,
+  turntableSheet,
   worstMetric,
+  TURNTABLE_YAWS,
   type ReportRow,
   type SheetRow,
+  type TurntableRow,
 } from '../shape-report';
 import { GOLDEN_SHAPES, REAL_SHAPES, type RealCase } from '../__fixtures__/shape';
 import { GOLDEN_ELEVATIONS } from '../__fixtures__/elevation';
@@ -190,6 +193,7 @@ describe('shape report (PR-0.3)', () => {
     expect(scored[0]!.row.name).toBe('refrigerator');
     expect(scored[0]!.row.ms).toBeUndefined();
     expect(scored[0]!.row.score.iou).toBeGreaterThan(0.6);
+    expect(scored[0]!.turntable.views).toHaveLength(4);
     expect(REAL_SHAPES.length).toBeGreaterThanOrEqual(12);
     expect(REAL_SHAPES.filter((c) => c.hard).length).toBeGreaterThanOrEqual(3);
   });
@@ -226,6 +230,29 @@ describe('shape report (PR-0.3)', () => {
     expect(meta.format).toBe('png');
     expect(meta.height).toBeGreaterThan(2 * 160);
   });
+
+  it('builds a turntable sheet: photo + one tile per quarter turn (PQ-T54)', async () => {
+    const { shape, photo, target } = await runGolden(GOLDEN_SHAPES[3]!);
+    const s = (await scoreRecipe(photo, target, shape.recipe!))!;
+    const row: TurntableRow = {
+      name: 'car',
+      crop: s.crop,
+      views: TURNTABLE_YAWS.map((deg) =>
+        renderFlat(shape.recipe!, 1, 160, 120, { yaw: (deg * Math.PI) / 180, pitch: 0 })
+      ),
+    };
+    expect(row.views).toHaveLength(4);
+    const png = await turntableSheet([row, row]);
+    const meta = await sharp(png).metadata();
+    expect(meta.format).toBe('png');
+    // Legend line + two labelled rows.
+    expect(meta.height).toBe(24 + 2 * (24 + 160 + 8) + 8);
+    // Photo + 4 views + 6 gaps, wider than the contact sheet's 3 tiles.
+    const contact = await sharp(
+      await contactSheet([{ ...row, flat: s.render, threeQuarter: row.views[0]! }])
+    ).metadata();
+    expect(meta.width).toBeGreaterThan(contact.width!);
+  });
 });
 
 /**
@@ -259,6 +286,7 @@ describe.runIf(process.env.SHAPE_REPORT)('make shape-report', () => {
       join(process.cwd(), 'src/server/perception/__fixtures__/shape/real');
     const real = await scoreRealSet(realDir, REAL_SHAPES);
     for (const r of real.scored) sheet.push(r.sheet);
+    const turntable = real.scored.map((r) => r.turntable);
     await mkdir(dir, { recursive: true });
     const md = reportMarkdown(rows, new Date().toISOString().slice(0, 10), {
       rows: real.scored.map((r) => r.row),
@@ -295,6 +323,8 @@ describe.runIf(process.env.SHAPE_REPORT)('make shape-report', () => {
     await writeFile(join(dir, 'index.md'), md + '\n' + elevMd);
     if (elevTiles.length) await writeFile(join(dir, 'elevation-sheet.png'), await stack(elevTiles));
     await writeFile(join(dir, 'contact-sheet.png'), await contactSheet(sheet));
+    if (turntable.length)
+      await writeFile(join(dir, 'turntable-sheet.png'), await turntableSheet(turntable));
     // Fitted recipes for `make shape-shots` (the real 3D viewer, stubbed API).
     await writeFile(join(dir, 'recipes.json'), JSON.stringify(recipes));
     console.info(`\n${md}\n${elevMd}\n→ ${dir}`);

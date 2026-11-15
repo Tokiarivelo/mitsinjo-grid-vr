@@ -85,7 +85,10 @@ features/copilot/          # ChatPanel, ChatMessage, ToolActivity, ConfirmPropos
   on silhouette, proportions, parts present, parts placed, surfaces, likeness from one sheet (photo | front | ¾);
   offline only (`make shape-judge`), never in a live answer; mock = grade 3. Trusted by the loop only after its
   calibration (damaged models lower in ≥ 90 % of pairs). Run 2026-11-10: 77 % of 13 pairs → **developer note
-  only**. Only live Meta answers count and are stored (`liveJudgement`: a mock or fallback grade 3 never does);
+  only**; re-run 2026-11-12 (PQ-T54): 69 % of the same 13 pairs → still **developer note only** (floor grades
+  1–2 persist; car-hidden and pump graded higher damaged, house-row and water-tank tied). Only live Meta
+  answers count and are stored (`liveJudgement`: a mock or fallback grade 3 never does); stored answers carry
+  the graded recipe's fingerprint and replay only on prompt + model + fingerprint match (`judgeReplayUsable`);
   captures under three parts are skipped (`damage` removes nothing).
   **Kit prompt 2 (PQ-T11/T12):** `kitPrompt(2, hint)` = the Muse cards of `docs/vision-to-3d-muse-skills.md` (`skills/`: Base + Look + Kit + the card of the hint's family; the free-parts call: Base + Look + Free parts, `partsPrompt()`), JSON schema with `evidence` first and `confidence` (`kitJsonSchema(2)`; prompt 1 keeps the schema without them, so its answers are not longer). `runObjectShape({ promptVersion })` runs the kit and the free-parts calls on a chosen version (routes leave it unset); `make eval-parts PROMPT=1,2` measures the free-parts call alone. The cards are generated from the doc (`make skills-gen`; `skills.test.ts` fails when the module is behind). `KIT_PROMPT_VERSION` stays on the version its eval kept.
   **Prompt versions (PQ-T5):** `KIT_PROMPT_VERSION` = 4 (PQ-T46: prompt 1 + the closed anatomy inventory of the hint's family, answered first), `CRITIC_PROMPT_VERSION` (`shape.ts`),
