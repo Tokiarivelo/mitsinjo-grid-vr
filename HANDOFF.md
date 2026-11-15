@@ -21,7 +21,8 @@ Cars left: estate, coupe, sport, bus, limo, lorry, motorhome, tractor. Trees lef
   per window / tyre / wheel, masks baked as a real cut. Eleven cars replay (`make car-replay OUT=r5`).
 - **PQ-T80 wing mirrors:** `car/car-mirrors.ts` measures them on the front's outline, the section reads the
   body across their rows (no more ledge along the car), `carMesh` builds one piece per side (slot `mirror`,
-  a Studio layer each). The car box takes the front's full width. `make car-replay OUT=r6`.
+  a Studio layer each, glass on its back). The car team's `mirror` details give their place along the car
+  and, when the front shows none, their outline (plain colour). `make car-replay OUT=r7`: 11 / 11 with mirrors.
 - **PQ-T79 trees** (Sonnet subagent, then refined): `tree` / `bush` no longer carved into boxes.
   `recon/route.ts` → `tree/tree-recon.ts` (`fitTree` → `packCrown` → `treeRecipe`), generic path when no
   crown is found or the outline IoU < 0.4. Trunk = one `lathe` (measured radius per height, flat foot),
@@ -40,5 +41,5 @@ Cars left: estate, coupe, sport, bus, limo, lorry, motorhome, tractor. Trees lef
   trunk tip shows from above; leafless drawings fall back to boxes; ≈ 7–8 k triangles (budget 5 k);
   village import and Blender export of a generated tree not run; V373–V381 not played.
 - Cars: body = extruded profile (spoilers, bull bars, open cabins solid); profile direction trusts the prompt;
-  mirrors need a front drawing that shows them, and stalk mirrors inside the wings' width stay small; V382–V385 not played.
+  a mirror moved out with a wide flank may pass the box's side; no user Mini in the bench; V382–V388 not played.
 - Houses: V335–V343 not played; phase PR not opened; door snap + views check pending.

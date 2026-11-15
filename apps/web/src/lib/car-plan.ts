@@ -94,6 +94,13 @@ export const CarMirrorSchema = z.object({
   y0: share,
   y1: share,
   reach: z.array(z.number().min(0).max(0.5)).min(2).max(32),
+  /** The body's edge under the mirror on the drawing, from the centre line (share of the width). */
+  root: z.number().min(0).max(0.5).optional(),
+  /**
+   * Set when the outline was read by the car team, not measured on the front's pixels (a front
+   * drawn without its mirrors): the mirrors take this colour instead of wearing the drawing.
+   */
+  color: hex.optional(),
 });
 export type CarMirror = z.infer<typeof CarMirrorSchema>;
 

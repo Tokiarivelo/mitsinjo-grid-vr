@@ -83,6 +83,20 @@ describe('carSlotLooks', () => {
     expect(at('tyre').drawn).toBe(false);
     expect(at('left')).toMatchObject({ drawn: false, surface: 'wood', color: '#806040' });
   });
+
+  it('draws the mirrors measured on the front; mirrors the team read take their colour', () => {
+    const mirrors = { z: 0.6, y0: 0.6, y1: 0.7, reach: [0.47, 0.5] };
+    const at = (m: typeof mirrors & { color?: string }) =>
+      carSlotLooks({ proportions, car: { ...car, mirrors: m }, faces: faces as never })[
+        CAR_SLOTS.indexOf('mirror')
+      ]!;
+    expect(at(mirrors).drawn).toBe(true);
+    expect(at({ ...mirrors, color: '#111111' })).toMatchObject({
+      drawn: false,
+      surface: 'plastic',
+      color: '#111111',
+    });
+  });
 });
 
 describe('carMaterials', () => {

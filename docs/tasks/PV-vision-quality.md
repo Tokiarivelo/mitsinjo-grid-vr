@@ -916,3 +916,13 @@ scripts/object-viewer-shot.mjs …` (1440 + 390, dark + light).
       the jeep, the pick-ups, the minibus and the second sedan; the beetle's stalk mirrors barely
       clear its wings (a small piece); the 1950s cabriolet and the first sedan show none on their
       front drawing (none built). No Mini drawing in the bench: not replayed on the user's car.
+      Second pass (user, same day: fix the limits, let the AI look for the mirrors): (1) the car
+      team already names the mirrors on every drawing (`details`, kind `mirror`): `readMirrors`
+      takes their place along the car from the side boxes (it agrees with the measured one within
+      0.01 on the hatchback and the jeep) and, when the front's pixels show none, their outline from
+      the team's boxes in a plain colour (the first sedan now has mirrors). Pixels still measure,
+      the model only finds. (2) stalk mirrors narrower than the wings (beetle, 1950s cabriolet):
+      `CarMirror.root` = the body's edge under the mirror; the mesh moves the mirror out with its
+      flank and keeps its measured width. (3) the back of the housing reads a side window: glass.
+      Bench `make car-replay OUT=r7`: all eleven cars carry two mirrors. Still open: a mirror moved
+      out may pass the box's side by a few percent; a car with no reading and no bump has none.

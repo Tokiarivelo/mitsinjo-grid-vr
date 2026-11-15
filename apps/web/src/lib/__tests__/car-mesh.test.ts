@@ -394,9 +394,45 @@ describe('wing mirrors (PQ-T80)', () => {
     expect(m.slot.length - own.length).toBe(bare.slot.length);
   });
 
-  it('builds none without a measured mirror, or when it does not clear the flank', () => {
+  it('builds none without a measured mirror, or for an outline with no width', () => {
     expect(slotCount(carMesh(plan, dims)!.slot).mirror).toBe(0);
-    const inside = { ...mirrors, reach: [0.44, 0.45, 0.45, 0.44] };
-    expect(slotCount(carMesh({ ...plan, mirrors: inside }, dims)!.slot).mirror).toBe(0);
+    const flat = { ...mirrors, reach: [0.45, 0.45, 0.45, 0.45], root: 0.45 };
+    expect(slotCount(carMesh({ ...plan, mirrors: flat }, dims)!.slot).mirror).toBe(0);
+  });
+
+  it('moves a stalk mirror out with the flank: narrower than the wings, it keeps its size', () => {
+    // Drawn from 0.3 to 0.38 of the centre line, inside a flank at 0.45.
+    const stalk = { z: 0.6, y0: 0.6, y1: 0.7, reach: [0.36, 0.38, 0.38, 0.36], root: 0.3 };
+    const own = faces(carMesh({ ...plan, mirrors: stalk }, dims)!).filter(
+      (f) => f.slot === 'mirror'
+    );
+    expect(own.length).toBeGreaterThan(40);
+    const xs = own.flatMap((f) => f.corners.map((c) => Math.abs(c[0]! - 0.5)));
+    // It stands out of the flank by what it measures on the drawing (0.08), no more.
+    expect(Math.max(...xs)).toBeGreaterThan(0.5);
+    expect(Math.max(...xs)).toBeLessThan(0.45 + 0.08 + 0.005);
+  });
+
+  it('turns the back of the housing into glass: it reads a side window, the rest the front', () => {
+    const m = carMesh({ ...plan, mirrors }, dims, { views: ['front', 'right'] })!;
+    const pane = atlasUv(faceSlot('right'), 0.5, 1 - 0.675);
+    let [glass, housing] = [0, 0];
+    for (let t = 0; t < m.slot.length; t++) {
+      if (CAR_SLOTS[m.slot[t]!] !== 'mirror') continue;
+      const us = [0, 1, 2].map((k) => [m.uv[(t * 3 + k) * 2]!, m.uv[(t * 3 + k) * 2 + 1]!]);
+      const onPane = us.every(
+        (uv) => Math.abs(uv[0]! - pane[0]) < 1e-6 && Math.abs(uv[1]! - pane[1]) < 1e-6
+      );
+      if (!onPane) {
+        housing++;
+        continue;
+      }
+      glass++;
+      // Only faces turned to the rear of the car.
+      const nz = [0, 1, 2].reduce((sum, k) => sum + m.normal[(t * 3 + k) * 3 + 2]!, 0);
+      expect(nz).toBeLessThan(0);
+    }
+    expect(glass).toBeGreaterThan(0);
+    expect(housing).toBeGreaterThan(glass);
   });
 });

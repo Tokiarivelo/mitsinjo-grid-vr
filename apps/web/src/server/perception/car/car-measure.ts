@@ -4,7 +4,7 @@ import type { CarPlan } from '@/lib/car-plan';
 import { sharpView } from '../house/house-specialist';
 import type { AlignedViews, GridView, ViewFrame, ViewName } from '../recon/views';
 import { applyCarReading, fitCarBody } from './car-fit';
-import { fitMirrors, mirrorStation } from './car-mirrors';
+import { fitMirrors, placeMirrors, readMirrors } from './car-mirrors';
 import type { CarReading } from './car-tools';
 import { dropShadow, measureCar } from './car-wheels';
 
@@ -62,9 +62,14 @@ export async function measureCarPlan(
       )
     );
     const read = applyCarReading(plan, reading, side, mirrored);
-    // They stand at the front corner of the side glass the team read, else where the cabin rises.
-    const z = mirrors && body ? mirrorStation(read, mirrors.outline) : null;
-    return mirrors && z !== null ? { ...read, mirrors: { z, ...mirrors.outline } } : read;
+    if (!body) return read;
+    // The team looked for the mirrors on every drawing: where they stand along the car, and their
+    // outline when the front's pixels do not show one.
+    const told = reading
+      ? readMirrors(reading, mirrored, front ? front.rows / front.cols : 0.75)
+      : null;
+    const placed = placeMirrors(read, mirrors?.outline ?? null, told);
+    return placed ? { ...read, mirrors: placed } : read;
   } catch (err) {
     console.warn('[vision] car measure failed:', err instanceof Error ? err.message : err);
     return null;

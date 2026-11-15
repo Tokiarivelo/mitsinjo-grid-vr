@@ -300,7 +300,9 @@ describe.runIf(
                 ? (look.rim ?? '#b9bcc0')
                 : slot === 'under'
                   ? '#1c1d1f'
-                  : paint,
+                  : slot === 'mirror'
+                    ? (recipe.car!.mirrors?.color ?? paint)
+                    : paint,
         ])
       ) as Record<CarSlot, string>;
       const pieces: Record<CarSlot, string> = {
@@ -330,7 +332,12 @@ describe.runIf(
           }
         : null;
       const drawn = new Set<CarSlot>(
-        CAR_SLOTS.filter((slot) => slot !== 'tyre' && (slot !== 'under' || recipe.faces?.underside))
+        CAR_SLOTS.filter(
+          (slot) =>
+            slot !== 'tyre' &&
+            (slot !== 'under' || recipe.faces?.underside) &&
+            (slot !== 'mirror' || !recipe.car!.mirrors?.color)
+        )
       );
       const deg = Math.PI / 180;
       const side = 440;

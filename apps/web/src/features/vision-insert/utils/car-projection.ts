@@ -36,7 +36,9 @@ const isSurface = (slot: CarSlot): slot is HullSurface =>
  */
 function drawn(recipe: CarRecipe, slot: CarSlot): boolean {
   if (!recipe.faces) return false;
-  if (slot === 'glass' || slot === 'rim' || slot === 'mirror') return true;
+  if (slot === 'glass' || slot === 'rim') return true;
+  // Mirrors the team read on a front drawn without them have no drawing to wear.
+  if (slot === 'mirror') return !recipe.car.mirrors?.color;
   if (slot === 'under') return Boolean(recipe.faces.underside);
   return isSurface(slot) && !recipe.faces.surfaces?.[slot]?.material;
 }
@@ -81,7 +83,9 @@ export function carSlotLooks(recipe: CarRecipe): CarSlotLook[] {
     tyre: { surface: 'rubber', color: look.tyre ?? MATERIAL_COLOR.rubber },
     rim: { surface: 'metal', color: look.rim ?? MATERIAL_COLOR.metal },
     under: { surface: 'rubber', color: CAR_UNDER_COLOR },
-    mirror: { surface: 'metal', color: paint },
+    mirror: recipe.car.mirrors?.color
+      ? { surface: 'plastic', color: recipe.car.mirrors.color }
+      : { surface: 'metal', color: paint },
   };
   return CAR_SLOTS.map((slot) => {
     const set = isSurface(slot) ? recipe.faces?.surfaces?.[slot] : undefined;

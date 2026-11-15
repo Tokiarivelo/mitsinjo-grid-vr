@@ -111,6 +111,8 @@ export const MIRROR_ARM = 0.5;
 export const MIRROR_BACK = 0.4;
 /** It starts this far inside the flank (share of the width) and must stand out by as much. */
 export const MIRROR_ROOT = 0.01;
+/** A face of the housing turned to the rear past this (z of its normal) is the mirror's glass. */
+export const MIRROR_GLASS = -0.75;
 
 type V3 = [number, number, number];
 const sub = (a: V3, b: V3): V3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
@@ -432,6 +434,8 @@ export function carMesh(
     (a[2] + b[2] + c[2]) / 3,
   ];
 
+  /** Where a point reads its drawing when not at its own place (a wing mirror moved out). */
+  let uvRead: ((p: V3) => V3) | null = null;
   /** One triangle out: its vertex normals kept except across a crease, its uvs on `view`. */
   const emit = (vs: Corners, ns: Corners, fn: V3, slot: CarSlot, view: UvView) => {
     for (let k = 0; k < 3; k++) {
@@ -440,7 +444,7 @@ export function carMesh(
       const m = dot(ns[k]!, fn) < CREASE_COS ? fn : ns[k]!;
       pos.push(p[0], p[1], p[2]);
       nrm.push(m[0], m[1], m[2]);
-      const uv = uvOf(p, view);
+      const uv = uvOf(uvRead ? uvRead(p) : p, view);
       uvs.push(uv[0], uv[1]);
     }
     slots.push(SLOT_INDEX[slot]);
@@ -726,9 +730,15 @@ export function carMesh(
     const at = Math.round(((mirror.z - body.z0) / Math.max(1e-6, body.z1 - body.z0)) * (N - 1));
     const i = Math.max(0, Math.min(N - 1, at));
     const mid = Math.min((mirror.y0 + mirror.y1) / 2, body.top[i]!);
-    const root = section(body.top[i]!, mid) * taperAt(i) - MIRROR_ROOT;
+    const flank = section(body.top[i]!, mid) * taperAt(i);
     const reach = mirror.reach;
     const tip = Math.max(...reach);
+    // The body's edge under the mirror on the drawing. A lofted body is as wide as its wings all
+    // along: where it stands wider than that edge, the mirror moves out with the flank and keeps
+    // its measured size (a stalk mirror narrower than the wings is not buried in the door).
+    const drawnRoot = Math.min(mirror.root ?? Math.min(...reach), tip);
+    const out = Math.max(0, flank - drawnRoot);
+    const root = Math.min(flank, drawnRoot) - MIRROR_ROOT;
     const L = reach.length;
     const yAt = (j: number) => mirror.y0 + ((mirror.y1 - mirror.y0) * j) / (L - 1);
     /** The heights between which the outline reaches `x` from the centre line. */
@@ -746,7 +756,17 @@ export function carMesh(
     };
     const depth = ((mirror.y1 - mirror.y0) * h * MIRROR_DEPTH) / 2;
     const face = { slot: 'mirror' as const, view: 'front' as UvView };
-    if (tip - root > 2 * MIRROR_ROOT)
+    // Its glass, on the back of the housing: the colour of a side window on its drawing.
+    const pane = (plan.windows ?? []).find((x) => x.view === 'right' || x.view === 'left');
+    const paneAt: V3 | null = pane
+      ? [
+          0,
+          Y(pane.points.reduce((sum, q) => sum + q[1], 0) / pane.points.length),
+          Z(pane.points.reduce((sum, q) => sum + q[0], 0) / pane.points.length),
+        ]
+      : null;
+    const glass = pane ? { slot: 'mirror' as const, view: pane.view as UvView } : null;
+    if (tip - drawnRoot > MIRROR_ROOT)
       for (const sx of [1, -1] as const) {
         const loops: V3[][] = [];
         const around: V3[][] = [];
@@ -768,7 +788,7 @@ export function carMesh(
             const [ca, sa] = [Math.cos(a), Math.sin(a)];
             // The housing bulges toward the front of the car; its back (the glass) is flatter.
             loop.push([
-              X(0.5 + sx * x),
+              X(0.5 + sx * (x + out)),
               Y((lo + hi) / 2) + ry * ca,
               Z(mirror.z) + rz * sa * (sa < 0 ? MIRROR_BACK : 1),
             ]);
@@ -777,6 +797,8 @@ export function carMesh(
           loops.push(loop);
           around.push(ns);
         }
+        // Each point reads the front drawing where the mirror is drawn, not where it stands.
+        const drawnAt = (p: V3): V3 => [p[0] - sx * out * w, p[1], p[2]];
         for (let k = 0; k < MIRROR_RINGS; k++)
           for (let s = 0; s < MIRROR_SEGMENTS; s++) {
             const q = (s + 1) % MIRROR_SEGMENTS;
@@ -792,19 +814,26 @@ export function carMesh(
               around[k + 1]![q]!,
               around[k]![q]!,
             ];
-            tri([A, B, C], [nA, nB, nC], face);
-            tri([A, C, D], [nA, nC, nD], face);
+            // The back of the housing (past the arm, turned to the rear) is the mirror's glass.
+            const rear = unit([nA[0] + nC[0], nA[1] + nC[1], nA[2] + nC[2]])[2] < MIRROR_GLASS;
+            const pane =
+              glass && paneAt && rear && k >= MIRROR_RINGS / 2 - 1 && k < MIRROR_RINGS - 1;
+            uvRead = pane ? () => paneAt : drawnAt;
+            tri([A, B, C], [nA, nB, nC], pane ? glass : face);
+            tri([A, C, D], [nA, nC, nD], pane ? glass : face);
           }
         // The tip, closed.
+        uvRead = drawnAt;
         const end = loops[MIRROR_RINGS]!;
         const c: V3 = [
           end[0]![0],
           end.reduce((sum, p) => sum + p[1], 0) / MIRROR_SEGMENTS,
           end.reduce((sum, p) => sum + p[2], 0) / MIRROR_SEGMENTS,
         ];
-        const out: V3 = [sx, 0, 0];
+        const tipOut: V3 = [sx, 0, 0];
         for (let s = 0; s < MIRROR_SEGMENTS; s++)
-          tri([c, end[s]!, end[(s + 1) % MIRROR_SEGMENTS]!], [out, out, out], face);
+          tri([c, end[s]!, end[(s + 1) % MIRROR_SEGMENTS]!], [tipOut, tipOut, tipOut], face);
+        uvRead = null;
       }
   }
 
