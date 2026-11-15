@@ -528,7 +528,13 @@ One task = one commit, with its Vitest test, its `contracts.md` update and its m
       reverted: 21 tests model every selected object (graceful degradation is the contract), so the
       blur/tiny branches of `routeImage` engage only at E2. Live check pending (no key): drawing
       answers, refusal causes on real photos.
-- [ ] **PQ-T48 New detail kinds + assemblies** (§12.5, §7.2), identical in the viewer and the judge render.
+- [x] **PQ-T48 New detail kinds + assemblies** (§12.5, §7.2), identical in the viewer and the judge render.
+      _Built 2026-11-12:_ 10 kinds in `DETAIL_KINDS` (`rear_window`, `windscreen`, `grille`,
+      `door_line`, `fascia`, `ridge_cap`, `reveal`, `step`, `wheel_arch`, `bumper`) + expansions in
+      `view-assemblies.ts` (dark glass/trim, light fascia/step slabs), `wheel_arch` = `arch`,
+      `door_line` = always-vertical `seam`; outline counts the 5 proud newcomers; viewer and judge
+      share `expandAssemblies` (flat test: flush keep the mask, step grows it); 18-kind triangle
+      budget holds; contracts + V269. No builder sets them yet (designer pass first, as PQ-T20).
 - [ ] **PQ-T49 Parallelism, draft / refine, cache** (§12.6, E12).
 - [ ] **PQ-T50 Organic generators + `plant` family** (§12.7, §7.3: `sweep, branch, scatter, drape`).
 - [ ] **PQ-T51 `loft` for vehicles, `inset` for openings** (§12.8, §7.3).

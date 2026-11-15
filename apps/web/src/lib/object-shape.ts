@@ -90,9 +90,11 @@ export const PART_KINDS = [
 ] as const;
 export const PartKindSchema = z.enum(PART_KINDS);
 /**
- * Small parts a host part carries (PQ-T20), expanded by the viewer and drawn by the flat render, never
- * template parts: `handle`, `seam` (door line), `vent` on a body; `mirror`, `arch` (wheel arch) and `rim`
- * on a vehicle; `gutter` along a roof eave; `foot` under a body. Dropped first past `MAX_TRIANGLES`.
+ * Small parts a host part carries (PQ-T20, PQ-T48 §7.2), expanded by the viewer and drawn by the flat
+ * render, never template parts: `handle`, `seam` (door line), `vent` on a body; `mirror`, `arch` /
+ * `wheel_arch` and `rim` on a vehicle; `windscreen`, `rear_window`, `grille`, `door_line`, `bumper` on a
+ * hull; `gutter`, `fascia`, `ridge_cap` on a roof; `reveal` (embrasure shadow gap) around an opening;
+ * `step` before a door; `foot` under a body. Dropped first past `MAX_TRIANGLES`.
  */
 export const DETAIL_KINDS = [
   'handle',
@@ -103,6 +105,16 @@ export const DETAIL_KINDS = [
   'gutter',
   'vent',
   'foot',
+  'rear_window',
+  'windscreen',
+  'grille',
+  'door_line',
+  'fascia',
+  'ridge_cap',
+  'reveal',
+  'step',
+  'wheel_arch',
+  'bumper',
 ] as const;
 export const DetailKindSchema = z.enum(DETAIL_KINDS);
 export type DetailKind = z.infer<typeof DetailKindSchema>;

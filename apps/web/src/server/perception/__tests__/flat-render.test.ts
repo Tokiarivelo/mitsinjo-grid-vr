@@ -384,6 +384,27 @@ describe('assembly details (PQ-T3): the judge sees what the viewer shows', () =>
     );
   });
 
+  it('the §7.2 details render like the viewer expands them (PQ-T48)', () => {
+    const body = part({ size: [0.5, 0.6, 0.4], front: true, kind: 'body' });
+    const mask = (r: ReturnType<typeof renderFlat>) => r.mask.data.reduce((a, b) => a + b, 0);
+    const diffOf = (a: ReturnType<typeof renderFlat>, b: ReturnType<typeof renderFlat>) =>
+      a.rgb.reduce((n, v, i) => n + (v !== b.rgb[i] ? 1 : 0), 0);
+    const plain = renderFlat(recipe([body]), 1, N, N);
+    // Flush glass and bars draw pixels but keep the silhouette.
+    const flush = renderFlat(
+      recipe([{ ...body, details: ['windscreen', 'grille', 'bumper'] }]),
+      1,
+      N,
+      N
+    );
+    expect(diffOf(flush, plain)).toBeGreaterThan(0);
+    expect(mask(flush)).toBe(mask(plain));
+    // A step stands below the host's foot: the silhouette grows.
+    const stepped = renderFlat(recipe([{ ...body, details: ['step'] }]), 1, N, N);
+    expect(diffOf(stepped, plain)).toBeGreaterThan(0);
+    expect(mask(stepped)).toBeGreaterThan(mask(plain));
+  });
+
   it('the heaviest detailed model (golden facade house) renders within budget', () => {
     const front = measureElevation(GOLDEN_ELEVATIONS[0]!.masks)!;
     const house = fitRecipe(

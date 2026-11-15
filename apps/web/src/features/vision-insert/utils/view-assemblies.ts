@@ -159,7 +159,8 @@ function plate(
 /** One detail of a host part: the plain parts it expands to (none when the host cannot carry it). */
 function detailParts(p: RecipePart, kind: DetailKind): RecipePart[] {
   if (kind === 'rim') return [];
-  if (kind === 'arch') return withArch(p);
+  // `arch` is the PQ-T20 name, `wheel_arch` the §7.2 one: same disc.
+  if (kind === 'arch' || kind === 'wheel_arch') return withArch(p);
   const b = boundsOf(p);
   const [w, h, d] = [b.x1 - b.x0, b.y1 - b.y0, b.z1 - b.z0];
   const [cx, cy] = [(b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2];
@@ -216,6 +217,70 @@ function detailParts(p: RecipePart, kind: DetailKind): RecipePart[] {
         )
       );
     }
+    case 'windscreen':
+      // Dark glass on the upper front face.
+      return [plate(p, [cx, b.y0 + h * 0.68, front], [w * 0.8, h * 0.25, PROUD], DETAIL_DARK)];
+    case 'rear_window':
+      // Same glass on the back face.
+      return [
+        plate(p, [cx, b.y0 + h * 0.68, b.z0 - PROUD / 2], [w * 0.8, h * 0.25, PROUD], DETAIL_DARK),
+      ];
+    case 'grille':
+      // Low centred slats proxy on the front face.
+      return [plate(p, [cx, b.y0 + h * 0.15, front], [w * 0.4, h * 0.1, PROUD], DETAIL_DARK)];
+    case 'bumper': {
+      // Full-width bars low on the front and back faces.
+      const y = b.y0 + h * 0.12;
+      const size: [number, number, number] = [w * 0.98, h * 0.08, PROUD * 2];
+      return [
+        plate(p, [cx, y, front], size, DETAIL_DARK),
+        plate(p, [cx, y, b.z0 - PROUD / 2], size, DETAIL_DARK),
+      ];
+    }
+    case 'door_line':
+      // Front and rear door shut lines on the front face, always vertical (`seam` picks by aspect).
+      return [cx - w * 0.12, cx + w * 0.12].map((x) =>
+        plate(p, [x, cy, front], [w * 0.008, h * 0.55, PROUD / 2], DETAIL_DARK)
+      );
+    case 'fascia': {
+      // Painted boards under the front and back eaves.
+      const y = b.y0 + h * 0.03;
+      return [b.z1 + PROUD / 2, b.z0 - PROUD / 2].map((z) =>
+        plate(p, [cx, y, z], [w, Math.max(MIN_EXTENT, h * 0.08), PROUD], DETAIL_METAL)
+      );
+    }
+    case 'ridge_cap':
+      // Cap straddling the roof top along its length.
+      return [
+        plate(
+          p,
+          [cx, b.y1 - h * 0.01, (b.z0 + b.z1) / 2],
+          [w * 0.98, h * 0.05, Math.max(MIN_EXTENT, d * 0.15)],
+          DETAIL_DARK
+        ),
+      ];
+    case 'reveal': {
+      // Shadow gap just inside the front-face edges (embrasure proxy).
+      const ix = w * 0.06;
+      const iy = h * 0.06;
+      const t = PROUD / 2;
+      return [
+        plate(p, [cx, b.y1 - iy, front], [w - 2 * ix, h * 0.012, t], DETAIL_DARK),
+        plate(p, [cx, b.y0 + iy, front], [w - 2 * ix, h * 0.012, t], DETAIL_DARK),
+        plate(p, [b.x0 + ix, cy, front], [w * 0.012, h - 2 * iy, t], DETAIL_DARK),
+        plate(p, [b.x1 - ix, cy, front], [w * 0.012, h - 2 * iy, t], DETAIL_DARK),
+      ];
+    }
+    case 'step':
+      // Stone slab before the bottom face, its top flush with the host's foot.
+      return [
+        plate(
+          p,
+          [cx, b.y0, b.z1 + d * 0.1],
+          [w * 0.3, h * 0.05, Math.max(MIN_EXTENT, d * 0.2)],
+          DETAIL_METAL
+        ),
+      ];
   }
 }
 
@@ -246,11 +311,26 @@ export function detailPartsOf(p: RecipePart): RecipePart[] {
   return kinds.flatMap((k) => detailParts(p, k));
 }
 
-/** Details that change the outline (`mirror`, `foot`, `gutter`, `arch`): the silhouette fit counts them. */
+/**
+ * Details that change the outline: the silhouette fit counts them. Flush glass and shut lines stay
+ * out; everything standing proud of the host (`mirror`, `foot`, `gutter`, `arch` / `wheel_arch`,
+ * `bumper`, `fascia`, `ridge_cap`, `step`) counts.
+ */
 export function outlineDetails(parts: ReadonlyArray<RecipePart>): RecipePart[] {
   return parts.flatMap((p) =>
     [...new Set(p.details ?? [])]
-      .filter((k) => k === 'mirror' || k === 'foot' || k === 'gutter' || k === 'arch')
+      .filter(
+        (k) =>
+          k === 'mirror' ||
+          k === 'foot' ||
+          k === 'gutter' ||
+          k === 'arch' ||
+          k === 'wheel_arch' ||
+          k === 'bumper' ||
+          k === 'fascia' ||
+          k === 'ridge_cap' ||
+          k === 'step'
+      )
       .flatMap((k) => detailParts(p, k))
   );
 }
