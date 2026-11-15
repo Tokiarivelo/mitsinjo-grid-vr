@@ -581,3 +581,16 @@ describe('lofted vehicle template (PQ-T51 §7.3)', () => {
     }
   });
 });
+
+describe('trees named by their species (PQ-T79)', () => {
+  it.each(['baobab', 'acacia tree', 'eucalyptus', 'oak', 'mango', 'banana plant', 'coconut palm'])(
+    '« %s » is a tree',
+    (label) => {
+      expect(defaultArchetype('other', undefined, label)).toBe('tree');
+    }
+  );
+  it('a hedge or a flower bed stays a bush', () => {
+    expect(defaultArchetype('other', undefined, 'gardenia bush')).toBe('bush');
+    expect(defaultArchetype('other', undefined, 'flower bed')).toBe('bush');
+  });
+});

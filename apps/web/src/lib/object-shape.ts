@@ -1,8 +1,11 @@
 import { ApplianceCategorySchema } from '@mitsinjo/engine';
 import { z } from 'zod';
-import { ATLAS_VIEWS } from './face-atlas';
+import { MODEL_VIEWS } from './face-atlas';
 import { HULL_BOXES_MAX, type HullSurface } from './face-hull';
+import { CarPlanSchema } from './car-plan';
+import { PlantPlanSchema } from './plant-plan';
 import { HousePlanSchema } from './house-plan';
+import { PieceEditsSchema } from './piece-edits';
 import type { ObjectKit } from './object-kit';
 import {
   boxPath,
@@ -656,6 +659,23 @@ export const ObjectRecipeSchema = z.object({
    */
   house: HousePlanSchema.optional(),
   /**
+   * The car as measured on its drawings (PQ-T76, vehicles of the `views` source): axles, track,
+   * clearance, tyre and rim colours (`lib/car-plan.ts`). Later read by the car specialists too.
+   */
+  car: CarPlanSchema.optional(),
+  /**
+   * A plant as measured on its drawing and named by the plant team (PQ-T82, trees, palms, bushes,
+   * grasses, cacti of the `views` source, `lib/plant-plan.ts`): stems, foliage masses, hanging
+   * strands, whole leaves, conifer skirts, colours. The 3D views build it (`lib/plant-mesh.ts`)
+   * instead of the `sdf` clumps of `parts`, which stay for the views that draw parts.
+   */
+  plant: PlantPlanSchema.optional(),
+  /**
+   * The operator's edits of the model's pieces in the 3D Studio (PQ-T77, `lib/piece-edits.ts`):
+   * hidden, locked, opacity, move / turn / scale, layer mask, per slot name. Never set by a model.
+   */
+  pieces: PieceEditsSchema.optional(),
+  /**
    * Drawn views projected on the model (PQ-T70, `views` source only): `atlas` is one image (data
    * URL, layout in `lib/face-atlas.ts`) of the validated drawings cut to the object, `views` the
    * drawings in it, `hull` the silhouette hull they are projected on (`lib/face-hull.ts`). The
@@ -664,7 +684,9 @@ export const ObjectRecipeSchema = z.object({
   faces: z
     .object({
       atlas: z.string().startsWith('data:image/').max(FACE_ATLAS_MAX_CHARS),
-      views: z.array(z.enum(ATLAS_VIEWS)).min(1).max(ATLAS_VIEWS.length),
+      views: z.array(z.enum(MODEL_VIEWS)).min(1).max(MODEL_VIEWS.length),
+      /** The atlas's sixth tile is the vehicle's drawn underside (PQ-T76). */
+      underside: z.boolean().optional(),
       hull: z.object({
         grid: z.tuple([hullCell.min(1), hullCell.min(1), hullCell.min(1)]),
         boxes: z
@@ -731,11 +753,26 @@ export const SHAPE_OUTLINE_MAX = 20_000;
 export const FACADE_URL_MAX = 8_000_000;
 
 /**
- * The views drawn beside the front (PQ-T68): right side, back, left side, then the view from
- * above (PQ-T71: the plan, validated like the faces).
+ * The views drawn beside the main 2D view. Most objects (PQ-T68): the main view is the front,
+ * then right side, back, left side and the view from above (PQ-T71). A vehicle (PQ-T76): the main
+ * view is its profile, then front, back, view from above and underside; its left side is the
+ * right one mirrored, never drawn. A tree or a bush: none, it is round about its trunk, so its side
+ * is its front (a drawn side shows another tree and the crown is cut where they disagree).
+ * `FACE_NAMES` lists every name; `facesFor` the ones an object has.
  */
-export const FACE_NAMES = ['side', 'back', 'left', 'top'] as const;
+export const OBJECT_FACES = ['side', 'back', 'left', 'top'] as const;
+export const VEHICLE_FACES = ['front', 'back', 'top', 'bottom'] as const;
+export const PLANT_FACES = [] as const;
+export const FACE_NAMES = ['side', 'back', 'left', 'top', 'front', 'bottom'] as const;
 export type FaceName = (typeof FACE_NAMES)[number];
+
+/** The faces drawn beside the main 2D view of an object of this archetype, in drawing order. */
+export const facesFor = (archetype: string | undefined): ReadonlyArray<FaceName> =>
+  archetype === 'vehicle'
+    ? VEHICLE_FACES
+    : archetype === 'tree' || archetype === 'bush'
+      ? PLANT_FACES
+      : OBJECT_FACES;
 
 /** An image URL accepted for a 2D view: inline image or https link, at most `FACADE_URL_MAX` characters. */
 const viewUrl = z
@@ -768,12 +805,16 @@ export const ShapeTargetSchema = z.object({
    * so the four views agree. A face not listed is drawn by the pipeline itself.
    */
   faceUrls: z
-    .object({ side: viewUrl, back: viewUrl, left: viewUrl, top: viewUrl })
+    .object(
+      Object.fromEntries(FACE_NAMES.map((f) => [f, viewUrl])) as Record<FaceName, typeof viewUrl>
+    )
     .partial()
     .optional(),
   /** Storage keys of those faces (they make a new validation a new request). */
   faceKeys: z
-    .object({ side: z.string(), back: z.string(), left: z.string(), top: z.string() })
+    .object(
+      Object.fromEntries(FACE_NAMES.map((f) => [f, z.string()])) as Record<FaceName, z.ZodString>
+    )
     .partial()
     .optional(),
   /** Family the operator picked when asked (PQ-T41): it becomes the kit hint and the kit's archetype. */

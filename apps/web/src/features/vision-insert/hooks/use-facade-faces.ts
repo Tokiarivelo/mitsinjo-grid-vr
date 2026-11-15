@@ -1,7 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { FACE_NAMES, type FaceName } from '@/lib/object-shape';
+import { archetypeOf } from '@/lib/object-kit';
+import { FACE_NAMES, facesFor, type FaceName } from '@/lib/object-shape';
 import type { FacadeData } from './use-facade-2d';
 import type { ShapeRequest } from './use-object-shape';
 
@@ -20,12 +21,8 @@ export interface FaceState {
 export type FacesState = Record<FaceName, FaceState>;
 
 const IDLE_FACE: FaceState = { status: 'idle', validated: false, userPrompt: '' };
-const idle = (): FacesState => ({
-  side: IDLE_FACE,
-  back: IDLE_FACE,
-  left: IDLE_FACE,
-  top: IDLE_FACE,
-});
+const idle = (): FacesState =>
+  Object.fromEntries(FACE_NAMES.map((f) => [f, IDLE_FACE])) as FacesState;
 
 /** Faces a validation hands to the 3D call: the validated ones only. */
 export interface ValidatedFaces {
@@ -47,9 +44,10 @@ export const validatedFaces = (faces: FacesState): ValidatedFaces | undefined =>
 };
 
 /**
- * Right side, back, left side and view from above of the validated front. Each one is drawn from
- * the front AND the faces already there (at most 3 references), so the views agree; « Generate
- * all » goes right → back → left → above for that reason. A new front (another file key) starts again from nothing.
+ * Right side, back, left side and view from above of the validated front; for a vehicle (PQ-T76,
+ * detected from its archetype) front, back, view from above and underside of its validated
+ * profile (`facesFor`). Each one is drawn from the main view AND the elevations already there (at
+ * most 3 references), so the views agree; « Generate all » goes in `facesFor` order for that reason. A new front (another file key) starts again from nothing.
  * Regenerating a face un-validates it only: the others stay as the operator checked them.
  */
 export function useFacadeFaces(target: ShapeRequest | null, front?: FacadeData) {
@@ -64,6 +62,9 @@ export function useFacadeFaces(target: ShapeRequest | null, front?: FacadeData) 
   useEffect(() => () => abortRef.current?.abort(), [frontKey]);
 
   const faces = store[frontKey] ?? idle();
+  // A vehicle is drawn from its profile: its own faces (the server's archetype once drawn).
+  const archetype = front?.archetype ?? (target ? archetypeOf(target) : undefined);
+  const names = facesFor(archetype);
 
   const patch = useCallback((face: FaceName, next: Partial<FaceState>, forKey: string) => {
     const cur = storeRef.current[forKey] ?? idle();
@@ -83,7 +84,8 @@ export function useFacadeFaces(target: ShapeRequest | null, front?: FacadeData) 
       const details = userPrompt ?? current[face].userPrompt;
       // The front first, then the other faces already drawn (3 references at most).
       // The plan is never a reference of an elevation; it is drawn from the elevations.
-      const others = FACE_NAMES.filter((f) => f !== face && f !== 'top')
+      const others = names
+        .filter((f) => f !== face && f !== 'top' && f !== 'bottom')
         .map((f) => current[f].imageUrl)
         .filter((u): u is string => !!u);
       const references = [front.imageUrl, ...others].slice(0, 3);
@@ -134,18 +136,18 @@ export function useFacadeFaces(target: ShapeRequest | null, front?: FacadeData) 
         );
       }
     },
-    [front, target, patch]
+    [front, target, patch, names]
   );
 
   /** Every face not drawn yet, in order, each one seeing the previous ones. */
   const generateAll = useCallback(async () => {
     const statusOf = (f: FaceName) => (storeRef.current[frontKey] ?? idle())[f].status;
-    for (const f of FACE_NAMES) {
+    for (const f of names) {
       if (statusOf(f) === 'ready') continue;
       await generate(f);
       if (statusOf(f) !== 'ready') return;
     }
-  }, [generate, frontKey]);
+  }, [generate, frontKey, names]);
 
   const setUserPrompt = useCallback(
     (face: FaceName, userPrompt: string) => patch(face, { userPrompt }, frontKey),
@@ -156,10 +158,10 @@ export function useFacadeFaces(target: ShapeRequest | null, front?: FacadeData) 
     [patch, frontKey]
   );
   const validateAll = useCallback(() => {
-    for (const f of FACE_NAMES)
+    for (const f of names)
       if ((storeRef.current[frontKey] ?? idle())[f].status === 'ready')
         patch(f, { validated: true }, frontKey);
-  }, [patch, frontKey]);
+  }, [patch, frontKey, names]);
 
-  return { faces, generate, generateAll, setUserPrompt, validate, validateAll };
+  return { faces, names, generate, generateAll, setUserPrompt, validate, validateAll };
 }

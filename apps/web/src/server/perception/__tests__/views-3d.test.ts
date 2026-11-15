@@ -2,15 +2,24 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import sharp from 'sharp';
 import { describe, expect, it, vi } from 'vitest';
+import { archetypeOf } from '@/lib/object-kit';
 import type { ShapeTarget } from '@/lib/object-shape';
 vi.mock('server-only', () => ({}));
 import { museImage, museImageReady } from '../facade-specialist';
 import { renderFlat, THREE_QUARTER } from '../flat-render';
 import { getPerceptionClient } from '../client';
+import { CAR_SLOTS, carMesh, type CarSlot } from '@/lib/car-mesh';
+import { rasterCar } from '../car/car-raster';
+import { rasterMesh } from '../recon/mesh-raster';
+import { PLANT_SLOTS, PLANT_TWO_SIDED, plantMesh } from '@/lib/plant-mesh';
+import { carToolAsk, liveReadCar } from '../car/car-specialist';
+import { liveReadPlant, plantToolAsk } from '../tree/plant-specialist';
+import { PlantReadingSchema } from '../tree/plant-tools';
+import { CarReadingSchema } from '../car/car-tools';
 import { houseToolAsk } from '../house/house-specialist';
-import { reconstructObject, reportLine, type ViewName } from '../recon';
+import { reconstructObject, reportLine } from '../recon';
 import { reconstructFromViews } from '../recon/reconstruct';
-import { decodeView } from '../recon/route';
+import { decodeView, type DrawnView } from '../recon/route';
 import { VIEW_NAMES } from '../recon/views';
 import { VIEW_CAMERA } from '../recon/score';
 
@@ -23,8 +32,13 @@ import { VIEW_CAMERA } from '../recon/score';
  * `model.png` (the model seen from the four cameras, front · right · back · left) and `model-34.png`
  * (the model turned ¾, front right then back left), `classes.png` (the colour classes read on each
  * view, canonical frame, magenta = not the object). `OFFLINE=1` never calls Meta.
+ * A vehicle (`LABEL=car`, PQ-T76) is built from its profile: `RIGHT=` is its main view (else
+ * `PHOTO=` draws it), `FRONT=`, `BACK=`, `TOP=`, `BOTTOM=` (underside) are its other views, its
+ * left side the profile mirrored (`LEFT=` is ignored).
  */
-describe.runIf(process.env.VIEWS_3D_FRONT || process.env.VIEWS_3D_PHOTO)('make views-3d', () => {
+describe.runIf(
+  process.env.VIEWS_3D_FRONT || process.env.VIEWS_3D_RIGHT || process.env.VIEWS_3D_PHOTO
+)('make views-3d', () => {
   it('rebuilds the object from its views', async () => {
     const out = process.env.VIEWS_3D_OUT;
     if (!out) throw new Error('Usage: make views-3d FRONT=front.png [RIGHT= BACK= LEFT=] OUT=dir');
@@ -37,20 +51,31 @@ describe.runIf(process.env.VIEWS_3D_FRONT || process.env.VIEWS_3D_PHOTO)('make v
           ).toString('base64')}`
         : undefined;
     const topPng = process.env.VIEWS_3D_TOP ? await readFile(process.env.VIEWS_3D_TOP) : undefined;
-    const [photoUrl, facadeUrl, side, back, left] = await Promise.all([
+    const [photoUrl, front, side, back, left, bottom] = await Promise.all([
       url(process.env.VIEWS_3D_PHOTO),
       url(process.env.VIEWS_3D_FRONT),
       url(process.env.VIEWS_3D_RIGHT),
       url(process.env.VIEWS_3D_BACK),
       url(process.env.VIEWS_3D_LEFT),
+      url(process.env.VIEWS_3D_BOTTOM),
     ]);
+    const label = process.env.VIEWS_3D_LABEL || 'object';
+    // A vehicle's main view is its profile (PQ-T76); the others are its faces.
+    const vehicle = archetypeOf({ category: 'other', label }) === 'vehicle';
+    const facadeUrl = vehicle ? side : front;
     const target: ShapeTarget = {
       id: 'views-3d',
-      label: process.env.VIEWS_3D_LABEL || 'object',
+      label,
       category: 'other',
       box: { x: 0, y: 0, w: 1, h: 1 },
       ...(facadeUrl ? { facadeUrl } : {}),
-      faceUrls: { ...(side ? { side } : {}), ...(back ? { back } : {}), ...(left ? { left } : {}) },
+      faceUrls: vehicle
+        ? {
+            ...(front ? { front } : {}),
+            ...(back ? { back } : {}),
+            ...(bottom ? { bottom } : {}),
+          }
+        : { ...(side ? { side } : {}), ...(back ? { back } : {}), ...(left ? { left } : {}) },
     };
     const live = !process.env.VIEWS_3D_OFFLINE && museImageReady();
     const perception = live ? getPerceptionClient('views-3d') : null;
@@ -74,6 +99,28 @@ describe.runIf(process.env.VIEWS_3D_FRONT || process.env.VIEWS_3D_PHOTO)('make v
                 ...(process.env.VIEWS_3D_SINGLE ? {} : { askHouseTool: houseToolAsk(perception) }),
               }
             : {}),
+        // PQ-T76: a vehicle is read by the car team (`CAR_READING=car-reading.json` replays a saved one).
+        ...(process.env.VIEWS_3D_CAR_READING
+          ? {
+              readCar: async () =>
+                CarReadingSchema.parse(
+                  JSON.parse(await readFile(process.env.VIEWS_3D_CAR_READING!, 'utf8'))
+                ),
+            }
+          : perception && !process.env.VIEWS_3D_NO_CAR
+            ? { readCar: liveReadCar(carToolAsk(perception)) }
+            : {}),
+        // PQ-T82: a plant is read by the plant team (`PLANT_READING=plant-reading.json` replays one).
+        ...(process.env.VIEWS_3D_PLANT_READING
+          ? {
+              readPlant: async () =>
+                PlantReadingSchema.parse(
+                  JSON.parse(await readFile(process.env.VIEWS_3D_PLANT_READING!, 'utf8'))
+                ),
+            }
+          : perception && !process.env.VIEWS_3D_NO_PLANT
+            ? { readPlant: liveReadPlant(plantToolAsk(perception)) }
+            : {}),
         // Offline: materials given by hand, largest class first (`MATERIALS=slate,wood,…`).
         ...(process.env.VIEWS_3D_MATERIALS
           ? {
@@ -95,9 +142,13 @@ describe.runIf(process.env.VIEWS_3D_FRONT || process.env.VIEWS_3D_PHOTO)('make v
         ...(photoUrl ? { cropUrl: photoUrl } : {}),
         // `TOP=`: the view from above, already drawn (front at the bottom of the image).
         ...(topPng ? { topPng } : {}),
-        onView: (view: ViewName | 'top', png) => void writeFile(join(out, `view-${view}.png`), png),
+        onView: (view: DrawnView, png) => void writeFile(join(out, `view-${view}.png`), png),
         onHouseReading: (reading) =>
           void writeFile(join(out, 'house-reading.json'), JSON.stringify(reading, null, 2)),
+        onCarReading: (reading) =>
+          void writeFile(join(out, 'car-reading.json'), JSON.stringify(reading, null, 2)),
+        onPlantReading: (reading) =>
+          void writeFile(join(out, 'plant-reading.json'), JSON.stringify(reading, null, 2)),
       }
     );
     if (!built)
@@ -113,6 +164,7 @@ describe.runIf(process.env.VIEWS_3D_FRONT || process.env.VIEWS_3D_PHOTO)('make v
     );
     if (recipe.house)
       await writeFile(join(out, 'house.json'), JSON.stringify(recipe.house, null, 2));
+    if (recipe.car) await writeFile(join(out, 'car.json'), JSON.stringify(recipe.car, null, 2));
     // The drawings as projected on the model (one tile per view, paper bled over).
     if (recipe.faces)
       await writeFile(
@@ -241,6 +293,187 @@ describe.runIf(process.env.VIEWS_3D_FRONT || process.env.VIEWS_3D_PHOTO)('make v
       .composite(turned)
       .png()
       .toFile(join(out, 'model-34.png'));
+    // A car's own mesh (PQ-T78): what the viewer shows, wearing its drawings, then its pieces.
+    const mesh = recipe.car
+      ? carMesh(
+          recipe.car,
+          [recipe.proportions.w, recipe.proportions.h, recipe.proportions.d],
+          recipe.faces
+            ? { views: recipe.faces.views, ...(recipe.faces.underside ? { underside: true } : {}) }
+            : {}
+        )
+      : null;
+    if (mesh && recipe.car) {
+      const look = recipe.car.look ?? {};
+      const paint = look.paint ?? '#8a8f94';
+      const colors = Object.fromEntries(
+        CAR_SLOTS.map((slot) => [
+          slot,
+          slot === 'glass'
+            ? (look.glass ?? '#39424a')
+            : slot === 'tyre'
+              ? (look.tyre ?? '#1d1d1f')
+              : slot === 'rim'
+                ? (look.rim ?? '#b9bcc0')
+                : slot === 'under'
+                  ? '#1c1d1f'
+                  : slot === 'mirror'
+                    ? (recipe.car!.mirrors?.color ?? paint)
+                    : paint,
+        ])
+      ) as Record<CarSlot, string>;
+      const pieces: Record<CarSlot, string> = {
+        roof: '#d9534f',
+        front: '#f0ad4e',
+        right: '#5bc0de',
+        back: '#9b59b6',
+        left: '#5cb85c',
+        glass: '#1f3a5f',
+        tyre: '#222222',
+        rim: '#c8c8c8',
+        under: '#6b4f2a',
+        mirror: '#b04fc4',
+      };
+      const atlasUrl = recipe.faces?.atlas;
+      const decodedAtlas = atlasUrl
+        ? await sharp(Buffer.from(atlasUrl.slice(atlasUrl.indexOf(',') + 1), 'base64'))
+            .removeAlpha()
+            .raw()
+            .toBuffer({ resolveWithObject: true })
+        : null;
+      const atlas = decodedAtlas
+        ? {
+            rgb: decodedAtlas.data,
+            width: decodedAtlas.info.width,
+            height: decodedAtlas.info.height,
+          }
+        : null;
+      const drawn = new Set<CarSlot>(
+        CAR_SLOTS.filter(
+          (slot) =>
+            slot !== 'tyre' &&
+            (slot !== 'under' || recipe.faces?.underside) &&
+            (slot !== 'mirror' || !recipe.car!.mirrors?.color)
+        )
+      );
+      const deg = Math.PI / 180;
+      const side = 440;
+      const cams: Array<{ yaw: number; pitch: number; flat?: boolean }> = [
+        { yaw: 40 * deg, pitch: 18 * deg },
+        { yaw: 220 * deg, pitch: 18 * deg },
+        { yaw: 90 * deg, pitch: 0 },
+        { yaw: 0, pitch: 0 },
+        { yaw: 180 * deg, pitch: 0 },
+        { yaw: 0, pitch: 90 * deg },
+        { yaw: 40 * deg, pitch: 18 * deg, flat: true },
+        { yaw: 140 * deg, pitch: -25 * deg },
+      ];
+      const shots = await Promise.all(
+        cams.map(async (cam, i) => ({
+          input: await sharp(
+            Buffer.from(
+              rasterCar(mesh, {
+                ...cam,
+                size: side,
+                atlas,
+                colors: cam.flat ? pieces : colors,
+                drawn,
+              })
+            ),
+            { raw: { width: side, height: side, channels: 3 } }
+          )
+            .png()
+            .toBuffer(),
+          left: gap + (i % 4) * (side + gap),
+          top: gap + Math.floor(i / 4) * (side + gap),
+        }))
+      );
+      await sharp({
+        create: {
+          width: 4 * side + 5 * gap,
+          height: 2 * side + 3 * gap,
+          channels: 3,
+          background: '#ffffff',
+        },
+      })
+        .composite(shots)
+        .png()
+        .toFile(join(out, 'car-sheet.png'));
+    }
+    // A plant (PQ-T82): its plan and the mesh the viewer draws, from four sides.
+    if (recipe.plant) {
+      await writeFile(join(out, 'plant.json'), JSON.stringify(recipe.plant, null, 2));
+      const { w, h, d } = recipe.proportions;
+      const mesh = plantMesh(recipe.plant, [w, h, d]);
+      const look = recipe.plant.look;
+      const colors = {
+        bark: look.bark,
+        leaf: look.leaf,
+        leafDark: look.leafDark,
+        flower: look.flower ?? look.leaf,
+      };
+      // The plant's skin (its front drawing) worn like the viewer wears it.
+      const skinUrl = recipe.plant.skin;
+      const skin = skinUrl
+        ? await sharp(Buffer.from(skinUrl.slice(skinUrl.indexOf(',') + 1), 'base64'))
+            .removeAlpha()
+            .raw()
+            .toBuffer({ resolveWithObject: true })
+        : null;
+      if (skin)
+        await sharp(Buffer.from(skinUrl!.slice(skinUrl!.indexOf(',') + 1), 'base64')).toFile(
+          join(out, 'plant-skin.jpg')
+        );
+      const side = 320;
+      const gap = 12;
+      const cams = [
+        { yaw: 0, pitch: 0.05 },
+        { yaw: Math.PI / 4, pitch: 0.3 },
+        { yaw: Math.PI / 2, pitch: 0.05 },
+        { yaw: 0.3, pitch: 1.2 },
+      ];
+      const shots = await Promise.all(
+        cams.map(async (cam, i) => ({
+          input: await sharp(
+            Buffer.from(
+              rasterMesh(mesh, PLANT_SLOTS, {
+                ...cam,
+                size: side,
+                colors,
+                twoSided: PLANT_TWO_SIDED,
+                ...(skin
+                  ? {
+                      atlas: {
+                        rgb: new Uint8Array(skin.data),
+                        width: skin.info.width,
+                        height: skin.info.height,
+                      },
+                    }
+                  : {}),
+              })
+            ),
+            {
+              raw: { width: side, height: side, channels: 3 },
+            }
+          )
+            .png()
+            .toBuffer(),
+          left: gap + i * (side + gap),
+          top: gap,
+        }))
+      );
+      await sharp({
+        create: {
+          width: 4 * side + 5 * gap,
+          height: side + 2 * gap,
+          channels: 3,
+          background: '#ffffff',
+        },
+      })
+        .composite(shots)
+        .png()
+        .toFile(join(out, 'plant-sheet.png'));
+    }
     console.info(`\n${recipe.parts.length} parts — ${reportLine(report)}\n→ ${out}`);
     expect(recipe.parts.length).toBeGreaterThan(0);
   }, 1_800_000);

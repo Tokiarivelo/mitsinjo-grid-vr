@@ -1,40 +1,40 @@
 # HANDOFF — read first, overwrite at end of session (≤40 lines)
 
-**Updated:** 2026-11-14 · **By:** Claude Code · **Branch:** `feat/pq-t74-house-quality`
-(from `feat/pq-t73-house-parts`; PQ-T67–T74 not on `main` yet; rebase before the PR)
+**Updated:** 2026-11-15 · **By:** Claude Code · **Branch:** `feat/pq-t76-cars` (PQ-T67–T82 not on `main`)
 
-## NEXT: try V335–V343 on `/village`, then open the phase PR (PQ-T67 → PQ-T75)
+## NEXT: plants still open (PQ-T82), then the phase PR (PQ-T67 → T82)
 
-Brief and open limits: `docs/tasks/PV-house-generation-next.md` (§ « Traité en PQ-T74 » + what is left).
-Offline replay: `make views-3d FRONT=… RIGHT=… BACK=… LEFT=… TOP=… OUT=… LABEL=house OFFLINE=1 READING=… MATERIALS=wood,slate`.
+Re-run live with the `leaves` specialist: lemongrass, aloe, bamboo, jacaranda (`make plants-live PLANTS=…`).
 
-## PQ-T74 — house quality on five new house types (2026-11-14)
+## Rules set by the user (2026-11-14)
 
-Live runs from photos (`resources/refine-3d/h-{thatch,fachwerk,stilt,logcabin,aframe}.jpg`, credits in
-`SOURCES-refine.md`), each failure fixed in the pure fit / mesh, then replayed:
+- Live Meta calls cost money: house non-regression is **offline only**, `make house-regress` (~30 s, free).
+- Car code lives in `server/perception/car/` + `lib/car-*.ts`, tree code in `server/perception/tree/`; never
+  edit `house/` or `lib/house-*.ts`; shared `recon/` changes gated on the archetype.
+- Go live once per object to get its drawings, then replay: `make car-replay` / `make tree-replay OUT=r13` (free).
 
-- `house-fit.ts`: `measuredBase` (base colour at the foot of the walls), `growToFootprint` (a strip along a
-  block grows it), `ANNEX_PITCH`, chimney `finish: 'stone'`, `swatchOblique`, `lowerFinishes`
-  (`HouseVolume.lower`), figured walls cut no wall swatch, bands of gable walls kept up to the ridge.
-- `house-mesh.ts`: `THATCH_EDGE` (thick thatch eaves and verges), `EAVE_DROP_MAX`, lower cladding (gable
-  walls cut level), chimney in the stone slot. `house-projection.ts`: thatch never wears the drawn swatch.
-- `house-tools.ts`: prompt v2 (`figured`, `base`), `patchReading` (single reading completed by the
-  specialists that answered), garbled colour keys read by their start. `recon/recipe.ts`: parts cut at 96.
-- Results: `~/Téléchargements/generated-view/h-*/maison-3d-t74.jpg`, sheet `t74-sheet.jpg`.
-- PQ-T75: `gableEnds` (hip → gable where windows sit in a peaked gable end), lower cladding behind
-  verandas and in recesses (`maison-3d-t75.jpg` for fachwerk and stilt).
+## Done this session
 
-Next subject after the PR: cars, brief in `docs/tasks/PV-car-generation.md` (PQ-T76, start with its step 0).
+- **PQ-T82 plants:** `PlantPlan` / `plantMesh` / `buildPlant` per habit; plant team of five (pilot +
+  trunk, branches, foliage, flowers, `leaves` = each big leaf traced); front drawing as skin (holes
+  filled). Live v005: coconut 0.14 → 0.61, banana 0.05 → 0.66, agave 0.26 → 0.52. Results to look at:
+  `resources/generated-view/plants/` + `VERSIONS.md` (`make plant-gallery`); `house-regress` reads there.
+
+- **PQ-T80 wing mirrors:** `car/car-mirrors.ts` measures them on the front's outline, else takes the car
+  team's `mirror` details, else `standardMirrors` (never a kind `other`); `carMesh` builds one piece per
+  side (slot `mirror`, a Studio layer each, glass on its back) and `mirrorFit` narrows the car (≤ 3 % on
+  the bench) so a mirror moved out stays in the box. `make car-replay OUT=r8`: 11 / 11 with mirrors.
+- **PQ-T81:** `sdf` parts were meshed inside out (one saw into every clump): fixed for all. A tree / bush
+  draws no other view (`PLANT_FACES`; side = front), `CLUMP_MAX` 0.24: willow 0.63 → 0.75 (`OUT=f2`).
 
 ## Decisions
 
-- Zero-regression rule: `house-mesh.test.ts` hashes unchanged; bungalow single replay = `house-pq-t72.json`
-  byte for byte. School single replay differs by `look.base` only (grey default → measured `#8a584b`):
-  intended (limit 17), the brief's "red plinth" came from the reading being null there.
-- `STRIP_MAX` 0.16 and `ANNEX_PITCH` 2 chosen so the bungalow's annexes stay as they were.
-- New plan fields optional (`chimney.finish`, `volume.lower`). No Neon migration, no HF republish.
+- Measured on pixels, models only draw and name. A mirror nobody saw is standard. A tree needs its front.
 
 ## Open
 
-- `figured` and the v2 prompt were not run live yet (fachwerk replayed with the flag set by hand).
-- Left: Muse views that disagree (views check + redraw), door snapped too wide (fix moves the bungalow reference).
+- Plants: agave tips don't curl, pads float apart, conifers are regular tiers, side IoU 0.15–0.3;
+  V373–V381, V392–V399 not played.
+- Cars: body = extruded profile (spoilers, bull bars, open cabins solid); profile direction trusts the prompt;
+  standard mirrors on a body that fills its box narrow it up to 9 %; no user Mini in the bench.
+- Not played: V335–V343 (houses), V382–V391 (cars); phase PR not opened; door snap + views check pending.

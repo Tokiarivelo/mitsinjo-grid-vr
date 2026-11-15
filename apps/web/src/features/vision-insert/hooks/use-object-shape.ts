@@ -1,5 +1,6 @@
 'use client';
 
+import type { PieceEdits } from '@/lib/piece-edits';
 import { useCallback, useEffect } from 'react';
 import {
   SHAPE_OUTLINE_MAX,
@@ -440,6 +441,27 @@ export function useObjectShape(scope?: string) {
     [cacheRef, setState]
   );
 
+  /**
+   * The operator edited the model's pieces in the 3D Studio (PQ-T77): like `restyle`, the shown
+   * recipe and its kept copy change together (village, Blender). No server call.
+   */
+  const editPieces = useCallback(
+    (pieces: PieceEdits) => {
+      setState((s) => {
+        const shape = s.shape;
+        if (!shape || shape.mode !== 'recipe' || !shape.recipe) return s;
+        const recipe = { ...shape.recipe };
+        if (Object.keys(pieces).length) recipe.pieces = pieces;
+        else delete recipe.pieces;
+        const next = { ...shape, recipe };
+        for (const [key, kept] of cacheRef.current)
+          if (kept === shape) cacheRef.current.set(key, next);
+        return { ...s, shape: next };
+      });
+    },
+    [cacheRef, setState]
+  );
+
   /** New photo: forget every kept shape and preview (ids repeat across photos). */
   const clear = useCallback(() => {
     cacheRef.current.clear();
@@ -465,5 +487,6 @@ export function useObjectShape(scope?: string) {
     clear,
     dropShapeCache,
     restyle,
+    editPieces,
   };
 }

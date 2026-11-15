@@ -35,7 +35,9 @@ describe('POST /api/vision/facade/face (PQ-T68)', () => {
   });
 
   it('refuses an unknown face, no reference, too many references or a non-image link', async () => {
-    expect((await post({ target, face: 'bottom', references: [FRONT] })).status).toBe(400);
+    expect((await post({ target, face: 'roof', references: [FRONT] })).status).toBe(400);
+    // A vehicle's front and underside are faces too (PQ-T76).
+    expect((await post({ target, face: 'bottom', references: [FRONT] })).status).toBe(200);
     // The view from above is a view like the others (PQ-T71).
     expect((await post({ target, face: 'top', references: [FRONT] })).status).toBe(200);
     expect((await post({ target, face: 'side', references: [] })).status).toBe(400);

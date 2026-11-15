@@ -2,8 +2,19 @@ import 'server-only';
 import type * as THREE from 'three';
 
 import { facesMesh, surfaceColor } from '@/features/vision-insert/utils/face-projection';
+import {
+  carGeometry,
+  carSlotLooks,
+  type CarRecipe,
+} from '@/features/vision-insert/utils/car-projection';
 import { houseGeometry, houseSlotLooks } from '@/features/vision-insert/utils/house-projection';
+import {
+  plantGeometry,
+  plantSlotLooks,
+  type PlantRecipe,
+} from '@/features/vision-insert/utils/plant-projection';
 import { recipeMesh } from '@/features/vision-insert/utils/object-geometry';
+import { withPieceEdits } from '@/features/vision-insert/utils/model-pieces';
 import { HULL_SURFACES } from '@/lib/face-hull';
 import { SURFACES } from '@/features/vision-insert/utils/surface-look';
 import type { ObjectRecipe } from '@/lib/object-shape';
@@ -56,7 +67,7 @@ function groupVertices(geo: THREE.BufferGeometry, start: number, count: number) 
  * uvs; roof, frames, glass, doors and decks are their material in their colour.
  */
 function houseGroups(recipe: ObjectRecipe & { house: NonNullable<ObjectRecipe['house']> }) {
-  const geo = houseGeometry(recipe);
+  const geo = withPieceEdits(houseGeometry(recipe), recipe);
   const looks = houseSlotLooks(recipe);
   const out = geo.groups
     .filter((g) => g.count > 0)
@@ -77,11 +88,65 @@ function houseGroups(recipe: ObjectRecipe & { house: NonNullable<ObjectRecipe['h
   return out;
 }
 
+/**
+ * A car (PQ-T76) by slot, as the 3D view draws it: body, glass and wheel faces wearing the drawings
+ * keep their atlas uvs; tyres and the underside are their material in their colour. Null without a
+ * fitted body.
+ */
+function carGroups(recipe: CarRecipe): DrawnGroup[] | null {
+  const built = carGeometry(recipe);
+  if (!built) return null;
+  const geo = withPieceEdits(built, recipe);
+  const looks = carSlotLooks(recipe);
+  const out = geo.groups
+    .filter((g) => g.count > 0)
+    .map((g): DrawnGroup => {
+      const look = looks[g.materialIndex ?? 0]!;
+      const drawnSlot = look.drawn && Boolean(recipe.faces);
+      return {
+        surface: look.slot,
+        ...groupVertices(geo, g.start, g.count),
+        ...(drawnSlot
+          ? look.tint
+            ? { color: look.tint }
+            : {}
+          : { color: look.color, material: look.surface }),
+      };
+    });
+  geo.dispose();
+  return out;
+}
+
+/** A plant (PQ-T82) by slot, as the 3D view draws it: each slot its material in its colour. */
+function plantGroups(recipe: PlantRecipe): DrawnGroup[] {
+  const geo = withPieceEdits(plantGeometry(recipe), recipe);
+  const looks = plantSlotLooks(recipe);
+  const out = geo.groups
+    .filter((g) => g.count > 0)
+    .map((g): DrawnGroup => {
+      const look = looks[g.materialIndex ?? 0]!;
+      return {
+        surface: look.slot,
+        ...groupVertices(geo, g.start, g.count),
+        color: look.color,
+        material: look.surface,
+      };
+    });
+  geo.dispose();
+  return out;
+}
+
 /** The drawn hull of a recipe by surface, as the 3D view draws it; empty without drawn faces. */
 export function drawnGroups(recipe: ObjectRecipe): DrawnGroup[] {
   if (recipe.house) return houseGroups({ ...recipe, house: recipe.house });
+  const car = recipe.car?.body ? carGroups({ ...recipe, car: recipe.car }) : null;
+  if (car) return car;
+  if (recipe.plant) return plantGroups({ ...recipe, plant: recipe.plant });
   if (!recipe.faces) return [];
-  const geo = facesMesh({ proportions: recipe.proportions, faces: recipe.faces });
+  const geo = withPieceEdits(
+    facesMesh({ proportions: recipe.proportions, faces: recipe.faces }),
+    recipe
+  );
   const out = geo.groups.map((g): DrawnGroup => {
     const surface = HULL_SURFACES[g.materialIndex ?? 0]!;
     const look = recipe.faces!.surfaces?.[surface];
@@ -116,7 +181,7 @@ const r4 = (n: number) => Number(n.toFixed(4));
 
 /** Mesh groups of a recipe, as the viewer builds it. */
 export function recipeGroups(recipe: ObjectRecipe): MeshGroup[] {
-  const geo = recipeMesh(recipe);
+  const geo = withPieceEdits(recipeMesh(recipe), recipe);
   const pos = geo.getAttribute('position');
   const col = geo.getAttribute('color');
   const index = geo.getIndex();
@@ -351,7 +416,7 @@ export function recipeToBlender(
     ...meta,
     groups: recipeGroups(recipe),
     recipe,
-    ...(recipe.faces || recipe.house
+    ...(recipe.faces || recipe.house || recipe.car?.body || recipe.plant
       ? { drawn: drawnGroups(recipe), ...(recipe.faces ? { atlas: recipe.faces.atlas } : {}) }
       : {}),
   });

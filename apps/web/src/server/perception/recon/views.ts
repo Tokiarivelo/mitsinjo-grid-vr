@@ -175,6 +175,11 @@ export interface AlignedViews {
   agreement: { frontBack?: number; rightLeft?: number };
   /** Where each canonical view sits on its drawing (the face textures are cut there). */
   frames: Partial<Record<ViewName, ViewFrame>>;
+  /**
+   * Width and depth per unit height as drawn on the front and the side (PQ-T76), before the grid
+   * clamps them: a profile longer than `GRID_COLS_MAX / GRID_ROWS` keeps its real length here.
+   */
+  aspects: { w: number; d: number };
 }
 
 /** A canonical view on its drawing: the object's box on a `cols` × `rows` image, mirrored or not. */
@@ -320,5 +325,6 @@ export function alignViews(input: Partial<Record<ViewName, ViewImage>>): Aligned
       ...(back ? { back: frame(back, !flipped.includes('back')) } : {}),
       ...(leftFrame ? { left: leftFrame } : {}),
     },
+    aspects: { w: wAspect, d: dAspect },
   };
 }

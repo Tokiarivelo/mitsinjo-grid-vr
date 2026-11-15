@@ -753,6 +753,50 @@ One task = one commit, with its Vitest test, its `contracts.md` update and its m
       byte-identical; the rule fires on the half-timbered house only across the 12 bench houses.
       Captures: `h-fachwerk/maison-3d-t75.jpg`, `h-stilt/maison-3d-t75.jpg`.
 
+- [ ] **PQ-T76 Cars from a photo.** Brief: `PV-car-generation.md` (step 0 findings in its § 6).
+      Step 0, done: `sedan`, `suv`, `truck-side` run live with no code change. Muse draws good,
+      consistent views (the front-first prompt is not the problem); the model came out 25–40 % too
+      short (`GRID_COLS_MAX` capped depth at 2 × height, `depthFromPlan` trusted a top view drawn too
+      wide); no part roles, no real wheels (0–2 flat cylinders), boxy body; dark roof / glazing / body
+      classes merge. (a) Done: a vehicle's proportions come from the elevations (`profileProportions`,
+      `vehicleAspects`, `AlignedViews.aspects` unclamped; the plan no longer sets its depth; wing
+      mirrors left out by `bodyWidthShare`). Offline replays, w/d · h/d: sedan 0.55 · 0.46 → 0.42 ·
+      0.35, SUV 0.57 · 0.46 → 0.39 · 0.35, truck 0.49 · 0.50 → 0.40 · 0.41. (b) Done: `CarPlan`
+      (`lib/car-plan.ts`, `recipe.car`), wheels measured on the profile (`car/car-wheels.ts`: lower
+      arc of each tyre, symmetric round the contact, Muse's ground shadow dropped) and the track on the
+      front. Replays: 2 axles on all three, radii per car within 0.01 (sedan 0.22, SUV 0.22, truck
+      0.16), rims on sedan and truck (black SUV rims: none). Limit: the sedan's front shadow spans the
+      whole width, no track. (c) Done: the car team (`car/car-tools.ts`, `car/car-specialist.ts`,
+      `askCarTool`): pilot + `body`, `glazing`, `lights`, `finishes`, a retry each, 8 min deadline;
+      reading saved and replayed (`CAR_READING=`, `make car-replay`); it sets `CarPlan.kind`. Live
+      once on the sedan (5 Spark calls): sedan, 4 doors, two-tone, chrome; 11 windows, 34 details,
+      6 finishes; front parts well placed, side stations / windows 0.02–0.05 off (to snap on the
+      pixels). House code untouched. (d) Done: `car/car-fit.ts` fits the body on the silhouettes
+      (profile on the side, arches over the measured wheels; section on the front, mirrors capped;
+      taper from above) and applies the reading (windows in the model frame, paint and glass
+      colours); `lib/car-mesh.ts` lofts it (≈ 6 k triangles, 9 slots, wheels as cylinders), drawn in
+      the object view, the village and the Blender export. Replays: a body on all three; sedan 10
+      windows, paint #c5d8c9; SUV and truck no windows yet (no team reading). Front shadow fixed:
+      sedan track 0.098–0.904. (e) Done (user 2026-11-14: roof and panels bulged; a car
+      drawn from its profile, left = right mirrored, a view from above and below): `carSection`
+      keeps the bonnet / boot a flat deck at the body's width (they were pinched to the cabin's),
+      the roof at the cabin's width under the drawing's rounded top row (it was 26 % of the
+      width), the plan narrows only the ends (`stationTaper`), creases keep their normals. A
+      vehicle's 2D view is its profile (`car/car-views.ts`, archetype detected), its faces front,
+      back, top, underside (`VEHICLE_FACES`, panel + route + 3D step), the left side mirrored,
+      the underside on the atlas's sixth tile (`faces.underside`). Live once on the sedan from
+      the photo (5 drawings, no team: `NO_CAR=1`): profile straight on from a ¾ photo, the views
+      agree, top view drawn lengthwise (the truck's lay sideways before), overall 0.851.
+      (f) Done (user 2026-11-14: tyres and underside « pas bon du tout »): the floor ran at the
+      arch top across the whole car at each axle (a slot under it); now `floorLine` keeps it at its
+      own height between the wells, the arch only over the tyres, an axle tube per pair, rounded
+      tyre shoulders. The SUV underside was drawn lying across the sheet and rejected: it is now
+      read turned (`readUnderside`). Live SUV (team, overall 0.935) and jeep (0.908) from their
+      profile; replays `t77` (`c-suv-p`, `c-jeep-p`, `c-sedan-p`).
+      Left: the jeep's top view on the bonnet (z alignment of the plan), truck redrawn, bench of 10.
+      **Test:** `car-proportions.test.ts`, `car-wheels.test.ts`, `car-tools.test.ts`, `car-fit.test.ts`, `car-mesh.test.ts`, `car-projection.test.ts`, `car-views.test.ts`, `car-underside.test.ts`, `make house-regress`, `make car-replay`. Houses unchanged: bungalow replay = `house-pq-t72.json`, bungalow and
+      school recipes identical before / after. Captures: `c-*/voiture-3d-t76a.jpg`, `t76a-sheet.jpg`, `t76b-wheels.jpg`, `c-sedan/t76c-reading.jpg`, `t76d-viewer.jpg`, `c-sedan-p/views-sheet.jpg`, `c-sedan-p/t76e-viewer.jpg` (all in `resources/refine-3d/`).
+
 ## Exit criteria
 
 Every real object meets methodology §9 · every prompt has a version and an eval behind it · the report, the
@@ -763,3 +807,154 @@ loop log and the docs agree · mock mode and the offline tests need no API key.
 Non-Meta image-to-3D models · Muse-written code run outside the §8bis sandbox (`eval`, Node `vm` and networked
 workers stay forbidden) · dense meshes or GLB export · projecting the photo on the model · generated top-down
 views · tuning a threshold so that one object passes.
+
+- [x] **PQ-T77 3D Studio: edit every generated model piece by piece.** User 2026-11-14: a
+      full-screen view of the generated 3D with Blender-like tools and Photoshop-like masks per
+      piece, for every model type. Done: « Open in 3D Studio » (top right of the viewer) →
+      `ui/object-studio.tsx` (full-viewport dialog, browser full screen when allowed): tools
+      Q / G / R / S with a gizmo (drei `TransformControls`), Textured / Solid / Wireframe / X-ray,
+      camera presets 1 / 3 / 7 / 5 + back / left / bottom + F frame, H / Alt+H / `/` isolate, undo
+      / redo (`usePieceHistory`, 50 steps), grid + axes. « Layers » (`piece-layers-panel.tsx`):
+      eye, lock, opacity, a box layer mask (on, invert, six sliders), numeric transform. A piece
+      is a geometry group (`utils/model-pieces.ts`: house slots, car slots, hull surfaces, recipe
+      materials); edits in `recipe.pieces` (`lib/piece-edits.ts`), drawn per piece with clipping
+      planes, baked (`withPieceEdits`) in the village and the Blender export. Limit: a piece is a
+      slot or a material (two windows of one slot move together).
+      **Test:** `piece-edits.test.ts`, `model-pieces.test.ts`, `use-piece-history.test.ts`,
+      `use-stable-except.test.ts`, `object-studio.test.tsx`; shots `SHOT_STUDIO=glass node
+scripts/object-viewer-shot.mjs …` (1440 + 390, dark + light).
+- [x] **PQ-T78 Cars checked on the bench, built the right way round, layers per window.** User
+      2026-11-14: check the car generation and the 3D Studio layers, test on the cars of
+      `resources/refine-3d`, refine and optimise. Found and fixed: (1) a car drawn from its profile
+      was **built backwards** (the profile, front to the right, was fed as the `right` elevation,
+      whose image left is the object's front): grille on the boot, plan from above off the bonnet
+      (the jeep's open point). The profile is now the `left` elevation, its mirror the `right` one
+      (`recon/route.ts`). (2) The underside ring past the wheels (bumpers) read the floor's drawing
+      in streaks: it now reads the front or back drawing. (3) Glass followed the mesh's triangles
+      (sawtooth): triangles are cut along each window (`cutTriangle`); a raked windscreen facing
+      the sky is glass from the front window (`cabinClimbs`), never the bonnet. (4) Deck → cabin
+      width jumped between two stations (crumpled A-pillars): blended (`CABIN_FULL`). (5) A wing or
+      sill turned up stays its flank's piece, the roof is the top of the ring only. (6) A plan from
+      above laid across the sheet or front up is turned by the colours along the profile's top edge
+      (`car/car-top.ts`). Layers: each window, tyre and wheel face of a car is its own piece
+      (`glass-1`…, `splitPieces` + `connectedTriangles`); a layer mask is baked as a real cut
+      (`maskGeometry`), as the studio's clipping planes show it, not triangle by triangle. Speed:
+      windows prefiltered per triangle, ≈ 40 ms for ≈ 8 000 triangles. Check tool: `car-sheet.png`
+      (the car mesh itself, eight cameras, `car/car-raster.ts`) written by every `make views-3d` /
+      `make car-replay`. Live bench and what is still wrong per car: `PV-car-generation.md` § 6 (g).
+      **Test:** `car-mesh.test.ts`, `car-views.test.ts` (orientation), `car-top.test.ts`,
+      `car-raster.test.ts`, `model-pieces.test.ts`, `piece-edits.test.ts`; `make house-regress`.
+- [x] **PQ-T79 Trees, palms and bushes read on their drawings, no more stacked slabs.** User
+      2026-11-14: check and refine the photo → 3D generation of trees, the way it was done for cars.
+      Step 0 (live, acacia, palm, pine, nothing changed): the drawings are good species-wise (a pine,
+      a fan palm, a twig-web acacia) but carry **roots, soil, dead fronds**; the model was a stack of
+      boxes (palm: crown a green hip roof, trunk a column of black slabs not touching it, dead fronds
+      a brown box; pine: sky-coloured « foliage » slabs; acacia: dropped, score 0.39 < 0.5, no views model). Cause: the carving solver (`recon/carve.ts`) knows boxes, a tree is one
+      crown on one trunk. Fix, all gated on `tree` / `bush` (`recon/route.ts` branches before the
+      materials question): `tree/tree-fit.ts` `fitTree` measures the crown on leaf-coloured pixels
+      (closed over the gaps), the trunk (the run that rises from the ground, low-quantile width over
+      ±20 rows so fallen fronds and roots do not count, foot cut above the roots, `TRUNK_REACH` into
+      the crown so they meet), leaf colours per tier and bark colour (`barkColour`: darker half of the
+      trunk's own pixels); `tree/tree-crown.ts` `packCrown` packs the volume of the two silhouettes
+      (rows cut to ellipses, chamfer clearance) with ≤ 24 clumps, biggest first; `tree/tree-parts.ts`
+      `treeRecipe` writes the trunk and two crown tiers as `sdf` parts (`wood` / `foliage`, kinds
+      `trunk` / `crown`: drawn like any `sdf` part; the real viewer was shot, village and Blender not run);
+      `tree/tree-recon.ts` scores on the four elevations (mean silhouette IoU, `TREE_MIN_IOU` 0.4,
+      else the generic solver stays). No Meta call besides the drawings (no material naming).
+      Prompts: `PLANT_CLEAN` added to the tree and bush elevations (no roots, soil, dead or hanging
+      leaves, nothing beside the plant): the palm re-drawn with it came back clean (mean silhouette IoU 0.60 → 0.71).
+      `object-kit.ts` takes species names (baobab, acacia, eucalyptus, oak, mango, banana, coconut…)
+      as trees. Two tries dropped after looking at the images: saucer lobes stacked per row (a
+      pancake stack), and a palm frond skirt (floating discs): a palm is a clean trunk + a lumpy crown.
+      Cost: 4 `sdf` parts, 7.8–8.9 k triangles, ≈ 0.3 s to mesh (more than the 5 k recipe budget,
+      like houses and cars). Bench (`resources/refine-3d/t79-bench.jpg`, `make tree-replay`):
+      table below. **Still wrong:** a fork or
+      lean of the trunk is one column, white flowers and bare twigs count as « not leaf » inside the
+      closed crown, the sheet's blue can still tint a teal frond, a sparse flat crown (baobab) is
+      made of round clumps thicker than the real foliage layer. **Test:** `tree-fit.test.ts`,
+      `tree-crown.test.ts`, `tree-fronds.test.ts`, `tree-parts.test.ts`, `tree-recon.test.ts`, `object-kit.test.ts`,
+      `facade-specialist.test.ts`; `make house-regress`; `make car-replay` (jeep-p, suv-p).
+
+  **Refined after review (same task, 2026-11-15, offline only, no new live run):**
+  the trunk is one `lathe` part (`trunkPart`: the radius measured at each of ≤ 10 heights, flat
+  foot on the ground, capped tip) instead of fused ellipsoids with a rounded underside; it rises to
+  the leaves above its own column (an umbrella crown arches over it: the baobab's trunk stopped
+  short of its crown) and `TRUNK_REACH` of them inside. Clumps are smaller and more numerous
+  (≤ 36, `CLUMP_MAX` 0.16, three crown tiers). `barkColour` is the 20–65 % luminance band of the
+  trunk's pixels (no ink line, no pale edge). A **palm has fronds** (`tree/tree-fronds.ts`): when
+  the label names one (`FROND_LABEL`: palm, coconut, ravenala, banana, raffia…) the crown is six
+  arched ribbons of flat lobes from the trunk's tip to the measured outline, two opposite fronds
+  per `sdf` part; the reading is still judged on the packed outline (`TREE_MIN_IOU`), the report
+  gives the fronds' own IoU (low by nature: fronds do not fill the outline). Cost now: 4–6 parts,
+  ≈ 7–8 k triangles. `scripts/tree-replay.sh` labels `palm2` as « palm tree ». The table below is
+  the refined state (`make tree-replay OUT=r13`).
+
+  | tree (`t-…`)           | parts | IoU front · side | what is right                                        | what is still wrong                                           |
+  | ---------------------- | ----- | ---------------- | ---------------------------------------------------- | ------------------------------------------------------------- |
+  | `acacia` (twig web)    | 5     | 0.57 · 0.53      | wide dome, short brown trunk with a flat foot        | twig web = one lumpy mass, thicker than the real canopy       |
+  | `palm` (first drawing) | 4     | 0.39 · 0.37      | dark trunk, flared foot, six fronds                  | fronds are thick paddles, not fans; dead fronds ignored       |
+  | `palm2` (new prompt)   | 4     | 0.41 · 0.43      | slender dark trunk, teal fronds up, out and drooping | six paddles for a dense fan; tips look hooked                 |
+  | `pine`                 | 5     | 0.71 · 0.69      | tall lumpy crown, trunk meets it                     | no cone tiers                                                 |
+  | `baobab`               | 6     | 0.57 · 0.57      | fat straight trunk into a flat umbrella crown        | crown is a ring of clumps: the trunk tip shows from above     |
+  | `gardenia` (bush)      | 5     | 0.74 · 0.80      | low wide dark-green mass on a stub of stems          | flowers and leaf detail lost; IoU under the first pass (0.83) |
+
+  Not run: `oak`, `eucalyptus`, `mango`, `banana` (budget of 6 live runs used: 3 step-0 + 3 re-drawn).
+
+- [x] **PQ-T80 Wing mirrors built whole, as their own piece.** User 2026-11-15 (a Mini Cooper):
+      the 3D car does not render a mirror completely. Cause, seen on the bench replays: the front's
+      section only **capped** the mirrors' rows at the body's width, so a stub of each mirror stayed
+      in the section and was lofted along the whole car (a ledge at the belt line, « ears » on the
+      front and the back views, the hatchback's shoulder set at the mirror's height); no mirror
+      geometry existed, the drawn mirror was cut at the flank. Fix: `car/car-mirrors.ts` `fitMirrors`
+      measures the mirrors on the front's outline (top-hat per side: a short bump is a mirror, a cab
+      wide over a long height is body), `fitSection` reads the body across their rows,
+      `mirrorStation` places them at the front corner of the side glass / where the cabin has risen;
+      `CarPlan.mirrors`; `carMesh` builds one closed piece per side (slot `mirror`, wearing the
+      front drawing), a layer each in the 3D Studio (« Wing mirrors 1 / 2 »). Also fixed: with a
+      fitted body the box takes the front drawing's full width (the body was narrowed twice, ≈ 8 %).
+      Bench (`make car-replay OUT=r6`, eleven cars rebuild): mirrors on the hatchback, both SUVs,
+      the jeep, the pick-ups, the minibus and the second sedan; the beetle's stalk mirrors barely
+      clear its wings (a small piece); the 1950s cabriolet and the first sedan show none on their
+      front drawing (none built). No Mini drawing in the bench: not replayed on the user's car.
+      Second pass (user, same day: fix the limits, let the AI look for the mirrors): (1) the car
+      team already names the mirrors on every drawing (`details`, kind `mirror`): `readMirrors`
+      takes their place along the car from the side boxes (it agrees with the measured one within
+      0.01 on the hatchback and the jeep) and, when the front's pixels show none, their outline from
+      the team's boxes in a plain colour (the first sedan now has mirrors). Pixels still measure,
+      the model only finds. (2) stalk mirrors narrower than the wings (beetle, 1950s cabriolet):
+      `CarMirror.root` = the body's edge under the mirror; the mesh moves the mirror out with its
+      flank and keeps its measured width. (3) the back of the housing reads a side window: glass.
+      Bench `make car-replay OUT=r7`: all eleven cars carry two mirrors. Third pass
+      (user, same day: fix what was left): (1) a mirror moved out no longer passes the box:
+      `mirrorFit` narrows the whole car until the tips stand on the box's side (`make car-replay
+OUT=r8`: hatchback 0.970, SUVs 0.976 / 0.984, pick-up 0.997, the others 1; widest point of
+      every mesh ≤ 0.5). (2) a car nobody saw a mirror on gets `standardMirrors` (plain colour, on
+      the shoulder), never a kind `other`. (3) `make dev-fresh` for a stale module in the dev server.
+- [x] **PQ-T81 A tree is built from its front alone; its clumps are closed solids.** User
+      2026-11-15 (a weeping willow): with its views the 3D tree had nothing to do with the drawing,
+      and inside each clump one could see through; decide, as for the car, how many 2D views an
+      object needs. Causes: (1) every `sdf` part was meshed inside out (`sdf-mesh.ts`: the
+      marching-cubes tables wind clockwise seen from outside; 99.9 % of the crown's faces looked
+      in, so the viewer culled the near wall and showed the far one); (2) the side, back and left
+      drawn by Muse are another tree, and the crown is the volume both silhouettes agree on.
+      Fix: two corners swapped per triangle (every `sdf` part, not only trees: the judge's flat
+      render raymarches the field and never saw it); a tree or a bush draws no other view
+      (`PLANT_FACES`, a note in the faces panel), its side is its front, an operator's validated
+      side is still read; `CLUMP_MAX` 0.16 → 0.24. Bench `make tree-replay OUT=f2` (front only):
+      willow 0.63 → 0.75, gardenia 0.77 → 0.81, acacia 0.52 → 0.54, baobab, palms, pine unchanged
+      (front only vs. the four views of r13: −0.05 to +0.03). Drawings saved: fewer Meta calls.
+      **Still open:** a weeping curtain is round clumps, not hanging strands; a lean of the trunk
+      leans the same way seen from the side. **Test:** `sdf-mesh.test.ts` (faces wound out),
+      `car-views.test.ts` (`facesFor`, a tree built with nothing drawn), `facade-faces-panel.test.tsx`.
+- [x] **PQ-T82 Every plant faithful to its drawing: a plant team and a plant plan.** User 2026-11-15
+      (a willow curtain, then « une génération parfaite… tout types de végétales », then « look at the
+      agave… il n'y a pas de feuilles », « all other plants also are not good »). Done: `PlantPlan` +
+      `plantMesh` (strands, tiers, whole leaves, fans, fronds as combs, pads, canes); `buildPlant` per
+      habit; plant team of five (`leaves` traces each big leaf on the drawing); the front drawing as
+      skin, holes filled; 14 photos in `resources/refine-3d`, results in `resources/generated-view/
+plants/` (`make plants-live`, `make plant-gallery`, VERSIONS.md). Live v005 (contributor model):
+      front IoU coconut 0.14 → 0.61, banana 0.05 → 0.66, agave 0.26 → 0.52, opuntia 0.45 → 0.43 (pads
+      instead of one column). **Still open:** agave tips that curl down are straight; pads float apart;
+      conifers are regular tiers; side IoU 0.15–0.3 (the side is the front's turned leaves); lemongrass,
+      aloe, bamboo, jacaranda not re-run live with the `leaves` specialist. **Test:** `plant-mesh.test.ts`,
+      `plant-build.test.ts`, `plant-tools.test.ts`, `plant-projection.test.ts`, `recon-texture.test.ts`.

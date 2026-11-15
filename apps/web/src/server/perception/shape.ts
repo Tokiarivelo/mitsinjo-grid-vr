@@ -117,6 +117,10 @@ export function kitPrompt(version: number = KIT_PROMPT_VERSION, hint?: KitArchet
 export const FACADE_REFERENCE_LINE =
   'The second image is the validated front elevation of this same object, drawn unoccluded: use it for the windows, doors, floors, roof shape, materials and part layout; the photo crop (first image) still gives the size, pose and colours.';
 
+/** The same line for a vehicle (PQ-T76): its validated 2D view is its side profile. */
+export const PROFILE_REFERENCE_LINE =
+  'The second image is the validated side profile of this same vehicle, drawn unoccluded with its front to the right: use it for the length, the wheels, the windows, the body line and the part layout; the photo crop (first image) still gives the size, pose and colours.';
+
 export function shapeQuestion(
   label: string,
   aspect?: number,
@@ -130,7 +134,9 @@ export function shapeQuestion(
       ? ` On the photo it is ${aspect.toFixed(2)} times as wide as it is high.`
       : '';
   const guess = hint ? ` It is probably a "${hint}".` : '';
-  const facade = withFacade ? ` ${FACADE_REFERENCE_LINE}` : '';
+  const facade = withFacade
+    ? ` ${hint === 'vehicle' ? PROFILE_REFERENCE_LINE : FACADE_REFERENCE_LINE}`
+    : '';
   const measured = facts.length ? ` Measured: ${facts.join(' · ')}.` : '';
   return `Describe the full 3D "${name}" in the clear rectangle in the middle of this crop with strong 3D imagination and interpolation, even if partially occluded.${seen}${guess}${measured}${facade}`;
 }

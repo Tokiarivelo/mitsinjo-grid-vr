@@ -4,7 +4,10 @@ import type { SectorId } from '@mitsinjo/engine';
 import type { KitArchetype } from '@/lib/object-kit';
 import type { ObjectRecipe } from '@/lib/object-shape';
 import { facesMesh } from '@/features/vision-insert/utils/face-projection';
+import { carGeometry } from '@/features/vision-insert/utils/car-projection';
+import { plantGeometry } from '@/features/vision-insert/utils/plant-projection';
 import { houseGeometry } from '@/features/vision-insert/utils/house-projection';
+import { withPieceEdits } from '@/features/vision-insert/utils/model-pieces';
 import { recipeMesh, triangleCount } from '@/features/vision-insert/utils/object-geometry';
 import { terrainHeight } from './landscape';
 import { TOKEN_HEX } from './scene-palette';
@@ -150,11 +153,25 @@ export function buildPlacedModelsGeometry(
     const faces = own ? item.recipe.faces : undefined;
     // A house read by its specialist is built volume by volume (PQ-T72).
     const house = own ? item.recipe.house : undefined;
+    // A car fitted on its drawings (PQ-T76): lofted body and wheels.
+    const carPlan = own && !house && item.recipe.car?.body ? item.recipe.car : undefined;
+    const carMesh = carPlan ? carGeometry({ ...item.recipe, car: carPlan }) : null;
+    // A plant built from its plan (PQ-T82): trunk, limbs, foliage, its own materials.
+    const plantPlan = own && !house && !carMesh ? item.recipe.plant : undefined;
+    // The operator's piece edits from the 3D Studio (PQ-T77) are baked in before the turn.
+    const edited = (geo: THREE.BufferGeometry) => withPieceEdits(geo, item.recipe);
     let g = house
-      ? houseGeometry({ ...item.recipe, house }).rotateY(effYaw)
-      : faces
-        ? facesMesh({ proportions: item.recipe.proportions, faces }).rotateY(effYaw)
-        : recipeMesh(recipeWithYaw, tier === 'low' ? 'low' : 'full');
+      ? edited(houseGeometry({ ...item.recipe, house })).rotateY(effYaw)
+      : carMesh
+        ? edited(carMesh).rotateY(effYaw)
+        : plantPlan
+          ? edited(plantGeometry({ ...item.recipe, plant: plantPlan })).rotateY(effYaw)
+          : faces
+            ? edited(facesMesh({ proportions: item.recipe.proportions, faces })).rotateY(effYaw)
+            : withPieceEdits(
+                recipeMesh(recipeWithYaw, tier === 'low' ? 'low' : 'full'),
+                recipeWithYaw
+              );
     if (tier === 'low') {
       const tris = triangleCount(g);
       if (lowTriangles + tris > PLACED_LOW_TRIANGLES) {
@@ -180,7 +197,7 @@ export function buildPlacedModelsGeometry(
     // Dimmed when the sector is unserved or the appliance draws nothing now (same as the box markers).
     const unserved = (sec?.unserved ?? false) || !item.running;
 
-    if (faces || house) {
+    if (faces || house || carMesh || plantPlan) {
       // Wears its drawings: its own mesh and texture, same place, same bounds.
       drawn.push({
         id: item.id,

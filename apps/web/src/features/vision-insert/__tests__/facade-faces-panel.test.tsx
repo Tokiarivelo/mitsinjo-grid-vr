@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '@/lib/i18n';
+import { PLANT_FACES, VEHICLE_FACES } from '@/lib/object-shape';
 import type { FacesState } from '../hooks/use-facade-faces';
 import { FacadeFacesPanel } from '../ui/facade-faces-panel';
 
@@ -13,7 +14,18 @@ const ready = (name: string, validated = false) => ({
   userPrompt: '',
 });
 
-const renderPanel = (faces: FacesState, props = {}) => {
+/** The faces given, the others idle. */
+const state = (faces: Partial<FacesState>): FacesState => ({
+  side: idleFace,
+  back: idleFace,
+  left: idleFace,
+  top: idleFace,
+  front: idleFace,
+  bottom: idleFace,
+  ...faces,
+});
+
+const renderPanel = (faces: Partial<FacesState>, props = {}) => {
   const handlers = {
     onGenerate: vi.fn(),
     onGenerateAll: vi.fn(),
@@ -23,7 +35,7 @@ const renderPanel = (faces: FacesState, props = {}) => {
   };
   render(
     <I18nProvider>
-      <FacadeFacesPanel faces={faces} {...handlers} {...props} />
+      <FacadeFacesPanel faces={state(faces)} {...handlers} {...props} />
     </I18nProvider>
   );
   return handlers;
@@ -79,5 +91,21 @@ describe('FacadeFacesPanel (PQ-T68)', () => {
       top: idleFace,
     });
     expect(screen.getByRole('alert').textContent).toContain('could not be drawn');
+  });
+
+  it('a vehicle (PQ-T76): front, back, top and underside of its profile, no left side', () => {
+    renderPanel({ front: ready('front') }, { names: VEHICLE_FACES });
+    expect(screen.getAllByRole('listitem')).toHaveLength(4);
+    expect(screen.getByText('Front')).toBeTruthy();
+    expect(screen.getByText('Underside')).toBeTruthy();
+    expect(screen.queryByText('Left side')).toBeNull();
+    expect(screen.getByRole('region', { name: /front, back, top, underside/i })).toBeTruthy();
+  });
+
+  it('a tree or a bush: no other view to draw, a note says its front is enough', () => {
+    renderPanel({}, { names: PLANT_FACES });
+    expect(screen.queryAllByRole('listitem')).toHaveLength(0);
+    expect(screen.queryByRole('button', { name: 'Draw all views' })).toBeNull();
+    expect(screen.getByText(/round about its trunk/)).toBeTruthy();
   });
 });

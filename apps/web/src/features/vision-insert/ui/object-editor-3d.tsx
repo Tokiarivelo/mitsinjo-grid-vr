@@ -24,8 +24,11 @@ import {
 } from '@/features/microgrid-3d/hooks/use-shader-warmup';
 import { cn } from '@/lib/utils';
 import type { ShapeImprove } from '../hooks/use-object-shape';
+import { useStableExcept } from '../hooks/use-stable-except';
 import { HULL_SURFACES, type HullSurface } from '@/lib/face-hull';
 import { faceMaterials, facesMesh } from '../utils/face-projection';
+import { carGeometry, carMaterials } from '../utils/car-projection';
+import { plantGeometry, plantMaterials } from '../utils/plant-projection';
 import { houseGeometry, houseMaterials } from '../utils/house-projection';
 import { recipeMesh, silhouetteDepth, silhouetteMesh } from '../utils/object-geometry';
 import { surfaceMaterial, SURFACES } from '../utils/surface-look';
@@ -33,6 +36,9 @@ import { buildStudioScene, STUDIO_SIGMA } from '../utils/studio-env';
 import { BuildFocus } from './build-focus-3d';
 import { PrintWipe } from './print-wipe-3d';
 import { SWATCH_GAIN } from '../utils/surface-maps';
+import { modelKind, pieceNames } from '../utils/model-pieces';
+import type { StudioControls } from '../utils/studio';
+import { StudioPieces } from './studio-pieces-3d';
 import { surfaceTextures, swatchTexture } from '../utils/surface-textures';
 
 export interface ObjectEditor3dProps {
@@ -55,6 +61,8 @@ export interface ObjectEditor3dProps {
   selectedSurface?: HullSurface | null;
   /** A click on the model names the surface under the pointer. */
   onPickSurface?: (surface: HullSurface) => void;
+  /** Full-screen 3D Studio (PQ-T77): tools, view mode, camera, selection of the model's pieces. */
+  studio?: StudioControls;
 }
 
 /** Strength of the studio reflections and fill (image-based light). */
@@ -107,6 +115,7 @@ function ObjectModel({
   improve,
   selectedSurface = null,
   onPickSurface,
+  studio,
 }: ObjectEditor3dProps) {
   const reducedMotion = useReducedMotion();
   // Photo size only (silhouette proportions); cached image, no GPU upload.
@@ -130,29 +139,44 @@ function ObjectModel({
     return fitRecipe(kitToRecipe(fallbackKit), photoAspect);
   }, [shapeRecipe, preview, detection, photoAspect]);
 
-  const activeRecipe = shapeRecipe ?? livePreview ?? fallbackRecipe;
+  const editedRecipe = shapeRecipe ?? livePreview ?? fallbackRecipe;
+  // Piece edits never rebuild the model: the recipe keeps its identity while only they change.
+  const activeRecipe = useStableExcept(editedRecipe, 'pieces');
 
   // Model from its drawn views (PQ-T70): the drawings are projected on it (never the photo).
   const faces = activeRecipe?.faces && !activeRecipe.yaw ? activeRecipe.faces : null;
   // A house read by its specialist (PQ-T72): built volume by volume, its walls wearing the drawings.
   const house = activeRecipe?.house && !activeRecipe.yaw ? activeRecipe : null;
-  const pickable = Boolean(faces || house);
-  const mesh = useMemo(
-    () =>
-      house?.house
-        ? houseGeometry({ ...house, house: house.house })
-        : faces && activeRecipe
-          ? facesMesh({ proportions: activeRecipe.proportions, faces })
-          : activeRecipe
-            ? recipeMesh(activeRecipe)
-            : silhouetteMesh(
-                silhouetteRings(detection),
-                detection.box,
-                photoAspect,
-                silhouetteDepth(detection)
-              ),
-    [activeRecipe, faces, house, detection, photoAspect]
+  // A car fitted on its drawings (PQ-T76): lofted body, real wheels, glass, wearing the drawings.
+  const carPlan = !house && activeRecipe?.car?.body && !activeRecipe.yaw ? activeRecipe.car : null;
+  const car = useMemo(
+    () => (carPlan && activeRecipe ? { ...activeRecipe, car: carPlan } : null),
+    [carPlan, activeRecipe]
   );
+  // A plant built from its plan (PQ-T82): trunk, limbs, foliage, strands, fronds.
+  const plantPlan =
+    !house && !car && activeRecipe?.plant && !activeRecipe.yaw ? activeRecipe.plant : null;
+  const plant = useMemo(
+    () => (plantPlan && activeRecipe ? { ...activeRecipe, plant: plantPlan } : null),
+    [plantPlan, activeRecipe]
+  );
+  const pickable = Boolean(faces || house || car || plant);
+  const mesh = useMemo(() => {
+    if (house?.house) return houseGeometry({ ...house, house: house.house });
+    const carMesh = car ? carGeometry(car) : null;
+    if (carMesh) return carMesh;
+    if (plant) return plantGeometry(plant);
+    return faces && activeRecipe
+      ? facesMesh({ proportions: activeRecipe.proportions, faces })
+      : activeRecipe
+        ? recipeMesh(activeRecipe)
+        : silhouetteMesh(
+            silhouetteRings(detection),
+            detection.box,
+            photoAspect,
+            silhouetteDepth(detection)
+          );
+  }, [activeRecipe, faces, house, car, plant, detection, photoAspect]);
   useEffect(() => () => mesh.dispose(), [mesh]);
   const invalidate = useThree((s) => s.invalidate);
   const vertexColors = Boolean(activeRecipe);
@@ -172,6 +196,22 @@ function ObjectModel({
           onLoad: invalidate,
         }
       );
+    if (car)
+      return carMaterials(car, {
+        tint,
+        selected: selectedSurface
+          ? { surface: selectedSurface, color: TOKEN_HEX.energyCyan }
+          : null,
+        onLoad: invalidate,
+      });
+    if (plant)
+      return plantMaterials(plant, {
+        tint,
+        selected: selectedSurface
+          ? { surface: selectedSurface, color: TOKEN_HEX.energyCyan }
+          : null,
+        onLoad: invalidate,
+      });
     if (faces)
       return faceMaterials(faces, {
         tint,
@@ -194,7 +234,7 @@ function ObjectModel({
         ...(map ? { map } : {}),
       });
     });
-  }, [mesh, vertexColors, swatches, tint, invalidate, faces, house, selectedSurface]);
+  }, [mesh, vertexColors, swatches, tint, invalidate, faces, house, car, plant, selectedSurface]);
   useEffect(() => () => surfaces.forEach((m) => m.dispose()), [surfaces]);
   // Plain silhouette material, memo'd like the surfaces (so the print wipe can clip it too).
   const silhouetteMaterial = useMemo(
@@ -211,6 +251,13 @@ function ObjectModel({
   const modelMaterials = useMemo<ReadonlyArray<THREE.Material>>(
     () => (vertexColors ? surfaces : [silhouetteMaterial]),
     [vertexColors, surfaces, silhouetteMaterial]
+  );
+  // The operator's piece edits (PQ-T77): drawn piece by piece in the studio, or once edited.
+  const edits = editedRecipe?.pieces;
+  const byPiece = Boolean(vertexColors && (studio || (edits && Object.keys(edits).length)));
+  const names = useMemo(
+    () => (activeRecipe ? pieceNames(modelKind(activeRecipe)) : []),
+    [activeRecipe]
   );
   /** The model is still being streamed: fresh geometry wipes in like print layers. */
   const building = livePreview !== null || improve?.status === 'running';
@@ -235,7 +282,7 @@ function ObjectModel({
         frames={1}
       />
       <group scale={scale}>
-        {vertexColors ? (
+        {byPiece ? null : vertexColors ? (
           <mesh
             geometry={mesh}
             material={surfaces}
@@ -256,6 +303,24 @@ function ObjectModel({
           <mesh geometry={mesh} material={silhouetteMaterial} />
         )}
       </group>
+      {byPiece && (
+        <StudioPieces
+          mesh={mesh}
+          materials={surfaces}
+          names={names}
+          edits={edits}
+          scale={scale}
+          {...(studio ? { studio } : {})}
+          {...(pickable && onPickSurface
+            ? {
+                onPickSlot: (slot: number) => {
+                  const surface = HULL_SURFACES[slot];
+                  if (surface) onPickSurface(surface);
+                },
+              }
+            : {})}
+        />
+      )}
       <PrintWipe
         mesh={mesh}
         materials={modelMaterials}
@@ -290,14 +355,19 @@ export function ObjectEditor3d(props: ObjectEditor3dProps) {
   const projected = Boolean((shown?.faces || shown?.house) && !shown.yaw);
   return (
     <Canvas
-      onCreated={({ gl, scene, camera }) => setWarmTarget({ gl, scene, camera })}
+      {...(props.studio ? { onPointerMissed: () => props.studio?.onSelect(null) } : {})}
+      onCreated={({ gl, scene, camera }) => {
+        // Layer masks of the 3D Studio (PQ-T77) are clipping planes on the pieces' materials.
+        gl.localClippingEnabled = true;
+        setWarmTarget({ gl, scene, camera });
+      }}
       className={cn(
         'transition-opacity duration-300 motion-reduce:transition-none',
         warm ? 'opacity-100' : 'opacity-0'
       )}
       frameloop="demand"
       dpr={[1, 1.5]}
-      camera={{ position: CAMERA_POSITION, fov: 35, near: 0.05, far: 20 }}
+      camera={{ position: CAMERA_POSITION, fov: 35, near: 0.02, far: 40 }}
       gl={{
         alpha: true,
         antialias: true,
@@ -313,7 +383,11 @@ export function ObjectEditor3d(props: ObjectEditor3dProps) {
       <Suspense fallback={null}>
         <ObjectModel {...props} />
       </Suspense>
-      <OrbitControls makeDefault enablePan={false} minDistance={1.2} maxDistance={5} />
+      {props.studio ? (
+        <OrbitControls makeDefault enablePan minDistance={0.3} maxDistance={12} />
+      ) : (
+        <OrbitControls makeDefault enablePan={false} minDistance={1.2} maxDistance={5} />
+      )}
       {/* Ink outline (PT-5): the composer renders off-screen, so tone mapping moves into it; ink after
           it keeps its theme colour exact. Alpha kept: the `.viewer-studio` backdrop shows through. */}
       <EffectComposer

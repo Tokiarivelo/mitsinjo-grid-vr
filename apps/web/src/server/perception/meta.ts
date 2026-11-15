@@ -55,6 +55,8 @@ import {
   HOUSE_SYSTEM_PROMPT,
   parseHouseReading,
 } from './house/house-prompt';
+import { CAR_TOOLS_PROMPT_VERSION } from './car/car-tools';
+import { PLANT_TOOLS_PROMPT_VERSION } from './tree/plant-tools';
 import { HOUSE_TOOLS_PROMPT_VERSION } from './house/house-tools';
 import {
   LABEL_JSON_SCHEMA,
@@ -640,6 +642,61 @@ export class MetaPerceptionBackend implements PerceptionBackend {
     );
     console.info(
       `[vision] 3D house ${tool} from ${model}: ${content ? `${content.length} chars` : 'empty'}`
+    );
+    return { model, usage, result: { content: content || null } };
+  }
+
+  async askCarTool(
+    tool: string,
+    system: string,
+    schema: { name: string; schema: object },
+    imageUrl: string,
+    question: string,
+    references: ReadonlyArray<string>,
+    signal?: AbortSignal
+  ): Promise<PerceptionCall<{ content: string | null }>> {
+    // PQ-T76: the car pilot and each specialist, on the seeing model of the parts step.
+    const kind = tool === 'pilot' ? 'carPilot' : 'carTool';
+    const { content, model, usage } = await this.visionJson(
+      system,
+      question,
+      imageUrl,
+      schema,
+      signal,
+      true,
+      { kind, params: { tool, promptVersion: CAR_TOOLS_PROMPT_VERSION } },
+      references,
+      this.modelFor('parts')
+    );
+    console.info(
+      `[vision] 3D car ${tool} from ${model}: ${content ? `${content.length} chars` : 'empty'}`
+    );
+    return { model, usage, result: { content: content || null } };
+  }
+
+  async askPlantTool(
+    tool: string,
+    system: string,
+    schema: { name: string; schema: object },
+    imageUrl: string,
+    question: string,
+    signal?: AbortSignal
+  ): Promise<PerceptionCall<{ content: string | null }>> {
+    // PQ-T82: the plant pilot and each specialist, on the seeing model of the parts step.
+    const kind = tool === 'pilot' ? 'plantPilot' : 'plantTool';
+    const { content, model, usage } = await this.visionJson(
+      system,
+      question,
+      imageUrl,
+      schema,
+      signal,
+      true,
+      { kind, params: { tool, promptVersion: PLANT_TOOLS_PROMPT_VERSION } },
+      [],
+      this.modelFor('parts')
+    );
+    console.info(
+      `[vision] 3D plant ${tool} from ${model}: ${content ? `${content.length} chars` : 'empty'}`
     );
     return { model, usage, result: { content: content || null } };
   }

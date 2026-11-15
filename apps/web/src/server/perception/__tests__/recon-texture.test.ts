@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bleedPaper, maskAt, shrink, trimPaper } from '../recon/texture';
+import { bleedPaper, maskAt, plantHoles, shrink, trimPaper } from '../recon/texture';
 import { alignViews } from '../recon/views';
 import type { ViewImage } from '../recon/grid';
 
@@ -61,5 +61,14 @@ describe('face textures', () => {
     expect(aligned.frames.right!.mirrored).toBe(true);
     expect(aligned.frames.back!.mirrored).toBe(true);
     expect(aligned.frames.left).toBeUndefined();
+  });
+});
+
+describe('plantHoles (PQ-T82)', () => {
+  it('takes the paper and the sky between leaves out of a plant, never a leaf or a purple bloom', () => {
+    // leaf, paper, sky, jacaranda purple
+    const rgb = Uint8Array.from([60, 140, 50, 236, 240, 244, 150, 190, 235, 140, 100, 200]);
+    const holes = plantHoles(rgb, Uint8Array.from([1, 1, 1, 1]), [238, 240, 242]);
+    expect([...holes]).toEqual([1, 0, 0, 1]);
   });
 });

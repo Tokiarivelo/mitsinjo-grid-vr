@@ -357,7 +357,12 @@ export function defaultArchetype(
     ) {
       return 'house';
     }
-    if (/\b(tree|trees|palm|pine|conifer|willow|hazo|arbre)\b/i.test(norm)) {
+    // PQ-T79: a tree is often named by its species only (« baobab », « acacia »).
+    if (
+      /\b(tree|trees|palm|palms|pine|conifer|willow|hazo|arbre|baobab|acacia|eucalyptus|oak|mango|coconut|cedar|cypress|banana|ravenala|jackfruit|avocado)\b/i.test(
+        norm
+      )
+    ) {
       return 'tree';
     }
     if (/\b(bush|plant|hedge|shrub|flower|flowers|grass|topiary)\b/i.test(norm)) {

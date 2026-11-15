@@ -160,6 +160,31 @@ export function trimPaper(
   return out;
 }
 
+/**
+ * A plant's holes (PQ-T82): the paper or the sky showing between its leaves, enclosed or not,
+ * taken out of `mask` (a new mask). Paper: within `PLANT_HOLE_DISTANCE` of the paper's colour;
+ * sky: blue over green over red by `SKY_MARGIN` (a purple bloom has more red than green: kept).
+ */
+export function plantHoles(
+  rgb: Uint8Array,
+  mask: Uint8Array,
+  paper: readonly [number, number, number]
+): Uint8Array {
+  const out = Uint8Array.from(mask);
+  for (let i = 0; i < out.length; i++) {
+    if (!out[i]) continue;
+    const [r, g, b] = [rgb[i * 3]!, rgb[i * 3 + 1]!, rgb[i * 3 + 2]!];
+    const papery = Math.hypot(r - paper[0], g - paper[1], b - paper[2]) < PLANT_HOLE_DISTANCE;
+    const sky = b > g + SKY_MARGIN && g >= r;
+    if (papery || sky) out[i] = 0;
+  }
+  return out;
+}
+/** Distance to the paper's colour under which a pixel inside a plant is a hole. */
+export const PLANT_HOLE_DISTANCE = 60;
+/** How much bluer than green a pixel is to be sky. */
+export const SKY_MARGIN = 25;
+
 /** `mask` shrunk by `by` pixels (a pixel stays when its whole neighbourhood is object). */
 export function shrink(mask: Uint8Array, cols: number, rows: number, by = BLEED_INSET): Uint8Array {
   let cur = mask;

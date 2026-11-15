@@ -10,6 +10,7 @@ import {
   Image as ImageIcon,
   Layers,
   Loader2,
+  Maximize2,
   Move3d,
   RotateCcw,
   Ruler,
@@ -40,23 +41,20 @@ import { ObjectDisplayControls } from './object-display-controls';
 import { SurfaceEditor } from './surface-editor';
 import { houseBaseLooks } from '../utils/house-projection';
 import type { HullSurface } from '@/lib/face-hull';
-import type { FaceSurface } from '@/lib/object-shape';
+import { VEHICLE_FACES, type FaceSurface } from '@/lib/object-shape';
 import { Facade2dPanel } from './facade-2d-panel';
 import { FacadeFacesPanel } from './facade-faces-panel';
 import { BlenderExportButton } from './blender-export-button';
 import { StepModelsGear } from './step-models-gear';
 import { useFacade2d, validatedFacade, type ValidatedFacade } from '../hooks/use-facade-2d';
 import { useFacadeFaces, validatedFaces } from '../hooks/use-facade-faces';
+import { LazyObjectEditor3d, ViewerSkeleton } from './lazy-object-editor-3d';
+import type { PieceEdits } from '@/lib/piece-edits';
 
-/** Placeholder while the viewer chunk loads or Spark builds the recipe. */
-function ViewerSkeleton() {
-  return <div className="h-full w-full animate-pulse rounded-control bg-surface-hover/60" />;
-}
-
-export const LazyObjectEditor3d = dynamic(
-  () => import('./object-editor-3d').then((m) => m.ObjectEditor3d),
-  { ssr: false, loading: () => <ViewerSkeleton /> }
-);
+/** The 3D Studio (PQ-T77), loaded when opened. */
+const LazyObjectStudio = dynamic(() => import('./object-studio').then((m) => m.ObjectStudio), {
+  ssr: false,
+});
 
 /** Note under an outline fallback: says why the AI shape is missing. */
 const NOTE_KEY: Record<NonNullable<ObjectShape['reason']>, string> = {
@@ -201,6 +199,8 @@ export interface ObjectShapePanelProps extends ObjectShapeState {
   onStepModelsSaved?: () => void;
   /** The operator restyles a surface of a drawn model (PQ-T71); null = back to its drawing. */
   onRestyle?: (surface: HullSurface, look: FaceSurface | null) => void;
+  /** The operator edited the model's pieces in the 3D Studio (PQ-T77). */
+  onEditPieces?: (pieces: PieceEdits) => void;
 }
 
 type ShapeTab = 'model' | 'facade';
@@ -230,9 +230,11 @@ export function ObjectShapePanel({
   scope,
   onStepModelsSaved,
   onRestyle,
+  onEditPieces,
 }: ObjectShapePanelProps) {
   const t = useTranslations('features.visionInsert');
   const webgl = useWebGLAvailable();
+  const [studioOpen, setStudioOpen] = useState(false);
   const facade = useFacade2d(imageUrl ?? null, detection, sessionId, scope);
   const ready = status === 'ready' && shape?.detectionId === detection.id;
   const materials = ready && shape?.recipe ? recipeMaterials(shape.recipe) : [];
@@ -243,6 +245,8 @@ export function ObjectShapePanel({
     ready || (loading && (preview !== undefined || detection.outline !== undefined));
   const seconds = useElapsedSeconds(startedAt, status === 'loading');
   const faceViews = useFacadeFaces(detection, facade.facade);
+  // A vehicle is drawn from its profile (PQ-T76): its 2D view and faces say so.
+  const vehicle = faceViews.names === VEHICLE_FACES;
   const showTabs = ready && Boolean(facade.facade);
   // Tab choice is per object: a new detection restarts on the model tab.
   const [tabState, setTabState] = useState({ id: detection.id, tab: 'model' as ShapeTab });
@@ -314,7 +318,11 @@ export function ObjectShapePanel({
         >
           {[
             { id: 'model' as const, label: t('model3dModelTab'), Icon: Box },
-            { id: 'facade' as const, label: t('facade2dTab'), Icon: ImageIcon },
+            {
+              id: 'facade' as const,
+              label: vehicle ? t('facade2dTabVehicle') : t('facade2dTab'),
+              Icon: ImageIcon,
+            },
           ].map(({ id, label: tabLabel, Icon }) => {
             const selected = activeTab === id;
             return (
@@ -361,9 +369,11 @@ export function ObjectShapePanel({
                 onGenerate?.(validatedFacade(facade.facade, validatedFaces(faceViews.faces)));
               }}
               isValidating3D={loading}
+              vehicle={vehicle}
               faces={
                 <FacadeFacesPanel
                   faces={faceViews.faces}
+                  names={faceViews.names}
                   onGenerate={(face, details) => void faceViews.generate(face, details)}
                   onGenerateAll={() => void faceViews.generateAll()}
                   onDetailsChange={faceViews.setUserPrompt}
@@ -398,6 +408,27 @@ export function ObjectShapePanel({
                   <ViewerSkeleton />
                 )}
               </div>
+              {liveViewer && ready && shape?.recipe && onEditPieces && (
+                <button
+                  type="button"
+                  onClick={() => setStudioOpen(true)}
+                  aria-label={t('studio.open')}
+                  title={t('studio.open')}
+                  className="absolute right-2 top-2 grid h-11 w-11 place-items-center rounded-control border border-border bg-canvas-raised/90 text-text-primary shadow-sm hover:bg-surface-hover"
+                >
+                  <Maximize2 className="h-4 w-4" aria-hidden="true" />
+                </button>
+              )}
+              {studioOpen && ready && shape && onEditPieces && (
+                <LazyObjectStudio
+                  shape={shape}
+                  detection={detection}
+                  label={label}
+                  imageUrl={imageUrl}
+                  onChange={onEditPieces}
+                  onClose={() => setStudioOpen(false)}
+                />
+              )}
               {/* Staged build (PG-T18): live progress while it prints, then it keeps improving.
                   No Cancel while loading: it would abort the whole generation, not just the rest. */}
               {(ready || loading) && improve && (

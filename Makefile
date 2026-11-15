@@ -49,6 +49,11 @@ port: ## Print the web app port (PORT from shell or .env, default 3000)
 dev-stop: ## Stop the dev server on $(PORT) for good (next dev respawns a killed next-server; this stops turbo/pnpm too)
 	@bash scripts/dev-stop.sh $(PORT)
 
+dev-fresh: ## Stop the dev server, drop its build cache (apps/web/.next), start it again: cures a stale module after a new export (« x is not a function », « export x was not found ») [MOCK=1 = offline LLM]
+	@bash scripts/dev-stop.sh $(PORT)
+	rm -rf apps/web/.next
+	@$(MAKE) $(if $(MOCK),dev-mock,dev)
+
 dev-mock: ## Run dev with the offline mock LLM provider
 	$(need_ws)
 	LLM_PROVIDER=mock $(PNPM) dev
@@ -162,10 +167,29 @@ eval-code: ## Scored route-B vs route-A eval on willow/car/house/appliance, to s
 	$(need_ws)
 	eval "$$(make -s env-export)" && EVAL_CODE=1 EVAL_CODE_DIR="$(CURDIR)/apps/web/src/server/perception/__fixtures__/shape/real" $(if $(IDS),EVAL_CODE_IDS="$(IDS)") $(if $(CRITIC_MODEL),META_CRITIC_MODEL="$(CRITIC_MODEL)") $(if $(CODE_MODEL),META_CODE_MODEL="$(CODE_MODEL)") $(PNPM) --filter $(WEB) exec vitest run src/server/perception/__tests__/eval-code.test.ts -t "make eval-code"
 
-views-3d: ## Views → 3D on your own drawings (PQ-T69): FRONT=front.png (or PHOTO=photo.jpg: the front is drawn from it, API cost) [RIGHT= BACK= LEFT= TOP=] OUT=dir [LABEL=…] [OFFLINE=1 = no Meta call, MATERIALS=slate,wood,… = materials by hand, largest class first, ROOF=2 = roof class by hand, READING=house-reading.json = replay a house specialist reading (PQ-T72), SINGLE=1 = one house reading instead of the pilot + part specialists (PQ-T73)]; else Muse Image draws the missing views and the materials are asked (API cost) → recipe.json, report.txt, model.png, model-34.png, faces-atlas.jpg
+views-3d: ## Views → 3D on your own drawings (PQ-T69): FRONT=front.png (or PHOTO=photo.jpg: the front is drawn from it, API cost) [RIGHT= BACK= LEFT= TOP=] OUT=dir [LABEL=… ; a vehicle (LABEL=car) is built from RIGHT= (its profile) with FRONT= BACK= TOP= BOTTOM=, its left side mirrored] [OFFLINE=1 = no Meta call, MATERIALS=slate,wood,… = materials by hand, largest class first, ROOF=2 = roof class by hand, READING=house-reading.json = replay a house specialist reading (PQ-T72), SINGLE=1 = one house reading instead of the pilot + part specialists (PQ-T73), CAR_READING=car-reading.json = replay a car team reading (PQ-T76), NO_CAR=1 = no car team call, PLANT_READING=plant-reading.json = replay a plant team reading (PQ-T82), NO_PLANT=1 = no plant team call]; else Muse Image draws the missing views and the materials are asked (API cost) → recipe.json, report.txt, model.png, model-34.png, faces-atlas.jpg, car-sheet.png (a car's own mesh from eight cameras)
 	$(need_ws)
-	@test -n "$(FRONT)$(PHOTO)" -a -n "$(OUT)" || { echo "Usage: make views-3d FRONT=front.png | PHOTO=photo.jpg [RIGHT=right.png BACK=back.png LEFT=left.png] OUT=dir [LABEL='stone house']"; exit 1; }
-	eval "$$(make -s env-export)" && $(if $(FRONT),VIEWS_3D_FRONT="$(abspath $(FRONT))") $(if $(PHOTO),VIEWS_3D_PHOTO="$(abspath $(PHOTO))") VIEWS_3D_OUT="$(abspath $(OUT))" $(if $(RIGHT),VIEWS_3D_RIGHT="$(abspath $(RIGHT))") $(if $(BACK),VIEWS_3D_BACK="$(abspath $(BACK))") $(if $(LEFT),VIEWS_3D_LEFT="$(abspath $(LEFT))") $(if $(TOP),VIEWS_3D_TOP="$(abspath $(TOP))") $(if $(ROOF),VIEWS_3D_ROOF="$(ROOF)") $(if $(LABEL),VIEWS_3D_LABEL="$(LABEL)") $(if $(OFFLINE),VIEWS_3D_OFFLINE=1) $(if $(MATERIALS),VIEWS_3D_MATERIALS="$(MATERIALS)") $(if $(READING),VIEWS_3D_READING="$(abspath $(READING))") $(if $(SINGLE),VIEWS_3D_SINGLE=1) $(PNPM) --filter $(WEB) exec vitest run src/server/perception/__tests__/views-3d.test.ts
+	@test -n "$(FRONT)$(RIGHT)$(PHOTO)" -a -n "$(OUT)" || { echo "Usage: make views-3d FRONT=front.png | PHOTO=photo.jpg [RIGHT=right.png BACK=back.png LEFT=left.png] OUT=dir [LABEL='stone house']"; exit 1; }
+	eval "$$(make -s env-export)" && $(if $(FRONT),VIEWS_3D_FRONT="$(abspath $(FRONT))") $(if $(PHOTO),VIEWS_3D_PHOTO="$(abspath $(PHOTO))") VIEWS_3D_OUT="$(abspath $(OUT))" $(if $(RIGHT),VIEWS_3D_RIGHT="$(abspath $(RIGHT))") $(if $(BACK),VIEWS_3D_BACK="$(abspath $(BACK))") $(if $(LEFT),VIEWS_3D_LEFT="$(abspath $(LEFT))") $(if $(TOP),VIEWS_3D_TOP="$(abspath $(TOP))") $(if $(BOTTOM),VIEWS_3D_BOTTOM="$(abspath $(BOTTOM))") $(if $(ROOF),VIEWS_3D_ROOF="$(ROOF)") $(if $(LABEL),VIEWS_3D_LABEL="$(LABEL)") $(if $(OFFLINE),VIEWS_3D_OFFLINE=1) $(if $(MATERIALS),VIEWS_3D_MATERIALS="$(MATERIALS)") $(if $(READING),VIEWS_3D_READING="$(abspath $(READING))") $(if $(SINGLE),VIEWS_3D_SINGLE=1) $(if $(CAR_READING),VIEWS_3D_CAR_READING="$(abspath $(CAR_READING))") $(if $(NO_CAR),VIEWS_3D_NO_CAR=1) $(if $(PLANT_READING),VIEWS_3D_PLANT_READING="$(abspath $(PLANT_READING))") $(if $(NO_PLANT),VIEWS_3D_NO_PLANT=1) $(PNPM) --filter $(WEB) exec vitest run src/server/perception/__tests__/views-3d.test.ts
+
+house-regress: ## House zero-regression check, offline (no Meta call, free): bungalow / school replays vs house-pq-t72.json + mesh hashes [REF=resources/generated-view] — run after any change to shared perception code
+	$(need_ws)
+	./scripts/house-regress.sh $(REF)
+
+car-replay: ## Car offline replay (PQ-T76, no Meta call): rebuilds every c-*/ car from its saved drawings [OUT=replay REF=resources/refine-3d NAMES="sedan suv"] → <dir>/<OUT>/recipe.json, car.json, car-sheet.png
+	$(need_ws)
+	./scripts/car-replay.sh $(or $(OUT),replay) $(or $(REF),$(CURDIR)/resources/refine-3d) $(NAMES)
+
+tree-replay: ## Tree offline replay (PQ-T79, no Meta call): rebuilds every t-*/ tree from its saved front, like the live route [OUT=replay REF=resources/refine-3d NAMES="acacia palm" SIDES=1 = also its saved side drawings] → <dir>/<OUT>/recipe.json, report.txt, model.png
+	$(need_ws)
+	SIDES=$(SIDES) ./scripts/tree-replay.sh $(or $(OUT),replay) $(or $(REF),$(CURDIR)/resources/refine-3d) $(NAMES)
+
+plant-gallery: ## Plant results to look at (PQ-T82): photo, 2D drawing, 3D render side by side for every t-* plant of run OUT → resources/generated-view/plants/v<NNN>-…/ (index.md, all.jpg, <plant>/compare.jpg), listed in resources/generated-view/VERSIONS.md [OUT=replay NAMES="willow palm"]
+	./scripts/plant-gallery.sh $(or $(OUT),replay) $(NAMES)
+
+plants-live: ## Plant live bench (PQ-T82, Meta API cost, contributor model): PLANTS="willow:tree aloe:plant" each <name>.jpg of resources/refine-3d drawn by Muse Image, read by the plant team, built → t-<name>/ (view-front.png, plant-reading.json, live/plant-sheet.png) [PARALLEL=3 MODEL=…]
+	$(need_ws)
+	PARALLEL=$(or $(PARALLEL),3) $(if $(MODEL),MODEL=$(MODEL)) ./scripts/plant-live.sh $(PLANTS)
 
 shape-report: ## 3D shape report: scores + contact sheet → test-results/shape-report/ (/shape-loop)
 	$(need_ws)
@@ -357,5 +381,5 @@ clean: ## Remove build/test output (keeps node_modules)
 clean-all: clean ## Also remove node_modules
 	rm -rf node_modules apps/*/node_modules packages/*/node_modules
 
-.PHONY: code-dump blender-render help install env setup-claude browsers dev port dev-mock build start test test-engine test-web test-shape family-photos shape-capture shape-judge sam-probe part-probe views-3d eval-code shape-report shape-shots improve-shot test-watch coverage e2e \
+.PHONY: code-dump blender-render help install env setup-claude browsers dev port dev-stop dev-fresh dev-mock build start test test-engine test-web test-shape family-photos shape-capture shape-judge sam-probe part-probe views-3d tree-replay eval-code shape-report shape-shots improve-shot test-watch coverage e2e \
         typecheck lint bridge bridge-sim test-bridge format format-check format-changed git-hooks check ci shots mockups scenarios-publish analyze scene-audit scene-audit-gpu lighthouse claude env-export mcp status todo deploy-link deploy clean clean-all video-tts-setup video-voice video-sfx video-capture video-canvas video-build video-thumbnail hf-dataset hf-publish
