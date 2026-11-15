@@ -191,6 +191,22 @@ interface ModelRef {
 }
 
 /**
+ * Creates the XR controller, grip and hand spaces up front (canvas creation), so three.js tracks
+ * the inputs that connect when the session starts. Built later (on the rig, after `xrActive`),
+ * they were never connected: rays, grips and legends stayed hidden (VSIM-T1 regression).
+ */
+export function primeXrInputs(gl: THREE.WebGLRenderer): void {
+  const xr = gl?.xr as
+    (THREE.WebXRManager & { getControllerGrip?: (i: number) => THREE.Group }) | undefined;
+  if (!xr?.getController) return;
+  for (let i = 0; i < 2; i++) {
+    xr.getController(i);
+    xr.getControllerGrip?.(i);
+    xr.getHand?.(i);
+  }
+}
+
+/**
  * Sets up articulated hands and controller visuals on the XR camera rig.
  * Immediately initializes visuals without relying on missed event listener races.
  * Returns a handle with .update() for useFrame and .dispose() for session exit.

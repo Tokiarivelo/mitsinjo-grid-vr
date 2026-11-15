@@ -332,7 +332,41 @@
       "panMode": "Outil main : glissez pour déplacer la vue",
       "panModeOff": "Revenir à la rotation : glissez pour pivoter la vue",
       "focusAppliance": "Montrer {name} dans la vue 3D",
-      "hint3dPan": "Cliquez sur un bâtiment pour l’inspecter · Glissez pour déplacer la vue · Molette pour zoomer"
+      "hint3dPan": "Cliquez sur un bâtiment pour l’inspecter · Glissez pour déplacer la vue · Molette pour zoomer",
+      "vrSector": {
+        "simulated": "DONNÉES SIMULÉES · résultat du moteur",
+        "served": "Servi {served} sur {demand} demandés",
+        "coverage": "Couverture {pct}",
+        "capNone": "Sans limite : servi par la stratégie",
+        "capActive": "Limite {kw} dès {from} h",
+        "capCut": "Coupé : 0 kW dès {from} h",
+        "refusedClinic": "Refusé : la clinique n’est jamais coupée (constitution du village)",
+        "less": "− {step}",
+        "more": "+ {step}",
+        "cut": "Couper tout",
+        "restore": "Rétablir",
+        "enter": "Entrer",
+        "door": "Aller à la porte",
+        "exit": "Sortir",
+        "undo": "Annuler",
+        "close": "Fermer ✕"
+      },
+      "vrControls": {
+        "legendTitleLeft": "Manette gauche",
+        "legendTitleRight": "Manette droite",
+        "legendTitleHand": "Mains",
+        "legendTrigger": "Gâchette : sélectionner (étiquette, bâtiment, bouton)",
+        "legendStickWalk": "Stick : marcher (les murs vous arrêtent)",
+        "legendStickTurn": "Stick ←/→ : pivoter · ↑/↓ : un pas",
+        "legendX": "X : afficher / masquer les étiquettes",
+        "legendY": "Y : retour (fermer le panneau, sortir)",
+        "legendA": "A : afficher / masquer les étiquettes",
+        "legendB": "B : retour (fermer le panneau, sortir)",
+        "legendStickPress": "Clic sur un stick : masquer cette aide",
+        "legendPinch": "Pincer : sélectionner une étiquette, un bâtiment, un bouton",
+        "legendThumbTurn": "Pouce glissé ←/→ : pivoter · ↑/↓ : un pas",
+        "legendThumbTap": "Tap du pouce : afficher / masquer les étiquettes"
+      }
     },
     "strategyLab": {
       "title": "Labo Stratégies",

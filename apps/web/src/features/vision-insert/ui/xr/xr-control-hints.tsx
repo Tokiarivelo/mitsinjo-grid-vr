@@ -29,7 +29,7 @@ export const XrAimHint = memo(function XrAimHint({
   context: AimHintContext;
 }) {
   const t = useTranslations('features.visionInsert.vrControls');
-  const { camera } = useThree();
+  const camera = useThree((s) => s.camera);
   const meshes = useMemo(
     () =>
       [0, 1].map(() => {
@@ -154,17 +154,28 @@ const LEGEND_H = 0.15;
  * the controller itself): shown on entry, toggled by a stick click or the menu. One canvas per
  * input kind, attached to the grip space so it moves with the controller.
  */
-export const XrControlLegend = memo(function XrControlLegend({ visible }: { visible: boolean }) {
-  const t = useTranslations('features.visionInsert.vrControls');
-  const { gl, scene } = useThree();
+export const XrControlLegend = memo(function XrControlLegend({
+  visible,
+  namespace = 'features.visionInsert.vrControls',
+  keysFor = legendKeys,
+}: {
+  visible: boolean;
+  /** i18n namespace of the legend lines (/simulation has its own, VSIM-T1). */
+  namespace?: string;
+  /** Legend lines of one input, title first. */
+  keysFor?: (kind: 'controller' | 'hand', handedness: XRHandedness) => string[];
+}) {
+  const t = useTranslations(namespace);
+  const gl = useThree((s) => s.gl);
+  const scene = useThree((s) => s.scene);
   const visibleRef = useRef(visible);
   useEffect(() => {
     visibleRef.current = visible;
   }, [visible]);
-  const live = useRef(t);
+  const live = useRef({ t, keysFor });
   useEffect(() => {
-    live.current = t;
-  }, [t]);
+    live.current = { t, keysFor };
+  }, [t, keysFor]);
   const meshesRef = useRef<THREE.Mesh[]>([]);
   useFrame(() => {
     for (const m of meshesRef.current) m.visible = visibleRef.current && !!m.userData.ready;
@@ -194,13 +205,12 @@ export const XrControlLegend = memo(function XrControlLegend({ visible }: { visi
       mesh.rotation.x = -0.6;
       mesh.visible = false;
       grip.add(mesh);
-      scene.add(grip);
-      const onConnected = (e: unknown) => {
-        const source = (e as { data?: XRInputSource }).data;
-        if (!source) return;
+      // A grip already placed in a camera rig (/simulation) stays there; else it lives in the scene.
+      if (!grip.parent) scene.add(grip);
+      const draw = (source: XRInputSource) => {
         const kind = source.hand ? 'hand' : 'controller';
-        const tr = live.current;
-        const [title, ...rest] = legendKeys(kind, source.handedness);
+        const { t: tr, keysFor: keys } = live.current;
+        const [title, ...rest] = keys(kind, source.handedness);
         (mesh.material as THREE.MeshBasicMaterial).map = holoCardTexture({
           width: 1024,
           height: 768,
@@ -214,6 +224,13 @@ export const XrControlLegend = memo(function XrControlLegend({ visible }: { visi
         (mesh.material as THREE.MeshBasicMaterial).needsUpdate = true;
         mesh.userData.ready = true;
       };
+      const onConnected = (e: unknown) => {
+        const source = (e as { data?: XRInputSource }).data;
+        if (source) draw(source);
+      };
+      // Mounted after the session started: the inputs are already connected.
+      const connected = gl.xr.getSession?.()?.inputSources?.[i];
+      if (connected) draw(connected);
       (
         grip as unknown as THREE.EventDispatcher<{ connected: { data?: XRInputSource } }>
       ).addEventListener('connected', onConnected as never);

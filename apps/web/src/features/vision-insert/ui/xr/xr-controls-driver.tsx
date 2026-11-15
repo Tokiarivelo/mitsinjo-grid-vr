@@ -18,7 +18,7 @@ export const XrControlsDriver = memo(function XrControlsDriver({
 }: {
   onAction: (action: XrControlAction) => void;
 }) {
-  const { gl } = useThree();
+  const gl = useThree((s) => s.gl);
   const memory = useMemo(() => createControlMemory(), []);
   const handler = useRef(onAction);
   useEffect(() => {

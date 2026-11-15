@@ -1,0 +1,123 @@
+'use client';
+
+import { useEffect, useRef } from 'react';
+import * as THREE from 'three';
+import { useFrame, useThree } from '@react-three/fiber';
+import { useSimulationStore } from '@/stores';
+import { bodyBlocked, type WalkGrid } from '../utils/walk-grid';
+
+export interface SimXrProbeState {
+  panel: string | null;
+  inside: string | null;
+  labels: boolean;
+  help: boolean;
+  refused: string | null;
+}
+
+const _v = new THREE.Vector3();
+const _e = new THREE.Euler();
+const _q = new THREE.Quaternion();
+
+/**
+ * Dev only: lets `make vr-sim-probe` read the /simulation VR session (`window.__VR_SIM__`): head
+ * pose, what is shown, world position of a named object, the walk grid and the sector caps.
+ */
+export function SimXrDevProbe({
+  state,
+  walkGridRef,
+}: {
+  state: SimXrProbeState;
+  walkGridRef: { current: WalkGrid | null };
+}) {
+  const camera = useThree((s) => s.camera);
+  const scene = useThree((s) => s.scene);
+  const live = useRef(state);
+  const frames = useRef(0);
+  useFrame(() => {
+    frames.current += 1;
+  });
+  useEffect(() => {
+    live.current = state;
+  }, [state]);
+
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'production') return;
+    const w = window as Window & { __VR_SIM__?: unknown };
+    w.__VR_SIM__ = {
+      state: () => live.current,
+      /** Frames rendered so far: the probe waits in frames (software GL can take seconds per frame). */
+      frames: () => frames.current,
+      head: () => camera.getWorldPosition(_v).toArray(),
+      yaw: () => _e.setFromQuaternion(camera.getWorldQuaternion(_q), 'YXZ').y,
+      shown: (name: string) => {
+        let n = 0;
+        scene.traverseVisible((o) => {
+          if (o.name === name) n++;
+        });
+        return n;
+      },
+      worldPos: (name: string) => {
+        const o = scene.getObjectByName(name);
+        return o ? o.getWorldPosition(new THREE.Vector3()).toArray() : null;
+      },
+      /** A world point in XR-origin space (what IWER poses use): the camera rig's local space. */
+      toOrigin: (p: [number, number, number]) => {
+        const rig = camera.parent;
+        const v = new THREE.Vector3(...p);
+        return (rig ? rig.worldToLocal(v) : v).toArray();
+      },
+      /** Names of the meshes whose world box holds (x, y, z): what blocks a spot. */
+      near: (x: number, y: number, z: number) => {
+        const p = new THREE.Vector3(x, y, z);
+        const box = new THREE.Box3();
+        const m4 = new THREE.Matrix4();
+        const names: string[] = [];
+        const label = (o: THREE.Object3D) => {
+          const path: string[] = [];
+          for (let c: THREE.Object3D | null = o; c; c = c.parent) path.push(c.name || c.type);
+          return path.slice(0, 4).join(' < ');
+        };
+        scene.traverseVisible((o) => {
+          const m = o as THREE.Mesh;
+          if (!m.isMesh) return;
+          const inst = (m as THREE.InstancedMesh).isInstancedMesh
+            ? (m as THREE.InstancedMesh)
+            : null;
+          if (!m.geometry.boundingBox) m.geometry.computeBoundingBox();
+          for (let k = 0; k < (inst ? inst.count : 1); k++) {
+            if (inst) inst.getMatrixAt(k, m4);
+            else m4.identity();
+            box.copy(m.geometry.boundingBox!).applyMatrix4(m4).applyMatrix4(m.matrixWorld);
+            if (box.containsPoint(p)) {
+              names.push(
+                `${label(m)}${inst ? ` #${k}` : ''} h=${(box.max.y - box.min.y).toFixed(2)}`
+              );
+              break;
+            }
+          }
+        });
+        return names;
+      },
+      /** Debug: every object named `name`, with its own and its parents' visibility. */
+      inspect: (name: string) => {
+        const found: Array<Record<string, unknown>> = [];
+        scene.traverse((o) => {
+          if (o.name !== name) return;
+          const chain: string[] = [];
+          for (let c: THREE.Object3D | null = o; c; c = c.parent)
+            chain.push(`${c.name || c.type}:${c.visible ? 'v' : 'h'}`);
+          found.push({ ready: !!o.userData.ready, chain: chain.join(' < ') });
+        });
+        return found;
+      },
+      gridReady: () => !!walkGridRef.current,
+      blocked: (x: number, z: number) =>
+        walkGridRef.current ? bodyBlocked(walkGridRef.current, x, z) : null,
+      caps: () => useSimulationStore.getState().input.sectorCaps ?? [],
+    };
+    return () => {
+      delete w.__VR_SIM__;
+    };
+  }, [camera, scene, walkGridRef]);
+  return null;
+}
