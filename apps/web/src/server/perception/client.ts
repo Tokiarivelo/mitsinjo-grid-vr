@@ -15,6 +15,7 @@ import { MetaPerceptionBackend } from './meta';
 import { MockPerceptionBackend } from './mock';
 import type { StageSheet } from './shape-script-prompt';
 import type {
+  CodeResult,
   ShapeOpsResult,
   CriticResult,
   JudgeResult,
@@ -176,6 +177,15 @@ export class PerceptionClient {
       b.proposeShapeOps
         ? b.proposeShapeOps(imageUrl, question, signal, sheet, opts)
         : Promise.resolve({ model: b.name, usage: {}, result: { ops: [] } })
+    );
+  }
+
+  /** Route-B construction code (PQ-T45); a backend without it answers null (no route B). */
+  writeBuildCode(imageUrl: string, question: string, signal?: AbortSignal): Promise<CodeResult> {
+    return this.run('writeBuildCode', (b) =>
+      b.writeBuildCode
+        ? b.writeBuildCode(imageUrl, question, signal)
+        : Promise.resolve({ model: b.name, usage: {}, result: { code: null } })
     );
   }
 }

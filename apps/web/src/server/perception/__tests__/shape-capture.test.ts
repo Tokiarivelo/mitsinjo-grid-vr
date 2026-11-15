@@ -28,6 +28,7 @@ import {
   rescoreCapture,
   writeCapture,
   type ShapeCapture,
+  type ShapeCode,
   captureMasks,
 } from '../shape-capture';
 import { KIT_PROMPT_VERSION } from '../shape';
@@ -309,11 +310,13 @@ describe.skipIf(!LIVE)('make shape-capture', () => {
     });
 
     let kit: ObjectKit | undefined;
+    let code: ShapeCode | undefined;
     const started = Date.now();
     // Offline tooling, not the live path: an explicit budget (routes set none and wait).
     const shape = await runObjectShape(perception, size, dataUrl, target, {
       timeoutMs: 150_000,
       onKit: (k) => (kit = k),
+      onCode: (c) => (code = c),
     });
     const seconds = (Date.now() - started) / 1000;
     if (shape.mode !== 'recipe' || !shape.recipe || !kit)
@@ -339,6 +342,8 @@ describe.skipIf(!LIVE)('make shape-capture', () => {
       ...(shape.fit ? { fit: shape.fit } : {}),
       // PQ-T1: SAM part masks (crop fractions) so the replay scores parts too.
       ...(shape.partMasks?.length ? { partMasks: shape.partMasks } : {}),
+      // PQ-T45: the winning route-B code, replayed offline through the sandbox.
+      ...(code ? { code } : {}),
       seconds,
       crop: rect,
       cropTarget: {

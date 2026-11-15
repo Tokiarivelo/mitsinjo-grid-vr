@@ -65,6 +65,8 @@ import {
 import { formatElevationScore, scoreElevation, type ScoredElevation } from './elevation-score';
 import { ELEVATION_ARCHETYPES, measureFacadeElevations } from './facade-views';
 import { routeHouseFacade } from './house-facade-route';
+import { codeSeedFor, refineWithCode } from './shape-code-loop';
+import type { ShapeCode } from './shape-capture';
 import { photoTarget, tagPhotoParts } from './photo-stages';
 import { fetchPartMasks, partMasksTimeout } from './part-masks';
 import { fitPartParams, hasPartGroups, preparePartFit } from './part-fit';
@@ -186,6 +188,8 @@ export interface ObjectShapeOptions {
   withViews?: boolean;
   /** Observes Spark's kit answer when present (PR-0.4 capture; routes leave this unset). */
   onKit?: (kit: ObjectKit) => void;
+  /** Observes the winning route-B construction code, if any round beat the draft (capture). */
+  onCode?: (code: ShapeCode) => void;
   /** Observes the side elevation Muse Image drew from the facade (end-to-end eval only). */
   onSideView?: (png: Buffer) => void;
   /** Gets the measured front elevation and its score against the model (end-to-end eval only). */
@@ -233,7 +237,9 @@ function budgetEnd(from: number, budgetMs: number | null | undefined): number {
  */
 export async function runObjectShape(
   perception: Pick<PerceptionClient, 'describeShape' | 'describeParts'> &
-    Partial<Pick<PerceptionClient, 'segmentImage' | 'checkViews' | 'proposeShapeOps'>>,
+    Partial<
+      Pick<PerceptionClient, 'segmentImage' | 'checkViews' | 'proposeShapeOps' | 'writeBuildCode'>
+    >,
   photo: PhotoForRegions | null,
   fullImageUrl: string,
   target: ShapeTarget,
@@ -244,6 +250,7 @@ export async function runObjectShape(
     onTiming,
     withViews,
     onKit,
+    onCode,
     onSideView,
     onElevation,
     onStage,
@@ -729,6 +736,45 @@ export async function runObjectShape(
               },
             }
           );
+        }
+        // PQ-T45 route B (house first, §8bis): Wonder rewrites the staged draft as
+        // construction code, run in the sandbox and kept only on elevation gain.
+        if (perception.writeBuildCode) {
+          const writeBuildCode = perception.writeBuildCode.bind(perception);
+          const codeStart = Date.now();
+          const rings = front.roofRings ? { roofRings: front.roofRings } : {};
+          const yardstick = (r: ObjectRecipe) => scoreElevation(r, front, rings);
+          const sparkDepth = kit.proportions.d / kit.proportions.w;
+          const depth = side ? (depthRatio(front, side) ?? sparkDepth) : sparkDepth;
+          const draftScore = yardstick(recipe);
+          const looped = await refineWithCode({
+            label: target.label,
+            draft: recipe,
+            baseScore: draftScore.score / 100,
+            params: {
+              seed: codeSeedFor(target.id),
+              proportions: recipe.proportions,
+              colors: kit.colors,
+              measures: {
+                eave: eaveShare,
+                yaw: yaw0,
+                depth,
+                windows: front.windows.length,
+                doors: front.doors.length,
+              },
+            },
+            measuresText: `eave ${eaveShare.toFixed(2)} · yaw ${yaw0.toFixed(2)} · depth ${depth.toFixed(2)} · windows ${front.windows.length} · doors ${front.doors.length}`,
+            detailText: `iou ${draftScore.iou.toFixed(2)} · edge ${draftScore.edgeF1.toFixed(2)} · openings ${draftScore.openings.matched}/${draftScore.openings.target}`,
+            sheet: async () => imageUrl,
+            writeCode: (img, q, sig) => writeBuildCode(img, q, sig),
+            score: async (r) => yardstick(r).score / 100,
+            ...(signal ? { signal } : {}),
+          });
+          timed('code', codeStart);
+          if (looped.code) {
+            recipe = looped.recipe;
+            onCode?.({ text: looped.code, seed: looped.seed, promptVersion: looped.promptVersion });
+          }
         }
         recipe = drawn(recipe);
         // PG-T2: the model against the drawing it was built from (the staged loop's yardstick).

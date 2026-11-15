@@ -11,6 +11,7 @@ import { boxUnionCoverage } from './parse-sam';
 import { classifyLabel } from './detect';
 import type {
   ApplianceDetection,
+  CodeResult,
   CriticResult,
   JudgeResult,
   ViewsCheckResult,
@@ -279,5 +280,10 @@ export class MockPerceptionBackend implements PerceptionBackend {
   async proposeShapeOps(): Promise<PerceptionCall<ShapeOpsResult>> {
     // No stage patch without Meta: the loop keeps the seed.
     return { model: MOCK_PERCEPTION_MODEL, usage: {}, result: { ops: [] } };
+  }
+
+  async writeBuildCode(): Promise<PerceptionCall<CodeResult>> {
+    // No construction code without Meta: route B skips, the draft stays.
+    return { model: MOCK_PERCEPTION_MODEL, usage: {}, result: { code: null } };
   }
 }

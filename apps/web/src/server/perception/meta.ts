@@ -37,6 +37,13 @@ import {
   parseJudge,
 } from './rubric-judge';
 import {
+  CODE_JSON_SCHEMA,
+  CODE_PROMPT_VERSION,
+  codeModel,
+  codePrompt,
+  parseBuildCode,
+} from './shape-code';
+import {
   VIEWS_CHECK_JSON_SCHEMA,
   VIEWS_CHECK_CARDS_VERSION,
   VIEWS_CHECK_PROMPT_VERSION,
@@ -71,6 +78,7 @@ import { effortFor } from './effort';
 import { redactDataUrls, redactDataUrlsInText, type VisionCallLog } from './vision-log';
 import {
   ObservationSchema,
+  type CodeResult,
   type CriticResult,
   type JudgeResult,
   type ViewsCheckResult,
@@ -473,6 +481,29 @@ export class MetaPerceptionBackend implements PerceptionBackend {
       `[vision] 3D judge from ${model}: ${judgement ? JUDGE_CRITERIA.map((c) => `${c} ${judgement.grades[c]}`).join(', ') : 'unusable'}`
     );
     return { model, usage, result: { judgement } };
+  }
+
+  async writeBuildCode(
+    imageUrl: string,
+    question: string,
+    signal?: AbortSignal
+  ): Promise<PerceptionCall<CodeResult>> {
+    const { content, model, usage } = await this.visionJson(
+      codePrompt(),
+      question,
+      imageUrl,
+      CODE_JSON_SCHEMA,
+      signal,
+      false,
+      { kind: 'writeBuildCode', params: { promptVersion: CODE_PROMPT_VERSION } },
+      [],
+      codeModel()
+    );
+    const code = parseBuildCode(content);
+    console.info(
+      `[vision] 3D build code from ${model}: ${code ? `${Buffer.byteLength(code, 'utf8')} bytes` : 'unusable'}`
+    );
+    return { model, usage, result: { code } };
   }
 
   async checkViews(

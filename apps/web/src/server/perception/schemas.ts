@@ -138,6 +138,15 @@ export const ShapeOpsResultSchema = PerceptionSourceSchema.extend({
 });
 export type ShapeOpsResult = z.infer<typeof ShapeOpsResultSchema>;
 
+/**
+ * Sandboxed construction code, route B (PQ-T45): the `build()` body (§8bis), null when
+ * unusable or mock. Parsed in `parseBuildCode`; length-capped by `CODE_MAX_BYTES`.
+ */
+export const CodeResultSchema = PerceptionSourceSchema.extend({
+  code: z.string().nullable(),
+});
+export type CodeResult = z.infer<typeof CodeResultSchema>;
+
 export const DetectionResultSchema = PerceptionSourceSchema.extend({
   detections: z.array(ApplianceDetectionSchema),
 });

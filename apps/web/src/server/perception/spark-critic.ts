@@ -239,6 +239,9 @@ async function criticRound(
       // Free recipes have no template to patch: rebuilding from a patched kit would swap the
       // imagined parts for the crude placeholder ones.
       shape.recipe.source === 'free' ||
+      // Route-B recipes rebuild from code, not from the kit: a kit patch would replay the
+      // draft the code already beat (PQ-T45).
+      shape.recipe.source === 'code' ||
       // Facade / views recipes are measured on the drawn views, not on the photo: nothing to patch.
       shape.recipe.source === 'facade' ||
       shape.recipe.source === 'views' ||

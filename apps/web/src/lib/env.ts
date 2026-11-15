@@ -16,6 +16,8 @@ const envSchema = z.object({
   META_REFINE_MODEL: z.string().default('muse-wonder-1.0'),
   /** Rubric judge of the 3D models (PQ-T4, offline `make shape-judge`). */
   META_JUDGE_MODEL: z.string().default('muse-wonder-1.0'),
+  /** Writer of the sandboxed construction code, route B (PQ-T45, §8bis); unset = META_REFINE_MODEL. */
+  META_CODE_MODEL: z.string().optional(),
   META_SEGMENT_MODEL: z.string().default('sam-3.1'),
   /** Object families whose kit call carries the family card (PQ-T13), comma separated; empty = none. */
   SHAPE_KIT_CARD_FAMILIES: z
@@ -72,6 +74,7 @@ export const env = envSchema.parse({
   META_VISION_MODEL: process.env.META_VISION_MODEL || undefined,
   META_REFINE_MODEL: process.env.META_REFINE_MODEL || undefined,
   META_JUDGE_MODEL: process.env.META_JUDGE_MODEL || undefined,
+  META_CODE_MODEL: process.env.META_CODE_MODEL || undefined,
   META_SEGMENT_MODEL: process.env.META_SEGMENT_MODEL || undefined,
   SHAPE_KIT_CARD_FAMILIES: process.env.SHAPE_KIT_CARD_FAMILIES || undefined,
   SHAPE_SIDE_V2: process.env.SHAPE_SIDE_V2 || undefined,

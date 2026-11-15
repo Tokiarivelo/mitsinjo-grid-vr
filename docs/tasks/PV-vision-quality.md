@@ -506,9 +506,17 @@ One task = one commit, with its Vitest test, its `contracts.md` update and its m
       on side faces (17–60°, overlays, replace guessed sides; ends skip covered faces); wall tints
       per face (yawed + roofline, split measured, both renders) + object-seed UV offsets; per-face
       pattern groups deferred to PQ-T45; V266.
-- [ ] **PQ-T45 Sandboxed code, the main path for every object** (§12.2ter, §8bis). Build `api` +
+- [x] **PQ-T45 Sandboxed code, the main path for every object** (§12.2ter, §8bis). Build `api` +
       QuickJS WASM + limits + Wonder-written `build()`, template draft replaced on gain, patch loop,
       code stored with the capture. First case: the house.
+      _Built 2026-11-12:_ `code-sandbox.ts` (QuickJS `release-sync`, module cached, fresh runtime +
+      context per run, api = 9 primitives + material + seeded rng, limits; deadline stands in for
+      the op counter — one poll costs ≈ 1.3 ms round-trip, measured), `shape-code.ts` (writer prompt
+      v1, `META_CODE_MODEL`), `shape-code-loop.ts` (gain ≥ 0.005, 3 stalls, ≤ 5 rounds), facade-branch
+      wiring (elevation yardstick, `code` timing), capture `code`, `code` recipe source (no critic /
+      kit-replay); contracts + V267. Deferred: checkpoint resume of code rounds, block patches (full
+      body re-sent), richer writer sheet (photo crop only, v1). Live measure pending (no key): valid-code
+      rate, gain vs route A, tour duration (Vercel/OVHcloud).
 - [ ] **PQ-T46 `anatomy` in kit, cards and score** (§12.3, §5, E5, E9).
 - [ ] **PQ-T47 Image type, representation family, routing** (§12.4, §4), with motivated refusal and the
       operator question under 0.82.
