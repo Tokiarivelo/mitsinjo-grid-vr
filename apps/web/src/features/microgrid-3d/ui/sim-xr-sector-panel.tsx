@@ -62,7 +62,7 @@ const HoloButton = memo(function HoloButton({
       position={position}
       scale={hover && !button.disabled ? 1.06 : 1}
       renderOrder={31}
-      userData={{ onSelect: press }}
+      userData={{ onSelect: press, xrUi: true }}
       onClick={(e) => {
         e.stopPropagation();
         press();

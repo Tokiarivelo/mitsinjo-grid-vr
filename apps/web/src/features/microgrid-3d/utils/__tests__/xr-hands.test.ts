@@ -108,6 +108,43 @@ describe('setupXRHandsAndControllers', () => {
     handle.dispose();
   });
 
+  it('gives an xrUi panel button priority over a nearer scene object behind it', () => {
+    // Regression: the power panel opened behind a house facade; the ray hit the house first and
+    // reopened the panel instead of pressing the button (panel draws on top, depthTest off).
+    const rig = new THREE.Group();
+    const scene = new THREE.Scene();
+    const wall = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 0.2), new THREE.MeshBasicMaterial());
+    wall.position.set(0, 0, -1);
+    const onWall = vi.fn();
+    wall.userData.onSelect = onWall;
+    const button = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial());
+    button.position.set(0, 0, -2);
+    const onButton = vi.fn();
+    button.userData = { onSelect: onButton, xrUi: true };
+    scene.add(wall, button);
+    scene.updateMatrixWorld(true);
+
+    const controller0 = new THREE.Group();
+    const controller1 = new THREE.Group();
+    const mockGl = {
+      xr: {
+        getHand: vi.fn(() => new THREE.Group()),
+        getController: vi.fn((i: number) => (i === 0 ? controller0 : controller1)),
+        getControllerGrip: vi.fn(() => new THREE.Group()),
+      },
+    } as unknown as THREE.WebGLRenderer;
+    const handle = setupXRHandsAndControllers(rig, mockGl, scene);
+    controller0.updateMatrixWorld(true);
+
+    (controller0 as unknown as { dispatchEvent: (e: { type: string }) => void }).dispatchEvent({
+      type: 'select',
+    });
+
+    expect(onButton).toHaveBeenCalledTimes(1);
+    expect(onWall).not.toHaveBeenCalled();
+    handle.dispose();
+  });
+
   it('safely raycasts when LineSegments2 with worldUnits=false is in the scene without logging camera errors', () => {
     const rig = new THREE.Group();
     const scene = new THREE.Scene();

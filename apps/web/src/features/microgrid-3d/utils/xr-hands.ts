@@ -269,6 +269,13 @@ export function setupXRHandsAndControllers(
       } catch {
         intersects = [];
       }
+      // Panels drawn on top of everything (`userData.xrUi`) win over what the ray crosses first
+      // (a house wall between you and the panel when you stand against it).
+      const ui = intersects.find((h) => h.object.userData?.xrUi && h.object.userData?.onSelect);
+      if (ui) {
+        ui.object.userData.onSelect({ stopPropagation: () => {} });
+        return;
+      }
       for (const hit of intersects) {
         let curr: THREE.Object3D | null = hit.object;
         while (curr) {
