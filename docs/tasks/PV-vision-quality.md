@@ -868,20 +868,51 @@ scripts/object-viewer-shot.mjs …` (1440 + 390, dark + light).
       pancake stack), and a palm frond skirt (floating discs): a palm is a clean trunk + a lumpy crown.
       Cost: 4 `sdf` parts, 7.8–8.9 k triangles, ≈ 0.3 s to mesh (more than the 5 k recipe budget,
       like houses and cars). Bench (`resources/refine-3d/t79-bench.jpg`, `make tree-replay`):
-      table below. **Still wrong:** a palm is a round crown (no fronds, no fan), a fork or
+      table below. **Still wrong:** a fork or
       lean of the trunk is one column, white flowers and bare twigs count as « not leaf » inside the
       closed crown, the sheet's blue can still tint a teal frond, a sparse flat crown (baobab) is
       made of round clumps thicker than the real foliage layer. **Test:** `tree-fit.test.ts`,
-      `tree-crown.test.ts`, `tree-parts.test.ts`, `tree-recon.test.ts`, `object-kit.test.ts`,
+      `tree-crown.test.ts`, `tree-fronds.test.ts`, `tree-parts.test.ts`, `tree-recon.test.ts`, `object-kit.test.ts`,
       `facade-specialist.test.ts`; `make house-regress`; `make car-replay` (jeep-p, suv-p).
 
-  | tree (`t-…`)           | run (prompt) | IoU front · side | what is right                                 | what is still wrong                                    |
-  | ---------------------- | ------------ | ---------------- | --------------------------------------------- | ------------------------------------------------------ |
-  | `acacia` (twig web)    | live, old    | 0.52 · 0.50      | wide flat dome, thin brown trunk              | twig web = lumpy mass; drawing had roots (cut)         |
-  | `palm` (first drawing) | live, old    | 0.61 · 0.59      | dark trunk, crown on top, dead fronds ignored | crown is a ball, not a fan                             |
-  | `palm2` (new prompt)   | live, new    | 0.70 · 0.71      | clean drawing, teal crown, dark slender trunk | crown is a ball, not a fan                             |
-  | `pine`                 | live, old    | 0.68 · 0.71      | conifer-ish lumps, trunk meets the crown      | no cone tiers; one big top clump                       |
-  | `baobab`               | live, new    | 0.62 · 0.59      | fat brown trunk, flat sparse crown on top     | crown clumps rounder and thicker than the real foliage |
-  | `gardenia` (bush)      | live, new    | 0.82 · 0.85      | low wide mass, dark green, stems stub         | flowers and leaf detail lost (flat colour)             |
+  **Refined after review (same task, 2026-11-15, offline only, no new live run):**
+  the trunk is one `lathe` part (`trunkPart`: the radius measured at each of ≤ 10 heights, flat
+  foot on the ground, capped tip) instead of fused ellipsoids with a rounded underside; it rises to
+  the leaves above its own column (an umbrella crown arches over it: the baobab's trunk stopped
+  short of its crown) and `TRUNK_REACH` of them inside. Clumps are smaller and more numerous
+  (≤ 36, `CLUMP_MAX` 0.16, three crown tiers). `barkColour` is the 20–65 % luminance band of the
+  trunk's pixels (no ink line, no pale edge). A **palm has fronds** (`tree/tree-fronds.ts`): when
+  the label names one (`FROND_LABEL`: palm, coconut, ravenala, banana, raffia…) the crown is six
+  arched ribbons of flat lobes from the trunk's tip to the measured outline, two opposite fronds
+  per `sdf` part; the reading is still judged on the packed outline (`TREE_MIN_IOU`), the report
+  gives the fronds' own IoU (low by nature: fronds do not fill the outline). Cost now: 4–6 parts,
+  ≈ 7–8 k triangles. `scripts/tree-replay.sh` labels `palm2` as « palm tree ». The table below is
+  the refined state (`make tree-replay OUT=r13`).
+
+  | tree (`t-…`)           | parts | IoU front · side | what is right                                        | what is still wrong                                           |
+  | ---------------------- | ----- | ---------------- | ---------------------------------------------------- | ------------------------------------------------------------- |
+  | `acacia` (twig web)    | 5     | 0.57 · 0.53      | wide dome, short brown trunk with a flat foot        | twig web = one lumpy mass, thicker than the real canopy       |
+  | `palm` (first drawing) | 4     | 0.39 · 0.37      | dark trunk, flared foot, six fronds                  | fronds are thick paddles, not fans; dead fronds ignored       |
+  | `palm2` (new prompt)   | 4     | 0.41 · 0.43      | slender dark trunk, teal fronds up, out and drooping | six paddles for a dense fan; tips look hooked                 |
+  | `pine`                 | 5     | 0.71 · 0.69      | tall lumpy crown, trunk meets it                     | no cone tiers                                                 |
+  | `baobab`               | 6     | 0.57 · 0.57      | fat straight trunk into a flat umbrella crown        | crown is a ring of clumps: the trunk tip shows from above     |
+  | `gardenia` (bush)      | 5     | 0.74 · 0.80      | low wide dark-green mass on a stub of stems          | flowers and leaf detail lost; IoU under the first pass (0.83) |
 
   Not run: `oak`, `eucalyptus`, `mango`, `banana` (budget of 6 live runs used: 3 step-0 + 3 re-drawn).
+
+- [x] **PQ-T80 Wing mirrors built whole, as their own piece.** User 2026-11-15 (a Mini Cooper):
+      the 3D car does not render a mirror completely. Cause, seen on the bench replays: the front's
+      section only **capped** the mirrors' rows at the body's width, so a stub of each mirror stayed
+      in the section and was lofted along the whole car (a ledge at the belt line, « ears » on the
+      front and the back views, the hatchback's shoulder set at the mirror's height); no mirror
+      geometry existed, the drawn mirror was cut at the flank. Fix: `car/car-mirrors.ts` `fitMirrors`
+      measures the mirrors on the front's outline (top-hat per side: a short bump is a mirror, a cab
+      wide over a long height is body), `fitSection` reads the body across their rows,
+      `mirrorStation` places them at the front corner of the side glass / where the cabin has risen;
+      `CarPlan.mirrors`; `carMesh` builds one closed piece per side (slot `mirror`, wearing the
+      front drawing), a layer each in the 3D Studio (« Wing mirrors 1 / 2 »). Also fixed: with a
+      fitted body the box takes the front drawing's full width (the body was narrowed twice, ≈ 8 %).
+      Bench (`make car-replay OUT=r6`, eleven cars rebuild): mirrors on the hatchback, both SUVs,
+      the jeep, the pick-ups, the minibus and the second sedan; the beetle's stalk mirrors barely
+      clear its wings (a small piece); the 1950s cabriolet and the first sedan show none on their
+      front drawing (none built). No Mini drawing in the bench: not replayed on the user's car.

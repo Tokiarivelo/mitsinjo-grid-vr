@@ -1,40 +1,44 @@
 # HANDOFF — read first, overwrite at end of session (≤40 lines)
 
-**Updated:** 2026-11-14 · **By:** Claude Code · **Branch:** `feat/pq-t76-cars`
-(from `feat/pq-t74-house-quality`; PQ-T67–T78 not on `main` yet; rebase before the PR)
+**Updated:** 2026-11-15 · **By:** Claude Code · **Branch:** `feat/pq-t76-cars`
+(from `feat/pq-t74-house-quality`; PQ-T67–T80 not on `main` yet; rebase before the PR)
 
-## NEXT: car bench on the photos not tried yet (estate, coupe, sport, bus, limo, lorry, motorhome, tractor), then the phase PR
+## NEXT: the phase PR (PQ-T67 → T80), or first the cars / trees not tried yet
 
-Brief: `docs/tasks/PV-car-generation.md` (§ 4 rules, § 6 findings, (g) = bench table). Task: `PV-vision-quality.md` PQ-T78.
+Cars left: estate, coupe, sport, bus, limo, lorry, motorhome, tractor. Trees left: oak, eucalyptus, mango, banana.
 
 ## Rules set by the user (2026-11-14)
 
 - Live Meta calls cost money: house non-regression is **offline only**, `make house-regress` (~30 s, free).
-- Car code lives in `server/perception/car/` + `lib/car-*.ts`; never edit `house/` or `lib/house-*.ts`;
-  shared `recon/` changes gated on `vehicle`. Cars are built by their own specialist team.
-- Go live once per car to get a reading, then replay it: `make car-replay OUT=…` (offline, free).
+- Car code lives in `server/perception/car/` + `lib/car-*.ts`, tree code in `server/perception/tree/`; never
+  edit `house/` or `lib/house-*.ts`; shared `recon/` changes gated on the archetype.
+- Go live once per object to get its drawings, then replay: `make car-replay` / `make tree-replay` (free).
 
-## Done this session (PQ-T78)
+## Done this session
 
-- Cars were **built backwards** when drawn profile first (profile fed as `right`): fixed in `recon/route.ts`
-  (profile = `left` elevation, its mirror = `right`). This was the jeep's bonnet mismatch.
-- `lib/car-mesh.ts`: bumpers read the front / back drawing (no floor streaks), glass cut along the read
-  windows (`cutTriangle`), raked windscreens glazed (`cabinClimbs`), deck → cabin blended, roof = top of the
-  ring only, ≈ 40 ms. `car/car-top.ts` turns a plan drawn across the sheet. Tyre colour = darkest wheel.
-- Studio layers: one piece per window / tyre / wheel on a car (`glass-1`…, `splitPieces`); masks baked as a
-  real cut (`maskGeometry`) in the village and Blender.
-- Check tool: `car-sheet.png` (the car mesh, eight cameras) in every `make views-3d` / `make car-replay`.
-- Live: team on the jeep (8 windows); truck, hatchback, minibus, cabrio, beetle drawn from their photo.
-  Eleven cars replay offline (`make car-replay OUT=r5`); sheet `resources/refine-3d/t78-bench.jpg`.
+- **PQ-T78 cars:** built the right way round (profile = `left` elevation), glass cut along the read windows,
+  bumpers from the front / back drawing, top view turned when drawn across, ≈ 40 ms mesh. Studio: one layer
+  per window / tyre / wheel, masks baked as a real cut. Eleven cars replay (`make car-replay OUT=r5`).
+- **PQ-T80 wing mirrors:** `car/car-mirrors.ts` measures them on the front's outline, the section reads the
+  body across their rows (no more ledge along the car), `carMesh` builds one piece per side (slot `mirror`,
+  a Studio layer each). The car box takes the front's full width. `make car-replay OUT=r6`.
+- **PQ-T79 trees** (Sonnet subagent, then refined): `tree` / `bush` no longer carved into boxes.
+  `recon/route.ts` → `tree/tree-recon.ts` (`fitTree` → `packCrown` → `treeRecipe`), generic path when no
+  crown is found or the outline IoU < 0.4. Trunk = one `lathe` (measured radius per height, flat foot),
+  crown = ≤ 36 clumps in 3 `sdf` tiers; a palm label (`FROND_LABEL`) gets six arched fronds
+  (`tree/tree-fronds.ts`). Drawing prompts carry `PLANT_CLEAN`; species names count as trees.
+- Six trees replay offline: `make tree-replay OUT=r13`; sheet `resources/refine-3d/t79-bench.jpg`.
 
 ## Decisions
 
-- Wheels and body are measured on pixels; the team only adds windows, kind and where to sample colours.
-- `AtlasView` stays 5 views (house code untouched); the underside is `AtlasTile` + `faces.underside`.
-- A studio piece = a geometry group; on a car, glass / tyre / rim groups split by connected part.
+- Wheels, body, trunk and crown are measured on pixels; models only draw and name (windows, kind).
+- A palm is told by its label, its size by the drawings; fronds are judged on the packed outline.
 
 ## Open
 
-- Body = extruded profile: spoilers, bull bars, open cabins stay solid. `sedan-p` has no team reading.
-- The profile's direction trusts the prompt (front to the right); no pixel check.
-- Houses: V335–V343 not played; phase PR PQ-T67 → T78 not opened; door snap + views check pending.
+- Trees: palm fronds are six thick paddles (IoU 0.38–0.43); a fork or lean is one column; the baobab's
+  trunk tip shows from above; leafless drawings fall back to boxes; ≈ 7–8 k triangles (budget 5 k);
+  village import and Blender export of a generated tree not run; V373–V381 not played.
+- Cars: body = extruded profile (spoilers, bull bars, open cabins solid); profile direction trusts the prompt;
+  mirrors need a front drawing that shows them, and stalk mirrors inside the wings' width stay small; V382–V385 not played.
+- Houses: V335–V343 not played; phase PR not opened; door snap + views check pending.
