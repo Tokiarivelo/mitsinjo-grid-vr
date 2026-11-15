@@ -10,6 +10,7 @@ import {
   kitToRecipe,
   ObjectKitSchema,
   TAIL_LIGHT_COLOR,
+  WHEEL_COLOR,
   type ObjectKit,
 } from '../object-kit';
 import { fitRecipe, ObjectRecipeSchema, recipeIssue } from '../object-shape';
@@ -143,6 +144,43 @@ describe('vehicle rears (PR-2.11)', () => {
   });
 });
 
+describe('vehicle glazing (PQ-T43)', () => {
+  const wheels = (subtype?: string) =>
+    kitToRecipe({ ...kit('vehicle'), ...(subtype ? { subtype } : {}) }).parts.filter(
+      (p) => p.shape === 'cylinder' && p.axis === 'z' && p.at[1]! < 0
+    );
+
+  it('no wheel uses the accent role: all are dark rubber, accent means glass', () => {
+    for (const sub of [undefined, 'sedan', 'van', 'pickup', 'motorbike']) {
+      const ws = wheels(sub);
+      expect(ws.length).toBeGreaterThan(0);
+      for (const w of ws) expect(w).toMatchObject({ color: WHEEL_COLOR, material: 'rubber' });
+    }
+  });
+
+  it('classic car: glass cabin band, windscreen and rear slope, still 12 parts', () => {
+    const r = kitToRecipe({ ...kit('vehicle'), subtype: 'sedan' });
+    const cabin = r.parts.find((p) => p.shape === 'box' && !p.front && p.size[2]! > 0.5)!;
+    expect(cabin.color).toBe('#ffffff');
+    const slopes = r.parts.filter((p) => p.shape === 'prism');
+    expect(slopes).toHaveLength(2);
+    for (const s of slopes) expect(s.color).toBe('#ffffff');
+    expect(r.parts).toHaveLength(12);
+  });
+
+  it('van: trim bumper, glass windshield; motorbike: flyscreen', () => {
+    const van = kitToRecipe({ ...kit('vehicle'), subtype: 'van' });
+    expect(van.parts.find((p) => p.shape === 'box' && p.size[0] === 0.04)).toMatchObject({
+      color: '#6e6a62',
+    });
+    expect(van.parts.find((p) => p.shape === 'prism')!.color).toBe('#ffffff');
+    const bike = kitToRecipe({ ...kit('vehicle'), subtype: 'motorbike' });
+    const screen = bike.parts.find((p) => p.shape === 'box' && p.size[0] === 0.02)!;
+    expect(screen).toMatchObject({ color: '#ffffff' });
+    expect(bike.parts).toHaveLength(8);
+  });
+});
+
 describe('decalWidth (PF-T1)', () => {
   it('never lets 8 windows overlap (regression: grey bar on the cottage row)', () => {
     const w = decalWidth(8, 0.76, 0.11);
@@ -235,6 +273,84 @@ describe('row of houses (PF-T4)', () => {
 
   it('units 1 (or absent) keeps the single-house facade', () => {
     expect(kitToRecipe(kit('house', { units: 1 }))).toEqual(kitToRecipe(kit('house')));
+  });
+});
+
+describe('four-face fallback + overhang (PQ-T43)', () => {
+  const roof1 = { eave: 0.5, gables: [{ x0: 0, x1: 1, peak: 0.5, top: 0.1 }] };
+
+  it('single gable: wall-color gable ends and draft overhang; full mirror waits (starved)', () => {
+    const r = kitToRecipe({ ...kit('house', { windows: 3, doors: 1 }), roof: roof1 });
+    const prisms = r.parts.filter((p) => p.shape === 'prism');
+    expect(prisms).toHaveLength(3);
+    const ends = prisms.filter((p) => p.color === '#c9a36a');
+    expect(ends).toHaveLength(2);
+    for (const e of ends) {
+      expect(e).toMatchObject({ kind: 'roof', overhang: 0 });
+      expect(e.size[2]).toBeCloseTo(0.025, 9);
+      expect(Math.abs(e.at[2]!)).toBeCloseTo(0.4875, 9);
+    }
+    const mid = prisms.find((p) => p.color === '#6e6a62')!;
+    expect(mid).toMatchObject({ kind: 'roof', overhang: 0.03 });
+    expect(mid.size[2]).toBeCloseTo(0.88, 9);
+    // 4 + 4 + 4 does not fit room 8: front-only, hidden-sides owns the other faces.
+    expect(r.parts).toHaveLength(8);
+    expect(r.parts.filter((p) => p.at[2]! < -0.5)).toHaveLength(0);
+  });
+
+  it('eaves draft clamps to the roofing bound; thatch defaults deepest', () => {
+    const overhangOf = (k: ObjectKit) =>
+      kitToRecipe(k).parts.find((p) => p.shape === 'prism' && p.color === '#6e6a62')!.overhang;
+    expect(
+      overhangOf({
+        ...kit('house', { windows: 2, eaves: 0.1 }),
+        materials: { secondary: 'tile' },
+        roof: roof1,
+      })
+    ).toBe(0.04);
+    expect(
+      overhangOf({
+        ...kit('house', { windows: 2 }),
+        materials: { secondary: 'thatch' },
+        roof: roof1,
+      })
+    ).toBe(0.07);
+  });
+
+  it('rear mirror and sides ship whole with inferred status when they fit', () => {
+    const r = kitToRecipe({ ...kit('house', { windows: 2, doors: 0 }), roof: roof1 });
+    expect(r.parts).toHaveLength(12);
+    const front = r.parts.filter((p) => p.at[2]! > 0.5);
+    const rear = r.parts.filter((p) => p.at[2]! < -0.5);
+    expect(front).toHaveLength(2);
+    expect(rear).toHaveLength(2);
+    for (const p of front) expect(p.status).toBeUndefined();
+    for (const p of rear) expect(p.status).toBe('inferred');
+    expect(rear.map((p) => p.at[0]).sort()).toEqual(front.map((p) => p.at[0]).sort());
+    const sides = r.parts.filter((p) => Math.abs(p.at[0]!) > 0.5);
+    expect(sides).toHaveLength(4);
+    expect(sides.filter((p) => p.at[0]! > 0)).toHaveLength(2);
+    for (const p of sides) {
+      expect(p.status).toBe('inferred');
+      expect(p.at[1]).toBe(front[0]!.at[1]);
+    }
+  });
+
+  it('rows stay front-only with roof-colored gables; building mirrors when room allows', () => {
+    const row = kitToRecipe(kit('house', { units: 2, windows: 4 }));
+    const prisms = row.parts.filter((p) => p.shape === 'prism');
+    expect(prisms).toHaveLength(2);
+    for (const p of prisms) {
+      expect(p.color).toBe('#6e6a62');
+      expect(p.size[2]).toBe(1);
+    }
+    expect(row.parts.filter((p) => p.at[2]! < -0.5)).toHaveLength(0);
+    const hall = kitToRecipe(kit('building', { floors: 1, windows: 1 }));
+    expect(hall.parts).toHaveLength(6);
+    const rear = hall.parts.filter((p) => p.at[2]! < -0.5);
+    expect(rear).toHaveLength(1);
+    expect(rear[0]!.status).toBe('inferred');
+    expect(hall.parts.filter((p) => Math.abs(p.at[0]!) > 0.5)).toHaveLength(2);
   });
 });
 

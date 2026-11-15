@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { silhouetteRings, type ObjectRecipe } from '@/lib/object-shape';
+import { silhouetteRings, type ObjectRecipe, type RecipePart } from '@/lib/object-shape';
 import {
   EDGE_BEVEL,
   edgeBevel,
@@ -241,6 +241,44 @@ describe('unitPrism (PF-T3)', () => {
     expect(b.max.z - b.min.z).toBeCloseTo(0.6 + 2 * ROOF_OVERHANG, 6);
     expect(b.max.y).toBeCloseTo(0.4, 6);
     expect(b.max.y - b.min.y).toBeCloseTo(0.4, 6);
+  });
+});
+
+describe('roof overhang option (PQ-T43)', () => {
+  const roof = (shape: 'prism' | 'hip', over?: Partial<RecipePart>): ObjectRecipe => ({
+    proportions: { w: 1, h: 0.8, d: 0.6 },
+    parts: [
+      {
+        shape,
+        at: [0, 0.25, 0],
+        size: [1, 0.5, 1],
+        color: '#6e6a62',
+        kind: 'roof',
+        ...(over ?? {}),
+      },
+    ],
+  });
+
+  it('explicit overhang grows prisms and hips past the legacy eave', () => {
+    for (const shape of ['prism', 'hip'] as const) {
+      const b = bounds(recipeMesh(roof(shape, { overhang: 0.05 })));
+      expect(b.max.x - b.min.x).toBeCloseTo(1 + 0.1, 6);
+      expect(b.max.z - b.min.z).toBeCloseTo(0.6 + 0.1, 6);
+    }
+  });
+
+  it('legacy hips stay flush while legacy prisms keep the 0.03 eave', () => {
+    const hip = bounds(recipeMesh(roof('hip')));
+    expect(hip.max.x - hip.min.x).toBeCloseTo(1, 6);
+    expect(hip.max.z - hip.min.z).toBeCloseTo(0.6, 6);
+    const prism = bounds(recipeMesh(roof('prism')));
+    expect(prism.max.x - prism.min.x).toBeCloseTo(1 + 2 * ROOF_OVERHANG, 6);
+  });
+
+  it('overhang 0 keeps gable ends flush with the walls', () => {
+    const b = bounds(recipeMesh(roof('prism', { overhang: 0 })));
+    expect(b.max.x - b.min.x).toBeCloseTo(1, 6);
+    expect(b.max.z - b.min.z).toBeCloseTo(0.6, 6);
   });
 });
 

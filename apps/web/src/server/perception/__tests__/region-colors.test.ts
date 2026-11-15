@@ -26,7 +26,8 @@ const vehicleKit = (): ObjectKit => ({
   archetype: 'vehicle',
   proportions: { w: 1, h: 0.4, d: 0.45 },
   colors: { main: '#a33327', secondary: '#cfd6dd', accent: '#1c1c1e' },
-  materials: { main: 'metal', secondary: 'glass', accent: 'rubber' },
+  // PQ-T43: accent = glass, secondary = trim metal (was glass/rubber).
+  materials: { main: 'metal', secondary: 'metal', accent: 'glass' },
 });
 
 /** Photo 200×100, box 160×80 px at (20, 10): the crop is the whole photo. */
@@ -229,7 +230,7 @@ describe('withRegionColors (PR-2.8)', () => {
       geom
     );
     expect(out.parts.find((p) => p.front)!.color).toBe('#ff0000');
-    expect(out.parts.find((p) => p.shape === 'box' && p.at[1] === 0.32)!.color).toBe('#cfd6dd');
+    expect(out.parts.find((p) => p.shape === 'box' && p.at[1] === 0.32)!.color).toBe('#1c1c1e');
     // 32 px measured but below trust: same reference.
     const thin = withRegionColors(
       'vehicle',

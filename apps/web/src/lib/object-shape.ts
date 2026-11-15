@@ -60,6 +60,8 @@ export const MAX_DOOR_PANELS = 4;
 export const MAX_DOOR_GLAZED = 0.8;
 /** Largest eave roll of a roof, share of its height (PG-T10). */
 export const MAX_ROOF_BULGE = 0.3;
+/** Largest roof overhang the schema accepts, object units each side (PQ-T43; bounds are tighter). */
+export const MAX_ROOF_OVERHANG = 0.12;
 /**
  * What a part is on the object (PV-G): set by the builders that know it (facade house), read by the
  * elevation score and the 3D view (opening look). Absent = guessed from shape and material.
@@ -140,6 +142,25 @@ export const RECIPE_MATERIALS = [
 ] as const;
 export const RecipeMaterialSchema = z.enum(RECIPE_MATERIALS);
 export type RecipeMaterial = z.infer<typeof RecipeMaterialSchema>;
+/**
+ * Roof overhang bound per roofing material, object units each side (PQ-T43, §7.1): it limits a
+ * chosen (draft or §8bis-code) value, never a measurement — measured overhangs stay baked in the
+ * part size (2D path). Builders clamp drafts with `boundForRoof`; the 3D view applies the option
+ * raw. Thatched tropical eaves run deepest, flat slabs shallowest.
+ */
+export const ROOF_OVERHANG_BOUNDS: Partial<Record<RecipeMaterial, number>> = {
+  thatch: 0.07,
+  tile: 0.04,
+  slate: 0.04,
+  metal: 0.03,
+  concrete: 0.02,
+};
+/** Default bound: the eave every prism had before PQ-T43 (legacy `ROOF_OVERHANG`). */
+export const DEFAULT_ROOF_OVERHANG = 0.03;
+/** Overhang bound for a roof part's material (PQ-T43). */
+export function boundForRoof(material: RecipeMaterial | undefined): number {
+  return (material && ROOF_OVERHANG_BOUNDS[material]) ?? DEFAULT_ROOF_OVERHANG;
+}
 
 /** Largest measured yaw (60°). */
 export const MAX_YAW = Math.PI / 3;
@@ -225,6 +246,12 @@ export const RecipePartSchema = z
     lintel: z.boolean().optional(),
     cap: z.boolean().optional(),
     bulge: z.number().min(0).max(MAX_ROOF_BULGE).optional(),
+    /**
+     * Roof only (PQ-T43): chosen overhang, object units each side, added by the 3D view to prisms
+     * and hips (0 = flush, e.g. gable ends). Builders clamp drafts to `boundForRoof`; absent on
+     * older shapes = the legacy eave (0.03 on prisms, 0 on hips, which had none).
+     */
+    overhang: z.number().min(0).max(MAX_ROOF_OVERHANG).optional(),
     rim: z.boolean().optional(),
     /** Detail kinds this part carries (PQ-T20); `rim` here equals `rim: true` on a wheel. */
     details: z.array(DetailKindSchema).max(DETAIL_KINDS.length).optional(),

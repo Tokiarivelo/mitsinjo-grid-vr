@@ -1,6 +1,12 @@
 import type { ApplianceCategory } from '@mitsinjo/engine';
 import { z } from 'zod';
-import { RecipeMaterialSchema, type ObjectRecipe, type RecipePart } from './object-shape';
+import {
+  boundForRoof,
+  MAX_ROOF_OVERHANG,
+  RecipeMaterialSchema,
+  type ObjectRecipe,
+  type RecipePart,
+} from './object-shape';
 import type { SceneryType } from './vision';
 
 /**
@@ -140,6 +146,11 @@ export const ObjectKitSchema = z.object({
       panes: z.tuple([count(6).min(1), count(6).min(1)]).optional(),
       /** Houses side by side in a row (PF-T4): measured on the photo, Spark's count only as a fallback. */
       units: count(8).optional(),
+      /**
+       * Roof overhang draft, object units each side (PQ-T43, §7.1): a starting point only — the
+       * measured roofline or the §8bis code choice wins, clamped to the roofing bound.
+       */
+      eaves: z.number().min(0).max(MAX_ROOF_OVERHANG).optional(),
     })
     .optional(),
   /** Measured roofline (houses): replaces the stepped roof with one prism per gable. */
@@ -311,7 +322,12 @@ const part = (
   at: Vec,
   size: Vec,
   color: string,
-  extra: Partial<Pick<RecipePart, 'axis' | 'front' | 'apex' | 'profile'>> = {}
+  extra: Partial<
+    Pick<
+      RecipePart,
+      'axis' | 'front' | 'apex' | 'profile' | 'material' | 'status' | 'kind' | 'overhang'
+    >
+  > = {}
 ): RecipePart => ({ shape, at, size, color, ...extra });
 
 /** `n` centres spread evenly over [-span/2, span/2]. */
@@ -329,9 +345,13 @@ const MAX_PARTS = 12;
 const unitsOf = (d: ObjectKit['details']) => Math.max(1, Math.min(8, d?.units ?? 1));
 
 /**
- * Front windows over the wall band [`bottom`, `top`] (y), doors standing on the ground. One house: the
- * kit counts spread over the front. A row of `units` (PF-T4): each house gets its own door and windows,
- * fewer when the 12-part budget (`room`) is short (windows first dropped, then doors).
+ * Openings over the wall band [`bottom`, `top`] (y): front windows and doors standing on the ground,
+ * then the rear mirror (same bays, windows before doors, status inferred) and two side windows per
+ * face. One house: the kit counts spread over the front. A row of `units` (PF-T4): each house gets
+ * its own door and windows, fewer when the 12-part budget (`room`) is short (windows first dropped,
+ * then doors). The rear/side mirror ships whole or not at all: a truncated rear is lopsided
+ * and would starve the deduced end windows downstream, so when it does not fit the template stays
+ * front-only and hidden-sides owns the other faces (rows always wait — their fronts fill the room).
  */
 function facade(
   c: ObjectKit['colors'],
@@ -348,26 +368,48 @@ function facade(
   const window = (x: number, w: number) => part('box', [x, winY, 0.505], [w, winH, 0.02], c.accent);
   const door = (x: number, w: number) =>
     part('box', [x, bottom + doorH / 2, 0.505], [w, doorH, 0.02], c.secondary);
+  let front: RecipePart[];
   if (units === 1) {
     const windows = Math.min(8, d?.windows ?? 3);
     const doors = Math.min(3, d?.doors ?? 1);
-    return [
+    front = [
       ...spread(windows, 0.76).map((x) => window(x, decalWidth(windows, 0.76, 0.11))),
       ...spread(doors, 0.5).map((x) => door(x, decalWidth(doors, 0.5, 0.1))),
     ];
+  } else {
+    const per = Math.floor(Math.max(0, room) / units);
+    const doors = per >= 2 || (per === 1 && !d?.windows) ? 1 : 0;
+    const wanted = Math.max(1, Math.ceil((d?.windows ?? 2 * units) / units));
+    const windows = Math.max(0, Math.min(wanted, per - doors));
+    const pitch = 1 / units;
+    // With a door: door on the left quarter of the house, windows over the right half.
+    const span = (doors ? 0.44 : 0.76) * pitch;
+    const winW = decalWidth(windows, span, Math.min(0.11, 0.16 * pitch));
+    front = spread(units, 1 - pitch).flatMap((cx) => [
+      ...spread(windows, span).map((x) => window(cx + x + (doors ? 0.15 * pitch : 0), winW)),
+      ...(doors ? [door(cx - 0.3 * pitch, Math.min(0.1, 0.16 * pitch))] : []),
+    ]);
   }
-  const per = Math.floor(Math.max(0, room) / units);
-  const doors = per >= 2 || (per === 1 && !d?.windows) ? 1 : 0;
-  const wanted = Math.max(1, Math.ceil((d?.windows ?? 2 * units) / units));
-  const windows = Math.max(0, Math.min(wanted, per - doors));
-  const pitch = 1 / units;
-  // With a door: door on the left quarter of the house, windows over the right half.
-  const span = (doors ? 0.44 : 0.76) * pitch;
-  const winW = decalWidth(windows, span, Math.min(0.11, 0.16 * pitch));
-  return spread(units, 1 - pitch).flatMap((cx) => [
-    ...spread(windows, span).map((x) => window(cx + x + (doors ? 0.15 * pitch : 0), winW)),
-    ...(doors ? [door(cx - 0.3 * pitch, Math.min(0.1, 0.16 * pitch))] : []),
-  ]);
+  // Rear by mirror of the front (PQ-T43, §7.4 remedy 2): same bays, windows before doors so a
+  // short budget drops rear doors first. Sides: two windows per face on the front windows' line,
+  // spread over the depth, interleaved so truncation keeps symmetric pairs.
+  const mirror = (p: RecipePart): RecipePart => ({
+    ...p,
+    at: [p.at[0], p.at[1], -p.at[2]],
+    status: 'inferred',
+  });
+  const rear = [
+    ...front.filter((p) => p.color === c.accent).map(mirror),
+    ...front.filter((p) => p.color !== c.accent).map(mirror),
+  ];
+  const sideW = front.find((p) => p.color === c.accent)?.size[0] ?? 0.11;
+  const sides = spread(2, 0.5).flatMap((z) =>
+    ([1, -1] as const).map((s) =>
+      part('box', [s * 0.51, winY, z], [0.02, winH, sideW], c.accent, { status: 'inferred' })
+    )
+  );
+  if (front.length + rear.length + sides.length > room) return front;
+  return [...front, ...rear, ...sides];
 }
 
 /** Row of `units` houses without a measured roof (PF-T4): one even gable per house, walls 60 % high. */
@@ -386,31 +428,60 @@ export function uniformRoof(units: number): KitRoof | null {
 }
 
 /** House without a measured roof: walls + three slabs that read as a pitched roof. */
-const steppedHouse: Template = ({ colors: c, details: d }) => [
-  part('box', [0, -0.2, 0], [1, 0.6, 1], c.main, { front: true }),
-  part('box', [0, 0.16, 0], [1, 0.12, 1], c.secondary),
-  part('box', [0, 0.28, 0], [0.72, 0.12, 0.74], c.secondary),
-  part('box', [0, 0.4, 0], [0.42, 0.12, 0.48], c.secondary),
-  ...(d?.chimney ? [part('box', [0.3, 0.38, 0], [0.08, 0.24, 0.1], c.main)] : []),
-  ...facade(c, d, -0.5, 0.1),
-];
+const steppedHouse: Template = ({ colors: c, details: d }) => {
+  const structure = [
+    part('box', [0, -0.2, 0], [1, 0.6, 1], c.main, { front: true }),
+    part('box', [0, 0.16, 0], [1, 0.12, 1], c.secondary),
+    part('box', [0, 0.28, 0], [0.72, 0.12, 0.74], c.secondary),
+    part('box', [0, 0.4, 0], [0.42, 0.12, 0.48], c.secondary),
+    ...(d?.chimney ? [part('box', [0.3, 0.38, 0], [0.08, 0.24, 0.1], c.main)] : []),
+  ];
+  return [...structure, ...facade(c, d, -0.5, 0.1, MAX_PARTS - structure.length)];
+};
 
 /** House with the measured roofline (PF-T3): walls up to the eave, one prism per gable on top. */
-function measuredHouse({ colors: c, details: d }: ObjectKit, roof: KitRoof): RecipePart[] {
+function measuredHouse(
+  { colors: c, details: d, materials }: ObjectKit,
+  roof: KitRoof
+): RecipePart[] {
   const eave = 0.5 - roof.eave;
   const ridges = roof.gables.map((g) => 0.5 - g.top);
   const highest = Math.max(...ridges);
+  // Draft overhang (PQ-T43): the `eaves` value clamped to the roofing bound. No photo measure
+  // here — KitRoof carries no wall extent, so outline-vs-wall (facade-house.ts:574) belongs to the
+  // fit stage and the §8bis code (PQ-T45).
+  const bound = boundForRoof(materials?.secondary);
+  const overhang = Math.min(d?.eaves ?? bound, bound);
+  // Single gable on a single house: the middle prism shrinks so the gable ends stand at the wall
+  // plane with a 0.005 gap (no coplanar faces); rows and multi-gable roofs keep full-depth prisms.
+  const singleGable = unitsOf(d) === 1 && roof.gables.length === 1;
   const gables = roof.gables.map((g, i) => {
     const w = Math.max(0.01, g.x1 - g.x0);
     const h = Math.max(0.01, ridges[i]! - eave);
-    return part('prism', [(g.x0 + g.x1) / 2 - 0.5, eave + h / 2, 0], [w, h, 1], c.secondary, {
+    const depth = singleGable ? Math.max(0.5, 0.94 - 2 * overhang) : 1;
+    return part('prism', [(g.x0 + g.x1) / 2 - 0.5, eave + h / 2, 0], [w, h, depth], c.secondary, {
       apex: Math.min(1, Math.max(0, (g.peak - g.x0) / w)),
+      kind: 'roof',
+      overhang,
     });
   });
+  // Gable triangles in wall material (PQ-T43, §7.4): thin prisms flush with the walls. Rows and
+  // multi-gable roofs keep roof-colored gables: no room under the 12-cap.
+  const mid = singleGable ? gables[0]! : null;
+  const ends = mid
+    ? [0.4875, -0.4875].map((z) =>
+        part('prism', [mid.at[0], mid.at[1], z], [mid.size[0], mid.size[1], 0.025], c.main, {
+          apex: mid.apex ?? 0.5,
+          kind: 'roof',
+          overhang: 0,
+        })
+      )
+    : [];
   const chimneyTop = eave + 0.85 * (highest - eave) + 0.06;
   const structure = [
     part('box', [0, (eave - 0.5) / 2, 0], [1, eave + 0.5, 1], c.main, { front: true }),
     ...gables,
+    ...ends,
     ...(d?.chimney
       ? [part('box', [0.3, (eave + chimneyTop) / 2, 0], [0.08, chimneyTop - eave, 0.1], c.main)]
       : []),
@@ -487,15 +558,31 @@ export const TEMPLATES: Record<KitArchetype, Template> = {
     const floors = Math.max(1, Math.min(4, d?.floors ?? 2));
     const windows = Math.max(1, Math.min(8, d?.windows ?? 4));
     const bodyH = 0.92;
+    const winW = decalWidth(windows, 0.8, 0.08);
+    const floorY = (f: number) => -0.5 + ((f + 0.6) * bodyH) / floors;
+    const front = Array.from({ length: floors }, (_, f) =>
+      spread(windows, 0.8).map((x) =>
+        part('box', [x, floorY(f), 0.505], [winW, 0.1, 0.02], c.accent)
+      )
+    ).flat();
+    // Rear mirror + one side window per floor per side (PQ-T43, §7.4 remedy 2), whole or not
+    // at all: a truncated mirror is lopsided, so when it does not fit the front ships alone.
+    const rear = front.map((p): RecipePart => ({
+      ...p,
+      at: [p.at[0], p.at[1], -p.at[2]],
+      status: 'inferred',
+    }));
+    const sides = Array.from({ length: floors }, (_, f) => floorY(f)).flatMap((y) =>
+      ([1, -1] as const).map((s) =>
+        part('box', [s * 0.51, y, 0], [0.02, 0.1, winW], c.accent, { status: 'inferred' })
+      )
+    );
+    const mirror = front.length + rear.length + sides.length <= 10 ? [...rear, ...sides] : [];
     return [
       part('box', [0, -0.04, 0], [1, bodyH, 1], c.main, { front: true }),
       part('box', [0, 0.46, 0], [1.0, 0.08, 1.0], c.secondary),
-      ...Array.from({ length: floors }, (_, f) => {
-        const y = -0.5 + ((f + 0.6) * bodyH) / floors;
-        return spread(windows, 0.8).map((x) =>
-          part('box', [x, y, 0.505], [decalWidth(windows, 0.8, 0.08), 0.1, 0.02], c.accent)
-        );
-      }).flat(),
+      ...front,
+      ...mirror,
     ].slice(0, 12);
   },
   tree: ({ colors: c }) => [
@@ -518,12 +605,20 @@ export const TEMPLATES: Record<KitArchetype, Template> = {
     if (wheels === 2 || sub === 'motorbike' || sub === 'bike' || sub === 'scooter') {
       return [
         part('box', [0, -0.06, 0], [0.55, 0.28, 0.22], c.main, { front: true }),
-        part('cylinder', [0.34, -0.32, 0], [0.32, 0.32, 0.08], c.accent, { axis: 'z' }),
-        part('cylinder', [-0.34, -0.32, 0], [0.32, 0.32, 0.08], c.accent, { axis: 'z' }),
+        part('cylinder', [0.34, -0.32, 0], [0.32, 0.32, 0.08], WHEEL_COLOR, {
+          axis: 'z',
+          material: 'rubber',
+        }),
+        part('cylinder', [-0.34, -0.32, 0], [0.32, 0.32, 0.08], WHEEL_COLOR, {
+          axis: 'z',
+          material: 'rubber',
+        }),
         part('cylinder', [0.22, 0.16, 0], [0.08, 0.52, 0.08], c.secondary),
         part('sphere', [0.06, 0.14, 0], [0.28, 0.2, 0.22], c.main),
         part('box', [-0.14, 0.12, 0], [0.24, 0.08, 0.18], c.secondary),
         part('cylinder', [0.32, 0.26, 0], [0.08, 0.08, 0.08], c.accent, { axis: 'x' }),
+        // Flyscreen above the headlamp (PQ-T43): the bike has room, unlike the 12-part cars.
+        part('box', [0.37, 0.35, 0], [0.02, 0.16, 0.2], c.accent),
       ];
     }
 
@@ -534,13 +629,19 @@ export const TEMPLATES: Record<KitArchetype, Template> = {
         part('box', [0, -0.08, 0], [1.0, 0.44, 0.9], c.main, { front: true }),
         part('box', [-0.04, 0.28, 0], [0.84, 0.36, 0.84], c.secondary),
         part('prism', [0.44, 0.28, 0], [0.12, 0.36, 0.84], c.accent, { apex: 0 }),
-        // Rear bumper only: the front one funded the red lenses (PR-2.11).
-        part('box', [-0.5, -0.18, 0], [0.04, 0.14, 0.88], c.accent),
+        // Rear bumper only: the front one funded the red lenses (PR-2.11). Trim colour, not glass.
+        part('box', [-0.5, -0.18, 0], [0.04, 0.14, 0.88], c.secondary),
         part('cylinder', [0.49, 0.02, 0.3], [0.03, 0.09, 0.09], c.accent, { axis: 'x' }),
         part('cylinder', [0.49, 0.02, -0.3], [0.03, 0.09, 0.09], c.accent, { axis: 'x' }),
         ...spread(perSide, 0.6).flatMap((x) => [
-          part('cylinder', [x, -0.38, 0.44], [0.22, 0.22, 0.14], c.accent, { axis: 'z' }),
-          part('cylinder', [x, -0.38, -0.44], [0.22, 0.22, 0.14], c.accent, { axis: 'z' }),
+          part('cylinder', [x, -0.38, 0.44], [0.22, 0.22, 0.14], WHEEL_COLOR, {
+            axis: 'z',
+            material: 'rubber',
+          }),
+          part('cylinder', [x, -0.38, -0.44], [0.22, 0.22, 0.14], WHEEL_COLOR, {
+            axis: 'z',
+            material: 'rubber',
+          }),
         ]),
         // Red rear lenses last: the 12-part slice drops them before a wheel (PR-2.11).
         part('cylinder', [-0.49, 0.02, 0.3], [0.03, 0.09, 0.09], TAIL_LIGHT_COLOR, { axis: 'x' }),
@@ -555,10 +656,22 @@ export const TEMPLATES: Record<KitArchetype, Template> = {
         part('box', [0.14, 0.28, 0], [0.44, 0.36, 0.84], c.secondary),
         part('prism', [0.42, 0.28, 0], [0.14, 0.36, 0.84], c.accent, { apex: 0 }),
         part('box', [-0.25, 0.14, 0], [0.46, 0.08, 0.86], c.secondary),
-        part('cylinder', [0.32, -0.38, 0.44], [0.24, 0.24, 0.14], c.accent, { axis: 'z' }),
-        part('cylinder', [0.32, -0.38, -0.44], [0.24, 0.24, 0.14], c.accent, { axis: 'z' }),
-        part('cylinder', [-0.3, -0.38, 0.44], [0.24, 0.24, 0.14], c.accent, { axis: 'z' }),
-        part('cylinder', [-0.3, -0.38, -0.44], [0.24, 0.24, 0.14], c.accent, { axis: 'z' }),
+        part('cylinder', [0.32, -0.38, 0.44], [0.24, 0.24, 0.14], WHEEL_COLOR, {
+          axis: 'z',
+          material: 'rubber',
+        }),
+        part('cylinder', [0.32, -0.38, -0.44], [0.24, 0.24, 0.14], WHEEL_COLOR, {
+          axis: 'z',
+          material: 'rubber',
+        }),
+        part('cylinder', [-0.3, -0.38, 0.44], [0.24, 0.24, 0.14], WHEEL_COLOR, {
+          axis: 'z',
+          material: 'rubber',
+        }),
+        part('cylinder', [-0.3, -0.38, -0.44], [0.24, 0.24, 0.14], WHEEL_COLOR, {
+          axis: 'z',
+          material: 'rubber',
+        }),
         part('cylinder', [0.49, 0.02, 0.3], [0.03, 0.09, 0.09], c.accent, { axis: 'x' }),
         part('cylinder', [0.49, 0.02, -0.3], [0.03, 0.09, 0.09], c.accent, { axis: 'x' }),
         part('cylinder', [-0.49, 0.02, 0.3], [0.03, 0.09, 0.09], TAIL_LIGHT_COLOR, { axis: 'x' }),
@@ -567,18 +680,32 @@ export const TEMPLATES: Record<KitArchetype, Template> = {
     }
 
     // Classic car / vintage / hatchback / sedan (Mini Cooper, etc.):
-    // Sleek, recognizable vehicle with sloped windshield, sloped rear, 4 wheels, headlights and red
-    // taillights. The bumpers sat coplanar with the body in its own colour (invisible): the rear
-    // reads through the trunk slope and the red lenses instead (PR-2.11).
+    // Sleek, recognizable vehicle: glass cabin band, sloped windscreen and rear window (accent =
+    // glass, PQ-T43; the slopes double as the glass — proud parts would cost the lights under the
+    // 12-cap), 4 dark wheels, headlights and red taillights. The bumpers sat coplanar with the body
+    // in its own colour (invisible): the rear reads through the trunk slope and the red lenses
+    // instead (PR-2.11).
     return [
       part('box', [0, -0.06, 0], [1.0, 0.48, 0.9], c.main, { front: true }),
-      part('box', [-0.03, 0.32, 0], [0.52, 0.36, 0.82], c.secondary),
-      part('prism', [0.26, 0.32, 0], [0.14, 0.36, 0.82], c.secondary, { apex: 0 }),
-      part('prism', [-0.33, 0.32, 0], [0.14, 0.36, 0.82], c.secondary, { apex: 1 }),
-      part('cylinder', [0.25, -0.38, 0.44], [0.24, 0.24, 0.14], c.accent, { axis: 'z' }),
-      part('cylinder', [0.25, -0.38, -0.44], [0.24, 0.24, 0.14], c.accent, { axis: 'z' }),
-      part('cylinder', [-0.25, -0.38, 0.44], [0.24, 0.24, 0.14], c.accent, { axis: 'z' }),
-      part('cylinder', [-0.25, -0.38, -0.44], [0.24, 0.24, 0.14], c.accent, { axis: 'z' }),
+      part('box', [-0.03, 0.32, 0], [0.52, 0.36, 0.82], c.accent),
+      part('prism', [0.26, 0.32, 0], [0.14, 0.36, 0.82], c.accent, { apex: 0 }),
+      part('prism', [-0.33, 0.32, 0], [0.14, 0.36, 0.82], c.accent, { apex: 1 }),
+      part('cylinder', [0.25, -0.38, 0.44], [0.24, 0.24, 0.14], WHEEL_COLOR, {
+        axis: 'z',
+        material: 'rubber',
+      }),
+      part('cylinder', [0.25, -0.38, -0.44], [0.24, 0.24, 0.14], WHEEL_COLOR, {
+        axis: 'z',
+        material: 'rubber',
+      }),
+      part('cylinder', [-0.25, -0.38, 0.44], [0.24, 0.24, 0.14], WHEEL_COLOR, {
+        axis: 'z',
+        material: 'rubber',
+      }),
+      part('cylinder', [-0.25, -0.38, -0.44], [0.24, 0.24, 0.14], WHEEL_COLOR, {
+        axis: 'z',
+        material: 'rubber',
+      }),
       part('cylinder', [0.49, 0.04, 0.28], [0.02, 0.08, 0.08], c.secondary, { axis: 'x' }),
       part('cylinder', [0.49, 0.04, -0.28], [0.02, 0.08, 0.08], c.secondary, { axis: 'x' }),
       part('cylinder', [-0.49, 0.04, 0.28], [0.02, 0.08, 0.08], TAIL_LIGHT_COLOR, { axis: 'x' }),
@@ -607,6 +734,12 @@ type Role = keyof ObjectKit['colors'];
  * parts it is fixed rather than role-measured (same exception as the alloy `RIM_COLOR`).
  */
 export const TAIL_LIGHT_COLOR = '#c0271c';
+
+/**
+ * Near-black every template wheel shares (PQ-T43): tyres read the same on every car, so like the
+ * red lenses they are fixed rather than role-measured — which frees `accent` to mean « glass ».
+ */
+export const WHEEL_COLOR = '#1c1c1c';
 
 /**
  * Stand-in colours handed to the templates so each part's role (main / secondary / accent) can be read

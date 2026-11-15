@@ -88,6 +88,26 @@ describe('measureKitColors (PF-T2)', () => {
     });
   });
 
+  it('vehicle (PQ-T43): light glass in the top band is the accent, not the black wheels', () => {
+    const BODY: Rgb = [176, 48, 48];
+    const GLASSDAY: Rgb = [143, 163, 181];
+    const TYRE: Rgb = [28, 28, 28];
+    const px = bands([
+      [{ rgb: GLASSDAY, share: 1 }],
+      [{ rgb: GLASSDAY, share: 1 }],
+      [{ rgb: BODY, share: 1 }],
+      [{ rgb: BODY, share: 1 }],
+      [
+        { rgb: BODY, share: 0.7 },
+        { rgb: TYRE, share: 0.3 },
+      ],
+    ]);
+    const c = measureKitColors(px, 'vehicle')!;
+    expect(c.main).toBe(linearToHex(...srgbToLinear(...BODY)));
+    expect(c.accent).toBe(linearToHex(...srgbToLinear(...GLASSDAY)));
+    expect(c.secondary).toBe(linearToHex(...srgbToLinear(...TYRE)));
+  });
+
   it('half-timbered walls (PG-T22): plaster wins over beams + shadow, without the option the biggest group', () => {
     const PLASTER: Rgb = [235, 230, 220];
     const BEAM: Rgb = [70, 50, 35];

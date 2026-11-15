@@ -171,6 +171,8 @@ const shadeOf = (lit: Group, dark: Group) => (dark.lightness + 16) / (lit.lightn
  * Object pixels → the kit's 3 colours (PF-T2), or null when too few pixels were measured.
  * main = biggest group outside the secondary band (walls, body, crown); secondary = biggest other group
  * inside that band (roof, trunk, stand), else the next biggest group; accent = darkest group left (glass).
+ * Vehicles (PQ-T43): accent and secondary swap — the glasshouse fills the top band, so it is the
+ * accent glass while secondary takes the darkest trim.
  * `plaster` (PG-T22, half-timbered walls): main = the lightest big group outside the band, so the
  * walls read as their plaster and not as plaster, beams and shadow averaged together.
  */
@@ -270,6 +272,10 @@ export function measureKitColors(
       : (by((g) => g.count, rest) ?? main);
   const left = rest.filter((g) => g !== secondary && g.count >= 0.01 * n);
   const accent = by((g) => -g.lightness, left) ?? main;
+  // The glasshouse fills the top band: it is the accent glass, not the wheels (else the cabin
+  // renders black and the fit hides it — golden car score 93 → 80).
+  if (archetype === 'vehicle')
+    return { main: main.hex, secondary: accent.hex, accent: secondary.hex };
   return { main: main.hex, secondary: secondary.hex, accent: accent.hex };
 }
 

@@ -159,7 +159,7 @@ const car: GoldenCase = {
     archetype: 'vehicle',
     proportions: { w: 1, h: 0.4, d: 0.45 },
     colors: WRONG,
-    materials: { main: 'metal', secondary: 'glass', accent: 'rubber' },
+    materials: { main: 'metal', secondary: 'metal', accent: 'glass' },
     details: { wheels: 4 },
   },
   expect: { main: RED },

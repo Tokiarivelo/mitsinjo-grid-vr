@@ -490,8 +490,15 @@ One task = one commit, with its Vitest test, its `contracts.md` update and its m
       `vision-pipeline.test.ts` + route tests (`ms` on the events).
       **Done when:** a slow run shows where the time went without guessing.
       _Built 2026-11-11:_ `onTiming` on `ObjectShapeOptions`, `formatDuration`, route wiring; V264.
-- [ ] **PQ-T43 Template fixes** (§12.2, §7.1, §7.4 remedy 2). Vehicle glazing, roof overhang + fascia,
+- [x] **PQ-T43 Template fixes** (§12.2, §7.1, §7.4 remedy 2). Vehicle glazing, roof overhang + fascia,
       hip-roof bevel; fallback template with openings on all four faces.
+      _Built 2026-11-12:_ glasshouse recolor in 12 parts (owner decision: cabin+slopes→accent glass,
+      `WHEEL_COLOR`+rubber, bike flyscreen, van bumper→trim; accent measured on the top band via a
+      vehicle swap in `measureKitColors`); `overhang?` + `eaves?` + `ROOF_OVERHANG_BOUNDS` (builders
+      clamp drafts, view applies raw, legacy 0.03/0); fascia auto-boards (`kind: 'roof'` +
+      known non-thatch material); hip eave (bevel kept sharp per R9); houses rear-mirror + sides
+      whole-or-nothing (starved stay front-only for hidden-sides), wall gable ends (single house +
+      1 gable); photo outline-vs-wall deferred to PQ-T45; V265.
 - [ ] **PQ-T44 Houses through the 2D path by default** (§12.2bis, §7.4 remedies 1, 3, 4). Clean facade
       drawing when none exists, real opening measures, per-face measured materials.
 - [ ] **PQ-T45 Sandboxed code, the main path for every object** (§12.2ter, §8bis). Build `api` +

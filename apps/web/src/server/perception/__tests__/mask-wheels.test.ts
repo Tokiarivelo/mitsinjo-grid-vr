@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
-import { kitToRecipe, TAIL_LIGHT_COLOR, type ObjectKit } from '@/lib/object-kit';
+import { kitToRecipe, TAIL_LIGHT_COLOR, WHEEL_COLOR, type ObjectKit } from '@/lib/object-kit';
 import {
   MAX_COMPONENTS,
   MAX_RECIPE_PARTS,
@@ -23,6 +23,7 @@ import { fitCircle, RIM_COLOR, RIM_RATIO, withMaskWheels } from '../mask-wheels'
 const kit = (extra?: Partial<ObjectKit>): ObjectKit => ({
   archetype: 'vehicle',
   proportions: { w: 1, h: 0.4, d: 0.45 },
+  // Accent stays near-black on purpose: wheels must read WHEEL_COLOR, never the accent (PQ-T43).
   colors: { main: '#a33327', secondary: '#cfd6dd', accent: '#1c1c1e' },
   materials: { main: 'metal', secondary: 'glass', accent: 'rubber' },
   ...extra,
@@ -99,7 +100,7 @@ describe('withMaskWheels (PR-2.6)', () => {
     // Photo (60, 70) r=12 in box 160×80 at (20, 10): x = −0.25, y = −0.25, rx = 0.075, ry = 0.15.
     const near = out.parts.filter((p) => p.shape === 'cylinder' && p.axis === 'z' && p.at[2] > 0);
     expect(near).toHaveLength(4);
-    const tyres = near.filter((p) => p.color === '#1c1c1e');
+    const tyres = near.filter((p) => p.color === WHEEL_COLOR);
     const rims = near.filter((p) => p.color === RIM_COLOR);
     expect(tyres).toHaveLength(2);
     expect(rims).toHaveLength(2);
@@ -119,7 +120,7 @@ describe('withMaskWheels (PR-2.6)', () => {
     // Far side mirrored (tyres only), template wheels replaced: 8 body + 6 wheel − 2 lights = 12.
     const far = out.parts.filter((p) => p.shape === 'cylinder' && p.axis === 'z' && p.at[2] < 0);
     expect(far).toHaveLength(2);
-    expect(far.every((p) => p.color === '#1c1c1e')).toBe(true);
+    expect(far.every((p) => p.color === WHEEL_COLOR)).toBe(true);
     expect(out.parts.length).toBeLessThanOrEqual(MAX_RECIPE_PARTS);
     expect(out.parts).toHaveLength(12);
     // Budget backstop dropped the two headlight dots first of the four light dots; the
@@ -153,7 +154,7 @@ describe('withMaskWheels (PR-2.6)', () => {
     };
     const out = withMaskWheels('vehicle', recipe, [boxOnly, plus], geom);
     const tyres = out.parts.filter(
-      (p) => p.shape === 'cylinder' && p.axis === 'z' && p.color === '#1c1c1e' && p.at[2] > 0
+      (p) => p.shape === 'cylinder' && p.axis === 'z' && p.color === WHEEL_COLOR && p.at[2] > 0
     );
     expect(tyres).toHaveLength(2);
     // Box (48, 58)–(72, 82) px → centre (60, 70) r = 12: the same numbers as the circle test.
@@ -181,7 +182,7 @@ describe('withMaskWheels (PR-2.6)', () => {
     ]);
     const out = withMaskWheels('vehicle', kitToRecipe(kit()), [wheelMask(geom, 160, 95, 10)], geom);
     const tyre = out.parts.find(
-      (p) => p.shape === 'cylinder' && p.axis === 'z' && p.color === '#1c1c1e'
+      (p) => p.shape === 'cylinder' && p.axis === 'z' && p.color === WHEEL_COLOR
     )!;
     // bu = 10/60 → x = −1/3; bv = 45/60 → y = −0.25; r = 10/60 both axes (square box).
     expect(tyre.at[0]).toBeCloseTo(-1 / 3, 3);
@@ -204,7 +205,7 @@ describe('withMaskWheels (PR-2.6)', () => {
     const out = withMaskWheels('vehicle', recipe, masks, geom);
     expect(out).not.toBe(recipe);
     const tyres = out.parts.filter(
-      (p) => p.shape === 'cylinder' && p.axis === 'z' && p.color === '#1c1c1e' && p.at[2] > 0
+      (p) => p.shape === 'cylinder' && p.axis === 'z' && p.color === WHEEL_COLOR && p.at[2] > 0
     );
     expect(tyres).toHaveLength(2);
   });
@@ -226,7 +227,7 @@ describe('withMaskWheels (PR-2.6)', () => {
     const recipe = { ...kitToRecipe(kit()), yaw: 0.2 };
     const out = withMaskWheels('vehicle', recipe, [wheelMask(geom, 60, 70, 12)], geom);
     const tyre = out.parts.find(
-      (p) => p.shape === 'cylinder' && p.axis === 'z' && p.color === '#1c1c1e' && p.at[2] > 0
+      (p) => p.shape === 'cylinder' && p.axis === 'z' && p.color === WHEEL_COLOR && p.at[2] > 0
     )!;
     // x = (xw − z·d·sin) / cos / w = (−0.25 − 0.44·0.45·sin0.2) / cos0.2 ≈ −0.2952.
     expect(tyre.at[0]).toBeCloseTo(-0.2952, 3);

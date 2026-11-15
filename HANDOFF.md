@@ -1,41 +1,40 @@
 # HANDOFF — read first, overwrite at end of session (≤40 lines)
 
-**Updated:** 2026-11-11 · **By:** Muse Code · **Branch:** feat/vision-no-timeout (PQ-T42 built, uncommitted; rebase onto `origin/main` before PR)
+**Updated:** 2026-11-12 · **By:** Muse Code · **Branch:** feat/pq-t43-template-fixes (`6c9fc1e` committed, unpushed — no network)
 
-## PRIORITY NEXT: `docs/vision-to-3d-universal-pipeline.md` §12 — PQ-T43 next
+## PRIORITY NEXT: PQ-T44 Houses through the 2D path by default (§12.2bis)
 
-PQ-T42 landed (this session, §12.1). Next in order (§12, registered as PQ-T43…PQ-T55 in
-`docs/tasks/PV-vision-quality.md` Q6):
+PQ-T43 landed (this session). Next (§12, Q6 in `PV-vision-quality.md`):
 
-1. **PQ-T43 Template fixes:** car glass, roof overhang + fascia, houses with openings on all 4 faces,
-   gable in wall material (§7.1, §7.4 remedy 2).
-2. PQ-T44 houses via 2D path by default; **PQ-T45 sandbox** (2ter): `api` + QuickJS WASM + Wonder
-   `build()` (`META_CODE_MODEL`), template = instant draft replaced on score gain, house first.
-3. Then PQ-T46 `anatomy`, PQ-T47 routing, PQ-T48 details, PQ-T49 parallel/cache, PQ-T50/51 generators,
-   PQ-T52 critic, PQ-T53 SDF, PQ-T54 real set, PQ-T55 eval B vs A.
+1. **PQ-T44:** clean facade drawing when none exists (PQ-T23 action), real opening
+   measures, per-face measured materials (§7.4 remedies 1, 3, 4).
+2. Then PQ-T45 sandbox (2ter), PQ-T46 anatomy, PQ-T47 routing, PQ-T48 details,
+   PQ-T49 parallel/cache, PQ-T50/51 generators, PQ-T52 critic, PQ-T53 SDF,
+   PQ-T54 real set, PQ-T55 eval B vs A.
 
-## Current state (uncommitted this session)
+## Current state (all committed, nothing pushed — network down)
 
-- **PQ-T42 stage durations (E12):** every run phase logs `[vision] 3D <phase> …` and emits SSE
-  `shape_timing { phase, ms }` (`SHAPE_TIMING_PHASES`: crop/kit/sam/masks/fit/views/stages/score/
-  critic); `vision_detections` carries `ms`. Skipped phases stay silent. `onTiming` on
-  `ObjectShapeOptions`, `formatDuration`, route wiring, contracts.md, V264 scenario.
-- **Also:** Q6 series PQ-T43…PQ-T55 registered in PV-vision-quality.md; stale Non-goals line narrowed
-  to code outside the §8bis sandbox. Earlier (committed): no generation timeouts; live 3D print; spec.
+- **PQ-T43** `6c9fc1e` here: glazing (recolor in 12, owner call), dark wheels,
+  overhang option + bounds, fascia (known non-thatch only), hip eave, 4-face
+  houses whole-or-nothing, wall gables, vehicle accent swap, V265 (local).
+- **Docs ticks** `a3fd8c3` on `feat/docs-tick-q4` (Q4+PH-T8+PR-0.5).
+- **Q4 code** still on `feat/pq-q4` (PR #15, reviewed) — merge to land it.
 
-## Verify
+## Verify (this session)
 
-- `make typecheck` 4/4 · `make lint` 0 errors · web suite green on rerun (337 files / 2559 tests;
-  first run: 2 load flakes) · `make test-shape` budget flakes environmentally (cottage row 301 vs
-  300 ms; untouched tree fails 2/5 — slow machine, not a regression).
+- `make typecheck` 4/4 · `make lint` 0 errors · web 2576/2576 (2 shards; full
+  runs add a vitest RPC-timeout infra flake, no test failures) · goldens car 93
+  (ΔE 3.4), cottage 86 (edge +0.02) · real rows all identical (frozen).
 
-## Open (measure at implementation)
+## Open
 
-- Wonder's code validity rate vs template draft; QuickJS cold start + function memory on Vercel;
-  checkpoint size with code; a model bigger than `muse-wonder-1.0` for `META_CODE_MODEL`.
-- V264 manual check pending (needs a Meta key). `fetch origin main` fails here (no remote access).
+- Push `feat/docs-tick-q4` + this branch when online; open PRs (ticks, PQ-T43);
+  merge PR #15 first (Q4 code: gloss/AO/PBR/fascia interplay unreviewed).
+- V265 manual check needs a Meta key. `make scenarios-publish` untouched (stale).
 
 ## Decisions
 
-- Critic timing covers the scoring pass too (a held score still reports `critic`).
-- Sandbox = QuickJS WASM (never `eval` / Node `vm`); limits on generated code only, never a clock on Meta; kept: `reason: 'timeout'`, explicit budgets, Vercel slices (OVH: `limitMs = Infinity`).
+- Glazing = recolor, not proud parts (12-cap; owner chose). Hip bevel kept sharp
+  (R9). Mirror whole-or-nothing (lopsided rears + starved ends are worse).
+- Fascia needs a known material (else elevation drawings mismatch). Photo
+  outline-vs-wall → PQ-T45 (template lacks wall extent). Ceiling still §14.3.

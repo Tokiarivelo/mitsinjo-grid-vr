@@ -188,7 +188,7 @@ export function vehicleShell(
   return shell;
 }
 
-/** Thin boxes on the walls' front face: the `facade()` spread windows and doors. */
+/** Thin boxes on the walls' faces: the `facade()` spread windows and doors, front and rear. */
 function facadePanels(parts: ReadonlyArray<RecipePart>, main: RecipePart): RecipePart[] {
   const face = main.at[2] + main.size[2] / 2;
   return parts.filter(
@@ -196,8 +196,8 @@ function facadePanels(parts: ReadonlyArray<RecipePart>, main: RecipePart): Recip
       p !== main &&
       p.shape === 'box' &&
       p.size[2] <= 0.05 &&
-      p.at[2] >= face - 0.03 &&
-      p.at[2] <= face + 0.06 &&
+      Math.abs(p.at[2]) >= face - 0.03 &&
+      Math.abs(p.at[2]) <= face + 0.06 &&
       Math.abs(p.at[0] - main.at[0]) <= main.size[0] / 2 &&
       Math.abs(p.at[1] - main.at[1]) <= main.size[1] / 2
   );
