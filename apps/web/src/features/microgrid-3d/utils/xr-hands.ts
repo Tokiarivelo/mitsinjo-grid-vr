@@ -46,10 +46,12 @@ export function createControllerGripModel(): THREE.Group {
   const group = new THREE.Group();
   group.name = 'controller-grip-visual';
 
+  // Light grey, like the Quest 3 Touch Plus the real model shows (a dark stand-in read as a
+  // different controller while the real one loads).
   const gripMat = new THREE.MeshStandardMaterial({
-    color: '#222831',
-    roughness: 0.52,
-    metalness: 0.18,
+    color: '#d9dde3',
+    roughness: 0.6,
+    metalness: 0,
   });
 
   // Handle (ergonomic rounded cylinder angled forward in the palm)
@@ -68,7 +70,7 @@ export function createControllerGripModel(): THREE.Group {
   const stickGeo = new THREE.CylinderGeometry(0.008, 0.006, 0.012, 12);
   stickGeo.rotateX(THREE.MathUtils.degToRad(32));
   stickGeo.translate(0, 0.048, -0.012);
-  const stickMat = new THREE.MeshStandardMaterial({ color: '#374151', roughness: 0.8 });
+  const stickMat = new THREE.MeshStandardMaterial({ color: '#4b5563', roughness: 0.8 });
   group.add(new THREE.Mesh(stickGeo, stickMat));
 
   // Buttons A & B (or X & Y)
@@ -234,7 +236,7 @@ export function setupXRHandsAndControllers(
 
   const hands: HandData[] = [];
   const rays: RayData[] = [];
-  const models: Array<{ dispose: () => void }> = [];
+  const models: Array<{ gripLoaded: () => boolean; dispose: () => void }> = [];
   const modelRefs: ModelRef[] = [];
   const selectListeners: Array<{
     controller: THREE.XRTargetRaySpace;
@@ -356,6 +358,7 @@ export function setupXRHandsAndControllers(
       updateHandMesh(h.group, h.mesh);
       if (h.real()) h.mesh.visible = false;
     }
+    for (const m of models) m.gripLoaded(); // shows the simple controller only until the real one
     if (scene && frame++ % USABLE_REFRESH_FRAMES === 0) usable = usableObjects(scene);
     for (const r of rays) {
       if (!r.space.visible) {

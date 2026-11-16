@@ -276,7 +276,8 @@ Pilotage scripté (MCP IWER ou `remote.dispatch`) : voir [`vr-iwer-tools.md`](vr
 9. **Mains, manettes, laser** (VS-T26, `/village` et `/simulation`) : la main est le modèle articulé
    `generic-hand` des WebXR input profiles (celui que dessine le Quest), peau mate + liseré clair (fresnel) ; la
    manette est celle que le navigateur annonce (Touch / Touch Plus). Chargés depuis le CDN des input profiles :
-   hors ligne, les sphères / la manette simple restent. Laser selon Meta « Ray casting » : rayon de visée long et
+   hors ligne, les sphères / une manette simple gris clair restent. Les modèles sont attachés une seule fois par
+   rendu (pas à chaque analyse) et les chargeurs sont partagés : le modèle ne se recharge pas. Laser selon Meta « Ray casting » : rayon de visée long et
    invisible ; on voit un faisceau fin de 25 cm (main) / 35 cm (manette) qui part à 10 cm et s'efface vers son
    bout, et un **curseur anneau** à l'impact, de taille angulaire constante, blanc au survol, bleu nuit
    (`#001E78`) et à 83 % quand on appuie ; le point central garde la couleur de ce qui est visé. Rien d'utilisable

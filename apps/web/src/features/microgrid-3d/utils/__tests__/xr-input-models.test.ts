@@ -4,6 +4,7 @@ import {
   attachInputModels,
   createHandSkinMaterial,
   HAND_SKIN,
+  modelLoaded,
   replayConnected,
   skinHand,
 } from '../xr-input-models';
@@ -57,5 +58,22 @@ describe('real XR input models', () => {
     m.dispose();
     expect(hand.children).toHaveLength(0);
     expect(grip.children).toHaveLength(0);
+  });
+
+  it('is loaded once the model has its mesh; the stand-in shows only until then (VS-T26)', () => {
+    expect(modelLoaded(null)).toBe(false);
+    const grip = new THREE.Group();
+    const fallback = new THREE.Group();
+    const gl = { xr: { getSession: () => null } } as unknown as THREE.WebGLRenderer;
+    const m = attachInputModels(gl, 1, { grip, gripFallback: fallback });
+    expect(m.gripLoaded()).toBe(false);
+    expect(fallback.visible).toBe(true);
+    // The factory adds the profile's scene under the model when it arrives.
+    const model = grip.children[0]!;
+    model.add(new THREE.Mesh());
+    expect(modelLoaded(model)).toBe(true);
+    expect(m.gripLoaded()).toBe(true);
+    expect(fallback.visible).toBe(false);
+    m.dispose();
   });
 });

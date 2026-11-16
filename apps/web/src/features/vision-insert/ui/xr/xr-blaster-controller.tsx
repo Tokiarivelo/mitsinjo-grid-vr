@@ -440,6 +440,8 @@ export const XRBlasterController = memo(function XRBlasterController({
   >([]);
   /** Fallback controller bodies: shown in the headset until the real model loads (it hides them). */
   const gripsRef = useRef<Array<{ model: THREE.Object3D; real: () => boolean }>>([]);
+  /** Real hand / controller models of inputs 0 and 1 (attached once per renderer). */
+  const inputModelsRef = useRef<ReturnType<typeof attachInputModels>[]>([]);
   const lastTouchRef = useRef(0);
   const inputKindsRef = useRef<['controller' | 'hand', 'controller' | 'hand']>([
     'controller',
@@ -650,7 +652,6 @@ export const XRBlasterController = memo(function XRBlasterController({
   useEffect(() => {
     if (!gl?.xr?.getController) return;
     const added: Array<{ parent: THREE.Object3D; child: THREE.Object3D }> = [];
-    const models: Array<{ dispose: () => void }> = [];
     const listeners: Array<{
       space: THREE.XRTargetRaySpace;
       type: 'selectstart' | 'selectend' | 'squeezestart' | 'squeezeend' | 'connected';
@@ -716,15 +717,16 @@ export const XRBlasterController = memo(function XRBlasterController({
         scene?.add(grip);
         added.push({ parent: grip, child: gripModel });
       }
-      // Real hand and controller models (VS-T26); the simple ones stay until they load.
-      const real = attachInputModels(gl, i, {
-        ...(hand ? { hand } : {}),
-        ...(grip ? { grip } : {}),
-      });
-      models.push(real);
+      // Real hand and controller models (attached once, below); the simple ones until they load.
+      const real = () => inputModelsRef.current[i];
       if (hand && handMesh)
-        handsRef.current.push({ group: hand, mesh: handMesh, real: real.handLoaded });
-      if (gripModel) gripsRef.current.push({ model: gripModel, real: real.gripLoaded });
+        handsRef.current.push({
+          group: hand,
+          mesh: handMesh,
+          real: () => real()?.handLoaded() ?? false,
+        });
+      if (gripModel)
+        gripsRef.current.push({ model: gripModel, real: () => real()?.gripLoaded() ?? false });
     }
 
     return () => {
@@ -736,11 +738,30 @@ export const XRBlasterController = memo(function XRBlasterController({
         parent.remove(child);
         scene?.remove(parent);
       }
-      for (const m of models) m.dispose();
       handsRef.current = [];
       gripsRef.current = [];
     };
   }, [gl, scene, triggerShot, tryGrab, release]);
+
+  // Real hand and controller models (VS-T26), attached once per renderer: the effect above runs
+  // again whenever the targets change (each analysis), and re-attaching there reloaded the model
+  // each time, showing the dark stand-in meanwhile (or for good when the reload missed the input).
+  useEffect(() => {
+    const xr = gl?.xr as
+      (THREE.WebXRManager & { getControllerGrip?: (i: number) => THREE.Group }) | undefined;
+    if (!xr?.getController) return;
+    const attached = ([0, 1] as const).map((i) =>
+      attachInputModels(gl, i, {
+        ...(typeof xr.getHand === 'function' ? { hand: xr.getHand(i) } : {}),
+        ...(typeof xr.getControllerGrip === 'function' ? { grip: xr.getControllerGrip(i) } : {}),
+      })
+    );
+    inputModelsRef.current = attached;
+    return () => {
+      inputModelsRef.current = [];
+      for (const m of attached) m.dispose();
+    };
+  }, [gl]);
 
   // Mouse: aim on move, shoot on left click (desktop preview and IWER emulator).
   // Listened on the document: in the emulator the IWER DevUI draws its own full-screen canvas

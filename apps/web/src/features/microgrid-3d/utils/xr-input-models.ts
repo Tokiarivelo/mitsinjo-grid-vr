@@ -79,16 +79,38 @@ export interface InputModelSlots {
   hand?: THREE.Object3D;
   /** Controller grip space (`renderer.xr.getControllerGrip(i)`). */
   grip?: THREE.Object3D;
-  /** Simple models kept until the real ones load. */
-  handFallback?: THREE.Object3D;
+  /** Simple controller shown while the real one is not loaded (`gripLoaded()` toggles it). */
   gripFallback?: THREE.Object3D;
 }
 
 let skin: THREE.MeshStandardMaterial | null = null;
+let handFactory: XRHandModelFactory | null = null;
+let controllerFactory: XRControllerModelFactory | null = null;
+
+/**
+ * One factory of each for the page: the controller factory caches each profile's model, so a
+ * remount (or a second hand) never downloads it again.
+ */
+function factories() {
+  if (!handFactory) {
+    handFactory = new XRHandModelFactory();
+    handFactory.setPath(`${INPUT_PROFILES_PATH}/generic-hand/`);
+  }
+  if (!controllerFactory) {
+    controllerFactory = new XRControllerModelFactory();
+    controllerFactory.setPath(INPUT_PROFILES_PATH);
+  }
+  return { hands: handFactory, controllers: controllerFactory };
+}
+
+/** A factory model has loaded once its mesh (scene) has been added under it. */
+export const modelLoaded = (model: THREE.Object3D | null) => !!model && model.children.length > 0;
 
 /**
  * Adds the real hand and controller models of input `index` (0 / 1) to their spaces. Returns
- * whether the real hand has loaded (`hand()`) and a dispose. Never throws: without a network the
+ * whether each has loaded and a dispose. Call it once per renderer (the spaces live as long as
+ * it does): every call starts a new model, and the simple ones show until it loads (VS-T26: a
+ * remount at each analysis left the dark stand-in on screen). Never throws: offline, the
  * fallbacks just stay.
  */
 export function attachInputModels(
@@ -97,45 +119,42 @@ export function attachInputModels(
   slots: InputModelSlots
 ): { handLoaded: () => boolean; gripLoaded: () => boolean; dispose: () => void } {
   const added: Array<{ parent: THREE.Object3D; child: THREE.Object3D }> = [];
-  let handReady = false;
-  let gripReady = false;
+  let handModel: THREE.Object3D | null = null;
+  let gripModel: THREE.Object3D | null = null;
+  let skinned = false;
   if (typeof window === 'undefined')
     return { handLoaded: () => false, gripLoaded: () => false, dispose: () => undefined };
   try {
     skin ??= createHandSkinMaterial();
-    const material = skin;
+    const { hands, controllers } = factories();
     const source = gl.xr?.getSession?.()?.inputSources?.[index];
     if (slots.hand) {
-      const fallback = slots.handFallback;
-      const handFactory = new XRHandModelFactory(null, (object) => {
-        skinHand(object, material);
-        handReady = true;
-        if (fallback) fallback.visible = false;
-      });
-      handFactory.setPath(`${INPUT_PROFILES_PATH}/generic-hand/`);
-      const model = handFactory.createHandModel(slots.hand, 'mesh');
-      slots.hand.add(model);
-      added.push({ parent: slots.hand, child: model });
+      handModel = hands.createHandModel(slots.hand, 'mesh');
+      slots.hand.add(handModel);
+      added.push({ parent: slots.hand, child: handModel });
       replayConnected(slots.hand, source, 'hand');
     }
     if (slots.grip) {
-      const fallback = slots.gripFallback;
-      const controllerFactory = new XRControllerModelFactory(null, () => {
-        gripReady = true;
-        if (fallback) fallback.visible = false;
-      });
-      controllerFactory.setPath(INPUT_PROFILES_PATH);
-      const model = controllerFactory.createControllerModel(slots.grip);
-      slots.grip.add(model);
-      added.push({ parent: slots.grip, child: model });
+      gripModel = controllers.createControllerModel(slots.grip);
+      slots.grip.add(gripModel);
+      added.push({ parent: slots.grip, child: gripModel });
       replayConnected(slots.grip, source, 'controller');
     }
   } catch {
     // Offline or no WebXR: the fallback models stay.
   }
+  const material = skin;
   return {
-    handLoaded: () => handReady,
-    gripLoaded: () => gripReady,
+    handLoaded: () => {
+      if (!modelLoaded(handModel)) return false;
+      if (!skinned && material) skinned = skinHand(handModel!, material) > 0;
+      return true;
+    },
+    gripLoaded: () => {
+      const ready = modelLoaded(gripModel);
+      if (slots.gripFallback) slots.gripFallback.visible = !ready;
+      return ready;
+    },
     dispose: () => {
       for (const { parent, child } of added) parent.remove(child);
     },
