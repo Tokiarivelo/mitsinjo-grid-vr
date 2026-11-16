@@ -70,7 +70,15 @@ Lorsque vous lancez l'immersion sur PC sans casque physique, l'émulateur **Meta
    - **Manettes :** stick gauche = marcher dans la direction du regard ; stick droit ←/→ = pivoter de 30° d'un
      coup (autour de la tête, avec un petit son), ↑/↓ = un pas de 0,8 m. Plus de rotation continue (confort).
    - **Mains :** pouce glissé ←/→ = pivoter, avant / arrière = un pas.
-   - **Clavier (PC) :** `Z`/`W`/`↑` avancer, `S`/`↓` reculer, `Q`/`A`/`←` et `D`/`→` de côté, `Shift` = courir.
+   - **Clavier (PC) :** `Z`/`W`/`↑` avancer, `S`/`↓` reculer, `Q`/`A` et `D` de côté, `←`/`→` = tourner la tête
+     (90°/s, VS-T33 : sur un portable, le pavé tactile est coupé tant qu'une touche est enfoncée, la souris ne
+     peut pas tourner pendant la marche), `Shift` = courir.
+   - **Taille humaine (VS-T33) :** le village est une maquette à demi-échelle (murs 1,3 m, portes ≈ 0,9 m) : le
+     marcheur est réduit d'autant dehors (`utils/xr-walk.ts`, `XR_VILLAGE_SCALE` = 0,5 sur le rig : yeux à
+     ≈ 0,8 m, sous le toit, pas, vitesse, mains et panneau suivent). Dans une pièce (1:1, plafond 2,7 m) : taille
+     normale.
+   - **URL (VS-T33) :** `?immersion=vr` tant que la VR est ouverte (`useImmersionQuery`) ; « Aller à la
+     simulation » ouvre `/simulation?immersion=vr`. Recharger cette URL rouvre la vue 3D et redemande la VR.
    - **On ne traverse plus les objets :** maisons, école, clinique, troncs d'arbres, panneaux, véhicules et
      modèles posés arrêtent la marche ; on glisse le long des murs. Buissons, herbes et petits rochers se
      traversent. Grille construite depuis la scène à l'entrée (`utils/walk-grid.ts`).
@@ -157,16 +165,16 @@ Baladez-vous dans les différents quartiers du village pour comparer leur statut
 Mêmes boutons que `/village` (§ 6) ; seul A/X change de rôle (pas d'analyse ici). Les légendes s'affichent
 au-dessus de chaque manette 25 s à l'entrée, puis d'un clic de stick.
 
-| Action                               | Manettes Meta Quest                  | Mains                        | PC (clavier / souris)           |
-| :----------------------------------- | :----------------------------------- | :--------------------------- | :------------------------------ |
-| **Marcher**                          | Stick gauche                         | —                            | `Z Q S D` / `W A S D` / flèches |
-| **Pivoter de 30°**                   | Stick droit ← / →                    | Pouce glissé ← / →           | Regard à la souris (émulateur)  |
-| **Un pas de 0,8 m**                  | Stick droit ↑ / ↓                    | Pouce glissé avant / arrière | —                               |
-| **Sélectionner** (étiquette, bouton) | Gâchette                             | Pincer                       | Clic gauche                     |
-| **Étiquettes du village**            | A / X                                | Tap du pouce                 | Balise flottante à l'entrée     |
-| **Retour**                           | B / Y : ferme le panneau, sinon sort | —                            | « Fermer ✕ » / « Sortir »       |
-| **Aide (légendes)**                  | Clic sur un stick                    | —                            | —                               |
-| **Quitter la VR**                    | Bouton Meta                          | Geste système                | « Quitter la VR »               |
+| Action                               | Manettes Meta Quest                  | Mains                        | PC (clavier / souris)         |
+| :----------------------------------- | :----------------------------------- | :--------------------------- | :---------------------------- |
+| **Marcher**                          | Stick gauche                         | —                            | `Z Q S D` / `W A S D` / `↑ ↓` |
+| **Pivoter de 30°**                   | Stick droit ← / →                    | Pouce glissé ← / →           | `← →` (continu) ou souris     |
+| **Un pas de 0,8 m**                  | Stick droit ↑ / ↓                    | Pouce glissé avant / arrière | —                             |
+| **Sélectionner** (étiquette, bouton) | Gâchette                             | Pincer                       | Clic gauche                   |
+| **Étiquettes du village**            | A / X                                | Tap du pouce                 | Balise flottante à l'entrée   |
+| **Retour**                           | B / Y : ferme le panneau, sinon sort | —                            | « Fermer ✕ » / « Sortir »     |
+| **Aide (légendes)**                  | Clic sur un stick                    | —                            | —                             |
+| **Quitter la VR**                    | Bouton Meta                          | Geste système                | « Quitter la VR »             |
 
 ### Piloter l'énergie d'un bâtiment (VSIM-T3/T4)
 

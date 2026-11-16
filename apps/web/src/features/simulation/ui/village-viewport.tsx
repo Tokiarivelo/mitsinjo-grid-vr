@@ -44,6 +44,7 @@ import {
   useSceneQuality,
   useWebXR,
   useXrHandoff,
+  useImmersionQuery,
   EmulatedXRExit,
   type CameraPreset,
   type SceneQuality,
@@ -154,6 +155,10 @@ export function VillageViewport({
     }, XR_HANDOFF_WAIT_MS);
     return () => window.clearInterval(timer);
   }, [xrRequested, xrStatus, xrEnter, clearXrRequest]);
+  // `?immersion=vr` while in VR (VS-T33); a reload on that URL asks for the VR entry again.
+  const requestXr = useXrHandoff((s) => s.request);
+  const arriveInXr = useCallback(() => requestXr(null), [requestXr]);
+  useImmersionQuery({ immersion: xrActive || xrRequested }, arriveInXr);
   // Dev only: lets `make vr-sim-probe` ask for the lab's hand-off (same pattern as __VR_SIM__).
   useEffect(() => {
     if (process.env.NODE_ENV === 'production') return;

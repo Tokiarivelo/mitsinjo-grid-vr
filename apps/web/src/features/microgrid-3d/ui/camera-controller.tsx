@@ -16,6 +16,7 @@ import { terrainHeight } from '../utils/landscape';
 import { setupXRHandsAndControllers, type XRHandsHandle } from '../utils/xr-hands';
 import { buildWalkGrid, resolveWalk, type WalkGrid } from '../utils/walk-grid';
 import { standNear, useXrHandoff } from '../utils/xr-handoff';
+import { readXrKeys, xrWorldScale, XR_KEY_TURN_SPEED } from '../utils/xr-walk';
 import {
   clampToInterior,
   INTERIOR_ORIGIN,
@@ -271,6 +272,7 @@ export function CameraController({
         xrRig.current = null;
         if (rig) {
           (xrPrevParent.current ?? scene).attach(camera);
+          camera.scale.set(1, 1, 1); // `attach` kept the rig's scale (VS-T33)
           scene.remove(rig);
         }
         moveToFocusTarget(focusKey);
@@ -282,11 +284,12 @@ export function CameraController({
     const rig = new THREE.Group();
     // Arriving from the /village lab (VS-T29): stand next to the object just added.
     const handoff = useXrHandoff.getState();
-    const view = handoff.pending
-      ? standNear(handoff.pending.at[0], handoff.pending.at[1], EYE_HEIGHT)
-      : XR_VIEWPOINT;
+    const at = handoff.pending?.at;
+    const view = at ? standNear(at[0], at[1], EYE_HEIGHT) : XR_VIEWPOINT;
     if (handoff.pending) handoff.clear();
     rig.position.set(...view.position);
+    // The village is half scale: the viewer shrinks with it (eyes, hands, steps, VS-T33).
+    rig.scale.setScalar(xrWorldScale(false));
     // Align rig yaw only with target on the horizontal plane (XZ).
     // NEVER pitch or roll the XR rig: tilting the rig's Y-axis causes
     // headset yaw to induce artificial visual roll, triggering severe motion sickness.
@@ -334,9 +337,14 @@ export function CameraController({
     if (!xrActive || !rig || !xrPlace) return;
     interior.current = xrPlace.interior;
     stepLeft.current = 0;
+    const scale = xrWorldScale(xrPlace.interior);
+    rig.scale.setScalar(scale);
     const headYaw = _euler.setFromQuaternion(camera.quaternion, 'YXZ').y;
     rig.rotation.set(0, xrPlace.spot.yaw - headYaw, 0);
-    _local.set(camera.position.x, 0, camera.position.z).applyAxisAngle(UP, rig.rotation.y);
+    _local
+      .set(camera.position.x, 0, camera.position.z)
+      .multiplyScalar(scale)
+      .applyAxisAngle(UP, rig.rotation.y);
     rig.position.x = xrPlace.spot.position[0] - _local.x;
     rig.position.z = xrPlace.spot.position[2] - _local.z;
     invalidate();
@@ -367,7 +375,7 @@ export function CameraController({
         stepDir.current.y = 0;
         if (stepDir.current.lengthSq() < 1e-6) return;
         stepDir.current.normalize().multiplyScalar(a.direction);
-        stepLeft.current = STEP_DISTANCE;
+        stepLeft.current = STEP_DISTANCE * rig.scale.x;
         playSnapSound();
         return;
       }
@@ -405,17 +413,27 @@ export function CameraController({
       const rig = xrRig.current;
       if (!rig) return;
 
-      let moveX = 0;
-      let moveZ = 0;
-      let isRunning = false;
-
-      // 1. Keyboard controls (WASD / ZQSD / Arrows)
-      const keys = xrKeysDown.current;
-      if (keys.has('KeyW') || keys.has('KeyZ') || keys.has('ArrowUp')) moveZ -= 1;
-      if (keys.has('KeyS') || keys.has('ArrowDown')) moveZ += 1;
-      if (keys.has('KeyA') || keys.has('KeyQ') || keys.has('ArrowLeft')) moveX -= 1;
-      if (keys.has('KeyD') || keys.has('ArrowRight')) moveX += 1;
-      if (keys.has('ShiftLeft') || keys.has('ShiftRight')) isRunning = true;
+      const scale = rig.scale.x;
+      // 1. Keyboard (WASD / ZQSD / ↑↓ walk, ← → turn the head: VS-T33)
+      const keys = readXrKeys(xrKeysDown.current);
+      let moveX = keys.moveX;
+      let moveZ = keys.moveZ;
+      const isRunning = keys.run;
+      if (keys.turn !== 0) {
+        state.invalidate();
+        camera.getWorldPosition(_head);
+        const t = turnRigAboutHead(
+          rig.position.x,
+          rig.position.z,
+          rig.rotation.y,
+          _head.x,
+          _head.z,
+          keys.turn * XR_KEY_TURN_SPEED * Math.min(delta, 0.1)
+        );
+        rig.position.x = t.x;
+        rig.position.z = t.z;
+        rig.rotation.y = t.yaw;
+      }
 
       // 2. WebXR Gamepad / Thumbsticks (Oculus Touch & IWER DevUI)
       const session = state.gl.xr?.getSession?.();
@@ -462,15 +480,15 @@ export function CameraController({
           xrMoveDir.current.normalize();
         }
 
-        const baseSpeed = isRunning ? 6.0 : 3.0; // m/s
-        const step = baseSpeed * Math.min(delta, 0.1);
+        const baseSpeed = isRunning ? 6.0 : 3.0; // m/s as felt; the world is `scale` smaller
+        const step = baseSpeed * scale * Math.min(delta, 0.1);
         walkRig(rig, xrMoveDir.current.x * step, xrMoveDir.current.z * step);
       }
 
       // Snap step glide (right stick ↑/↓, thumb swipe): stops at a wall.
       if (stepLeft.current > 0) {
         state.invalidate();
-        const d = Math.min(stepLeft.current, STEP_SPEED * Math.min(delta, 0.1));
+        const d = Math.min(stepLeft.current, STEP_SPEED * scale * Math.min(delta, 0.1));
         const moved = walkRig(rig, stepDir.current.x * d, stepDir.current.z * d);
         stepLeft.current = moved < d * 0.5 ? 0 : stepLeft.current - d;
       }
@@ -483,13 +501,14 @@ export function CameraController({
       const groundY = interior.current
         ? INTERIOR_ORIGIN[1]
         : terrainHeight(rig.position.x, rig.position.z);
-      const eyeOffset = hasFloorTracking.current ? 0 : EYE_HEIGHT;
+      // Headset pose is in rig space: heights scale with the rig (half-scale village).
+      const eyeOffset = hasFloorTracking.current ? 0 : EYE_HEIGHT * scale;
       rig.position.y = groundY + eyeOffset;
 
-      // Absolute safety floor clamp: eye height can NEVER sink beneath ground level + 0.35m
-      const eyeWorldY = rig.position.y + camera.position.y;
-      if (eyeWorldY < groundY + 0.35) {
-        rig.position.y = groundY + 0.35 - camera.position.y;
+      // Absolute safety floor clamp: eye height can NEVER sink beneath ground level + 0.35m (felt)
+      const eyeWorldY = rig.position.y + camera.position.y * scale;
+      if (eyeWorldY < groundY + 0.35 * scale) {
+        rig.position.y = groundY + (0.35 - camera.position.y) * scale;
       }
       return;
     }

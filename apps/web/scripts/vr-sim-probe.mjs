@@ -211,7 +211,25 @@ try {
   // The glide moves ≤ 0.32 m a frame: 0.8 m is done well within 12 frames.
   await frames(12);
   const h1 = await head();
-  check('right stick ↑ : one 0.8 m step', Math.abs(xz(h0, h1) - 0.8) < 0.15, xz(h0, h1).toFixed(2));
+  // The rig is shrunk for the half-scale village (VS-T33): a step is 0.8 m as felt.
+  const scale = await sim((s) => s.scale());
+  check(
+    'the walker is shrunk to the half-scale village (eyes under a 1.3 m house wall)',
+    scale < 1 && h1[1] - (await sim((s, p) => s.ground(p[0], p[2]), h1)) < 1.3,
+    `scale ${scale}, eyes ${h1[1].toFixed(2)} m`
+  );
+  const felt = xz(h0, h1) / scale;
+  check('right stick ↑ : one 0.8 m step (felt)', Math.abs(felt - 0.8) < 0.15, felt.toFixed(2));
+  // ← / → turn the head from the keyboard while W walks (VS-T33: touchpad off while typing).
+  const k0 = await sim((s) => s.yaw());
+  await page.keyboard.down('KeyW');
+  await page.keyboard.down('ArrowLeft');
+  await frames(6);
+  await page.keyboard.up('ArrowLeft');
+  await page.keyboard.up('KeyW');
+  await frames(2);
+  const k1 = await sim((s) => s.yaw());
+  check('keyboard ← turns the head while walking', wrap(k1 - k0) > 0.05, `${deg(wrap(k1 - k0))}°`);
   const labels0 = (await state()).labels;
   await tapButton('controller-right', 3);
   const labels1 = (await state()).labels;

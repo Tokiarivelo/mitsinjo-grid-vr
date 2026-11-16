@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { useFrame, useThree } from '@react-three/fiber';
 import { useSimulationStore } from '@/stores';
 import { bodyBlocked, type WalkGrid } from '../utils/walk-grid';
+import { terrainHeight } from '../utils/landscape';
 import { describeXrHands } from '../utils/xr-input-models';
 import { useXrInputsShown, XR_INPUT_LAYER } from '../utils/xr-inputs-shown';
 
@@ -85,6 +86,10 @@ export function SimXrDevProbe({
         near: (camera as THREE.PerspectiveCamera).near,
       }),
       head: () => camera.getWorldPosition(_v).toArray(),
+      /** Rig scale: the walker shrinks in the half-scale village (VS-T33). */
+      scale: () => camera.parent?.scale.x ?? 1,
+      /** Terrain height at (x, z), to read the eye height above the ground. */
+      ground: (x: number, z: number) => terrainHeight(x, z),
       yaw: () => _e.setFromQuaternion(camera.getWorldQuaternion(_q), 'YXZ').y,
       shown: (name: string) => {
         let n = 0;

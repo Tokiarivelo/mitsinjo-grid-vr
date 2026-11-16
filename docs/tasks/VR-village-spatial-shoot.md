@@ -332,3 +332,10 @@ Style : hologramme futuriste (cyan / ambre, lignes de balayage, coins lumineux, 
 - [x] Menu : bouton « Fermer » en haut à droite de la carte de scan (`MENU_CLOSE_OFFSET`).
 - [x] Miniature : notice « gâchette raccorde, grip tourne, « Ranger » l'enlève » + carte au-dessus (nom, état, aide) avec « Ranger » (`miniature-label.tsx`).
 - [ ] **Done when :** `make vr-probe` vert ; joué au casque.
+
+### VS-T33 : Immersion dans l'URL, taille humaine et regard au clavier dans /simulation
+
+- [x] `?immersion=vr` sur `/simulation` (VR ouverte ou demandée) et `/village` (immersion), `&lab=2d|3d` aux bureaux du labo (`utils/immersion-query.ts`, `hooks/use-immersion-query.ts`) ; « Aller à la simulation » ouvre `/simulation?immersion=vr` ; recharger l'URL rouvre l'immersion.
+- [x] /simulation VR : rig réduit à 0,5 dans le village à demi-échelle (yeux ≈ 0,8 m, sous les murs de 1,3 m), 1:1 dans les pièces ; pas, vitesse, laser et panneau de secteur suivent (`utils/xr-walk.ts`).
+- [x] Clavier : `←`/`→` tournent la tête (90°/s) pendant la marche (le pavé tactile d'un portable est coupé pendant la frappe) ; `A`/`Q`/`D` restent le pas de côté.
+- [ ] **Done when :** `make vr-sim-probe` vert ; joué au casque (taille ressentie, confort).

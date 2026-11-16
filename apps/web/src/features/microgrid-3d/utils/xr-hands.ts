@@ -381,8 +381,10 @@ export function setupXRHandsAndControllers(
         _rayHits.length = 0;
       }
       const hit = _rayHits[0];
-      // The visual lives in the controller's space: the hit is put back in it.
-      _rayEnd.set(0, 0, -(hit ? hit.distance : 2.5));
+      // The visual lives in the controller's space: the hit is put back in it (the rig may be
+      // scaled, VS-T33: world metres ÷ that scale).
+      const spaceScale = r.space.matrixWorld.getMaxScaleOnAxis() || 1;
+      _rayEnd.set(0, 0, -(hit ? hit.distance / spaceScale : 2.5));
       r.visual.update({
         origin: _rayLocalO,
         direction: _rayLocalD,

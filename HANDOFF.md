@@ -1,7 +1,7 @@
 # HANDOFF — read first, overwrite at end of session (≤40 lines)
 
-**Updated:** 2026-11-16 · **By:** Claude Code · **Branch:** `feat/vs-t31-desk-turn`, stacked on
-`feat/vs-t29-chat-readable-voice-level` (PR #20, open). Tasks VS-T29–T32 in `docs/tasks/VR-village-spatial-shoot.md`.
+**Updated:** 2026-11-16 · **By:** Claude Code · **Branch:** `feat/vs-t33-xr-query-scale`, stacked on
+`feat/vs-t31-desk-turn` ← `feat/vs-t29-chat-readable-voice-level` (PR #20, open). Tasks VS-T29–T33 in `docs/tasks/VR-village-spatial-shoot.md`.
 
 ## NEXT
 
@@ -12,6 +12,10 @@
 
 ## Done this session
 
+- **VS-T33:** `?immersion=vr` on /simulation and /village, `&lab=2d|3d` at the studio desks
+  (`microgrid-3d/utils/immersion-query.ts`, `hooks/use-immersion-query.ts`; reload reopens); « Go to the
+  simulation » → `/simulation?immersion=vr`. Sim VR rig scaled 0.5 in the half-scale village (eyes ≈ 0.8 m), 1:1
+  in rooms (`utils/xr-walk.ts`); ← / → turn the head from the keyboard while walking (touchpad off while typing).
 - **VS-T32:** telemetry HUD removed (event line → `xr-event-toast.tsx`, 4.5 s notice); scan crystal above the
   card (`AIR_CRYSTAL_Y`); command guide wraps in a holo card; menu « Close » (`MENU_CLOSE_OFFSET`); miniature
   card with state, help and « Put away » (`miniature-label.tsx`, `dismissMiniature`).
@@ -23,14 +27,14 @@
   « Go to the simulation » enters VR next to the object (`microgrid-3d/utils/xr-handoff.ts`).
 - **VS-T30:** controllers no longer clipped (`XrInputsLayer`, 5 cm near plane); hands / controllers hideable
   (stick held 0.8 s or Menu button); lasers coloured against what they hit (`xr-ray-contrast.ts`).
-- Probes: `make vr-probe` (desks round trip, menu Close, Put away), `make vr-sim-probe`.
+- Probes: `make vr-probe`, `make vr-sim-probe` (+ felt step, eye height, keyboard turn).
 
 ## Decisions
 
-- Hand-off lives in memory (zustand): a reload drops it. No Neon migration, no HF dataset change.
-- Putting a miniature away leaves the simulation untouched (it only clears the miniature in reach).
+- Scale the viewer, not the village: the scene stays as is; speed, steps, laser, sector panel follow the rig scale.
+- Hand-off lives in memory (zustand): a reload drops it (the URL param now re-asks for VR, at the usual viewpoint). No Neon migration, no HF dataset change.
 
 ## Open
 
 - `make check`: `recon` / chart time-budget tests flake under full-suite load (pass alone).
-- Commits need the GPG key unlocked (signing on); VS-T31 is staged, VS-T32 unstaged until then.
+- Commits need the GPG key unlocked (signing on).

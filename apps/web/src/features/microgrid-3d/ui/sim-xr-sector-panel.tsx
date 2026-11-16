@@ -137,14 +137,22 @@ export const SimXrSectorPanel = memo(function SimXrSectorPanel({
     if (pose) {
       g.position.set(...pose.position);
       g.rotation.set(0, pose.yaw, 0);
+      g.scale.setScalar(1);
       return;
     }
+    // Same size and reach as felt when the walker is shrunk for the half-scale village (VS-T33).
+    const s = camera.parent?.scale.x ?? 1;
+    g.scale.setScalar(s);
     camera.getWorldPosition(_head);
     camera.getWorldDirection(_dir);
     _dir.y = 0;
     if (_dir.lengthSq() < 1e-6) _dir.set(0, 0, -1);
     _dir.normalize();
-    g.position.set(_head.x + _dir.x * AHEAD, _head.y - BELOW_EYES, _head.z + _dir.z * AHEAD);
+    g.position.set(
+      _head.x + _dir.x * AHEAD * s,
+      _head.y - BELOW_EYES * s,
+      _head.z + _dir.z * AHEAD * s
+    );
     g.rotation.set(0, Math.atan2(-_dir.x, -_dir.z), 0);
   }, [sector, pose, camera]);
 

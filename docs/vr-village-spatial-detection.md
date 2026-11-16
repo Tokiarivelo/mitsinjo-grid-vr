@@ -273,10 +273,14 @@ l'émulateur : [`vr-iwer-tools.md`](vr-iwer-tools.md).
   départ le plus proche) avec son câble de dérivation (`tapPoint`) ; « Insérer dans la simulation » = le même
   appel que le panneau web (`hooks/use-appliance-insert.ts` : ligne + modèle 3D édité, moteur relancé) ;
   « Aller à la simulation » demande l'entrée VR à `/simulation` (`microgrid-3d/utils/xr-handoff.ts`, en
-  mémoire), termine la session XR puis ouvre `/simulation` : la vue 3D ouvre sa session seule et place
+  mémoire), termine la session XR puis ouvre `/simulation?immersion=vr` (VS-T33) : la vue 3D ouvre sa session seule et place
   l'utilisateur à 2,5 m de l'objet ajouté, côté centre du village, face à lui (`standNear`). Un casque qui
   refuse une session sans nouveau geste garde la demande : « Voir en VR » arrive alors au même endroit.
   Titre, état et boutons de la table sont debout au-dessus de son bord éloigné, à hauteur des yeux (VS-T29).
+- **Immersion dans l'URL** (VS-T33, `microgrid-3d/utils/immersion-query.ts`, `useImmersionQuery`) : `/village`
+  porte `?immersion=vr` tant que l'immersion est affichée, plus `&lab=2d` (bureau des vues 2D) ou `&lab=3d`
+  (construction, labo 3D) ; `history.replaceState`, sans navigation. Recharger `/village?immersion=vr` rouvre
+  l'immersion (la session casque demande toujours « Voir en VR ») ; le bureau du labo n'est pas restauré.
 - **Lisibilité des panneaux** (VS-T29) : tailles de texte en dmm (1 dmm = 1 mm vu à 1 m ; Meta : 14 px
   minimum, 18 px confortable) converties en px de canevas pour la largeur du plan et la distance de lecture
   (`holoTextPx`, `HOLO_TEXT_DMM` : titre 30, libellé 24, texte 20, légende 16). `HoloButton` : icône en

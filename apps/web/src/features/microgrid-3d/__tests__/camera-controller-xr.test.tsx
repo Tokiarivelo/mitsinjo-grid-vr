@@ -38,6 +38,7 @@ import {
   EYE_HEIGHT,
   XR_VIEWPOINT,
 } from '../ui/camera-controller';
+import { XR_VILLAGE_SCALE } from '../utils/xr-walk';
 
 const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 1500);
 three.state.camera = camera;
@@ -113,8 +114,9 @@ describe('CameraController XR (VR-T2)', () => {
     frameCallback?.({ invalidate: vi.fn(), gl: { xr: { getSession: () => null } } }, 0.1);
     // Camera is facing -Z horizontally, so moving forward decreases Z (moves toward village center):
     expect(rig.position.z).toBeLessThan(startZ);
-    // Height follows terrain at village plateau + eye height (1.8m)
-    expect(rig.position.y).toBe(EYE_HEIGHT);
+    // Height follows terrain at village plateau + eye height, shrunk with the half-scale village
+    expect(rig.scale.x).toBe(XR_VILLAGE_SCALE);
+    expect(rig.position.y).toBeCloseTo(EYE_HEIGHT * XR_VILLAGE_SCALE);
 
     window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyW' }));
   });
@@ -127,7 +129,27 @@ describe('CameraController XR (VR-T2)', () => {
     camera.position.set(0, -2.0, 0);
     frameCallback?.({ invalidate: vi.fn(), gl: { xr: { getSession: () => null } } }, 0.1);
 
-    const worldEyeY = rig.position.y + camera.position.y;
-    expect(worldEyeY).toBeGreaterThanOrEqual(0.35);
+    const worldEyeY = rig.position.y + camera.position.y * rig.scale.x;
+    expect(worldEyeY).toBeGreaterThanOrEqual(0.35 * XR_VILLAGE_SCALE - 1e-9);
+  });
+
+  it('turns the head with ← while walking forward (VS-T33 regression)', () => {
+    render(<CameraController preset="village" reducedMotion xrActive />);
+    const rig = camera.parent as THREE.Group;
+    const startYaw = rig.rotation.y;
+    const startZ = rig.position.z;
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyW' }));
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'ArrowLeft' }));
+    frameCallback?.({ invalidate: vi.fn(), gl: { xr: { getSession: () => null } } }, 0.1);
+    expect(rig.rotation.y).toBeGreaterThan(startYaw);
+    expect(rig.position.z).toBeLessThan(startZ);
+    window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyW' }));
+    window.dispatchEvent(new KeyboardEvent('keyup', { code: 'ArrowLeft' }));
+  });
+
+  it('gives the camera back at scale 1 on exit', () => {
+    const { rerender } = render(<CameraController preset="village" reducedMotion xrActive />);
+    rerender(<CameraController preset="village" reducedMotion />);
+    expect(camera.scale.toArray()).toEqual([1, 1, 1]);
   });
 });

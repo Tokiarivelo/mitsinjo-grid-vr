@@ -6,14 +6,17 @@ type Vec3 = [number, number, number];
 export const XR_HANDOFF_STAND = 2.5;
 
 export interface XrHandoff {
-  /** Village point (x, z) of the object the viewer arrives next to. */
-  at: [number, number];
+  /**
+   * Village point (x, z) of the object the viewer arrives next to; null = the usual entry viewpoint
+   * (a reload of `/simulation?immersion=vr`, VS-T33).
+   */
+  at: [number, number] | null;
 }
 
 interface XrHandoffState {
   /** A VR entry asked for by another page (the /village lab, VS-T29), not yet taken. */
   pending: XrHandoff | null;
-  request: (at: [number, number]) => void;
+  request: (at: [number, number] | null) => void;
   clear: () => void;
 }
 

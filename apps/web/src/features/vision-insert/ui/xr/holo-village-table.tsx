@@ -18,6 +18,7 @@ import {
 } from '@/features/microgrid-3d/utils/landscape';
 import { tapPoint } from '@/features/microgrid-3d/utils/tap-point';
 import { useXrHandoff } from '@/features/microgrid-3d/utils/xr-handoff';
+import { immersionHref } from '@/features/microgrid-3d/utils/immersion-query';
 import { useApplianceInsert } from '../../hooks/use-appliance-insert';
 import {
   pathSegmentsInRange,
@@ -206,7 +207,7 @@ export const HoloVillageTable = memo(function HoloVillageTable({
       .getSession()
       ?.end()
       .catch(() => {});
-    router.push('/simulation');
+    router.push(immersionHref('/simulation'));
   };
 
   const summary = draft.summary;
