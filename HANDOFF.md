@@ -1,16 +1,21 @@
 # HANDOFF — read first, overwrite at end of session (≤40 lines)
 
-**Updated:** 2026-11-16 · **By:** Claude Code · **Branch:** `feat/vs-t29-chat-readable-voice-level` (from `main`
-after PR #19 merge). Tasks VS-T29, VS-T30 in `docs/tasks/VR-village-spatial-shoot.md`.
+**Updated:** 2026-11-16 · **By:** Claude Code · **Branch:** `feat/vs-t31-desk-turn`, stacked on
+`feat/vs-t29-chat-readable-voice-level` (PR #20, open). Tasks VS-T29–T31 in `docs/tasks/VR-village-spatial-shoot.md`.
 
 ## NEXT
 
-1. Headset: play V442, V444–V449 and S133–S135 (lasers on bright sky / dark rooms, hide hands & controllers). Check that Quest Browser opens /simulation's VR session without a new
+1. Headset: play V450–V452 (desk turn comfort, 1.1 s). Then V442, V444–V449 and S133–S135 (lasers on bright sky / dark rooms, hide hands & controllers). Check that Quest Browser opens /simulation's VR session without a new
    gesture after « Go to the simulation » (else the « View in VR » button lands next to the object).
 2. Quest Browser voice = system keyboard dictation (no Web Speech API): the level meter needs the mic there too.
 3. PR #15 (`feat/pq-q4`, Q4 surfaces & light) stays open: main rewrote the perception pipeline, needs a port.
 
 ## Done this session
+
+- **VS-T31 desks:** 2D lab (views) and 3D lab (build, lab) back to back on a turntable round the viewer
+  (`studio-desks.tsx`, `deskTurnAngle` / `deskYaw` / `deskPivot`); « Validate & build » turns right → left.
+  « 2D lab » (far left of the lab, `LAB_TO_VIEWS`) and « 3D lab » (generation column, once built) go back
+  and forth (`toViews` / `toLab` reducer events). `make vr-probe` green with the round trip.
 
 - PR #19 (VS-T25–T28) merged. Earlier fixes: Cancel under the floating Menu button, `make dev-mock` offline.
 - **VS-T29 readable panels:** text sized in dmm for the reading distance (`holoTextPx`, `HOLO_TEXT_DMM`,

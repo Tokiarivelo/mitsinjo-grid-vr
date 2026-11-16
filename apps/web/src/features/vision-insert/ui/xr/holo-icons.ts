@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 
 /** Line icons of the holo buttons, drawn on a canvas (no emoji font in the headset browser). */
-export const HOLO_ICONS = ['keyboard', 'mic', 'stop', 'send', 'insert', 'go'] as const;
+export const HOLO_ICONS = ['keyboard', 'mic', 'stop', 'send', 'insert', 'go', 'back'] as const;
 export type HoloIcon = (typeof HOLO_ICONS)[number];
 
 type Ctx = CanvasRenderingContext2D;
@@ -73,6 +73,15 @@ const DRAW: Record<HoloIcon, (ctx: Ctx, s: number) => void> = {
     ctx.moveTo(0.56 * s, 0.24 * s);
     ctx.lineTo(0.84 * s, 0.5 * s);
     ctx.lineTo(0.56 * s, 0.76 * s);
+    ctx.stroke();
+  },
+  back: (ctx, s) => {
+    ctx.beginPath();
+    ctx.moveTo(0.86 * s, 0.5 * s);
+    ctx.lineTo(0.18 * s, 0.5 * s);
+    ctx.moveTo(0.44 * s, 0.24 * s);
+    ctx.lineTo(0.16 * s, 0.5 * s);
+    ctx.lineTo(0.44 * s, 0.76 * s);
     ctx.stroke();
   },
 };

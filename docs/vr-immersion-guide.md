@@ -277,6 +277,13 @@ Pilotage scripté (MCP IWER ou `remote.dispatch`) : voir [`vr-iwer-tools.md`](vr
    « Menu ») à chaque étape du studio ; on retrouve la visite 360° et le bouton devient « Revenir au studio ·
    « objet » », qui ramène à l'étape quittée (vues 2D, construction ou labo). Ré-extraire **le même objet** reprend
    aussi là où on était (le labo garde son modèle) ; confirmer un autre objet oublie le précédent.
+   8b. **Labo 2D ↔ labo 3D** (VS-T31) : les vues 2D et le labo 3D sont deux bureaux dos à dos sur un plateau centré
+   sur le spectateur. « Valider et construire la 3D » fait tourner le plateau de droite à gauche (1,1 s, adouci) :
+   le bureau 2D part à gauche, le bureau 3D arrive de la droite ; seul le contenu tourne, le dôme et la grille
+   restent immobiles (pas de vection). Dans le labo, « Labo 2D » (tout à gauche, après la liste des pièces)
+   ramène aux vues en tournant dans l'autre sens, le modèle reste ; dans les vues, « Labo 3D » (sous la carte de
+   génération, à droite) apparaît dès que le modèle existe. Les deux bureaux ne sont dessinés ensemble que
+   pendant la rotation (`studio-desks.tsx`, `deskTurnAngle` / `deskYaw` / `deskPivot` dans `xr-layout.ts`).
 9. **Mains, manettes, laser** (VS-T26, `/village` et `/simulation`) : la main est le modèle articulé
    `generic-hand` des WebXR input profiles (celui que dessine le Quest), peau mate + liseré clair (fresnel) ; la
    manette est celle que le navigateur annonce (Touch / Touch Plus). Chargés depuis le CDN des input profiles :

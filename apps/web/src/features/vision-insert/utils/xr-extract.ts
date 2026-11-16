@@ -12,6 +12,9 @@ import type { FaceName } from '@/lib/object-shape';
  * Leaving the studio (« Leave the studio », or leaving the lab) keeps where the viewer was
  * (`away`, VS-T26): « Back to the studio » returns there, and extracting the same object again
  * resumes it (its lab, its model) instead of starting over. Confirming another object forgets it.
+ *
+ * Two desks in the studio (VS-T31): the 2D lab (views) and the 3D lab (build, lab). Once the model
+ * exists, « 2D lab » goes back from the lab to the views and « 3D lab » from the views to the lab.
  */
 export type XrExtractStage = 'idle' | 'confirm' | 'views' | 'build' | 'lab';
 
@@ -35,6 +38,8 @@ export type XrExtractEvent =
   | { type: 'build' }
   | { type: 'enterLab' }
   | { type: 'exitLab' }
+  | { type: 'toViews' }
+  | { type: 'toLab'; built: boolean }
   | { type: 'leave' }
   | { type: 'return' };
 
@@ -64,6 +69,10 @@ export function xrExtractReducer(state: XrExtractState, event: XrExtractEvent): 
       return state.stage === 'views' ? { ...state, stage: 'build' } : state;
     case 'enterLab':
       return state.stage === 'build' ? { ...state, stage: 'lab' } : state;
+    case 'toViews':
+      return state.stage === 'lab' ? { ...state, stage: 'views' } : state;
+    case 'toLab':
+      return state.stage === 'views' && event.built ? { ...state, stage: 'lab' } : state;
     case 'exitLab':
     case 'leave':
       if (event.type === 'exitLab' && state.stage !== 'lab') return state;
@@ -76,6 +85,11 @@ export function xrExtractReducer(state: XrExtractState, event: XrExtractEvent): 
         : state;
   }
 }
+
+/** Studio desk of a step (VS-T31): the 2D lab for the views, the 3D lab for the build and the lab. */
+export type StudioDesk = '2d' | '3d';
+export const deskOf = (stage: XrExtractStage): StudioDesk | null =>
+  stage === 'views' ? '2d' : stage === 'build' || stage === 'lab' ? '3d' : null;
 
 /** A modal step: the 360° photo, its outlines and floor arrows take no shot meanwhile. */
 export const isModalStage = (stage: XrExtractStage) => stage !== 'idle';

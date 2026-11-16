@@ -41,6 +41,10 @@ export interface XrExtract {
   build: () => void;
   enterLab: () => void;
   exitLab: () => void;
+  /** From the 3D lab back to the 2D views, keeping the model (VS-T31). */
+  toViews: () => void;
+  /** From the 2D views to the 3D lab, once the model is built (VS-T31). */
+  toLab: () => void;
   /** Leaves the studio, keeping the step and the object to come back to (VS-T26). */
   leave: () => void;
   /** Back to the studio step left (no-op when none). */
@@ -132,6 +136,8 @@ export function useXrExtract({
     if (state.stage === 'build' && ready) dispatch({ type: 'enterLab' });
   }, [state.stage, ready]);
   const exitLab = useCallback(() => dispatch({ type: 'exitLab' }), []);
+  const toViews = useCallback(() => dispatch({ type: 'toViews' }), []);
+  const toLab = useCallback(() => dispatch({ type: 'toLab', built: ready }), [ready]);
   const leave = useCallback(() => dispatch({ type: 'leave' }), []);
   const back = useCallback(() => {
     if (awayId) select(awayId);
@@ -205,6 +211,8 @@ export function useXrExtract({
     build,
     enterLab,
     exitLab,
+    toViews,
+    toLab,
     leave,
     back,
     awayId,

@@ -26,13 +26,14 @@ import { HoloButton, HoloFrame, HoloText } from './holo-ui';
 import { HOLO } from './holo-style';
 import { AnchoredPanel, usePanelAnchor } from './holo-extract-panels';
 import { PEDESTAL_DROP, StudioPedestal } from './xr-extract-studio';
-import type { PanelAnchor } from './xr-layout';
+import { LAB_TO_VIEWS, type PanelAnchor } from './xr-layout';
 import { HoloVillageTable } from './holo-village-table';
 import type { AimReadout } from './xr-blaster-controller';
 
 export const LAB_IDS = {
   model: 'holo:lab-model',
   exit: 'holo:lab-exit',
+  toViews: 'holo:lab-to-views',
   undo: 'holo:lab-undo',
   redo: 'holo:lab-redo',
   hide: 'holo:lab-hide',
@@ -64,6 +65,8 @@ export interface XrObjectLabProps {
   /** Every edit, at once (the page's recipe: the 2D panel and the village see it live). */
   onEditPieces: (pieces: PieceEdits) => void;
   onExit: () => void;
+  /** Back to the 2D lab (the views), keeping the model (VS-T31); no button without it. */
+  onToViews?: () => void;
   /** Where the studio opened (the model lands where its hologram stood); else ahead of the gaze. */
   anchor?: PanelAnchor | null;
   /** `photoKey` of the scanned photo: with it, the village hologram places the object (VS-T28). */
@@ -88,6 +91,7 @@ export const XrObjectLab = memo(function XrObjectLab({
   hoveredId,
   onEditPieces,
   onExit,
+  onToViews,
   anchor: studioAnchor,
   photo,
   aim,
@@ -413,6 +417,24 @@ export const XrObjectLab = memo(function XrObjectLab({
             onSelect={onExit}
           />
         </group>
+
+        {/* « 2D lab » (VS-T31): far left, where the 2D desk comes back from */}
+        {onToViews && (
+          <group position={LAB_TO_VIEWS.position} rotation={[0, LAB_TO_VIEWS.yaw, 0]}>
+            <HoloButton
+              {...btn(LAB_IDS.toViews)}
+              label={t('vrLab.toViews')}
+              tip={t('vrLab.toViewsTip')}
+              icon="back"
+              width={0.28}
+              height={0.09}
+              position={[0, 0, 0.004]}
+              color={HOLO.cyan}
+              distance={LAB_TO_VIEWS.distance}
+              onSelect={onToViews}
+            />
+          </group>
+        )}
 
         {/* Village hologram (VS-T28): place the edited model, add it, go to the simulation */}
         {photo && (

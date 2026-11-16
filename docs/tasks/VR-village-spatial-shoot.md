@@ -314,3 +314,10 @@ Style : hologramme futuriste (cyan / ambre, lignes de balayage, coins lumineux, 
 - [x] Afficher / masquer mains et manettes partout : calque `XR_INPUT_LAYER`, stick maintenu 0,8 s, Menu › bouton sur /village, choix gardé.
 - [x] Lasers : couleur selon l'environnement (`xr-ray-contrast.ts`) + halo du ton opposé, sur /village et /simulation.
 - [ ] **Done when :** `make vr-probe` + `make vr-sim-probe` verts ; joué au casque (ciel clair, intérieur sombre).
+
+### VS-T31 : Passage labo 2D → labo 3D en tournant les bureaux, et retour
+
+- [x] « Valider et construire la 3D » : les bureaux tournent de droite à gauche (plateau centré sur le spectateur, `StudioDesks`), la salle reste fixe.
+- [x] Labo 3D : bouton « Labo 2D » tout à gauche → retour aux vues 2D (rotation inverse), le modèle reste (`toViews`).
+- [x] Labo 2D : bouton « Labo 3D » sous la carte de génération dès que le modèle existe (`toLab`).
+- [ ] **Done when :** `make vr-probe` vert (aller-retour 2D ↔ 3D) ; joué au casque (confort de la rotation).

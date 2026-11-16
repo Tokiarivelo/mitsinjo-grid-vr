@@ -3,7 +3,7 @@
  * Panels sit about 1 m away, below eye level, so the centre of the webcam video stays clear
  * (Meta comfort guidance: ~1 m, slightly below the line of sight, ~70 cm reach for hands).
  */
-type Vec3 = [number, number, number];
+export type Vec3 = [number, number, number];
 
 /**
  * Inside the wrist menu (`wrist-menu.ts`), relative to its centre (0.9 m ahead, below the eyes,
@@ -154,4 +154,48 @@ export const VILLAGE_TABLE = {
   radius: 0.32,
   /** Distance (m) its title, status and buttons (above the far edge) are read from. */
   distance: 1.55,
+} as const;
+
+/**
+ * Studio desks (VS-T31): the 2D lab (views) and the 3D lab (build, lab) stand back to back on a
+ * turntable centred on the viewer. Going to the 3D lab turns it right to left (desks slide to
+ * the left, the 3D one comes in from the right), going back turns it the other way. Only the desks
+ * turn (the dome and the grid stay still: no vection); eased in and out over `DESK_TURN_SECONDS`.
+ */
+export const DESK_TURN_SECONDS = 1.1;
+
+/** Smoothstep ease of a 0..1 progress. */
+const ease = (k: number) => {
+  const c = Math.max(0, Math.min(1, k));
+  return c * c * (3 - 2 * c);
+};
+
+/** Turntable angle (rad, + = counter-clockwise from above = to the left): 0 = 2D desk ahead, π = 3D. */
+export function deskTurnAngle(to: '2d' | '3d', progress: number): number {
+  const e = ease(progress);
+  return Math.PI * (to === '3d' ? e : 1 - e);
+}
+
+/** Yaw (rad, about the viewer) of one desk at turntable angle `angle`: the 3D desk sits behind. */
+export const deskYaw = (desk: '2d' | '3d', angle: number) =>
+  desk === '2d' ? angle : angle - Math.PI;
+
+/** Turntable centre: where the viewer stood when the panels' anchor was set. */
+export function deskPivot(anchor: PanelAnchor, distance = EXTRACT_DISTANCE): Vec3 {
+  const [x, y, z] = anchor.position;
+  return [
+    Number((x - Math.sin(anchor.yaw) * distance).toFixed(3)),
+    y,
+    Number((z + Math.cos(anchor.yaw) * distance).toFixed(3)),
+  ];
+}
+
+/**
+ * « 2D lab » button of the 3D lab (VS-T31): far left, past the pieces list (the 2D desk comes back
+ * from the left), turned toward the viewer (~1.15 m away).
+ */
+export const LAB_TO_VIEWS = {
+  position: [-1.02, -0.05, 0.55] as Vec3,
+  yaw: Number(Math.atan2(1.02, EXTRACT_DISTANCE - 0.55).toFixed(3)),
+  distance: 1.16,
 } as const;

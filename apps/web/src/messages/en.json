@@ -1584,7 +1584,9 @@
         "bigger": "+ Size",
         "turn": "Turn 90°",
         "fade": "Opacity",
-        "exit": "Leave the lab"
+        "exit": "Leave the lab",
+        "toViews": "2D lab",
+        "toViewsTip": "Turn back to the 2D views: the model stays"
       },
       "vrControls": {
         "verbTrigger": "Trigger",
@@ -1630,7 +1632,9 @@
       },
       "vrStudio": {
         "viewsTitle": "Drawing the 2D views of « {name} »",
-        "buildSub": "The 3D lab opens by itself as soon as the model is ready"
+        "buildSub": "The 3D lab opens by itself as soon as the model is ready",
+        "toLab": "3D lab",
+        "toLabTip": "Turn to the 3D lab: the model is already built"
       },
       "cancelAnalysis": "Cancel the analysis",
       "analysisCancelled": "Analysis cancelled.",

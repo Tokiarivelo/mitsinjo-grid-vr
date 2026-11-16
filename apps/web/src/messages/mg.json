@@ -1584,7 +1584,9 @@
         "bigger": "+ Habe",
         "turn": "Ahodino 90°",
         "fade": "Mangarahara",
-        "exit": "Hiala ao amin’ny labo"
+        "exit": "Hiala ao amin’ny labo",
+        "toViews": "Labo 2D",
+        "toViewsTip": "Miverina any amin’ny sary 2D: tsy very ny modely"
       },
       "vrControls": {
         "verbTrigger": "Bokotra fitifirana",
@@ -1630,7 +1632,9 @@
       },
       "vrStudio": {
         "viewsTitle": "Manao ny sary 2D an’i « {name} »",
-        "buildSub": "Misokatra ho azy ny labo 3D raha vao vonona ny modely"
+        "buildSub": "Misokatra ho azy ny labo 3D raha vao vonona ny modely",
+        "toLab": "Labo 3D",
+        "toLabTip": "Mitodika any amin’ny labo 3D: efa vita ny modely"
       },
       "cancelAnalysis": "Ajanony ny famakafakana",
       "analysisCancelled": "Najanona ny famakafakana.",

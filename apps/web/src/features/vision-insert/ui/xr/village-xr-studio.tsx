@@ -64,6 +64,8 @@ import { XrControlsDriver } from './xr-controls-driver';
 import { SNAP_TURN, snapshotSources, STEP_DISTANCE, type XrControlAction } from './xr-controls';
 import { snapTurn } from './xr-rig';
 import { newStudioWalk, StudioWalk, wheelStep } from './studio-walk';
+import { StudioDesks } from './studio-desks';
+import { deskOf } from '../../utils/xr-extract';
 import type { AimHintContext } from './xr-aim-hint';
 import { FollowGroup, WristMenuButton, WristMenuPanel } from './xr-wrist-menu';
 
@@ -444,6 +446,10 @@ export const VillageXRStudio = memo(function VillageXRStudio({
     ? localLabel(awayTarget.detection, locale) || awayTarget.detection.label
     : '';
   const door = studio ? 'leave' : stage === 'idle' && awayTarget ? 'back' : null;
+  // Studio desks (VS-T31): which one is ahead, and whether the 3D lab can be opened from the 2D one.
+  const desk = deskOf(stage);
+  const labReady = Boolean(extract?.ready && extract.shape.shape && extractTarget && imageUrl);
+  const vehicle = Boolean(extract?.slides.some((s) => s.id === 'bottom'));
 
   // Controls (VS-T23): buttons, sticks and thumb gestures → turn, step, analyse, back, help.
   const tc = useTranslations('features.visionInsert.vrControls');
@@ -802,57 +808,86 @@ export const VillageXRStudio = memo(function VillageXRStudio({
       {studio && (
         <StudioWalk walk={studioWalk}>
           <StudioRoom />
-          {extract && anchor && stage === 'views' && (
-            <HoloViewsCarousel
+          {/* 2D lab and 3D lab back to back, turned from one to the other (VS-T31) */}
+          {extract && anchor && desk && (
+            <StudioDesks
               anchor={anchor}
-              registry={panels}
-              hoveredId={hoveredTargetId}
-              slides={extract.slides}
-              vehicle={extract.slides.some((s) => s.id === 'bottom')}
-              canBuild={extract.canBuild}
-              onRedraw={extract.redraw}
-              onToggleValidated={extract.toggleValidated}
-              onBuild={extract.build}
-              onCancel={extract.cancel}
-              chatOf={extract.chatOf}
-              onSendChat={extract.sendChat}
-              aim={aimOut}
-            />
-          )}
-          {extract && anchor && (stage === 'views' || stage === 'build') && (
-            <AnchoredPanel anchor={anchor} name="xr-studio-panels">
-              {stage === 'build' && (
-                <HoloBuildStage
-                  name={extractName}
-                  {...(extract.slides[0]?.imageUrl ? { imageUrl: extract.slides[0].imageUrl } : {})}
-                />
-              )}
-              <HoloGenerationColumn
-                stage={stage}
-                name={extractName}
-                slides={extract.slides}
-                vehicle={extract.slides.some((s) => s.id === 'bottom')}
-                {...(extract.shape.step ? { step: extract.shape.step } : {})}
-                seconds={buildSeconds}
-                registry={panels}
-                hoveredId={hoveredTargetId}
-                onCancel={extract.cancel}
-              />
-            </AnchoredPanel>
-          )}
-          {extract && stage === 'lab' && extract.shape.shape && extractTarget && imageUrl && (
-            <XrObjectLab
-              shape={extract.shape.shape}
-              detection={extractTarget.detection}
-              imageUrl={imageUrl}
-              label={extractName}
-              registry={panels}
-              hoveredId={hoveredTargetId}
-              onEditPieces={extract.editPieces}
-              onExit={leaveLab}
-              anchor={anchor}
-              photo={photo}
-              aim={aimOut}
+              desk={desk}
+              twoD={
+                <>
+                  <HoloViewsCarousel
+                    anchor={anchor}
+                    registry={panels}
+                    hoveredId={hoveredTargetId}
+                    slides={extract.slides}
+                    vehicle={vehicle}
+                    canBuild={extract.canBuild}
+                    onRedraw={extract.redraw}
+                    onToggleValidated={extract.toggleValidated}
+                    onBuild={extract.build}
+                    onCancel={extract.cancel}
+                    chatOf={extract.chatOf}
+                    onSendChat={extract.sendChat}
+                    aim={aimOut}
+                  />
+                  <AnchoredPanel anchor={anchor} name="xr-studio-panels-2d">
+                    <HoloGenerationColumn
+                      stage="views"
+                      name={extractName}
+                      slides={extract.slides}
+                      vehicle={vehicle}
+                      seconds={buildSeconds}
+                      registry={panels}
+                      hoveredId={hoveredTargetId}
+                      onCancel={extract.cancel}
+                      {...(labReady ? { onToLab: extract.toLab } : {})}
+                    />
+                  </AnchoredPanel>
+                </>
+              }
+              threeD={
+                stage === 'build' ? (
+                  <AnchoredPanel anchor={anchor} name="xr-studio-panels">
+                    <HoloBuildStage
+                      name={extractName}
+                      {...(extract.slides[0]?.imageUrl
+                        ? { imageUrl: extract.slides[0].imageUrl }
+                        : {})}
+                    />
+                    <HoloGenerationColumn
+                      stage="build"
+                      name={extractName}
+                      slides={extract.slides}
+                      vehicle={vehicle}
+                      {...(extract.shape.step ? { step: extract.shape.step } : {})}
+                      seconds={buildSeconds}
+                      registry={panels}
+                      hoveredId={hoveredTargetId}
+                      onCancel={extract.cancel}
+                    />
+                  </AnchoredPanel>
+                ) : (
+                  labReady &&
+                  extract.shape.shape &&
+                  extractTarget &&
+                  imageUrl && (
+                    <XrObjectLab
+                      shape={extract.shape.shape}
+                      detection={extractTarget.detection}
+                      imageUrl={imageUrl}
+                      label={extractName}
+                      registry={panels}
+                      hoveredId={hoveredTargetId}
+                      onEditPieces={extract.editPieces}
+                      onExit={leaveLab}
+                      onToViews={extract.toViews}
+                      anchor={anchor}
+                      photo={photo}
+                      aim={aimOut}
+                    />
+                  )
+                )
+              }
             />
           )}
         </StudioWalk>

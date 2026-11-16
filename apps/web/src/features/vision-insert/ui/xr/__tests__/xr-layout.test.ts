@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   anchorAhead,
   CAROUSEL_RADIUS,
+  deskPivot,
+  deskTurnAngle,
+  deskYaw,
   EXTRACT_DISTANCE,
+  LAB_TO_VIEWS,
   EXTRACT_DROP,
   slidePose,
 } from '../xr-layout';
@@ -39,5 +43,40 @@ describe('slidePose (VS-T20)', () => {
       const p = slidePose(rel).position;
       expect(Math.hypot(p[0], p[2] - EXTRACT_DISTANCE)).toBeCloseTo(CAROUSEL_RADIUS, 2);
     }
+  });
+});
+
+describe('studio desks turntable (VS-T31)', () => {
+  it('turns right to left toward the 3D lab, back the other way', () => {
+    expect(deskTurnAngle('3d', 0)).toBe(0);
+    expect(deskTurnAngle('3d', 1)).toBeCloseTo(Math.PI);
+    expect(deskTurnAngle('3d', 0.5)).toBeCloseTo(Math.PI / 2);
+    expect(deskTurnAngle('2d', 0)).toBeCloseTo(Math.PI);
+    expect(deskTurnAngle('2d', 1)).toBe(0);
+    // Eased: slow start, never past the ends.
+    expect(deskTurnAngle('3d', 0.1)).toBeLessThan(Math.PI * 0.1);
+    expect(deskTurnAngle('3d', 2)).toBeCloseTo(Math.PI);
+  });
+  it('keeps the desks back to back: the 3D desk comes in from the right', () => {
+    expect(deskYaw('2d', 0)).toBe(0);
+    expect(deskYaw('3d', Math.PI)).toBe(0);
+    // Half way: 2D desk on the left (+yaw, counter-clockwise), 3D desk on the right.
+    expect(deskYaw('2d', Math.PI / 2)).toBeGreaterThan(0);
+    expect(deskYaw('3d', Math.PI / 2)).toBeLessThan(0);
+  });
+  it('centres the turntable on the viewer who set the anchor', () => {
+    const eye: [number, number, number] = [1, 1.6, 2];
+    const a = anchorAhead(eye, [1, 0, 0]);
+    const p = deskPivot(a);
+    expect(p[0]).toBeCloseTo(1);
+    expect(p[2]).toBeCloseTo(2);
+    expect(p[1]).toBe(a.position[1]);
+  });
+  it('turns the « 2D lab » button toward the viewer, on the far left', () => {
+    const [x, , z] = LAB_TO_VIEWS.position;
+    expect(x).toBeLessThan(-0.9);
+    // Facing the eye at (0, 0, EXTRACT_DISTANCE) in panel space.
+    expect(Math.atan2(-x, EXTRACT_DISTANCE - z)).toBeCloseTo(LAB_TO_VIEWS.yaw, 2);
+    expect(Math.hypot(x, EXTRACT_DISTANCE - z)).toBeCloseTo(LAB_TO_VIEWS.distance, 1);
   });
 });

@@ -1584,7 +1584,9 @@
         "bigger": "+ Taille",
         "turn": "Tourner 90°",
         "fade": "Opacité",
-        "exit": "Quitter le labo"
+        "exit": "Quitter le labo",
+        "toViews": "Labo 2D",
+        "toViewsTip": "Revenir aux vues 2D : le modèle reste"
       },
       "vrControls": {
         "verbTrigger": "Gâchette",
@@ -1630,7 +1632,9 @@
       },
       "vrStudio": {
         "viewsTitle": "Dessin des vues 2D de « {name} »",
-        "buildSub": "Le labo 3D s’ouvre tout seul dès que le modèle est prêt"
+        "buildSub": "Le labo 3D s’ouvre tout seul dès que le modèle est prêt",
+        "toLab": "Labo 3D",
+        "toLabTip": "Tourner vers le labo 3D : le modèle est déjà construit"
       },
       "cancelAnalysis": "Annuler l'analyse",
       "analysisCancelled": "Analyse annulée.",

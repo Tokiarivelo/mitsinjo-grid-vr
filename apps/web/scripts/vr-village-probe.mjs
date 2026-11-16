@@ -3,7 +3,7 @@
 // The emulator shows the walkable 360° tour (VS-T14), not the webcam. Checks: session starts;
 // wrist menu; loft with 2 floor arrows; a controller shot at the fridge (no scan yet) starts ONE
 // scan and outlines it, asking nothing; a second shot at it asks « Extract to 3D? »; then the 3D
-// studio: 2D views carousel + generation column, the views AI chat (keys, send, bot answer) → build → the lab opens by itself (a piece hidden, the object placed
+// studio: 2D views carousel + generation column, the views AI chat (keys, send, bot answer) → build (the desks turn, VS-T31) → the lab opens by itself (a piece hidden; « 2D lab » / « 3D lab » turn back and forth, the object placed
 // on the village hologram and added to the simulation); mouse clicks through the DevUI overlay
 // (wrist menu, Help, « Cancel ») → leave = miniature; a tap on it connects it; a hand pinch at the lamp; shooting a floor
 // arrow walks to the hall; ↑ walks on. Screenshots show the photo orientation ("MARRY" letters).
@@ -302,7 +302,9 @@ try {
     await sleep(600);
   }
   await press('holo:views-build');
-  await sleep(1500);
+  await sleep(450);
+  await shot('3d1-desks-turning'); // VS-T31: the 2D desk slides left, the 3D desk comes from the right
+  await sleep(1050);
   await shot('3d2-studio-building');
   check(
     '« Validate & build » builds the model, then the lab opens by itself',
@@ -319,6 +321,26 @@ try {
   );
   await shot('3g-lab-piece-hidden');
   await press('holo:lab-show-all');
+
+  // VS-T31: « 2D lab » turns the desks back to the views, « 3D lab » turns them to the lab again.
+  const toViewsAt = await panelAt('holo:lab-to-views');
+  if (toViewsAt) await rc('look_at', { device: 'headset', target: toViewsAt });
+  await sleep(500);
+  await shot('3g0-lab-to-views-button');
+  await press('holo:lab-to-views');
+  await sleep(500);
+  await shot('3g0b-desks-turning-back');
+  check('« 2D lab » goes back to the views, the model kept', (await extract())?.stage === 'views');
+  await sleep(1200);
+  const toLabAt = await panelAt('holo:studio-to-lab');
+  check('the 2D lab offers « 3D lab » once the model exists', !!toLabAt);
+  if (toLabAt) await rc('look_at', { device: 'headset', target: toLabAt });
+  await sleep(500);
+  await shot('3g0c-views-to-lab-button');
+  await press('holo:studio-to-lab');
+  check('« 3D lab » turns back to the lab', (await extract())?.stage === 'lab');
+  await sleep(1500);
+  await waitFor(async () => ((await lab())?.names.length ?? 0) > 0, 15000);
 
   // Village hologram (VS-T28): place the edited model on the table, add it to the simulation.
   const village = () => page.evaluate(() => window.__VR_VILLAGE__ ?? null);
