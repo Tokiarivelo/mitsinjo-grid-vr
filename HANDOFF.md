@@ -1,38 +1,36 @@
 # HANDOFF — read first, overwrite at end of session (≤40 lines)
 
-**Updated:** 2026-11-15 · **By:** Claude Code · **Branch:** `fix/vs-t25-studio-text-pot-highlights` (pushed;
-VS-T25 + VS-T26 in `docs/tasks/VR-village-spatial-shoot.md`).
+**Updated:** 2026-11-16 · **By:** Claude Code · **Branch:** `feat/vs-t27-face-chat-lemur-bot` (pushed; stacked
+on `fix/vs-t25-studio-text-pot-highlights`, which has no PR yet). Tasks VS-T27, VS-T28 in
+`docs/tasks/VR-village-spatial-shoot.md`.
 
 ## NEXT
 
-1. Open the PR for this branch (VS-T25–T26) after `make rebase-main`; play V417–V428 in the emulator by hand.
-2. Highlights misplaced after turning during an analysis (user report): not reproduced; the projection
-   chain checks out. Need the exact repro (Play vs cursor mode, real Muse vs mock, during « refining »).
-3. Shape stream (other branch): plants PQ-T82 live re-runs, then the PQ phase PR.
+1. Run `make vr-probe` with `make dev-mock` (the dev server ran `LLM_PROVIDER=meta`: the real 3D build missed
+   the probe's 240 s wait, so the lab and village-table steps didn't run in the emulator yet).
+2. Open the PRs: VS-T25/T26 branch first, then this one (after `make rebase-main`); play V434–V442 by hand.
+3. Headset: Quest Browser voice = system keyboard dictation (no Web Speech API there): check it.
 
 ## Done this session
 
-- **VS-T25:** hologram cards shrink every line together (no clipped titles); walk in the studio (left stick,
-  80 cm steps, mouse wheel; `studio-walk.tsx`); Play-mode mouse turns the held carousel / model, not the view;
-  bigger 2D views; potted plants keep their pot (`server/perception/tree/plant-pot.ts`, `PlantPot` in the plan).
-- **VS-T26:**
-  - Real articulated hand (`generic-hand`, skin + pale fresnel rim) and the runtime's controller model,
-    from the WebXR input profiles CDN, simple models offline (`microgrid-3d/utils/xr-input-models.ts`).
-    three's factories are re-exported from plain JS + a `.d.ts` (`three-xr-factories.*`): their typings
-    pull three `src/` types and broke `tsc` project-wide.
-  - Laser per Meta « Ray casting »: short fading beam (25 / 35 cm, 10 cm gap) + constant-angle cursor ring,
-    white / `#001E78` at 83 % on press (`xr-ray-visual.ts`), on /village and /simulation.
-  - Wrist « Menu » floats in the room in the emulator or with no left wrist (was head-locked, unreachable).
-  - « Leave the studio » / « Back to the studio · name » (`FollowGroup`); the same object resumes its step
-    and its lab (`away` in `utils/xr-extract.ts`).
-  - Lab layers list scrolls with a vertical pinch-and-drag (panel `axis: 'y'`).
+- **VS-T27:** AI chat left of the 2D views carousel (`holo-face-chat.tsx`): history per view (`utils/face-chat.ts`,
+  bot line settles only after the view was seen drawing), holo keyboard (`utils/xr-keyboard.ts`, UV keys),
+  voice (`use-voice-input.ts`, fallback `use-system-keyboard.ts`), « Send » = redraw with details. Robot
+  ring-tailed lemur head (`lemur-bot.tsx`, gaze/blink in `utils/lemur-bot.ts`): original design, not a film
+  character. Probe: chat keys → send → bot « done » PASS.
+- **VS-T28:** village hologram table in the lab (`holo-village-table.tsx`, `utils/village-holo.ts`): place by
+  UV, page placement rules, feeder cable, insert via the new shared `hooks/use-appliance-insert.ts` (web
+  `ApplianceInsert` uses it too), « Go to the simulation » ends the XR session then pushes `/simulation`.
+- **Fix:** a shot that starts the analysis no longer opens « Extract to 3D? » by itself (studio mode);
+  regression test in `village-xr-studio.test.tsx`, probe check « the analysis alone asks nothing » PASS.
 
 ## Decisions
 
-- No Neon migration (plant `pot` is an optional field of a JSONB plan); no HF dataset change.
-- Emulator detection (`isDevXREmulated`) decides only where the Menu button sits.
+- Bot replies are the drawing's status (i18n), never generated text. One request at a time.
+- No Neon migration, no HF dataset change.
 
 ## Open
 
 - `make check`: green except the `recon` time-budget test under full-suite load (passes alone).
-- Not played on a headset: S125–S132, V400–V428.
+- Probe: « wrist menu closed on entry » failed in the last 3 runs; not investigated (no change here touches the wrist menu).
+- Uncommitted, not mine: `scripts/iwer-bridge-stop.sh` (orphaned bridges), left as is.
