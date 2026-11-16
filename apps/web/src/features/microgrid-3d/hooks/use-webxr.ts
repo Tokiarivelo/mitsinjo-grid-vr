@@ -7,6 +7,7 @@ import {
   guardEmulatorPointerCapture,
   installDevXREmulator,
   installDevXRPanels,
+  xrEmulatorAllowed,
   markEmulatedImmersion,
 } from '../utils/dev-xr-emulator';
 
@@ -36,7 +37,8 @@ export function useWebXR(rendererRef: RefObject<WebGLRenderer | null>): UseWebXR
     // Dev: the emulator extension's forwarded pointers must not throw on capture (VS-T38).
     if (process.env.NODE_ENV === 'development') guardEmulatorPointerCapture();
     (async () => {
-      if (!(await isImmersiveVRSupported()) && process.env.NODE_ENV === 'development') {
+      // No headset: the IWER emulator (dev, and production unless NEXT_PUBLIC_XR_EMULATOR=off).
+      if (!(await isImmersiveVRSupported()) && xrEmulatorAllowed()) {
         await installDevXREmulator().catch(() => false);
       }
       if (!cancelled) setStatus((await isImmersiveVRSupported()) ? 'supported' : 'unsupported');

@@ -1,8 +1,24 @@
+import { publicEnv } from '@/lib/env';
+
 /**
- * Dev-only WebXR emulation (Meta IWER + DevUI overlay). Loaded through a dynamic
- * import from `useWebXR` in development only, so production ships zero emulator code.
+ * WebXR emulation (Meta IWER + DevUI overlay) for browsers without a headset. Loaded through a
+ * dynamic import from `useWebXR` only when native immersive-vr is missing (a Quest never loads
+ * it), in development and in production unless `NEXT_PUBLIC_XR_EMULATOR=off`.
  * Never throws: `false` means "no emulation" and the VR button stays hidden.
  */
+
+/**
+ * Whether a browser without a headset may get the emulator: dev always; production unless
+ * `NEXT_PUBLIC_XR_EMULATOR=off` (immersion + 3D labs on a desktop); never under tests.
+ */
+export function xrEmulatorAllowed(
+  nodeEnv: string | undefined = process.env.NODE_ENV,
+  flag: 'on' | 'off' = publicEnv.NEXT_PUBLIC_XR_EMULATOR
+): boolean {
+  if (nodeEnv === 'test') return false;
+  return nodeEnv === 'development' || flag === 'on';
+}
+
 let installing: Promise<boolean> | null = null;
 
 /** Installs once: concurrent callers (React effects run twice in dev) share the same install. */
