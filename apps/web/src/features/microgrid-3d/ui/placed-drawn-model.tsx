@@ -2,20 +2,25 @@
 
 import { memo, useEffect, useMemo } from 'react';
 import { useThree } from '@react-three/fiber';
+import * as THREE from 'three';
 import { faceMaterials, facesMesh } from '@/features/vision-insert/utils/face-projection';
 import { carGeometry, carMaterials } from '@/features/vision-insert/utils/car-projection';
 import { plantGeometry, plantMaterials } from '@/features/vision-insert/utils/plant-projection';
 import { houseGeometry, houseMaterials } from '@/features/vision-insert/utils/house-projection';
 import { withPieceEdits } from '@/features/vision-insert/utils/model-pieces';
-import type { PlacedDrawnModel } from '../utils/placed-models-geometry';
+import { PLACED_NIGHT_DIM, type PlacedDrawnModel } from '../utils/placed-models-geometry';
 import { TOKEN_HEX } from '../utils/scene-palette';
 
-/** Tint of a drawn model by feeder state: as drawn, dimmed when unserved, alert when on fire. */
-const STATE_TINT: Record<PlacedDrawnModel['state'], string | null> = {
-  served: null,
-  unserved: TOKEN_HEX.idle,
-  fire: TOKEN_HEX.criticalRed,
-};
+/**
+ * Tint of a drawn model (VS-T35, lit like the village): as drawn when powered or by day, greyed
+ * towards the idle tone as an unpowered one goes dark at night (`dim`), alert red when on fire.
+ */
+export function drawnTint(model: Pick<PlacedDrawnModel, 'state' | 'dim'>): string | null {
+  if (model.state === 'fire') return TOKEN_HEX.criticalRed;
+  if (model.state === 'served' || model.dim >= 1) return null;
+  const k = Math.min(1, (1 - model.dim) / (1 - PLACED_NIGHT_DIM));
+  return `#${new THREE.Color('#ffffff').lerp(new THREE.Color(TOKEN_HEX.idle), k).getHexString()}`;
+}
 
 /**
  * A placed model wearing its validated drawings (PQ-T71), or built from its house plan (PQ-T72), its car plan (PQ-T76) or its plant plan (PQ-T82), with the operator's surface looks: the
@@ -45,7 +50,7 @@ export const PlacedDrawnModelMesh = memo(function PlacedDrawnModelMesh({
   );
   useEffect(() => () => geometry.dispose(), [geometry]);
   const materials = useMemo(() => {
-    const options = { tint: STATE_TINT[model.state], onLoad: invalidate };
+    const options = { tint: drawnTint(model), onLoad: invalidate };
     return recipe.house
       ? houseMaterials({ ...recipe, house: recipe.house }, options)
       : recipe.car?.body
@@ -53,7 +58,8 @@ export const PlacedDrawnModelMesh = memo(function PlacedDrawnModelMesh({
         : recipe.plant
           ? plantMaterials({ ...recipe, plant: recipe.plant }, options)
           : faceMaterials(recipe.faces!, options);
-  }, [recipe, model.state, invalidate]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the tint reads state and dim only
+  }, [recipe, model.state, model.dim, invalidate]);
   useEffect(() => () => materials.forEach((m) => m.dispose()), [materials]);
   return (
     <mesh

@@ -11,6 +11,8 @@ import { resetSimulationStore, useSimulationStore } from '../simulation.store';
 import {
   footprint,
   liveApplianceIds,
+  loadStoredModels,
+  VILLAGE_UNITS_PER_M,
   sceneScale,
   usePlacedModelsStore,
   withoutDrawings,
@@ -59,6 +61,27 @@ describe('placed-models.store (PI-T1)', () => {
     it('scales pumps and machines to ~0.9', () => {
       expect(sceneScale('machine')).toBe(0.9);
       expect(sceneScale('water_pump')).toBe(0.9);
+    });
+
+    it('stands an object at its typical height from its proportions (VS-T35)', () => {
+      // A fridge (1.8 m) as tall as it is drawn: 0.9 scene units for a height-1 recipe.
+      expect(sceneScale('cabinet', { w: 0.46, h: 1, d: 0.45 })).toBeCloseTo(
+        1.8 * VILLAGE_UNITS_PER_M
+      );
+      // A wide house keeps the village's height (4 m), not its width, as the largest side.
+      const s = sceneScale('house', { w: 1, h: 0.61, d: 0.83 });
+      expect(s * 0.61).toBeCloseTo(4 * VILLAGE_UNITS_PER_M, 2);
+    });
+
+    it('grows a slim object until its width is plausible for its kind', () => {
+      // Pump fixture: h 1, w 0.25 → 0.8 m tall would make it 0.2 m wide (< 0.3 m machine width).
+      const s = sceneScale('machine', { w: 0.25, h: 1, d: 0.18 });
+      expect((s * 0.25) / VILLAGE_UNITS_PER_M).toBeCloseTo(0.3, 2);
+    });
+
+    it('keeps the fixed largest side for flat water and unsized kinds', () => {
+      expect(sceneScale('water', { w: 1, h: 0.04, d: 0.8 })).toBe(2.5);
+      expect(sceneScale('other', { w: 1, h: 1, d: 1 })).toBe(1.0);
     });
 
     it('falls back safely for unknown archetypes', () => {
@@ -112,6 +135,16 @@ describe('placed-models.store (PI-T1)', () => {
           scale: 1.0,
         },
       });
+    });
+
+    it('drops the legacy derived scale on load, so the scene re-sizes from proportions', () => {
+      localStorage.setItem(
+        PLACED_MODELS_STORAGE_KEY,
+        JSON.stringify({ a: { applianceId: 'a', recipe: SAMPLE_RECIPE, scale: 3.8 } })
+      );
+      const loaded = loadStoredModels();
+      expect(loaded.a).toBeDefined();
+      expect(loaded.a!.scale).toBeUndefined();
     });
 
     it('removes placed models', () => {

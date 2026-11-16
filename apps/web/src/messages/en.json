@@ -243,7 +243,8 @@
         "battery": "BESS Storage",
         "controller": "EMS Dispatch Hub",
         "wind": "Wind Generation",
-        "lake": "Scenic Reservoir"
+        "lake": "Scenic Reservoir",
+        "appliance": "Inserted object"
       },
       "villageDemand": "Village demand",
       "tabMetrics": "Metrics",
@@ -365,7 +366,44 @@
         "legendStickPress": "Click a stick: hide this help",
         "legendPinch": "Pinch: select a label, building or button",
         "legendThumbTurn": "Thumb swipe ←/→: turn · ↑/↓: one step",
-        "legendThumbTap": "Thumb tap: show / hide labels"
+        "legendThumbTap": "Thumb tap: show / hide labels",
+        "legendStickHold": "Hold a stick 1 s: show / hide hands & controllers"
+      },
+      "vrMixer": {
+        "title": "Dispatcher · mixing desk",
+        "hint": "Hold the trigger on a fader and slide it up or down; release to send. Top notch = no limit.",
+        "battery": "Battery",
+        "soc": "Charge {pct}",
+        "reserve": "Reserve {pct}",
+        "served": "Served {kw}",
+        "limit": "Limit {kw}",
+        "noLimit": "No limit",
+        "cutState": "Cut",
+        "direct": "Direct · {kw}",
+        "level": "Level {pct}",
+        "cut": "Cut",
+        "restore": "On",
+        "start": "Start the battery & dispatch",
+        "running": "Dispatching",
+        "more": "+{count} more on the 2D panel"
+      },
+      "vrMap": {
+        "mini": "Map",
+        "title": "Village map",
+        "hint": "Aim at a building or the dispatcher, trigger: its controls open",
+        "you": "You"
+      },
+      "villageTags": {
+        "standby": "Standby",
+        "solar": "{kw} · Clean energy",
+        "battery": "{pct} charge · Lithium storage",
+        "controllerTitle": "Dispatch controller",
+        "controller": "Microgrid core · 240 V bus",
+        "windTitle": "Hilltop wind turbines",
+        "wind": "Clean wind power · Ridge array",
+        "lakeTitle": "Lake promenade",
+        "lake": "Safety railing · Night lighting",
+        "appliance": "{priority} · {kw}"
       }
     },
     "strategyLab": {
@@ -986,21 +1024,18 @@
       "vrShootToDisconnect": "⚡ Shoot to disconnect from grid",
       "vrGridStatusConnected": "✓ Connected to grid (+{watts} W)",
       "vrGridStatusNotConnected": "3D Model Ready · Not connected",
-      "vrHudTitle": "Microgrid Telemetry",
-      "vrHudBattery": "Battery",
-      "vrHudSolar": "Solar",
-      "vrHudDemand": "Demand",
-      "vrHudAppliances": "In-situ Appliances",
-      "vrHudConnectedCount": "{count} connected (+{watts} W)",
-      "vrHudMinimize": "Minimize",
-      "vrHudExpand": "Expand",
       "vrHudEventConnected": "+{watts} W · {name} connected",
       "vrHudEventDisconnected": "−{watts} W · {name} disconnected",
-      "vrHudEventMaterialized": "{name} in 3D · hold to rotate, tap to connect",
+      "vrHudEventMaterialized": "{name} is in front of you: trigger connects it, grip turns it, « Put away » removes it",
       "vrHudEventNoObject": "No object detected at this spot",
-      "vrHudNetSurplus": "Surplus +{kw} kW",
-      "vrHudNetDeficit": "Deficit -{kw} kW",
-      "vrHudNetBalanced": "Grid Balanced",
+      "vrMini": {
+        "connected": "✓ On the village grid",
+        "idle": "Not on the grid",
+        "hint": "Trigger: connect / disconnect · Grip: turn",
+        "dismiss": "Put away",
+        "dismissTip": "Removes this miniature; the simulation stays as it is",
+        "dismissed": "{name} put away"
+      },
       "vrLiveWebcam": "Live Webcam",
       "vrVirtualRoom": "Virtual Studio Room",
       "vrCameraStandby": "Camera Standby",
@@ -1539,23 +1574,28 @@
       "vrChat": {
         "title": "AI chat · {view}",
         "aiLabel": "AI EDIT · redraws this view, check it before validating",
-        "empty": "Ask the AI to change the {view}: type with « Keys » or speak with « Voice », then « Send ».",
+        "empty": "Ask the AI to change the {view}: type with « Keyboard » or speak with « Dictate », then « Send ».",
         "placeholder": "Describe the change…",
         "listening": "Listening… speak now",
         "working": "Redrawing the {view} with your request…",
         "done": "Done: the new drawing is on the slide. Validate it or ask for another change.",
         "failed": "The drawing failed. Send the request again.",
-        "keyboard": "Keys",
-        "voice": "Voice",
+        "keyboard": "Keyboard",
+        "voice": "Dictate",
         "stop": "Stop",
         "send": "Send",
         "wait": "Wait for the drawing to finish",
-        "voiceUnavailable": "Voice unavailable in this browser: use « Keys »",
-        "voiceError": "Voice not heard (microphone allowed?): try again or use « Keys »",
+        "voiceUnavailable": "Voice unavailable in this browser: use « Keyboard »",
+        "voiceError": "Voice not heard (microphone allowed?): try again or use « Keyboard »",
         "keyShift": "⇧ Caps",
         "keySpace": "space",
         "keyBack": "⌫ Erase",
-        "keyClear": "Clear"
+        "keyClear": "Clear",
+        "keyboardTip": "Open or close the holo keyboard to type your request",
+        "voiceTip": "Speak your request: it is written in the field",
+        "stopTip": "Stop listening; the text heard stays in the field",
+        "sendTip": "Send the request: the AI redraws this view with it",
+        "meterTitle": "Voice level"
       },
       "vrVillage": {
         "title": "Place « {name} » in the village",
@@ -1563,7 +1603,9 @@
         "placed": "Placed at {x}, {z} · feeder: {sector}",
         "notPlaced": "Not placed yet: aim at the village table and press",
         "inSimulation": "In the simulation: strategies recomputed",
-        "goSimulation": "Go to the simulation"
+        "goSimulation": "Go to the simulation",
+        "insertTip": "Add the object to the simulation: the strategies are recomputed",
+        "goSimulationTip": "Open the simulation in VR, next to this object"
       },
       "vrLab": {
         "title": "3D lab · {name}",
@@ -1576,7 +1618,9 @@
         "bigger": "+ Size",
         "turn": "Turn 90°",
         "fade": "Opacity",
-        "exit": "Leave the lab"
+        "exit": "Leave the lab",
+        "toViews": "2D lab",
+        "toViewsTip": "Turn back to the 2D views: the model stays"
       },
       "vrControls": {
         "verbTrigger": "Trigger",
@@ -1613,11 +1657,18 @@
         "helpShown": "Help shown: click a stick, or Menu › Help, to hide it",
         "helpHidden": "Help hidden: click a stick, or Menu › Help, to show it",
         "helpShow": "Show the controls help",
-        "helpHide": "Hide the controls help"
+        "helpHide": "Hide the controls help",
+        "inputsShow": "Show hands & controllers",
+        "inputsHide": "Hide hands & controllers",
+        "inputsShownEvent": "Hands & controllers shown",
+        "inputsHiddenEvent": "Hands & controllers hidden (the lasers stay)",
+        "legendStickHold": "Hold a stick 1 s: show / hide hands & controllers"
       },
       "vrStudio": {
         "viewsTitle": "Drawing the 2D views of « {name} »",
-        "buildSub": "The 3D lab opens by itself as soon as the model is ready"
+        "buildSub": "The 3D lab opens by itself as soon as the model is ready",
+        "toLab": "3D lab",
+        "toLabTip": "Turn to the 3D lab: the model is already built"
       },
       "cancelAnalysis": "Cancel the analysis",
       "analysisCancelled": "Analysis cancelled.",

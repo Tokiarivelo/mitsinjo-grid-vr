@@ -70,7 +70,15 @@ Lorsque vous lancez l'immersion sur PC sans casque physique, l'émulateur **Meta
    - **Manettes :** stick gauche = marcher dans la direction du regard ; stick droit ←/→ = pivoter de 30° d'un
      coup (autour de la tête, avec un petit son), ↑/↓ = un pas de 0,8 m. Plus de rotation continue (confort).
    - **Mains :** pouce glissé ←/→ = pivoter, avant / arrière = un pas.
-   - **Clavier (PC) :** `Z`/`W`/`↑` avancer, `S`/`↓` reculer, `Q`/`A`/`←` et `D`/`→` de côté, `Shift` = courir.
+   - **Clavier (PC) :** `Z`/`W`/`↑` avancer, `S`/`↓` reculer, `Q`/`A` et `D` de côté, `←`/`→` = tourner la tête
+     (90°/s, VS-T33 : sur un portable, le pavé tactile est coupé tant qu'une touche est enfoncée, la souris ne
+     peut pas tourner pendant la marche), `Shift` = courir.
+   - **Taille humaine (VS-T33) :** le village est une maquette à demi-échelle (murs 1,3 m, portes ≈ 0,9 m) : le
+     marcheur est réduit d'autant dehors (`utils/xr-walk.ts`, `XR_VILLAGE_SCALE` = 0,5 sur le rig : yeux à
+     ≈ 0,8 m, sous le toit, pas, vitesse, mains et panneau suivent). Dans une pièce (1:1, plafond 2,7 m) : taille
+     normale.
+   - **URL (VS-T33) :** `?immersion=vr` tant que la VR est ouverte (`useImmersionQuery`) ; « Aller à la
+     simulation » ouvre `/simulation?immersion=vr`. Recharger cette URL rouvre la vue 3D et redemande la VR.
    - **On ne traverse plus les objets :** maisons, école, clinique, troncs d'arbres, panneaux, véhicules et
      modèles posés arrêtent la marche ; on glisse le long des murs. Buissons, herbes et petits rochers se
      traversent. Grille construite depuis la scène à l'entrée (`utils/walk-grid.ts`).
@@ -157,16 +165,16 @@ Baladez-vous dans les différents quartiers du village pour comparer leur statut
 Mêmes boutons que `/village` (§ 6) ; seul A/X change de rôle (pas d'analyse ici). Les légendes s'affichent
 au-dessus de chaque manette 25 s à l'entrée, puis d'un clic de stick.
 
-| Action                               | Manettes Meta Quest                  | Mains                        | PC (clavier / souris)           |
-| :----------------------------------- | :----------------------------------- | :--------------------------- | :------------------------------ |
-| **Marcher**                          | Stick gauche                         | —                            | `Z Q S D` / `W A S D` / flèches |
-| **Pivoter de 30°**                   | Stick droit ← / →                    | Pouce glissé ← / →           | Regard à la souris (émulateur)  |
-| **Un pas de 0,8 m**                  | Stick droit ↑ / ↓                    | Pouce glissé avant / arrière | —                               |
-| **Sélectionner** (étiquette, bouton) | Gâchette                             | Pincer                       | Clic gauche                     |
-| **Étiquettes du village**            | A / X                                | Tap du pouce                 | Balise flottante à l'entrée     |
-| **Retour**                           | B / Y : ferme le panneau, sinon sort | —                            | « Fermer ✕ » / « Sortir »       |
-| **Aide (légendes)**                  | Clic sur un stick                    | —                            | —                               |
-| **Quitter la VR**                    | Bouton Meta                          | Geste système                | « Quitter la VR »               |
+| Action                               | Manettes Meta Quest                  | Mains                        | PC (clavier / souris)         |
+| :----------------------------------- | :----------------------------------- | :--------------------------- | :---------------------------- |
+| **Marcher**                          | Stick gauche                         | —                            | `Z Q S D` / `W A S D` / `↑ ↓` |
+| **Pivoter de 30°**                   | Stick droit ← / →                    | Pouce glissé ← / →           | `← →` (continu) ou souris     |
+| **Un pas de 0,8 m**                  | Stick droit ↑ / ↓                    | Pouce glissé avant / arrière | —                             |
+| **Sélectionner** (étiquette, bouton) | Gâchette                             | Pincer                       | Clic gauche                   |
+| **Étiquettes du village**            | A / X                                | Tap du pouce                 | Balise flottante à l'entrée   |
+| **Retour**                           | B / Y : ferme le panneau, sinon sort | —                            | « Fermer ✕ » / « Sortir »     |
+| **Aide (légendes)**                  | Clic sur un stick                    | —                            | —                             |
+| **Quitter la VR**                    | Bouton Meta                          | Geste système                | « Quitter la VR »             |
 
 ### Piloter l'énergie d'un bâtiment (VSIM-T3/T4)
 
@@ -181,7 +189,44 @@ au-dessus de chaque manette 25 s à l'entrée, puis d'un clic de stick.
    tout s'éteint si on coupe. Le même panneau est au mur ; **« Sortir »**, la porte ou B/Y vous ramènent dehors.
 4. La limite porte sur le **secteur** (« Ménages » = toutes les maisons d'habitation), comme dans le moteur.
 
+### Table de mixage du dispatcher (VS-T34)
+
+1. Visez l'étiquette **du dispatcher** (ou l'abri du dispatcher) et sélectionnez : une **table de mixage**
+   holographique s'ouvre devant vous (`ui/sim-xr-dispatch-panel.tsx`), une tranche par canal :
+   - **Batterie** (maître, vert) : charge (moteur) et réserve. Curseur vers le haut = plus de batterie envoyée
+     (réserve plus basse, 90 % → 5 %, `minSocPct`). **« Lancer la batterie et dispatcher »** = premier calcul du
+     moteur de la journée (sans résultat, rien ne circule) ; ensuite « Dispatch en cours ».
+   - **Un curseur par secteur** : « Servi » (moteur) et la limite. Glisser = limite en kW de l'heure affichée à
+     minuit (`sectorCaps`, échelle = la demande du secteur maintenant) ; tout en haut = sans limite.
+     **« Couper » / « Allumer »** sous la tranche (mêmes patches que le panneau du bâtiment).
+   - **Un curseur par appareil branché directement au dispatcher** (ajouté depuis `/village` avec le raccordement
+     « EMS », violet) : il apparaît **tout seul** dans la table. Glisser = son niveau (cycle de marche × 0–100 % dès
+     l'heure affichée, `hourlyDuty`) ; « Couper » = 0 %. Six tranches au plus, les autres restent au panneau 2D.
+2. **Glisser** : gâchette maintenue sur le curseur, monter / descendre le laser ; le moteur est relancé au
+   **relâchement** (une seule fois, annulable par « Annuler »). Le glisser au laser est générique
+   (`utils/xr-drag.ts` : `userData.onDrag` / `onDragEnd`, lu par `xr-hands.ts`).
+3. Règles dures inchangées : la clinique n'est jamais coupée (« Refusé »), tout est annulable, tous les nombres
+   viennent du moteur (DONNÉES SIMULÉES). B/Y ferme la table.
+
+### Carte du village (VS-T37, VS-T38)
+
+1. **Mini-carte** (style GTA) tout à droite de la vue, en bas (`ui/sim-xr-minimap.tsx`) : disque « cap en haut »
+   centré sur vous (flèche), dessiné sur une texture (`utils/sim-xr-map-draw.ts`) : routes et chemins en
+   latérite, mare, lac, rizière, secteurs (couleur du statut moteur) et dispatcher (carré violet). Un point hors de
+   portée reste sur le bord. Elle suit le marcheur sans être collée à la tête (suivi paresseux des menus /village).
+2. **Gâchette sur la mini-carte** : la **grande carte holographique**, presque droite (texte lisible), qui vous
+   **suit** en marchant et reste **centrée sur vous** (nord en haut, flèche « Vous » tournée selon votre regard,
+   noms des bâtiments). **Gâchette sur un bâtiment** : son panneau de puissance ; **sur le dispatcher** : sa table
+   de mixage. La carte se ferme alors ; « Fermer ✕ » ou B/Y aussi. Redessin seulement quand on bouge (≥ 2 cm ou
+   ~0,6°). Projection pure dans `utils/sim-xr-minimap.ts`. Vérif : `make vr-sim-map-probe`.
+3. **Laser** (/simulation) : au repos un faisceau léger et sa pointe restent visibles, le faisceau va jusqu'à la
+   cible (4 m max, deux fois plus épais) ; un panneau ou une carte qui vient d'apparaître est visable en ~0,1 s.
+
 ---
+
+### Objets insérés dans l'immersion (VS-T35)
+
+Chaque objet ajouté depuis /village porte une étiquette 3D (« Objet inséré », nom, priorité · kW du moteur, couleur de son secteur), montrée avec celles des types de village par le même interrupteur (affiché au départ, A au casque). Il a la taille de son genre au ½ du village (`sceneScale`) et la lumière du village : tel quel le jour, éteint la nuit s'il n'est pas alimenté. Vérification : `make placed-shot` (captures écran et immersion).
 
 ## 6. Commandes de l'immersion `/village` (visite 360°, détection, extraction 3D) — VS-T23
 
@@ -277,6 +322,13 @@ Pilotage scripté (MCP IWER ou `remote.dispatch`) : voir [`vr-iwer-tools.md`](vr
    « Menu ») à chaque étape du studio ; on retrouve la visite 360° et le bouton devient « Revenir au studio ·
    « objet » », qui ramène à l'étape quittée (vues 2D, construction ou labo). Ré-extraire **le même objet** reprend
    aussi là où on était (le labo garde son modèle) ; confirmer un autre objet oublie le précédent.
+   8b. **Labo 2D ↔ labo 3D** (VS-T31) : les vues 2D et le labo 3D sont deux bureaux dos à dos sur un plateau centré
+   sur le spectateur. « Valider et construire la 3D » fait tourner le plateau de droite à gauche (1,1 s, adouci) :
+   le bureau 2D part à gauche, le bureau 3D arrive de la droite ; seul le contenu tourne, le dôme et la grille
+   restent immobiles (pas de vection). Dans le labo, « Labo 2D » (tout à gauche, après la liste des pièces)
+   ramène aux vues en tournant dans l'autre sens, le modèle reste ; dans les vues, « Labo 3D » (sous la carte de
+   génération, à droite) apparaît dès que le modèle existe. Les deux bureaux ne sont dessinés ensemble que
+   pendant la rotation (`studio-desks.tsx`, `deskTurnAngle` / `deskYaw` / `deskPivot` dans `xr-layout.ts`).
 9. **Mains, manettes, laser** (VS-T26, `/village` et `/simulation`) : la main est le modèle articulé
    `generic-hand` des WebXR input profiles (celui que dessine le Quest), peau mate + liseré clair (fresnel) ; la
    manette est celle que le navigateur annonce (Touch / Touch Plus). Chargés depuis le CDN des input profiles :

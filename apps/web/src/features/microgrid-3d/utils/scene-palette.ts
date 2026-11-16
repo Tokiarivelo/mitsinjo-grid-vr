@@ -92,3 +92,16 @@ export const STATUS_TEXT_CLASS: Record<StatusColor, string> = {
   'critical-red': 'text-critical-red',
   idle: 'text-text-muted',
 };
+
+/** Lamp glow above which the village starts to light up (dusk). */
+export const DUSK_GLOW = 0.45;
+
+/**
+ * How dark it is for the buildings (0 broad daylight … 1 night), from the sky's lamp glow: the
+ * village's windows light up and its unpowered buildings go dark only past dusk. Shared by the
+ * sector buildings and the inserted objects (VS-T35). Pure.
+ */
+export function duskDarkness(lampGlow: number): number {
+  if (!Number.isFinite(lampGlow)) return 0;
+  return Math.max(0, Math.min(1, (lampGlow - DUSK_GLOW) / 0.4));
+}

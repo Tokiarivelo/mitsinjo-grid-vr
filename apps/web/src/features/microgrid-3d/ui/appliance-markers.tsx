@@ -10,10 +10,10 @@ import { SECTOR_ICON_BG_CLASS, SECTOR_TEXT_CLASS } from '@/components/ui/sector-
 import { fmtKw } from '@/lib/format';
 import { usePlacedModelsStore } from '@/stores';
 import type { ApplianceMarkerSceneModel } from '../types';
-import { MARKER_PLINTH_HEX, STATUS_HEX, TOKEN_HEX } from '../utils/scene-palette';
-import { APPLIANCE_FOCUS_SCALE } from '../utils/camera-focus';
+import { MARKER_PLINTH_HEX, STATUS_HEX, TOKEN_HEX, duskDarkness } from '../utils/scene-palette';
 import { BADGE_DISTANCE_FACTOR, badgeY, beaconY, SceneBadge } from './scene-badge';
 import { PlacedDrawnModelMesh } from './placed-drawn-model';
+import { ImmersionTag, SECTOR_TAG_ACCENT } from './immersion-labels';
 import {
   buildPlacedModelsGeometry,
   placedGeometryKey,
@@ -23,6 +23,24 @@ import {
 
 /** Tags for every marker up to this count; above, only the selected sector's (scene stays readable). */
 export const MARKER_TAGS_ALL_MAX = 6;
+
+/**
+ * Markers that wear a label: all of them up to `MARKER_TAGS_ALL_MAX`; above, every object inserted
+ * with its 3D model from /village (labelled like the village's buildings, VS-T35) plus the selected
+ * sector's plain markers. Pure.
+ */
+export function taggedMarkers<M extends { id: string; sector: SectorId }>(
+  shown: readonly M[],
+  selectedSector: SectorId | null,
+  modeled: (id: string) => boolean
+): M[] {
+  if (shown.length <= MARKER_TAGS_ALL_MAX) return [...shown];
+  return shown.filter((m) => modeled(m.id) || m.sector === selectedSector);
+}
+
+/** 3D tag card of an inserted object in immersion: smaller than a building's, above its top. */
+const IMMERSION_TAG_SIZE = 0.6;
+const IMMERSION_TAG_LIFT = 1.1;
 
 const PLINTH: [number, number, number] = [0.46, 0.12, 0.46];
 const BODY: [number, number, number] = [0.32, 0.5, 0.32];
@@ -69,6 +87,17 @@ export interface ApplianceMarkersProps {
    * Only rendered if explicitly requested (defaults to false).
    */
   showStraightFeederLinks?: boolean;
+  /** Sky lamp glow (`palette.lampGlow`): unpowered objects go dark at night only (VS-T35). */
+  lampGlow?: number;
+  /**
+   * Immersion (HTML badges off): the objects' 3D tags, shown with the village types' (VS-T35).
+   * `category` = translated tag kind, `describe` = translated second line.
+   */
+  immersionTags?: {
+    active: boolean;
+    category: string;
+    describe: (m: ApplianceMarkerSceneModel) => string;
+  } | null;
 }
 
 /**
@@ -92,6 +121,8 @@ export function ApplianceMarkers({
   tier = 'high',
   sectorStatuses,
   showStraightFeederLinks = false,
+  lampGlow = 1,
+  immersionTags = null,
 }: ApplianceMarkersProps) {
   const placedModels = usePlacedModelsStore((s) => s.models);
   const shown = useMemo(
@@ -128,9 +159,10 @@ export function ApplianceMarkers({
   );
 
   // Rebuild the merged mesh only when what it draws changes (not on every scene-model refresh).
-  const geometryKey = placedGeometryKey(placedItems, sectorStatuses, tier);
+  const darkness = duskDarkness(lampGlow);
+  const geometryKey = placedGeometryKey(placedItems, sectorStatuses, tier, darkness);
   const { modelsGeometry, plinths, modelBounds, drawn } = useMemo(
-    () => buildPlacedModelsGeometry(placedItems, sectorStatuses, tier),
+    () => buildPlacedModelsGeometry(placedItems, sectorStatuses, tier, darkness),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- geometryKey covers every input
     [geometryKey]
   );
@@ -152,8 +184,7 @@ export function ApplianceMarkers({
   if (markers.length === 0) return null;
   const running = standardMarkers.filter((m) => m.running);
   const idle = standardMarkers.filter((m) => !m.running);
-  const tagged =
-    shown.length <= MARKER_TAGS_ALL_MAX ? shown : shown.filter((m) => m.sector === selectedSector);
+  const tagged = taggedMarkers(shown, selectedSector, (id) => Boolean(placedModels[id]));
   const selected = selectedId ? shown.find((m) => m.id === selectedId) : undefined;
   const topOf = (m: ApplianceMarkerSceneModel) => modelBounds[m.id]?.height ?? PLINTH[1] + BODY[1];
   const selectedRadius = selected ? (modelBounds[selected.id]?.radius ?? 0.35) : 0.35;
@@ -174,7 +205,8 @@ export function ApplianceMarkers({
       {/* 1. Placed 3D models (PI-T2): single merged mesh for all objects */}
       {modelsGeometry && (
         <mesh name="placed-appliance-models" geometry={modelsGeometry} castShadow receiveShadow>
-          <meshStandardMaterial vertexColors roughness={0.7} metalness={0.2} />
+          {/* The village houses' finish (walls 0.62–0.72 rough, barely metallic, VS-T35). */}
+          <meshStandardMaterial vertexColors roughness={0.68} metalness={0.05} />
         </mesh>
       )}
 
@@ -281,7 +313,8 @@ export function ApplianceMarkers({
           position={[m.position[0], m.position[1] + badgeY(beaconY(topOf(m))), m.position[2]]}
           htmlPortal={htmlPortal}
           zIndexRange={[8, 0]}
-          distanceFactor={BADGE_DISTANCE_FACTOR * APPLIANCE_FOCUS_SCALE}
+          // Same size as the village buildings' badges (VS-T35).
+          distanceFactor={BADGE_DISTANCE_FACTOR}
           icon={
             <ApplianceIcon
               category={m.category}
@@ -302,6 +335,30 @@ export function ApplianceMarkers({
           dataId={m.id}
         />
       ))}
+
+      {/* Immersion: 3D tags like the village types' (HTML badges are off there, VS-T35) */}
+      {immersionTags?.active &&
+        tagged.map((m) => {
+          const top = m.position[1] + topOf(m);
+          return (
+            <ImmersionTag
+              key={`itag-${m.id}`}
+              item={{
+                id: `appliance-${m.id}`,
+                title: tagOf(m),
+                category: immersionTags.category,
+                description: immersionTags.describe(m),
+                icon: '🔌',
+                accentColor: SECTOR_TAG_ACCENT[m.sector],
+                basePos: [m.position[0], top, m.position[2]],
+                anchorPos: [m.position[0], top + IMMERSION_TAG_LIFT, m.position[2]],
+              }}
+              size={IMMERSION_TAG_SIZE}
+              selected={m.id === selectedId}
+              {...(onSelectMarker ? { onSelect: () => onSelectMarker(m.id) } : {})}
+            />
+          );
+        })}
 
       {/* Selection ring */}
       {selected && (

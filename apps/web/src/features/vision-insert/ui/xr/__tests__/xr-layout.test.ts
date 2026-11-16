@@ -1,11 +1,29 @@
 import { describe, expect, it } from 'vitest';
 import {
+  AIR_BOB,
+  AIR_CARD,
+  AIR_CRYSTAL_Y,
+  AIR_RINGS_RADIUS,
   anchorAhead,
+  faceOrigin,
+  MENU_CLOSE_OFFSET,
+  MENU_CLOSE_SIZE,
+  MENU_SCAN_OFFSET,
+  miniatureSlot,
   CAROUSEL_RADIUS,
+  deskPivot,
+  deskTurnAngle,
+  deskYaw,
   EXTRACT_DISTANCE,
+  LAB_TO_VIEWS,
   EXTRACT_DROP,
   slidePose,
+  MENU_INPUTS_OFFSET,
+  STUDIO_DOOR_OFFSET,
+  STUDIO_DOOR_SIZE,
+  VILLAGE_TABLE,
 } from '../xr-layout';
+import { MENU_DISTANCE, MENU_DROP, WRIST_OFFSET_FLOAT } from '../wrist-menu';
 
 describe('anchorAhead (VS-T19)', () => {
   it('sits ahead along the horizontal heading, below the eyes, level', () => {
@@ -39,5 +57,90 @@ describe('slidePose (VS-T20)', () => {
       const p = slidePose(rel).position;
       expect(Math.hypot(p[0], p[2] - EXTRACT_DISTANCE)).toBeCloseTo(CAROUSEL_RADIUS, 2);
     }
+  });
+});
+
+describe('studio desks turntable (VS-T31)', () => {
+  it('turns right to left toward the 3D lab, back the other way', () => {
+    expect(deskTurnAngle('3d', 0)).toBe(0);
+    expect(deskTurnAngle('3d', 1)).toBeCloseTo(Math.PI);
+    expect(deskTurnAngle('3d', 0.5)).toBeCloseTo(Math.PI / 2);
+    expect(deskTurnAngle('2d', 0)).toBeCloseTo(Math.PI);
+    expect(deskTurnAngle('2d', 1)).toBe(0);
+    // Eased: slow start, never past the ends.
+    expect(deskTurnAngle('3d', 0.1)).toBeLessThan(Math.PI * 0.1);
+    expect(deskTurnAngle('3d', 2)).toBeCloseTo(Math.PI);
+  });
+  it('keeps the desks back to back: the 3D desk comes in from the right', () => {
+    expect(deskYaw('2d', 0)).toBe(0);
+    expect(deskYaw('3d', Math.PI)).toBe(0);
+    // Half way: 2D desk on the left (+yaw, counter-clockwise), 3D desk on the right.
+    expect(deskYaw('2d', Math.PI / 2)).toBeGreaterThan(0);
+    expect(deskYaw('3d', Math.PI / 2)).toBeLessThan(0);
+  });
+  it('centres the turntable on the viewer who set the anchor', () => {
+    const eye: [number, number, number] = [1, 1.6, 2];
+    const a = anchorAhead(eye, [1, 0, 0]);
+    const p = deskPivot(a);
+    expect(p[0]).toBeCloseTo(1);
+    expect(p[2]).toBeCloseTo(2);
+    expect(p[1]).toBe(a.position[1]);
+  });
+  it('turns the « 2D lab » button toward the viewer, on the far left', () => {
+    const [x, , z] = LAB_TO_VIEWS.position;
+    expect(x).toBeLessThan(-0.9);
+    // Facing the eye at (0, 0, EXTRACT_DISTANCE) in panel space.
+    expect(Math.atan2(-x, EXTRACT_DISTANCE - z)).toBeCloseTo(LAB_TO_VIEWS.yaw, 2);
+    expect(Math.hypot(x, EXTRACT_DISTANCE - z)).toBeCloseTo(LAB_TO_VIEWS.distance, 1);
+  });
+});
+
+describe('wrist menu layout (VS-T32)', () => {
+  it('keeps the crystal and its rings above the scan card (they hid its title)', () => {
+    // The whole button bobs together: the rings' lowest point stays above the card's top edge.
+    expect(AIR_CRYSTAL_Y - AIR_RINGS_RADIUS).toBeGreaterThan(AIR_CARD.height / 2);
+  });
+  it('puts « Close » above the card top right, clear of the bobbing card and the rings', () => {
+    const [x, y] = MENU_CLOSE_OFFSET;
+    const cardTop = MENU_SCAN_OFFSET[1] + AIR_CARD.height / 2 + AIR_BOB;
+    expect(y - MENU_CLOSE_SIZE.height / 2).toBeGreaterThan(cardTop);
+    expect(x - MENU_CLOSE_SIZE.width / 2).toBeGreaterThan(AIR_RINGS_RADIUS);
+    expect(x + MENU_CLOSE_SIZE.width / 2).toBeLessThanOrEqual(AIR_CARD.width / 2);
+  });
+});
+
+describe('faceOrigin (VS-T32)', () => {
+  it('turns a miniature card toward the viewer at the origin', () => {
+    for (const i of [0, 1, 2, 3]) {
+      const slot = miniatureSlot(i);
+      const yaw = faceOrigin(slot);
+      // Front normal (sin yaw, 0, cos yaw) points from the slot back to the origin.
+      const len = Math.hypot(slot[0], slot[2]);
+      expect(Math.sin(yaw)).toBeCloseTo(-slot[0] / len, 2);
+      expect(Math.cos(yaw)).toBeCloseTo(-slot[2] / len, 2);
+    }
+  });
+});
+
+describe('follow dock (VS-T36)', () => {
+  // Angle under the horizon (rad) of a point `drop` m under the eyes, `ahead` m away.
+  const down = (drop: number, ahead: number) => Math.atan2(drop, ahead);
+
+  it('« Menu » and « Leave the studio » sit under the studio panels and table (regression)', () => {
+    // Before: 0.06 m above the follow centre, over the lab tools and the village table.
+    const dock = down(MENU_DROP - STUDIO_DOOR_OFFSET[1], MENU_DISTANCE);
+    const labBottom = down(EXTRACT_DROP + 0.29, EXTRACT_DISTANCE);
+    const tableBottom = down(EXTRACT_DROP - VILLAGE_TABLE.position[1] + VILLAGE_TABLE.radius, 1.3);
+    expect(dock).toBeGreaterThan(labBottom + 0.1);
+    expect(dock).toBeGreaterThan(tableBottom + 0.1);
+    expect(dock).toBeLessThan(0.7); // ≤ 40° down: a glance, not a neck bend
+    expect(WRIST_OFFSET_FLOAT[1]).toBe(STUDIO_DOOR_OFFSET[1]);
+  });
+
+  it('stays wide of the opened menu (scan card, guide, buttons)', () => {
+    const menuHalf = Math.max(AIR_CARD.width, 0.56, 0.36) / 2;
+    expect(STUDIO_DOOR_OFFSET[0] - STUDIO_DOOR_SIZE.width / 2).toBeGreaterThan(menuHalf);
+    expect(-WRIST_OFFSET_FLOAT[0]).toBeGreaterThan(menuHalf);
+    expect(MENU_INPUTS_OFFSET[0]).toBe(0);
   });
 });

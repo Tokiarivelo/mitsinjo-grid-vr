@@ -108,6 +108,6 @@ describe('HoloVillageTable (VS-T28)', () => {
     fireEvent.click(screen.getByRole('button', { name: v.insertButton }));
     fireEvent.click(screen.getByRole('button', { name: v.vrVillage.goSimulation }));
     expect(nav.end).toHaveBeenCalled();
-    expect(nav.push).toHaveBeenCalledWith('/simulation');
+    expect(nav.push).toHaveBeenCalledWith('/simulation?immersion=vr');
   });
 });

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three';
 import {
+  pickUsable,
   createHandMesh,
   HAND_JOINTS,
   setupXRHandsAndControllers,
@@ -224,5 +225,27 @@ describe('updateHandMesh', () => {
     const mesh = createHandMesh();
     expect(updateHandMesh(hand, mesh)).toBe(0);
     expect(mesh.visible).toBe(false);
+  });
+});
+
+describe('pickUsable (VS-T36)', () => {
+  const plane = (z: number, name: string) => {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial());
+    m.position.z = z;
+    m.name = name;
+    m.updateMatrixWorld(true);
+    return m;
+  };
+
+  it('a throwing object on the ray no longer hides the button (regression: « Close » dead)', () => {
+    const cable = plane(-1, 'cable');
+    cable.raycast = () => {
+      throw new Error('Line2 needs raycaster.camera');
+    };
+    const close = plane(-2, 'close');
+    const far = plane(-3, 'far');
+    const caster = new THREE.Raycaster(new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -1));
+    const hits = pickUsable(caster, [far, cable, close], []);
+    expect(hits.map((h) => h.object.name)).toEqual(['close', 'far']);
   });
 });

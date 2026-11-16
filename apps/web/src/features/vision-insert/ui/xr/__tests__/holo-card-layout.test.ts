@@ -23,4 +23,12 @@ describe('layoutHoloCard', () => {
     // Title stays bigger than the subtitle.
     expect(blocks[0]!.size).toBeGreaterThan(blocks[1]!.size);
   });
+
+  it('shrinks a single word wider than the card instead of cutting it (« Keyboard », VS-T29)', () => {
+    // 8 chars × 120 px × 0.5 = 480 px on a 400 px wide card (pad 20 each side): too wide.
+    const { blocks } = layoutHoloCard(measure, [{ text: 'Keyboard', size: 120 }], 400, 400);
+    const b = blocks[0]!;
+    expect(b.rows).toEqual(['Keyboard']);
+    expect(measure(b.font, b.rows[0]!)).toBeLessThanOrEqual(400 - 2 * 400 * 0.05);
+  });
 });

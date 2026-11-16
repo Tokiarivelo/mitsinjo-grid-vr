@@ -16,6 +16,7 @@ import { STUDIO_COLUMN_POSITION, STUDIO_COLUMN_YAW } from './xr-layout';
 /** Pedestal top under the panel anchor (m), shared by the build stage and the lab. */
 export const PEDESTAL_DROP = 0.25;
 export const STUDIO_CANCEL_ID = 'holo:studio-cancel';
+export const STUDIO_TO_LAB_ID = 'holo:studio-to-lab';
 
 /**
  * The 3D studio room (VS-T24): dark dome, grid floor, studio lights. Shown as soon as the viewer
@@ -109,6 +110,8 @@ export interface HoloGenerationColumnProps {
   registry: PanelRegistry;
   hoveredId: string | null;
   onCancel: () => void;
+  /** Model already built: « 3D lab » turns the desks to it (VS-T31). */
+  onToLab?: () => void;
 }
 
 /**
@@ -127,6 +130,7 @@ export const HoloGenerationColumn = memo(function HoloGenerationColumn({
   registry,
   hoveredId,
   onCancel,
+  onToLab,
 }: HoloGenerationColumnProps) {
   const t = useTranslations('features.visionInsert');
   const { nameOf, statusOf } = useSlideText(vehicle);
@@ -190,6 +194,22 @@ export const HoloGenerationColumn = memo(function HoloGenerationColumn({
           position={[0, -0.11, 0.006]}
           hovered={hoveredId === STUDIO_CANCEL_ID}
           onSelect={onCancel}
+        />
+      )}
+      {!building && onToLab && (
+        <HoloButton
+          registry={registry}
+          id={STUDIO_TO_LAB_ID}
+          label={t('vrStudio.toLab')}
+          tip={t('vrStudio.toLabTip')}
+          icon="go"
+          width={0.3}
+          height={0.08}
+          position={[0, -0.11, 0.006]}
+          color={HOLO.violet}
+          distance={1.4}
+          hovered={hoveredId === STUDIO_TO_LAB_ID}
+          onSelect={onToLab}
         />
       )}
       <group position={[0, -0.42, 0]}>

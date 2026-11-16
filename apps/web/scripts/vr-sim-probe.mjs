@@ -28,6 +28,8 @@ const xz = (a, b) => Math.hypot(a[0] - b[0], a[2] - b[2]);
 const HOUSEHOLDS = [-9, 0, 11];
 const HOUSEHOLDS_LABEL = [-9, 4.2, 11];
 const HEALTH_LABEL = [12.5, 5.8, -0.5];
+/** The dispatcher's label (anchor above BUS_POSITION). */
+const CONTROLLER_LABEL = [0, 4.4, 1];
 
 const browser = await chromium.launch({
   headless: true,
@@ -135,6 +137,53 @@ try {
   }
   check('the immersive session starts on /simulation', active);
   await rc('set_input_mode', { mode: 'controller' });
+
+  // --- Map (VS-T37): mini map low right → big hologram map → a pin opens its controls ---------
+  const pressNamed = async (name) => {
+    const p = await sim((s, n) => s.worldPos(n), name);
+    if (!p) return false;
+    await aimSelect(p);
+    return true;
+  };
+  await frames(10);
+  check('the mini map shows in view', (await sim((s) => s.shown('sim-xr-minimap'))) > 0);
+  await shot('sim-0-minimap');
+  await pressNamed('sim-xr-minimap-open');
+  check('a trigger on the mini map opens the big map', (await state()).map === true);
+  await shot('sim-0b-bigmap');
+  await pressNamed('sim-xr-map-pin-market');
+  const afterPin = await state();
+  check(
+    'a building pin opens its power panel and closes the map',
+    afterPin.panel === 'market' && !afterPin.map
+  );
+  await shot('sim-0c-map-to-panel');
+  // « Close ✕ » on each modal, aimed with the right laser (VS-T38 regression: it did nothing).
+  await pressNamed('sim-xr-button-close');
+  check('« Close ✕ » closes the power panel', (await state()).panel === null);
+  await pressNamed('sim-xr-minimap-open');
+  await pressNamed('sim-xr-button-map-close');
+  check('« Close ✕ » closes the big map', (await state()).map === false);
+  // The health centre's panel (user report: its « Close ✕ » did nothing), and a second click on
+  // the label closes the panel too (VS-T38).
+  await aimSelect(HEALTH_LABEL);
+  check('the health label opens its panel', (await state()).panel === 'health');
+  await shot('sim-0d-health-panel');
+  await pressNamed('sim-xr-button-close');
+  check('« Close ✕ » closes the health panel', (await state()).panel === null);
+  await aimSelect(HEALTH_LABEL);
+  await aimSelect(HEALTH_LABEL);
+  check('a second click on the label closes its panel', (await state()).panel === null);
+  await pressNamed('sim-xr-minimap-open');
+  await pressNamed('sim-xr-map-pin-dispatcher');
+  check('the dispatcher pin opens the mixing desk', (await state()).mixer === true);
+  await pressNamed('sim-xr-button-mixer-close');
+  check('« Close ✕ » closes the mixing desk', (await state()).mixer === false);
+  if (process.env.VR_SIM_ONLY_MAP) {
+    if (errors.length) console.log(errors.slice(0, 10).join('\n'));
+    await browser.close();
+    process.exit(results.every((r) => r.ok) ? 0 : 1);
+  }
   check(
     'the walk grid is built from the scene',
     await waitFor(() => sim((s) => s.gridReady()), 30000)
@@ -152,13 +201,84 @@ try {
   );
   await shot('sim-1-entry');
 
+  // --- Dispatcher mixing desk (VS-T34) --------------------------------------------------------
+  await aimSelect(CONTROLLER_LABEL);
+  check('the dispatcher label opens its mixing desk', (await state()).mixer === true);
+  const faders = await sim((s) =>
+    ['battery', 'households', 'health'].map((n) => s.shown(`sim-xr-fader-${n}`))
+  );
+  check(
+    'the desk has the battery and sector faders',
+    faders.every((n) => n === 1),
+    `${faders}`
+  );
+  await shot('sim-0-mixer');
+  await pressPanel('mixer-cut-households');
+  check(
+    'mixer « Cut » sets a 0 kW households limit through the engine',
+    (await sim((s) => s.caps())).some((c) => c.sector === 'households' && c.maxKw === 0)
+  );
+  await pressPanel('mixer-on-households');
+  check(
+    'mixer « On » removes it',
+    !(await sim((s) => s.caps())).some((c) => c.sector === 'households')
+  );
+  await pressPanel('mixer-cut-health');
+  check(
+    'mixer refuses to cut the clinic (constitution)',
+    !(await sim((s) => s.caps())).some((c) => c.sector === 'health') &&
+      (await state()).refused === 'health'
+  );
+  await tapButton('controller-right', 4);
+  check('B closes the mixing desk', (await state()).mixer === false);
+
+  // --- Hands & controllers (VS-T30) -----------------------------------------------------------
+  const ins = await sim((s) => s.inputs());
+  const shownAtEntry = await sim((s) => s.inputsShown());
+  check(
+    'the controllers are drawn in VR (near plane pulled in)',
+    shownAtEntry.shown &&
+      shownAtEntry.drawn &&
+      shownAtEntry.near <= 0.1 &&
+      ins.every((i) => i.meshes > 0 && i.fromHead < 1),
+    `near ${shownAtEntry.near}, meshes ${ins.map((i) => i.meshes).join('/')}`
+  );
+  const holdStick = async () => {
+    await rc('set_gamepad_state', {
+      device: 'controller-right',
+      buttons: [{ index: 2, value: 1, touched: true }],
+    });
+    await sleep(1500);
+    await frames(3);
+    await rc('set_gamepad_state', {
+      device: 'controller-right',
+      buttons: [{ index: 2, value: 0, touched: false }],
+    });
+    await frames(2);
+  };
+  const help0 = (await state()).help;
+  await holdStick();
+  const hidden = await sim((s) => s.inputsShown());
+  check(
+    'holding a stick hides the hands & controllers (help untouched)',
+    !hidden.shown && !hidden.drawn && (await state()).help === help0
+  );
+  await shot('sim-1b-inputs-hidden');
+  await holdStick();
+  check('holding it again shows them back', (await sim((s) => s.inputsShown())).drawn);
+
   // --- Same controls as /village ------------------------------------------------------------
   const y0 = await sim((s) => s.yaw());
   await stick('controller-right', 0.9, 0);
-  await sleep(250);
+  // Read the first snap as soon as it shows: on slow software GL a frame can last over the 0.6 s
+  // held-stick repeat, so the total after release may hold two snaps (by design).
+  let y1 = y0;
+  await waitFor(async () => {
+    y1 = await sim((s) => s.yaw());
+    return Math.abs(wrap(y1 - y0)) > 0.01;
+  }, 180000);
   await stick('controller-right', 0, 0);
-  await sleep(600);
-  const y1 = await sim((s) => s.yaw());
+  await frames(2);
   check(
     'right stick → : snap turn 30° right',
     Math.abs(deg(wrap(y1 - y0)) + 30) <= 2,
@@ -171,7 +291,25 @@ try {
   // The glide moves ≤ 0.32 m a frame: 0.8 m is done well within 12 frames.
   await frames(12);
   const h1 = await head();
-  check('right stick ↑ : one 0.8 m step', Math.abs(xz(h0, h1) - 0.8) < 0.15, xz(h0, h1).toFixed(2));
+  // The rig is shrunk for the half-scale village (VS-T33): a step is 0.8 m as felt.
+  const scale = await sim((s) => s.scale());
+  check(
+    'the walker is shrunk to the half-scale village (eyes under a 1.3 m house wall)',
+    scale < 1 && h1[1] - (await sim((s, p) => s.ground(p[0], p[2]), h1)) < 1.3,
+    `scale ${scale}, eyes ${h1[1].toFixed(2)} m`
+  );
+  const felt = xz(h0, h1) / scale;
+  check('right stick ↑ : one 0.8 m step (felt)', Math.abs(felt - 0.8) < 0.15, felt.toFixed(2));
+  // ← / → turn the head from the keyboard while W walks (VS-T33: touchpad off while typing).
+  const k0 = await sim((s) => s.yaw());
+  await page.keyboard.down('KeyW');
+  await page.keyboard.down('ArrowLeft');
+  await frames(6);
+  await page.keyboard.up('ArrowLeft');
+  await page.keyboard.up('KeyW');
+  await frames(2);
+  const k1 = await sim((s) => s.yaw());
+  check('keyboard ← turns the head while walking', wrap(k1 - k0) > 0.05, `${deg(wrap(k1 - k0))}°`);
   const labels0 = (await state()).labels;
   await tapButton('controller-right', 3);
   const labels1 = (await state()).labels;
@@ -267,6 +405,37 @@ try {
       !(await sim((s) => s.caps())).some((c) => c.sector === 'health' && c.maxKw === 0)
   );
   await shot('sim-7-clinic-refused');
+
+  // --- Arriving from the /village lab (VS-T29): VR opens by itself, next to the object ------
+  const SPOT = [3.3, 0, 23.8];
+  const exitVr = page.getByRole('button', { name: /Exit VR/i }).first();
+  await exitVr.evaluate((el) => setTimeout(() => el.click(), 0)).catch(() => {});
+  await waitFor(
+    async () => !(await rc('get_session_status').catch(() => null))?.sessionActive,
+    30000
+  );
+  await page.evaluate((at) => window.__XR_HANDOFF__?.(at), [SPOT[0], SPOT[2]]);
+  let again = false;
+  for (let i = 0; i < 40 && !again; i++) {
+    await sleep(1000);
+    again = !!(await rc('get_session_status').catch(() => null))?.sessionActive;
+  }
+  // Head straight ahead in its own space: the rig alone then sets where it faces.
+  await rc('look_at', { device: 'headset', target: { x: 0, y: 1.6, z: -2 } }).catch(() => {});
+  await sleep(800);
+  check('« Go to the simulation » from the lab opens VR by itself (no click)', again);
+  await waitFor(async () => !!(await sim((s) => s.head())), 30000);
+  const h2 = await head();
+  const dist = h2 ? xz(h2, SPOT) : Infinity;
+  const yawTo = h2 ? Math.atan2(-(SPOT[0] - h2[0]), -(SPOT[2] - h2[2])) : 0;
+  const yaw2 = (await sim((s) => s.yaw())) ?? 99;
+  const off = Math.abs(Math.atan2(Math.sin(yaw2 - yawTo), Math.cos(yaw2 - yawTo)));
+  check(
+    '… standing next to the added object, facing it',
+    dist > 1 && dist < 4 && off < 0.5,
+    `${dist.toFixed(1)} m away, ${((off * 180) / Math.PI).toFixed(0)}° off`
+  );
+  await shot('sim-8-from-lab');
 
   check('no page errors', errors.length === 0, errors.slice(0, 2).join(' | '));
 } finally {

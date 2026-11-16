@@ -16,7 +16,8 @@ import { useVoiceInput } from '../../hooks/use-voice-input';
 import { systemKeyboardSupported, useSystemKeyboard } from '../../hooks/use-system-keyboard';
 import { useHoloPanel, type PanelRegistry } from './holo-panel';
 import { HoloButton, HoloFrame, HoloText } from './holo-ui';
-import { HOLO, type HoloCardSpec } from './holo-style';
+import { HOLO, HOLO_TEXT_DMM, holoTextPx, type HoloCardSpec } from './holo-style';
+import { HoloVoiceMeter } from './holo-voice-meter';
 import { drawChatTexture, type ChatBubbleItem } from './holo-chat-texture';
 import { drawKeyboardTexture } from './holo-keyboard-texture';
 import { LemurBot } from './lemur-bot';
@@ -31,20 +32,28 @@ export const CHAT_IDS = {
   keys: 'holo:chat-keys',
 } as const;
 
-const { width: W, historyHeight: HH } = CHAT_PANEL;
-const ROW_H = 0.08;
+const { width: W, historyHeight: HH, distance: D } = CHAT_PANEL;
+/** Field and button rows: 10 cm, room for a 24 dmm label at 1.4 m (≈ 3.4 cm). */
+const ROW_H = 0.1;
 const GAP = 0.02;
-const HEADER_Y = HH / 2 + 0.06;
-/** Field on its own full-width row, then « Keys » · « Voice » · « Send » (wide enough to read). */
+const HEADER_H = 0.1;
+const HEADER_Y = HH / 2 + HEADER_H / 2 + 0.015;
+/** Field on its own full-width row, then « Keyboard » · « Dictate » · « Send » with icons. */
 const FIELD_Y = -HH / 2 - ROW_H / 2 - 0.015;
-const BTN_Y = FIELD_Y - ROW_H - 0.012;
-const BTN_W = { keys: 0.2, voice: 0.2, send: W - 0.4 - 2 * GAP } as const;
-const HINT_Y = BTN_Y - ROW_H / 2 - 0.025;
+const BTN_Y = FIELD_Y - ROW_H - 0.015;
+const BTN_W = { keys: 0.21, voice: 0.21, send: W - 0.42 - 2 * GAP } as const;
+const HINT_H = 0.045;
+const HINT_Y = BTN_Y - ROW_H / 2 - 0.012 - HINT_H / 2;
 const KEYS_H = 0.29;
-const KEYS_Y = HINT_Y - 0.03 - KEYS_H / 2;
+const KEYS_Y = HINT_Y - HINT_H / 2 - 0.02 - KEYS_H / 2;
+/** Voice level meter, inside the field on the right while dictating (VS-T29). */
+const METER_W = 0.17;
+const METER_H = ROW_H * 0.8;
 /** Frame round the chat: header top to the buttons' bottom. */
-const FRAME_TOP = HEADER_Y + 0.06;
+const FRAME_TOP = HEADER_Y + HEADER_H / 2 + 0.01;
 const FRAME_BOTTOM = BTN_Y - ROW_H / 2 - 0.015;
+/** Text sizes (canvas px) for their planes, in dmm at the chat distance. */
+const px = (dmm: number, planeWidth: number) => holoTextPx(dmm, planeWidth, D);
 
 const _local = new THREE.Vector3();
 
@@ -143,7 +152,8 @@ export const HoloFaceChat = memo(function HoloFaceChat({
       t('empty', { view: viewName }),
       1024,
       Math.round((1024 * HH) / W),
-      historyTex.current ?? undefined
+      historyTex.current ?? undefined,
+      px(HOLO_TEXT_DMM.body, W)
     );
     return historyTex.current;
   }, [items, t, viewName]);
@@ -155,8 +165,17 @@ export const HoloFaceChat = memo(function HoloFaceChat({
       align: 'left',
       accent: HOLO.violet,
       lines: [
-        { text: t('title', { view: viewName }), size: 50, weight: 700 },
-        { text: t('aiLabel'), size: 30, weight: 600, color: HOLO.violet },
+        {
+          text: t('title', { view: viewName }),
+          size: px(HOLO_TEXT_DMM.title, W * 0.7),
+          weight: 700,
+        },
+        {
+          text: t('aiLabel'),
+          size: px(HOLO_TEXT_DMM.caption, W * 0.7),
+          weight: 600,
+          color: HOLO.violet,
+        },
       ],
     }),
     [t, viewName]
@@ -164,6 +183,8 @@ export const HoloFaceChat = memo(function HoloFaceChat({
 
   const listening = voice.listening;
   const shown = listening && voice.interim ? `${kb.draft} ${voice.interim}`.trim() : kb.draft;
+  // While dictating the level meter takes the field's right end: the text keeps the rest.
+  const fieldTextW = W * 0.97 - (listening ? METER_W + 0.02 : 0);
   const fieldSpec = useMemo<HoloCardSpec>(
     () => ({
       glass: false,
@@ -171,16 +192,16 @@ export const HoloFaceChat = memo(function HoloFaceChat({
       accent: listening ? HOLO.amber : HOLO.cyan,
       lines: [
         shown
-          ? { text: `${shown}▍`, size: 40, weight: 600 }
+          ? { text: `${shown}▍`, size: px(HOLO_TEXT_DMM.label, fieldTextW), weight: 600 }
           : {
               text: listening ? t('listening') : t('placeholder'),
-              size: 38,
+              size: px(HOLO_TEXT_DMM.label, fieldTextW),
               weight: 400,
               color: listening ? HOLO.amber : HOLO.cyan,
             },
       ],
     }),
-    [shown, listening, t]
+    [shown, listening, t, fieldTextW]
   );
 
   // Keyboard: one plane, the key from the hit's UV.
@@ -247,7 +268,7 @@ export const HoloFaceChat = memo(function HoloFaceChat({
       <HoloText
         spec={header}
         width={W * 0.7}
-        height={0.09}
+        height={HEADER_H}
         position={[-W * 0.13, HEADER_Y, 0.002]}
       />
       <mesh position={[0, 0, 0.002]} renderOrder={3}>
@@ -265,6 +286,9 @@ export const HoloFaceChat = memo(function HoloFaceChat({
         registry={registry}
         id={CHAT_IDS.keyboard}
         label={t('keyboard')}
+        icon="keyboard"
+        tip={t('keyboardTip')}
+        distance={D}
         width={BTN_W.keys}
         height={ROW_H}
         position={[x0 + BTN_W.keys / 2, BTN_Y, 0.004]}
@@ -282,15 +306,28 @@ export const HoloFaceChat = memo(function HoloFaceChat({
         />
         <HoloText
           spec={fieldSpec}
-          width={W * 0.97}
+          width={fieldTextW}
           height={ROW_H * 0.86}
-          position={[0, 0, 0.002]}
+          position={[-(W * 0.97 - fieldTextW) / 2, 0, 0.002]}
         />
+        {listening && (
+          <HoloVoiceMeter
+            analyser={voice.analyser}
+            width={METER_W}
+            height={METER_H}
+            title={t('meterTitle')}
+            distance={D}
+            position={[W / 2 - METER_W / 2 - 0.008, 0, 0.003]}
+          />
+        )}
       </group>
       <HoloButton
         registry={registry}
         id={CHAT_IDS.voice}
         label={listening ? t('stop') : t('voice')}
+        icon={listening ? 'stop' : 'mic'}
+        tip={listening ? t('stopTip') : t('voiceTip')}
+        distance={D}
         width={BTN_W.voice}
         height={ROW_H}
         position={[x0 + BTN_W.keys + GAP + BTN_W.voice / 2, BTN_Y, 0.004]}
@@ -304,6 +341,9 @@ export const HoloFaceChat = memo(function HoloFaceChat({
         registry={registry}
         id={CHAT_IDS.send}
         label={t('send')}
+        icon="send"
+        tip={t('sendTip')}
+        distance={D}
         width={BTN_W.send}
         height={ROW_H}
         position={[W / 2 - BTN_W.send / 2, BTN_Y, 0.004]}
@@ -324,14 +364,14 @@ export const HoloFaceChat = memo(function HoloFaceChat({
                     : voice.error
                       ? t('voiceError')
                       : t('voiceUnavailable'),
-                size: 30,
-                weight: 400,
+                size: px(HOLO_TEXT_DMM.caption, W),
+                weight: 600,
                 color: HOLO.amber,
               },
             ],
           }}
           width={W}
-          height={0.04}
+          height={HINT_H}
           position={[0, HINT_Y, 0.004]}
         />
       )}

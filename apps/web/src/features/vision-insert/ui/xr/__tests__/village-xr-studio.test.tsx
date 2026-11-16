@@ -64,11 +64,21 @@ vi.mock('../holo-extract-panels', () => ({
 vi.mock('../xr-extract-studio', () => ({
   StudioRoom: () => <div data-testid="studio-room" />,
   HoloBuildStage: () => <div data-testid="build-stage" />,
-  HoloGenerationColumn: (props: { stage: string }) => (
-    <div data-testid="generation-column" data-stage={props.stage} />
+  HoloGenerationColumn: (props: { stage: string; onToLab?: () => void }) => (
+    <div data-testid="generation-column" data-stage={props.stage}>
+      {props.onToLab && (
+        <button type="button" onClick={props.onToLab}>
+          3D lab
+        </button>
+      )}
+    </div>
   ),
 }));
 vi.mock('../holo-ui', () => ({
+  HoloFrame: () => null,
+  HoloText: ({ spec }: { spec: { lines: { text: string }[] } }) => (
+    <p>{spec.lines.map((l) => l.text).join(' · ')}</p>
+  ),
   HoloButton: ({ label, onSelect }: { label: string; onSelect?: () => void }) => (
     <button type="button" onClick={() => onSelect?.()}>
       {label}
@@ -78,10 +88,31 @@ vi.mock('../holo-ui', () => ({
 vi.mock('../holo-views-carousel', () => ({
   HoloViewsCarousel: () => <div data-testid="views-carousel" />,
 }));
-vi.mock('../xr-object-lab', () => ({ XrObjectLab: () => <div data-testid="xr-lab" /> }));
+vi.mock('../xr-object-lab', () => ({
+  XrObjectLab: (props: { onToViews?: () => void }) => (
+    <div data-testid="xr-lab">
+      {props.onToViews && (
+        <button type="button" onClick={props.onToViews}>
+          2D lab
+        </button>
+      )}
+    </div>
+  ),
+}));
+// The desks turntable animates in a frame loop: here the desk ahead only.
+vi.mock('../studio-desks', () => ({
+  StudioDesks: (p: { desk: string; twoD: React.ReactNode; threeD: React.ReactNode }) => (
+    <div data-testid="studio-desks" data-desk={p.desk}>
+      {p.desk === '2d' ? p.twoD : p.threeD}
+    </div>
+  ),
+}));
 vi.mock('../holo-detection-target', () => ({ HoloDetectionTarget: () => null }));
 vi.mock('../spawned-object-3d', () => ({ SpawnedObject3D: () => null }));
-vi.mock('../village-spatial-hud', () => ({ VillageSpatialHUD: () => null }));
+vi.mock('../xr-event-toast', () => ({
+  XrEventToast: ({ message }: { message: string | null }) =>
+    message ? <p data-testid="event-toast">{message}</p> : null,
+}));
 vi.mock('../spatial-interaction-guide', () => ({ SpatialInteractionGuide: () => null }));
 vi.mock('../xr-wrist-menu', () => ({
   WristMenuButton: () => null,
@@ -180,6 +211,27 @@ describe('VillageXRStudio — shoot an object in the webcam video', () => {
     expect(onSelectAppliance).toHaveBeenCalledTimes(2); // materialize, then connect
   });
 
+  it('says how to use a new miniature, and « Put away » removes it (VS-T32)', () => {
+    // Before: the miniature appeared with no word on how to use it nor how to remove it.
+    const { rerender, view, getByTestId, getByRole, queryByRole } = setup();
+    rerender(view([fridge], false));
+    act(() => blaster.props!.onShootTarget('fridge'));
+    expect(getByTestId('event-toast').textContent).toMatch(/Put away/);
+    expect(getByRole('button', { name: 'Put away' })).toBeTruthy();
+    fireEvent.click(getByRole('button', { name: 'Put away' }));
+    expect(blaster.props!.miniatures).toEqual([]);
+    expect(queryByRole('button', { name: 'Put away' })).toBeNull();
+    expect(getByTestId('event-toast').textContent).toMatch(/put away/);
+  });
+
+  it('closes the open menu from its « Close » button (VS-T32)', () => {
+    const { getByRole, queryByTestId } = setup();
+    act(() => blaster.props!.menu.toggle());
+    expect(queryByTestId('wrist-menu-panel')).toBeTruthy();
+    fireEvent.click(getByRole('button', { name: 'Close' }));
+    expect(queryByTestId('wrist-menu-panel')).toBeNull();
+  });
+
   it('keeps the menu hidden on entry; the wrist button opens and closes it', () => {
     const { queryByTestId } = setup();
     const menu = blaster.props!.menu;
@@ -247,6 +299,8 @@ describe('VillageXRStudio — 3D extraction (VS-T18–T22)', () => {
     build: vi.fn(),
     enterLab: vi.fn(),
     exitLab: vi.fn(),
+    toViews: vi.fn(),
+    toLab: vi.fn(),
     leave: vi.fn(),
     back: vi.fn(),
     awayId: null,
@@ -383,6 +437,58 @@ describe('VillageXRStudio — 3D extraction (VS-T18–T22)', () => {
     rerender(view([fridge], false, extractAt('lab')));
     expect(queryByTestId('studio-room')).toBeTruthy();
     expect(queryByTestId('generation-column')).toBeNull();
+  });
+});
+
+describe('VillageXRStudio — 2D lab / 3D lab desks (VS-T31)', () => {
+  const base = (stage: XrExtract['stage'], ready: boolean): XrExtract => ({
+    stage,
+    id: 'fridge',
+    ask: vi.fn(),
+    confirm: vi.fn(),
+    cancel: vi.fn(),
+    build: vi.fn(),
+    enterLab: vi.fn(),
+    exitLab: vi.fn(),
+    toViews: vi.fn(),
+    toLab: vi.fn(),
+    leave: vi.fn(),
+    back: vi.fn(),
+    awayId: null,
+    slides: [],
+    canBuild: false,
+    redraw: vi.fn(),
+    toggleValidated: vi.fn(),
+    chatOf: () => [],
+    sendChat: vi.fn(),
+    ready,
+    shape: ready
+      ? {
+          status: 'ready',
+          shape: { detectionId: 'fridge', mode: 'recipe' } as XrExtract['shape']['shape'],
+        }
+      : { status: 'idle' },
+    editPieces: vi.fn(),
+  });
+
+  it('the 3D lab has « 2D lab », the 2D lab has « 3D lab » once the model exists', () => {
+    const lab = base('lab', true);
+    const { rerender, view, getByRole, getByTestId, queryByRole } = setup(false, lab);
+    const more = { imageUrl: 'data:image/jpeg;base64,scan' };
+    rerender(view([fridge], false, lab, more));
+    expect(getByTestId('studio-desks').dataset.desk).toBe('3d');
+    fireEvent.click(getByRole('button', { name: '2D lab' }));
+    expect(lab.toViews).toHaveBeenCalledOnce();
+
+    const views = base('views', true);
+    rerender(view([fridge], false, views, more));
+    expect(getByTestId('studio-desks').dataset.desk).toBe('2d');
+    fireEvent.click(getByRole('button', { name: '3D lab' }));
+    expect(views.toLab).toHaveBeenCalledOnce();
+
+    // No model yet: no way to the 3D lab from the views.
+    rerender(view([fridge], false, base('views', false), more));
+    expect(queryByRole('button', { name: '3D lab' })).toBeNull();
   });
 });
 

@@ -6,7 +6,7 @@ import { SECTOR_IDS, type Priority, type SectorId } from '@mitsinjo/engine';
 import { SECTOR_ICON_BG_CLASS, SectorIcon } from '@/components/ui/sector-icon';
 import { fmtPct } from '@/lib/format';
 import type { BuildingSceneModel } from '../types';
-import { STATUS_HEX, TOKEN_HEX, glowFromIntensity } from '../utils/scene-palette';
+import { STATUS_HEX, TOKEN_HEX, duskDarkness, glowFromIntensity } from '../utils/scene-palette';
 import { BODY_LAYOUT, BuildingBody } from './building-bodies';
 import { badgeY, SceneBadge } from './scene-badge';
 
@@ -142,10 +142,8 @@ export function VillageBuildings({
   htmlPortal,
   lampGlow = 1,
 }: VillageBuildingsProps) {
-  // Only start glowing when it begins to get dark (dusk / night: lampGlow > 0.45).
-  // Zero in broad daylight (lampGlow <= 0.45).
-  const duskThreshold = 0.45;
-  const darkness = Math.max(0, Math.min(1, (lampGlow - duskThreshold) / 0.4));
+  // Only start glowing when it begins to get dark (zero in broad daylight).
+  const darkness = duskDarkness(lampGlow);
 
   return (
     <group name="village-buildings">

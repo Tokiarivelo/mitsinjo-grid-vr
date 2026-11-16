@@ -21,17 +21,13 @@ const CELL_OFFSET_Z = 0.03 * Math.sin(TILT_RAD);
 
 export interface SolarArrayProps {
   model: SolarSceneModel;
-  nameLabel?: string;
+  /** Translated name (no default: zero static text). */
+  nameLabel: string;
   outputLabel?: string;
   htmlPortal?: RefObject<HTMLElement | null> | null;
 }
 
-export function SolarArray({
-  model,
-  nameLabel = 'Solar PV Array',
-  outputLabel,
-  htmlPortal,
-}: SolarArrayProps) {
+export function SolarArray({ model, nameLabel, outputLabel, htmlPortal }: SolarArrayProps) {
   const { currentKw, glowIntensity, isGenerating } = model;
 
   const panelLayout = useMemo(() => {

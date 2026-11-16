@@ -5,6 +5,8 @@ import {
   buildPlacedModelsGeometry,
   PLACED_DRAWN_MAX,
   PLACED_LOW_TRIANGLES,
+  PLACED_NIGHT_DIM,
+  placedDim,
   placedGeometryKey,
   type PlacedModelItem,
 } from '../utils/placed-models-geometry';
@@ -341,5 +343,32 @@ describe('placed houses read by their specialist (PQ-T72)', () => {
     expect(res.drawn[0]!.recipe.house?.volumes).toHaveLength(1);
     // The roof's fascia hangs under the eave: the model still rests on the ground.
     expect(res.modelBounds['app-h']!.height).toBeGreaterThan(0.5);
+  });
+});
+
+describe('lit like the village (VS-T35)', () => {
+  const item = (running: boolean): PlacedModelItem => ({
+    id: running ? 'on' : 'off',
+    sector: 'water',
+    running,
+    position: [0, 0, 0],
+    recipe: SAMPLE_RECIPE,
+  });
+
+  it('keeps an unpowered object as built by day, dark only at night', () => {
+    expect(placedDim(true, 0)).toBe(1);
+    expect(placedDim(true, 1)).toBeCloseTo(PLACED_NIGHT_DIM);
+    expect(placedDim(false, 1)).toBe(1);
+    const day = buildPlacedModelsGeometry([item(false)], undefined, 'high', 0);
+    const lit = buildPlacedModelsGeometry([item(true)], undefined, 'high', 0);
+    expect(day.modelsGeometry!.getAttribute('color').getX(0)).toBeCloseTo(
+      lit.modelsGeometry!.getAttribute('color').getX(0)
+    );
+  });
+
+  it('rebuilds on darkness tenths only', () => {
+    const k = (d: number) => placedGeometryKey([item(false)], undefined, 'high', d);
+    expect(k(0.51)).toBe(k(0.54));
+    expect(k(0.2)).not.toBe(k(0.8));
   });
 });

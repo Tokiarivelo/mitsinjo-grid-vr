@@ -243,7 +243,8 @@
         "battery": "Fitehirizana vatoaratra BESS",
         "controller": "Mpibaiko ny tambajotra EMS",
         "wind": "Fikomian-drivotra",
-        "lake": "Farihy & Fari-dranomaso"
+        "lake": "Farihy & Fari-dranomaso",
+        "appliance": "Zavatra nampidirina"
       },
       "villageDemand": "Filan'ny tanàna",
       "tabMetrics": "Kajy & refy",
@@ -365,7 +366,44 @@
         "legendStickPress": "Tsindrio ny stick : afenina ity fanampiana ity",
         "legendPinch": "Tsongoy : misafidy marika, trano, bokotra",
         "legendThumbTurn": "Ankihibe ←/→ : mihodina · ↑/↓ : dingana iray",
-        "legendThumbTap": "Kitiho ny ankihibe : aseho / afenina ny marika"
+        "legendThumbTap": "Kitiho ny ankihibe : aseho / afenina ny marika",
+        "legendStickHold": "Tazomy 1 s ny stick: aseho / afeno ny tanana sy ny fitantanana"
+      },
+      "vrMixer": {
+        "title": "Dispatcher · latabatra fampifangaroana",
+        "hint": "Tazomy ny gâchette eo amin'ny curseur, tariho miakatra na midina ; avelao mba handefa. Ambony indrindra = tsy misy fetra.",
+        "battery": "Bateria",
+        "soc": "Herinaratra {pct}",
+        "reserve": "Tahiry {pct}",
+        "served": "Nomena {kw}",
+        "limit": "Fetra {kw}",
+        "noLimit": "Tsy misy fetra",
+        "cutState": "Tapaka",
+        "direct": "Mivantana · {kw}",
+        "level": "Haavo {pct}",
+        "cut": "Tapaho",
+        "restore": "Alefaso",
+        "start": "Alefaso ny bateria ary zarao ny herinaratra",
+        "running": "Mizara ankehitriny",
+        "more": "+{count} hafa ao amin'ny tabilao 2D"
+      },
+      "vrMap": {
+        "mini": "Sarintany",
+        "title": "Sarintanin’ny tanàna",
+        "hint": "Kendreo ny trano na ny dispatcher, tsindrio : misokatra ny fanaraha-maso azy",
+        "you": "Ianao"
+      },
+      "villageTags": {
+        "standby": "Miandry",
+        "solar": "{kw} · Angovo madio",
+        "battery": "{pct} herinaratra · Fitehirizana lithium",
+        "controllerTitle": "Mpitantana ny fizarana",
+        "controller": "Fon'ny tamba-jotra kely · bus 240 V",
+        "windTitle": "Rivotra eny an-kavoana",
+        "wind": "Angovo avy amin'ny rivotra · Tendrombohitra",
+        "lakeTitle": "Fitsangatsanganana amoron-drano",
+        "lake": "Fefy fiarovana · Jiro amin'ny alina",
+        "appliance": "{priority} · {kw}"
       }
     },
     "strategyLab": {
@@ -986,21 +1024,18 @@
       "vrShootToDisconnect": "⚡ Kendreo sy tifiro mba hanapahana ny fifandraisana",
       "vrGridStatusConnected": "✓ Mifandray amin'ny tambazotra (+{watts} W)",
       "vrGridStatusNotConnected": "Modely 3D vonona · Tsy mifandray",
-      "vrHudTitle": "Fampitana Angovo",
-      "vrHudBattery": "Bateria",
-      "vrHudSolar": "Masoandro",
-      "vrHudDemand": "Filana",
-      "vrHudAppliances": "Fitaovana VR",
-      "vrHudConnectedCount": "{count} mifandray (+{watts} W)",
-      "vrHudMinimize": "Ahenao",
-      "vrHudExpand": "Ahabeo",
       "vrHudEventConnected": "+{watts} W · {name} nampifandraisina",
       "vrHudEventDisconnected": "−{watts} W · {name} nesorina",
-      "vrHudEventMaterialized": "{name} 3D · tazony hanodinana, tsindrio hampifandraisina",
+      "vrHudEventMaterialized": "Eo anoloanao i {name}: gâchette hampifandray azy, grip hanodina azy, « Atokàny » hanesorana azy",
       "vrHudEventNoObject": "Tsy misy zavatra hita eto",
-      "vrHudNetSurplus": "Ambim-bava +{kw} kW",
-      "vrHudNetDeficit": "Tsy ampy -{kw} kW",
-      "vrHudNetBalanced": "Milamina ny tambajotra",
+      "vrMini": {
+        "connected": "✓ Mifandray amin'ny tambajotran'ny tanàna",
+        "idle": "Tsy mifandray",
+        "hint": "Gâchette: ampifandraisina / esorina · Grip: aodina",
+        "dismiss": "Atokàny",
+        "dismissTip": "Esorina ity kely ity; tsy miova ny simulation",
+        "dismissed": "Natokana i {name}"
+      },
       "vrLiveWebcam": "Fakan-tsary mivantana",
       "vrVirtualRoom": "Efitrano studio virtoaly",
       "vrCameraStandby": "Miandry ny fakan-tsary",
@@ -1539,14 +1574,14 @@
       "vrChat": {
         "title": "Resaka AI · {view}",
         "aiLabel": "FANOVANA AI · averina hosoratana ity sary ity, hamarino alohan'ny hankatoavina",
-        "empty": "Angataho amin'ny AI ny fanovana ny {view} : soraty amin'ny « Fitendry » na lazao amin'ny « Feo », avy eo « Alefa ».",
+        "empty": "Angataho amin'ny AI ny fanovana ny {view} : soraty amin'ny « Fitendry » na lazao amin'ny « Lazao », avy eo « Alefa ».",
         "placeholder": "Lazao ny fanovana…",
         "listening": "Mihaino… mitenena",
         "working": "Averiko hosoratana ny {view} araka ny fangatahanao…",
         "done": "Vita : eo amin'ny sary ny sary vaovao. Ankatoavy na mangataha fanovana hafa.",
         "failed": "Tsy nahomby ny sary. Alefaso indray ny fangatahana.",
         "keyboard": "Fitendry",
-        "voice": "Feo",
+        "voice": "Lazao",
         "stop": "Ajanony",
         "send": "Alefa",
         "wait": "Andraso ho vita ny sary",
@@ -1555,7 +1590,12 @@
         "keyShift": "⇧ Lehibe",
         "keySpace": "elanelana",
         "keyBack": "⌫ Fafao",
-        "keyClear": "Fafao daholo"
+        "keyClear": "Fafao daholo",
+        "keyboardTip": "Sokafy na hidio ny fitendry holo hanoratana ny fangatahanao",
+        "voiceTip": "Lazao ny fangatahanao : voasoratra ao amin'ny saha izany",
+        "stopTip": "Ajanony ny fihainoana ; mijanona ao amin'ny saha ny lahatsoratra re",
+        "sendTip": "Alefaso ny fangatahana : averin'ny AI hosoratana ity sary ity",
+        "meterTitle": "Haavon'ny feo"
       },
       "vrVillage": {
         "title": "Apetraho ao an-tanàna ny « {name} »",
@@ -1563,7 +1603,9 @@
         "placed": "Napetraka ao amin'ny {x}, {z} · fizarana : {sector}",
         "notPlaced": "Mbola tsy napetraka : tondroy ny latabatry ny tanàna ary tsindrio",
         "inSimulation": "Ao anaty simulation : naverina nokajiana ny paikady",
-        "goSimulation": "Mankany amin'ny simulation"
+        "goSimulation": "Mankany amin'ny simulation",
+        "insertTip": "Ampidiro ao amin'ny simulation ilay zavatra : averina kajiana ny paikady",
+        "goSimulationTip": "Sokafy amin'ny VR ny simulation, eo akaikin'ity zavatra ity"
       },
       "vrLab": {
         "title": "Labo 3D · {name}",
@@ -1576,7 +1618,9 @@
         "bigger": "+ Habe",
         "turn": "Ahodino 90°",
         "fade": "Mangarahara",
-        "exit": "Hiala ao amin’ny labo"
+        "exit": "Hiala ao amin’ny labo",
+        "toViews": "Labo 2D",
+        "toViewsTip": "Miverina any amin’ny sary 2D: tsy very ny modely"
       },
       "vrControls": {
         "verbTrigger": "Bokotra fitifirana",
@@ -1613,11 +1657,18 @@
         "helpShown": "Miseho ny fanampiana : tsindrio ny stick, na Menu › Fanampiana, hanafenana azy",
         "helpHidden": "Miafina ny fanampiana : tsindrio ny stick, na Menu › Fanampiana, hanehoana azy",
         "helpShow": "Asehoy ny fanampiana momba ny fanaraha-maso",
-        "helpHide": "Afeno ny fanampiana momba ny fanaraha-maso"
+        "helpHide": "Afeno ny fanampiana momba ny fanaraha-maso",
+        "inputsShow": "Asehoy ny tanana sy ny fitantanana",
+        "inputsHide": "Afeno ny tanana sy ny fitantanana",
+        "inputsShownEvent": "Aseho ny tanana sy ny fitantanana",
+        "inputsHiddenEvent": "Miafina ny tanana sy ny fitantanana (mijanona ny laser)",
+        "legendStickHold": "Tazomy 1 s ny stick: aseho / afeno ny tanana sy ny fitantanana"
       },
       "vrStudio": {
         "viewsTitle": "Manao ny sary 2D an’i « {name} »",
-        "buildSub": "Misokatra ho azy ny labo 3D raha vao vonona ny modely"
+        "buildSub": "Misokatra ho azy ny labo 3D raha vao vonona ny modely",
+        "toLab": "Labo 3D",
+        "toLabTip": "Mitodika any amin’ny labo 3D: efa vita ny modely"
       },
       "cancelAnalysis": "Ajanony ny famakafakana",
       "analysisCancelled": "Najanona ny famakafakana.",

@@ -1,6 +1,9 @@
 import * as THREE from 'three';
 import { attachInputModels } from './xr-input-models';
+import { putOnInputLayer } from './xr-inputs-shown';
+import { createSurroundingProbe } from './xr-ray-contrast';
 import { createRayVisual, type RayVisual } from './xr-ray-visual';
+import { dragPoint, findDraggable, type XrDraggable } from './xr-drag';
 
 export const HAND_JOINTS = [
   'wrist',
@@ -97,7 +100,8 @@ export function createControllerGripModel(): THREE.Group {
   ringGeo.translate(0, 0.03, -0.015);
   group.add(new THREE.Mesh(ringGeo, gripMat));
 
-  return group;
+  // Own render layer: « hands & controllers » hides it with one camera switch (VS-T30).
+  return putOnInputLayer(group);
 }
 
 /**
@@ -120,7 +124,7 @@ export function createHandMesh(): THREE.InstancedMesh {
   mesh.frustumCulled = false;
   mesh.castShadow = true;
   mesh.name = 'hand-joints-mesh';
-  return mesh;
+  return putOnInputLayer(mesh);
 }
 
 const _handMatrix = new THREE.Matrix4();
@@ -167,6 +171,8 @@ interface RayData {
   space: THREE.XRTargetRaySpace;
   visual: RayVisual;
   pressed: boolean;
+  /** What the held trigger drags (a fader, VS-T34), null otherwise. */
+  drag: XrDraggable | null;
 }
 
 /** Things a pointer can use: panels (`userData.xrUi`) and anything with a select handler. */
@@ -177,6 +183,7 @@ function usableObjects(scene: THREE.Scene): THREE.Object3D[] {
     if (
       o.userData?.xrUi ||
       o.userData?.onSelect ||
+      o.userData?.onDrag ||
       o.userData?.onClick ||
       h.__r3f?.handlers?.onClick
     )
@@ -185,8 +192,45 @@ function usableObjects(scene: THREE.Scene): THREE.Object3D[] {
   return out;
 }
 
-/** Frames between two refreshes of the usable objects list (they rarely change). */
-const USABLE_REFRESH_FRAMES = 30;
+/**
+ * Hits of `caster` on the usable objects, nearest first, into `out`. Each object is tried alone:
+ * one that throws (a `Line2` cable, a sprite without camera…) is skipped instead of emptying the
+ * whole pick. Before, a click raycast the whole scene in one call and a throw anywhere on the ray
+ * made it hit nothing: « Close » or the left laser did nothing while the beam sat on a button.
+ */
+export function pickUsable(
+  caster: THREE.Raycaster,
+  objects: readonly THREE.Object3D[],
+  out: THREE.Intersection[]
+): THREE.Intersection[] {
+  out.length = 0;
+  for (const o of objects) {
+    try {
+      caster.intersectObject(o, true, out);
+    } catch {
+      // Not pickable from this ray: ignore it.
+    }
+  }
+  out.sort((a, b) => a.distance - b.distance);
+  // A usable object inside another usable one is hit twice: keep its nearest hit only.
+  let n = 0;
+  for (let i = 0; i < out.length; i++) {
+    const h = out[i]!;
+    let seen = false;
+    for (let j = 0; j < n && !seen; j++) seen = out[j]!.object === h.object;
+    if (!seen) out[n++] = h;
+  }
+  out.length = n;
+  return out;
+}
+
+/** Beam and tip opacity over nothing usable (/simulation, VS-T38). */
+export const RAY_IDLE_OPACITY = 0.45;
+/**
+ * Frames between two refreshes of the usable objects list: a panel or map just opened is aimable
+ * within ~0.1 s (it was 0.5 s: the tip vanished on a fresh button, VS-T38).
+ */
+const USABLE_REFRESH_FRAMES = 8;
 const _rayCaster = new THREE.Raycaster();
 const _rayHits: THREE.Intersection[] = [];
 const _rayO = new THREE.Vector3();
@@ -194,6 +238,10 @@ const _rayD = new THREE.Vector3();
 const _rayLocalO = new THREE.Vector3(0, 0, 0);
 const _rayLocalD = new THREE.Vector3(0, 0, -1);
 const _rayEnd = new THREE.Vector3();
+const _dragCaster = new THREE.Raycaster();
+const _dragO = new THREE.Vector3();
+const _dragD = new THREE.Vector3();
+const _dragLocal = new THREE.Vector3();
 
 interface ModelRef {
   parent: THREE.Object3D;
@@ -255,12 +303,36 @@ export function setupXRHandsAndControllers(
 
     // 2. Controller Target Ray: a short beam + cursor ring (Meta ray spec, VS-T26).
     const controllerRay = gl.xr.getController(i);
-    const ray: RayData = { space: controllerRay, visual: createRayVisual(), pressed: false };
+    const ray: RayData = {
+      space: controllerRay,
+      visual: createRayVisual(),
+      pressed: false,
+      drag: null,
+    };
     controllerRay.add(ray.visual.group);
     rig.add(controllerRay);
     rays.push(ray);
-    const onPress = () => (ray.pressed = true);
-    const onLift = () => (ray.pressed = false);
+    const onPress = () => {
+      ray.pressed = true;
+      // Trigger pressed on a fader: it follows the ray until release (VS-T34).
+      if (!scene) return;
+      controllerRay.updateMatrixWorld(true);
+      controllerRay.getWorldPosition(_dragO);
+      _dragD.set(0, 0, -1).transformDirection(controllerRay.matrixWorld);
+      _dragCaster.set(_dragO, _dragD);
+      _dragCaster.camera = (gl.xr.isPresenting ? gl.xr.getCamera() : camera) ?? _dragCaster.camera;
+      const hits = pickUsable(_dragCaster, usableObjects(scene), []);
+      ray.drag = findDraggable(hits);
+      if (ray.drag && dragPoint(ray.drag, _dragO, _dragD, _dragLocal)) {
+        ray.drag.userData.onDrag?.(_dragLocal);
+      }
+    };
+    const onLift = () => {
+      ray.pressed = false;
+      const held = ray.drag;
+      ray.drag = null;
+      held?.userData.onDragEnd?.();
+    };
     controllerRay.addEventListener?.('selectstart', onPress);
     controllerRay.addEventListener?.('selectend', onLift);
     selectListeners.push({ controller: controllerRay, listener: onPress, type: 'selectstart' });
@@ -284,12 +356,7 @@ export function setupXRHandsAndControllers(
       direction.transformDirection(controllerRay.matrixWorld).normalize();
       raycaster.set(origin, direction);
 
-      let intersects: THREE.Intersection[] = [];
-      try {
-        intersects = raycaster.intersectObjects(scene.children, true);
-      } catch {
-        intersects = [];
-      }
+      const intersects = pickUsable(raycaster, usableObjects(scene), []);
       // Panels drawn on top of everything (`userData.xrUi`) win over what the ray crosses first
       // (a house wall between you and the panel when you stand against it).
       const ui = intersects.find((h) => h.object.userData?.xrUi && h.object.userData?.onSelect);
@@ -350,6 +417,7 @@ export function setupXRHandsAndControllers(
   let usable: THREE.Object3D[] = [];
   let frame = 0;
   let last = performance.now();
+  const probe = createSurroundingProbe();
   const update = () => {
     const now = performance.now();
     const dt = Math.min(0.1, (now - last) / 1000);
@@ -368,17 +436,16 @@ export function setupXRHandsAndControllers(
       r.space.updateMatrixWorld(true);
       r.space.getWorldPosition(_rayO);
       _rayD.set(0, 0, -1).transformDirection(r.space.matrixWorld);
+      if (r.drag && dragPoint(r.drag, _rayO, _rayD, _dragLocal))
+        r.drag.userData.onDrag?.(_dragLocal);
       _rayCaster.set(_rayO, _rayD);
       _rayCaster.camera = (gl.xr.isPresenting ? gl.xr.getCamera() : camera) ?? _rayCaster.camera;
-      _rayHits.length = 0;
-      try {
-        _rayCaster.intersectObjects(usable, true, _rayHits);
-      } catch {
-        _rayHits.length = 0;
-      }
+      pickUsable(_rayCaster, usable, _rayHits);
       const hit = _rayHits[0];
-      // The visual lives in the controller's space: the hit is put back in it.
-      _rayEnd.set(0, 0, -(hit ? hit.distance : 2.5));
+      // The visual lives in the controller's space: the hit is put back in it (the rig may be
+      // scaled, VS-T33: world metres ÷ that scale).
+      const spaceScale = r.space.matrixWorld.getMaxScaleOnAxis() || 1;
+      _rayEnd.set(0, 0, -(hit ? hit.distance / spaceScale : 2.5));
       r.visual.update({
         origin: _rayLocalO,
         direction: _rayLocalD,
@@ -387,6 +454,12 @@ export function setupXRHandsAndControllers(
         input: 'controller',
         pressed: r.pressed,
         tint: '#7dd3fc',
+        // Always show where you point: faint beam and tip over nothing, beam to the hit (VS-T38).
+        idle: RAY_IDLE_OPACITY,
+        reach: true,
+        surrounding: scene
+          ? probe(rays.indexOf(r) as 0 | 1, scene, _rayO, _rayD, _rayCaster.camera)
+          : 0,
         dt,
       });
     }

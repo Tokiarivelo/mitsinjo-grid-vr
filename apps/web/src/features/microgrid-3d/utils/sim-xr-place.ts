@@ -244,6 +244,7 @@ export function simLegendKeys(kind: 'controller' | 'hand', handedness: XRHandedn
         'legendX',
         'legendY',
         'legendStickPress',
+        'legendStickHold',
       ]
     : [
         'legendTitleRight',
@@ -252,6 +253,7 @@ export function simLegendKeys(kind: 'controller' | 'hand', handedness: XRHandedn
         'legendA',
         'legendB',
         'legendStickPress',
+        'legendStickHold',
       ];
 }
 

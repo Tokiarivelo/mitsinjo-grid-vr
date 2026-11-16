@@ -34,13 +34,27 @@ export interface ImmersionLabelsProps {
   showLabels?: boolean;
   /** Controlled toggle callback (optional). */
   onToggleLabels?: () => void;
+  /** The dispatcher's label was selected (VR: its mixing desk, VS-T34). */
+  onSelectDispatcher?: () => void;
 }
 
-interface VillageTypeItem extends VillageTypeTextureSpec {
+/** One 3D tag: its card, the stalk's foot (`basePos`) and the card's centre (`anchorPos`). */
+export interface ImmersionTagItem extends VillageTypeTextureSpec {
   anchorPos: [number, number, number];
   basePos: [number, number, number];
   sectorId?: SectorId;
 }
+type VillageTypeItem = ImmersionTagItem;
+
+/** Accent per sector on the 3D tags: a sector's buildings and its inserted objects share it. */
+export const SECTOR_TAG_ACCENT: Record<SectorId, string> = {
+  households: '#38bdf8',
+  school: '#f59e0b',
+  water: '#06b6d4',
+  market: '#eab308',
+  health: '#ef4444',
+  industry: '#8b5cf6',
+};
 
 /**
  * 3D Floating Interactive Option in the air (Hologram Console Beacon).
@@ -202,17 +216,19 @@ export const AirOptionBeacon = memo(function AirOptionBeacon({
 });
 
 /**
- * 3D Tagged Label Component for a single Village Type.
- * Displays vertical laser stalk, ground anchor pin, and billboard badge.
+ * One 3D tag in immersion (village types and inserted objects, VS-T35): vertical laser stalk,
+ * ground anchor pin and billboard card. `size` scales the card (a small object's tag is smaller).
  */
-const SingleVillageTypeTag = memo(function SingleVillageTypeTag({
+export const ImmersionTag = memo(function ImmersionTag({
   item,
   selected,
   onSelect,
+  size = 1,
 }: {
-  item: VillageTypeItem;
+  item: ImmersionTagItem;
   selected: boolean;
   onSelect?: () => void;
+  size?: number;
 }) {
   const [hovered, setHovered] = useState(false);
   const texture = useMemo(() => getVillageTypeTagTexture(item), [item]);
@@ -245,7 +261,7 @@ const SingleVillageTypeTag = memo(function SingleVillageTypeTag({
       {/* 2. Facing Billboard 3D Tagged Badge */}
       <Billboard follow lockX={false} lockY={false} lockZ={false} position={[ax, ay, az]}>
         <mesh
-          scale={selected ? 1.15 : hovered ? 1.08 : 1.0}
+          scale={size * (selected ? 1.15 : hovered ? 1.08 : 1.0)}
           onClick={(e) => {
             e.stopPropagation();
             onSelect?.();
@@ -281,6 +297,7 @@ export const ImmersionLabels = memo(function ImmersionLabels({
   airOptionPosition = [0, 3.6, 9.5],
   showLabels,
   onToggleLabels,
+  onSelectDispatcher,
 }: ImmersionLabelsProps) {
   const tSim = useTranslations('features.simulation');
   const [internalActive, setInternalActive] = useState(false);
@@ -308,11 +325,11 @@ export const ImmersionLabels = memo(function ImmersionLabels({
       {
         id: 'households',
         sectorId: 'households',
-        title: sectorNames.households ?? 'Village Households',
+        title: sectorNames.households,
         category: tSim('villageTypes.residential'),
         description: `${priorityLabels[hh.priority]} · ${fmtPct(hh.coveragePct, 0)}`,
         icon: '🏠',
-        accentColor: '#38bdf8',
+        accentColor: SECTOR_TAG_ACCENT.households,
         basePos: [SECTOR_POSITIONS.households[0], 1.6, SECTOR_POSITIONS.households[2]],
         anchorPos: [SECTOR_POSITIONS.households[0], 4.2, SECTOR_POSITIONS.households[2]],
       },
@@ -320,11 +337,11 @@ export const ImmersionLabels = memo(function ImmersionLabels({
       {
         id: 'school',
         sectorId: 'school',
-        title: sectorNames.school ?? 'Primary School',
+        title: sectorNames.school,
         category: tSim('villageTypes.education'),
         description: `${priorityLabels[sch.priority]} · ${fmtKw(sch.servedKw)}`,
         icon: '🏫',
-        accentColor: '#f59e0b',
+        accentColor: SECTOR_TAG_ACCENT.school,
         basePos: [SECTOR_POSITIONS.school[0], 2.8, SECTOR_POSITIONS.school[2]],
         anchorPos: [SECTOR_POSITIONS.school[0], 5.2, SECTOR_POSITIONS.school[2]],
       },
@@ -332,11 +349,11 @@ export const ImmersionLabels = memo(function ImmersionLabels({
       {
         id: 'water',
         sectorId: 'water',
-        title: sectorNames.water ?? 'Water Pumping Station',
+        title: sectorNames.water,
         category: tSim('villageTypes.water'),
         description: `${priorityLabels[wt.priority]} · ${fmtKw(wt.servedKw)}`,
         icon: '💧',
-        accentColor: '#06b6d4',
+        accentColor: SECTOR_TAG_ACCENT.water,
         basePos: [SECTOR_POSITIONS.water[0], 4.6, SECTOR_POSITIONS.water[2]],
         anchorPos: [SECTOR_POSITIONS.water[0], 6.8, SECTOR_POSITIONS.water[2]],
       },
@@ -344,11 +361,11 @@ export const ImmersionLabels = memo(function ImmersionLabels({
       {
         id: 'market',
         sectorId: 'market',
-        title: sectorNames.market ?? 'Local Market & Artisans',
+        title: sectorNames.market,
         category: tSim('villageTypes.commerce'),
         description: `${priorityLabels[mkt.priority]} · ${fmtKw(mkt.servedKw)}`,
         icon: '🛍️',
-        accentColor: '#eab308',
+        accentColor: SECTOR_TAG_ACCENT.market,
         basePos: [SECTOR_POSITIONS.market[0], 1.8, SECTOR_POSITIONS.market[2]],
         anchorPos: [SECTOR_POSITIONS.market[0], 4.2, SECTOR_POSITIONS.market[2]],
       },
@@ -356,11 +373,11 @@ export const ImmersionLabels = memo(function ImmersionLabels({
       {
         id: 'health',
         sectorId: 'health',
-        title: sectorNames.health ?? 'Health Clinic',
+        title: sectorNames.health,
         category: tSim('villageTypes.healthcare'),
         description: `${priorityLabels[hl.priority]} · ${fmtKw(hl.servedKw)}`,
         icon: '🏥',
-        accentColor: '#ef4444',
+        accentColor: SECTOR_TAG_ACCENT.health,
         basePos: [SECTOR_POSITIONS.health[0], 3.4, SECTOR_POSITIONS.health[2]],
         anchorPos: [SECTOR_POSITIONS.health[0], 5.8, SECTOR_POSITIONS.health[2]],
       },
@@ -368,20 +385,20 @@ export const ImmersionLabels = memo(function ImmersionLabels({
       {
         id: 'industry',
         sectorId: 'industry',
-        title: sectorNames.industry ?? 'Carpentry Workshop',
+        title: sectorNames.industry,
         category: tSim('villageTypes.industry'),
-        description: `${priorityLabels[ind.priority]} · ${ind.connected ? fmtKw(ind.servedKw) : 'Standby'}`,
+        description: `${priorityLabels[ind.priority]} · ${ind.connected ? fmtKw(ind.servedKw) : tSim('villageTags.standby')}`,
         icon: '🏭',
-        accentColor: '#8b5cf6',
+        accentColor: SECTOR_TAG_ACCENT.industry,
         basePos: [SECTOR_POSITIONS.industry[0], 2.4, SECTOR_POSITIONS.industry[2]],
         anchorPos: [SECTOR_POSITIONS.industry[0], 4.8, SECTOR_POSITIONS.industry[2]],
       },
       // 7. Solar PV Array (Clean Energy Generation)
       {
         id: 'solar',
-        title: 'Solar PV Array',
+        title: tSim('solarArray'),
         category: tSim('villageTypes.solar'),
-        description: `${fmtKw(model.solar.currentKw)} · Clean Energy`,
+        description: tSim('villageTags.solar', { kw: fmtKw(model.solar.currentKw) }),
         icon: '☀️',
         accentColor: '#f59e0b',
         basePos: [SOLAR_POSITION[0], 1.2, SOLAR_POSITION[2]],
@@ -390,9 +407,9 @@ export const ImmersionLabels = memo(function ImmersionLabels({
       // 8. Central BESS Storage (Grid Storage)
       {
         id: 'battery',
-        title: 'Central BESS Storage',
+        title: tSim('bessBattery'),
         category: tSim('villageTypes.battery'),
-        description: `${fmtPct(model.battery.socPct, 0)} SoC · Lithium BESS`,
+        description: tSim('villageTags.battery', { pct: fmtPct(model.battery.socPct, 0) }),
         icon: '🔋',
         accentColor: '#10b981',
         basePos: [BATTERY_POSITION[0], 1.4, BATTERY_POSITION[2]],
@@ -401,9 +418,9 @@ export const ImmersionLabels = memo(function ImmersionLabels({
       // 9. EMS Dispatch Hub (Microgrid Core)
       {
         id: 'controller',
-        title: 'EMS Dispatch Hub',
+        title: tSim('villageTags.controllerTitle'),
         category: tSim('villageTypes.controller'),
-        description: 'Microgrid Core · 240V Bus',
+        description: tSim('villageTags.controller'),
         icon: '⚡',
         accentColor: '#38bdf8',
         basePos: [BUS_POSITION[0], 1.8, BUS_POSITION[2]],
@@ -412,9 +429,9 @@ export const ImmersionLabels = memo(function ImmersionLabels({
       // 10. Hilltop Wind Turbines (Wind Power)
       {
         id: 'wind',
-        title: 'Hilltop Wind Turbines',
+        title: tSim('villageTags.windTitle'),
         category: tSim('villageTypes.wind'),
-        description: 'Clean Wind Power · Ridge Array',
+        description: tSim('villageTags.wind'),
         icon: '🌀',
         accentColor: '#0284c7',
         basePos: [22, 14.0, -58],
@@ -423,9 +440,9 @@ export const ImmersionLabels = memo(function ImmersionLabels({
       // 11. Lake Promenade (Scenic Nature & Safety Grille)
       {
         id: 'lake',
-        title: 'Lake Promenade',
+        title: tSim('villageTags.lakeTitle'),
         category: tSim('villageTypes.lake'),
-        description: 'Safety Grille · Night Illumination',
+        description: tSim('villageTags.lake'),
         icon: '🌊',
         accentColor: '#06b6d4',
         basePos: [30, 0.6, -46],
@@ -442,11 +459,14 @@ export const ImmersionLabels = memo(function ImmersionLabels({
       {/* 2. All 11 Tagged Labels of Village Types across the diorama */}
       {active &&
         villageTypeItems.map((item) => (
-          <SingleVillageTypeTag
+          <ImmersionTag
             key={item.id}
             item={item}
             selected={item.sectorId ? selectedSector === item.sectorId : false}
-            onSelect={() => item.sectorId && onSelectSector(item.sectorId)}
+            onSelect={() => {
+              if (item.sectorId) onSelectSector(item.sectorId);
+              else if (item.id === 'controller') onSelectDispatcher?.();
+            }}
           />
         ))}
     </group>

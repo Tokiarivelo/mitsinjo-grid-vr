@@ -17,7 +17,8 @@ export interface BatteryUnitProps {
   statusLabels: Record<BatteryStatusColor, string>;
   /** Translated SoC text, e.g. "62% SoC". */
   socLabel: (pct: string) => string;
-  nameLabel?: string;
+  /** Translated name (no default: zero static text). */
+  nameLabel: string;
   /** Stable DOM parent for the label (see VillageCanvas). */
   htmlPortal?: RefObject<HTMLElement | null> | null;
 }
@@ -69,7 +70,7 @@ export function BatteryUnit({
   model,
   statusLabels,
   socLabel,
-  nameLabel = 'BESS Storage',
+  nameLabel,
   htmlPortal,
 }: BatteryUnitProps) {
   const { socPct, isCharging, isDischarging, statusColor } = model;

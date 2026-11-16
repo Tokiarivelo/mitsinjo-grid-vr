@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   canBuild,
+  deskOf,
   isModalStage,
   snapIndex,
   viewSlides,
@@ -28,6 +29,25 @@ describe('xrExtractReducer (VS-T19–T22)', () => {
       ...XR_EXTRACT_IDLE,
       away: { id: 'det-1', stage: 'lab' },
     });
+  });
+
+  it('goes between the 2D lab and the 3D lab once the model is built (VS-T31)', () => {
+    const lab = { stage: 'lab' as const, id: 'a' };
+    const views = run([{ type: 'toViews' }], lab);
+    expect(views).toEqual({ stage: 'views', id: 'a' });
+    expect(run([{ type: 'toLab', built: true }], views)).toEqual(lab);
+    // No model yet: the 3D lab stays shut; outside the lab, « 2D lab » does nothing.
+    expect(run([{ type: 'toLab', built: false }], views)).toEqual(views);
+    expect(run([{ type: 'toViews' }], { stage: 'build', id: 'a' }).stage).toBe('build');
+    expect(run([{ type: 'toLab', built: true }], { stage: 'build', id: 'a' }).stage).toBe('build');
+  });
+
+  it('puts the views on the 2D desk, the build and the lab on the 3D desk (VS-T31)', () => {
+    expect(deskOf('views')).toBe('2d');
+    expect(deskOf('build')).toBe('3d');
+    expect(deskOf('lab')).toBe('3d');
+    expect(deskOf('confirm')).toBeNull();
+    expect(deskOf('idle')).toBeNull();
   });
 
   it('leaves the studio and comes back to the same step (VS-T26)', () => {

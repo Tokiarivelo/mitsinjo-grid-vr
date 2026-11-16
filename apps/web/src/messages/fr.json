@@ -243,7 +243,8 @@
         "battery": "Stockage batterie BESS",
         "controller": "Contrôleur de réseau EMS",
         "wind": "Production éolienne",
-        "lake": "Plan d'eau & Promenade"
+        "lake": "Plan d'eau & Promenade",
+        "appliance": "Objet inséré"
       },
       "villageDemand": "Demande du village",
       "tabMetrics": "Métriques",
@@ -365,7 +366,44 @@
         "legendStickPress": "Clic sur un stick : masquer cette aide",
         "legendPinch": "Pincer : sélectionner une étiquette, un bâtiment, un bouton",
         "legendThumbTurn": "Pouce glissé ←/→ : pivoter · ↑/↓ : un pas",
-        "legendThumbTap": "Tap du pouce : afficher / masquer les étiquettes"
+        "legendThumbTap": "Tap du pouce : afficher / masquer les étiquettes",
+        "legendStickHold": "Stick maintenu 1 s : afficher / masquer mains et manettes"
+      },
+      "vrMixer": {
+        "title": "Dispatcher · table de mixage",
+        "hint": "Gâchette maintenue sur un curseur, glisser vers le haut ou le bas ; relâcher pour envoyer. Tout en haut = sans limite.",
+        "battery": "Batterie",
+        "soc": "Charge {pct}",
+        "reserve": "Réserve {pct}",
+        "served": "Servi {kw}",
+        "limit": "Limite {kw}",
+        "noLimit": "Sans limite",
+        "cutState": "Coupé",
+        "direct": "Direct · {kw}",
+        "level": "Niveau {pct}",
+        "cut": "Couper",
+        "restore": "Allumer",
+        "start": "Lancer la batterie et dispatcher",
+        "running": "Dispatch en cours",
+        "more": "+{count} autres sur le panneau 2D"
+      },
+      "vrMap": {
+        "mini": "Carte",
+        "title": "Carte du village",
+        "hint": "Visez un bâtiment ou le dispatcher, gâchette : ses commandes s’ouvrent",
+        "you": "Vous"
+      },
+      "villageTags": {
+        "standby": "En veille",
+        "solar": "{kw} · Énergie propre",
+        "battery": "{pct} de charge · Stockage lithium",
+        "controllerTitle": "Contrôleur de dispatch",
+        "controller": "Cœur du micro-réseau · bus 240 V",
+        "windTitle": "Éoliennes de la colline",
+        "wind": "Énergie éolienne propre · Crête",
+        "lakeTitle": "Promenade du lac",
+        "lake": "Garde-corps · Éclairage de nuit",
+        "appliance": "{priority} · {kw}"
       }
     },
     "strategyLab": {
@@ -986,21 +1024,18 @@
       "vrShootToDisconnect": "⚡ Visez et tirez pour déconnecter",
       "vrGridStatusConnected": "✓ Raccordé au réseau (+{watts} W)",
       "vrGridStatusNotConnected": "Modèle 3D prêt · Non raccordé",
-      "vrHudTitle": "Télémétrie Microgrid",
-      "vrHudBattery": "Batterie",
-      "vrHudSolar": "Solaire",
-      "vrHudDemand": "Demande",
-      "vrHudAppliances": "Appareils in-situ",
-      "vrHudConnectedCount": "{count} raccordés (+{watts} W)",
-      "vrHudMinimize": "Réduire",
-      "vrHudExpand": "Agrandir",
       "vrHudEventConnected": "+{watts} W · {name} raccordé",
       "vrHudEventDisconnected": "−{watts} W · {name} déconnecté",
-      "vrHudEventMaterialized": "{name} en 3D · maintenir pour tourner, toucher pour raccorder",
+      "vrHudEventMaterialized": "{name} est devant vous : gâchette pour le raccorder, grip pour le tourner, « Ranger » pour l'enlever",
       "vrHudEventNoObject": "Aucun objet détecté à cet endroit",
-      "vrHudNetSurplus": "Surplus +{kw} kW",
-      "vrHudNetDeficit": "Déficit -{kw} kW",
-      "vrHudNetBalanced": "Réseau équilibré",
+      "vrMini": {
+        "connected": "✓ Raccordé au réseau du village",
+        "idle": "Pas raccordé",
+        "hint": "Gâchette : raccorder / débrancher · Grip : tourner",
+        "dismiss": "Ranger",
+        "dismissTip": "Enlève cette miniature ; la simulation ne change pas",
+        "dismissed": "{name} rangé"
+      },
       "vrLiveWebcam": "Caméra en direct",
       "vrVirtualRoom": "Pièce studio virtuelle",
       "vrCameraStandby": "Caméra en attente",
@@ -1539,14 +1574,14 @@
       "vrChat": {
         "title": "Chat IA · {view}",
         "aiLabel": "MODIF. IA · redessine cette vue, vérifiez-la avant de valider",
-        "empty": "Demandez à l'IA de modifier la vue {view} : tapez avec « Clavier » ou parlez avec « Voix », puis « Envoyer ».",
+        "empty": "Demandez à l'IA de modifier la vue {view} : tapez avec « Clavier » ou parlez avec « Dicter », puis « Envoyer ».",
         "placeholder": "Décrivez la modification…",
         "listening": "J'écoute… parlez",
         "working": "Je redessine la vue {view} avec votre demande…",
         "done": "C'est fait : le nouveau dessin est sur la diapositive. Validez-le ou demandez une autre modification.",
         "failed": "Le dessin a échoué. Renvoyez la demande.",
         "keyboard": "Clavier",
-        "voice": "Voix",
+        "voice": "Dicter",
         "stop": "Stop",
         "send": "Envoyer",
         "wait": "Attendez la fin du dessin",
@@ -1555,7 +1590,12 @@
         "keyShift": "⇧ Maj",
         "keySpace": "espace",
         "keyBack": "⌫ Effacer",
-        "keyClear": "Vider"
+        "keyClear": "Vider",
+        "keyboardTip": "Ouvrir ou fermer le clavier holo pour taper votre demande",
+        "voiceTip": "Dites votre demande : elle s’écrit dans le champ",
+        "stopTip": "Arrêter l’écoute ; le texte entendu reste dans le champ",
+        "sendTip": "Envoyer la demande : l’IA redessine cette vue avec",
+        "meterTitle": "Niveau de voix"
       },
       "vrVillage": {
         "title": "Placer « {name} » dans le village",
@@ -1563,7 +1603,9 @@
         "placed": "Posé en {x}, {z} · départ : {sector}",
         "notPlaced": "Pas encore posé : visez la table du village et appuyez",
         "inSimulation": "Dans la simulation : stratégies recalculées",
-        "goSimulation": "Aller à la simulation"
+        "goSimulation": "Aller à la simulation",
+        "insertTip": "Ajouter l’objet à la simulation : les stratégies sont recalculées",
+        "goSimulationTip": "Ouvrir la simulation en VR, à côté de cet objet"
       },
       "vrLab": {
         "title": "Labo 3D · {name}",
@@ -1576,7 +1618,9 @@
         "bigger": "+ Taille",
         "turn": "Tourner 90°",
         "fade": "Opacité",
-        "exit": "Quitter le labo"
+        "exit": "Quitter le labo",
+        "toViews": "Labo 2D",
+        "toViewsTip": "Revenir aux vues 2D : le modèle reste"
       },
       "vrControls": {
         "verbTrigger": "Gâchette",
@@ -1613,11 +1657,18 @@
         "helpShown": "Aide affichée : clic sur un stick, ou Menu › Aide, pour la masquer",
         "helpHidden": "Aide masquée : clic sur un stick, ou Menu › Aide, pour l’afficher",
         "helpShow": "Afficher l’aide des commandes",
-        "helpHide": "Masquer l’aide des commandes"
+        "helpHide": "Masquer l’aide des commandes",
+        "inputsShow": "Afficher mains et manettes",
+        "inputsHide": "Masquer mains et manettes",
+        "inputsShownEvent": "Mains et manettes affichées",
+        "inputsHiddenEvent": "Mains et manettes masquées (les lasers restent)",
+        "legendStickHold": "Stick maintenu 1 s : afficher / masquer mains et manettes"
       },
       "vrStudio": {
         "viewsTitle": "Dessin des vues 2D de « {name} »",
-        "buildSub": "Le labo 3D s’ouvre tout seul dès que le modèle est prêt"
+        "buildSub": "Le labo 3D s’ouvre tout seul dès que le modèle est prêt",
+        "toLab": "Labo 3D",
+        "toLabTip": "Tourner vers le labo 3D : le modèle est déjà construit"
       },
       "cancelAnalysis": "Annuler l'analyse",
       "analysisCancelled": "Analyse annulée.",

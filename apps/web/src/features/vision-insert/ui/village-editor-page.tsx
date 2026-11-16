@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
 import type { WebGLRenderer } from 'three';
 import {
   Box,
@@ -14,7 +14,12 @@ import {
   Zap,
 } from 'lucide-react';
 import { StatusBadge } from '@/components/ui/status-badge';
-import { useWebXR, useWebGLAvailable } from '@/features/microgrid-3d';
+import {
+  labOfStage,
+  useImmersionQuery,
+  useWebXR,
+  useWebGLAvailable,
+} from '@/features/microgrid-3d';
 import { GridSchematicPreview } from '@/features/overview';
 import { selectActiveResult, selectInput, selectTimeIndex, useSimulationStore } from '@/stores';
 import { readAsDataUrl } from '@/lib/files';
@@ -175,6 +180,13 @@ export function VillageEditorPage() {
     select: onSelectObject,
     scope: VILLAGE_SCOPE,
   });
+  // `?immersion=vr` while the immersion shows, `&lab=2d|3d` at the studio desks (VS-T33); a reload
+  // on that URL opens the immersion again (the VR session itself still needs « View in VR »).
+  const openImmersion = useCallback(() => setVrViewOpen(true), []);
+  useImmersionQuery(
+    { immersion: xrActive || vrViewOpen, lab: labOfStage(xrExtract.stage) },
+    openImmersion
+  );
   const regenerateShape = () => {
     if (imageUrl && shapeRequest) void requestShape(imageUrl, shapeRequest, undefined, true);
   };

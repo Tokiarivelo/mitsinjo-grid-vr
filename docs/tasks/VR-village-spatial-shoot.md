@@ -108,6 +108,8 @@
 
 ### VS-T8 : Tableau de bord HUD Holo dans les Airs (Diegetic Microgrid HUD)
 
+> Retiré en VS-T32 (panneau jugé encombrant) : les événements passent par la notice `XrEventToast`.
+
 - [x] Créer le composant `<VillageSpatialHUD />` positionné en flottement diégétique (`[-0.95, 1.55, -1.2]`, orienté vers le joueur).
 - [x] Créer `spatial-hud-texture.ts` : canvas 2D haute définition avec :
   - Jauge Batterie SoC (%) et indicateur état
@@ -298,3 +300,86 @@ Style : hologramme futuriste (cyan / ambre, lignes de balayage, coins lumineux, 
 - [x] « Insérer dans la simulation » : même appel que le panneau web, extrait dans `hooks/use-appliance-insert.ts` (ligne + modèle 3D édité dans le labo, moteur relancé) ; « Mettre à jour » ensuite.
 - [x] « Aller à la simulation » (une fois inséré) : termine la session XR, ouvre `/simulation`.
 - [ ] **Done when :** `make vr-probe` vert (table, pose, insertion) ; joué au casque.
+
+### VS-T29 : Panneaux lisibles, icônes et bulles au survol, niveau de voix, arrivée en VR dans la simulation
+
+- [x] Texte en dmm (`holoTextPx`, `HOLO_TEXT_DMM`) : boutons, champ, historique et titres du chat lisibles à 1,4 m (≥ 18 px Meta).
+- [x] Icônes sur les boutons (`holo-icons.ts`) ; bulle au survol qui répète le libellé en grand + ce que fait le bouton (`HoloButton.tip`).
+- [x] Graphe « Niveau de voix » dans le champ pendant la dictée (`holo-voice-meter.tsx`, `lib/voice-analyser.ts` partagé avec le copilote).
+- [x] Table du village : titre, état et boutons au-dessus du bord éloigné, à hauteur des yeux (plus sous la table).
+- [x] « Aller à la simulation » : `/simulation` entre seule en VR, à côté de l'objet ajouté (`utils/xr-handoff.ts`).
+- [ ] **Done when :** `make vr-probe` + `make vr-sim-probe` verts ; joué au casque (entrée VR sans geste sur Quest à vérifier).
+
+### VS-T30 : Mains et manettes visibles (et masquables), lasers de couleur adaptative
+
+- [x] /simulation : mains et manettes coupées par le plan proche (0,5 m) → 5 cm pendant la session (`XrInputsLayer`).
+- [x] Afficher / masquer mains et manettes partout : calque `XR_INPUT_LAYER`, stick maintenu 0,8 s, Menu › bouton sur /village, choix gardé.
+- [x] Lasers : couleur selon l'environnement (`xr-ray-contrast.ts`) + halo du ton opposé, sur /village et /simulation.
+- [ ] **Done when :** `make vr-probe` + `make vr-sim-probe` verts ; joué au casque (ciel clair, intérieur sombre).
+
+### VS-T31 : Passage labo 2D → labo 3D en tournant les bureaux, et retour
+
+- [x] « Valider et construire la 3D » : les bureaux tournent de droite à gauche (plateau centré sur le spectateur, `StudioDesks`), la salle reste fixe.
+- [x] Labo 3D : bouton « Labo 2D » tout à gauche → retour aux vues 2D (rotation inverse), le modèle reste (`toViews`).
+- [x] Labo 2D : bouton « Labo 3D » sous la carte de génération dès que le modèle existe (`toLab`).
+- [ ] **Done when :** `make vr-probe` vert (aller-retour 2D ↔ 3D) ; joué au casque (confort de la rotation).
+
+### VS-T32 : Menu et miniatures plus clairs
+
+- [x] HUD « Télémétrie Microgrid » retiré du menu ; les événements (raccordé, masqué…) s'affichent 4,5 s dans une notice (`xr-event-toast.tsx`).
+- [x] Bouton de scan : cristal et anneaux au-dessus de la carte (`AIR_CRYSTAL_Y`), ils ne cachent plus « Cibles acquises » ni le titre.
+- [x] Guide des commandes : texte sur deux lignes dans la carte holo partagée (ne déborde plus).
+- [x] Menu : bouton « Fermer » en haut à droite de la carte de scan (`MENU_CLOSE_OFFSET`).
+- [x] Miniature : notice « gâchette raccorde, grip tourne, « Ranger » l'enlève » + carte au-dessus (nom, état, aide) avec « Ranger » (`miniature-label.tsx`).
+- [ ] **Done when :** `make vr-probe` vert ; joué au casque.
+
+### VS-T33 : Immersion dans l'URL, taille humaine et regard au clavier dans /simulation
+
+- [x] `?immersion=vr` sur `/simulation` (VR ouverte ou demandée) et `/village` (immersion), `&lab=2d|3d` aux bureaux du labo (`utils/immersion-query.ts`, `hooks/use-immersion-query.ts`) ; « Aller à la simulation » ouvre `/simulation?immersion=vr` ; recharger l'URL rouvre l'immersion.
+- [x] /simulation VR : rig réduit à 0,5 dans le village à demi-échelle (yeux ≈ 0,8 m, sous les murs de 1,3 m), 1:1 dans les pièces ; pas, vitesse, laser et panneau de secteur suivent (`utils/xr-walk.ts`).
+- [x] Clavier : `←`/`→` tournent la tête (90°/s) pendant la marche (le pavé tactile d'un portable est coupé pendant la frappe) ; `A`/`Q`/`D` restent le pas de côté.
+- [ ] **Done when :** `make vr-sim-probe` vert ; joué au casque (taille ressentie, confort).
+
+### VS-T34 : Table de mixage du dispatcher en VR (/simulation)
+
+- [x] Étiquette (ou abri) du dispatcher → table de mixage VR : tranche Batterie (réserve, « Lancer la batterie et dispatcher »), une tranche par secteur (limite kW, Couper / Allumer), une par appareil raccordé directement au dispatcher (`connectionMode: 'ems'`, ajouté depuis /village, auto-ajouté).
+- [x] Curseurs « DJ » : glisser au laser (`utils/xr-drag.ts`, `xr-hands.ts`), moteur relancé au relâchement, annulable ; clinique jamais coupée.
+- [x] Patches moteur purs et testés (`utils/dispatch-mixer.ts`) ; bouton holo et placement partagés (`ui/sim-xr-holo.tsx`).
+- [ ] **Done when :** `make vr-sim-probe` vert (table, couper / allumer, refus clinique) ; glisser joué au casque.
+
+### VS-T35 : Objets insérés étiquetés, éclairés et dimensionnés comme le village (/simulation)
+
+- [x] Tout traduit : étiquettes 3D de l'immersion (solaire, batterie, dispatcher, éoliennes, lac, « En veille »), noms par défaut du solaire et de la batterie retirés (`features.simulation.villageTags`, `villageTypes.appliance`).
+- [x] Écran : au-delà de 6 objets, chaque objet inséré avec son modèle depuis /village garde son badge (`taggedMarkers`) ; badges à la taille de ceux des bâtiments.
+- [x] Immersion (écran et VR) : une étiquette 3D par objet inséré (`ImmersionTag`, couleur de son secteur), sous le même interrupteur « Types de village & Étiquettes » (affiché au départ).
+- [x] Lumière du village : objet non alimenté tel quel le jour, assombri seulement la nuit (`duskDarkness`, `placedDim`, `drawnTint`) ; finition des murs du village (rugosité 0.68, métal 0.05).
+- [x] Taille selon les proportions (`sceneScale`) : hauteur type de son genre (`ARCHETYPE_HEIGHT_M`, village au ½ : `VILLAGE_UNITS_PER_M` 0.5) gardée dans sa plage réelle de largeur ; l'ancienne échelle stockée est ignorée au chargement.
+- [x] `make placed-shot` : réfrigérateur, TV, ventilateur et pompe réels posés dans /simulation, captures écran et immersion.
+- [ ] **Done when :** vu au casque (étiquettes, taille, nuit).
+
+### VS-T36 : Boutons suiveurs dans un dock bas (studio /village)
+
+- [x] Le bouton flottant « Menu » (sans poignet gauche, émulateur) et « Quitter le studio / Revenir au studio » descendent dans un dock bas du cadre suiveur (`FOLLOW_DOCK_Y` −0.3 m, ~34° sous le regard, `FOLLOW_DOCK_X` ±0.48 m) : ils ne couvrent plus les panneaux du labo, la table du village ni le panneau de placement, et n'interceptent plus leurs clics.
+- [x] Hors du menu ouvert (carte de scan, guide, boutons) ; test `xr-layout.test.ts` « follow dock ».
+- [x] Régression VS-T33 corrigée : « Aller à la simulation » restait sur /village (la fin de session réécrivait l'URL `/village` par `replaceState`, ce qui annulait le `router.push`). `leaveImmersionFor(href)` gèle l'URL de la page quittée jusqu'à l'arrivée (10 s max) ; test `use-immersion-query.test.tsx`, `make vr-handoff-probe`.
+- [x] /simulation VR : le clic d'un laser raycastait toute la scène en un appel ; un objet qui lève une erreur (câble `Line2`…) vidait le résultat → « Fermer ✕ » et le laser gauche sans effet. `pickUsable` (`xr-hands.ts`) teste chaque objet utilisable à part, pour le survol, le clic et le glisser.
+- [x] ~~Flèches ← / → échangées~~ : annulé en VS-T38 (va-et-vient avec la rotation de tête de l'émulateur).
+- [ ] **Done when :** vu au casque (V463–V466, S151–S153).
+
+### VS-T37 : Carte du village dans la VR de /simulation (mini-carte style GTA + carte hologramme)
+
+- [x] Mini-carte en bas à droite de la vue, cap en haut, centrée sur le marcheur ; secteurs (statut moteur) et dispatcher ; suivi paresseux, jamais collée à la tête.
+- [x] Gâchette dessus → grande carte holographique devant soi (nord en haut, « Vous » + direction) ; un bâtiment ouvre son panneau de puissance, le dispatcher sa table de mixage ; « Fermer ✕ » / B/Y.
+- [x] `utils/sim-xr-minimap.ts` (testé), `useSimXr` (`map`, `openMap`, `closeMap`, testé), textes `features.simulation.vrMap` (EN/FR/MG), `make vr-sim-map-probe` (4 étapes passent).
+- [ ] **Done when :** vu au casque (S154–S157).
+
+### VS-T38 : Carte qui suit, routes et eau, laser toujours visible (/simulation VR)
+
+- [x] Carte dessinée sur texture (`utils/sim-xr-map-draw.ts`, testé) : routes et chemins, mare, lac, rizière, bâtiments, noms nets et droits.
+- [x] Grande carte plus grande (rayon 0,55 m), presque droite, qui suit le marcheur et reste centrée sur lui ; flèche selon le regard.
+- [x] Mini-carte tout à droite (~38°).
+- [x] Laser : faisceau léger + pointe au repos, faisceau jusqu'à la cible, objets nouveaux visables en ~0,1 s (`xr-ray-visual.ts` `idle` / `reach`, `xr-hands.ts`).
+- [x] Flèches ← / → remises dans leur sens d'origine.
+- [x] Second clic sur l'étiquette / le bâtiment / le dispatcher d'origine : son menu se ferme (`useSimXr`).
+- [x] Dev : l'extension Immersive Web Emulator ne lève plus `setPointerCapture` InvalidStateError ni « reading 'position' » (`guardEmulatorPointerCapture`).
+- [ ] **Done when :** vu au casque (S158–S161).

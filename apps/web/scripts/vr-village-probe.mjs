@@ -3,9 +3,9 @@
 // The emulator shows the walkable 360° tour (VS-T14), not the webcam. Checks: session starts;
 // wrist menu; loft with 2 floor arrows; a controller shot at the fridge (no scan yet) starts ONE
 // scan and outlines it, asking nothing; a second shot at it asks « Extract to 3D? »; then the 3D
-// studio: 2D views carousel + generation column, the views AI chat (keys, send, bot answer) → build → the lab opens by itself (a piece hidden, the object placed
+// studio: 2D views carousel + generation column, the views AI chat (keys, send, bot answer) → build (the desks turn, VS-T31) → the lab opens by itself (a piece hidden; « 2D lab » / « 3D lab » turn back and forth, the object placed
 // on the village hologram and added to the simulation); mouse clicks through the DevUI overlay
-// (wrist menu, Help, « Cancel ») → leave = miniature; a tap on it connects it; a hand pinch at the lamp; shooting a floor
+// (wrist menu, Help, « Cancel », menu « Close ») → leave = miniature with its card; a tap on it connects it, « Put away » removes it; a hand pinch at the lamp; shooting a floor
 // arrow walks to the hall; ↑ walks on. Screenshots show the photo orientation ("MARRY" letters).
 // Screenshots in <outDir>/vr-*.png.
 // Usage: node scripts/vr-village-probe.mjs <baseUrl> <outDir>   (dev server must run; needs ffmpeg)
@@ -153,6 +153,23 @@ try {
   const m1 = await menu();
   if (m1) await fire('controller-right', m1.button, { x: 0.2, y: 1.3, z: -0.1 });
   check('a second press closes it', (await menu())?.open === false);
+  // VS-T32: the menu has its own « Close » button, and no telemetry HUD any more.
+  const m1b = await menu();
+  if (m1b) await fire('controller-right', m1b.button, { x: 0.2, y: 1.3, z: -0.1 });
+  await sleep(600);
+  const shownN = (name) => page.evaluate((n) => window.__VR_CONTROLS__?.shown(n) ?? -1, name);
+  check('no telemetry HUD in the open menu', (await shownN('village-spatial-hud')) === 0);
+  const closeAt = await page.evaluate(() => {
+    const o = window.__VR_PANELS__?.objects.find(
+      (x) => x.userData.holoPanel?.id === 'holo:menu-close'
+    );
+    if (!o) return null;
+    const p = o.getWorldPosition(new o.position.constructor());
+    return { x: p.x, y: p.y, z: p.z };
+  });
+  await shot('0d-menu-close-button');
+  if (closeAt) await fire('controller-right', closeAt, { x: 0.2, y: 1.3, z: -0.1 });
+  check('« Close » in the menu closes it', !!closeAt && (await menu())?.open === false);
 
   // Mouse (VS-T24): the IWER DevUI canvas lies over the scene; clicks must still reach it.
   const click = async (world) => {
@@ -302,7 +319,9 @@ try {
     await sleep(600);
   }
   await press('holo:views-build');
-  await sleep(1500);
+  await sleep(450);
+  await shot('3d1-desks-turning'); // VS-T31: the 2D desk slides left, the 3D desk comes from the right
+  await sleep(1050);
   await shot('3d2-studio-building');
   check(
     '« Validate & build » builds the model, then the lab opens by itself',
@@ -320,6 +339,26 @@ try {
   await shot('3g-lab-piece-hidden');
   await press('holo:lab-show-all');
 
+  // VS-T31: « 2D lab » turns the desks back to the views, « 3D lab » turns them to the lab again.
+  const toViewsAt = await panelAt('holo:lab-to-views');
+  if (toViewsAt) await rc('look_at', { device: 'headset', target: toViewsAt });
+  await sleep(500);
+  await shot('3g0-lab-to-views-button');
+  await press('holo:lab-to-views');
+  await sleep(500);
+  await shot('3g0b-desks-turning-back');
+  check('« 2D lab » goes back to the views, the model kept', (await extract())?.stage === 'views');
+  await sleep(1200);
+  const toLabAt = await panelAt('holo:studio-to-lab');
+  check('the 2D lab offers « 3D lab » once the model exists', !!toLabAt);
+  if (toLabAt) await rc('look_at', { device: 'headset', target: toLabAt });
+  await sleep(500);
+  await shot('3g0c-views-to-lab-button');
+  await press('holo:studio-to-lab');
+  check('« 3D lab » turns back to the lab', (await extract())?.stage === 'lab');
+  await sleep(1500);
+  await waitFor(async () => ((await lab())?.names.length ?? 0) > 0, 15000);
+
   // Village hologram (VS-T28): place the edited model on the table, add it to the simulation.
   const village = () => page.evaluate(() => window.__VR_VILLAGE__ ?? null);
   const tableAt = await panelAt('holo:village-map');
@@ -331,6 +370,13 @@ try {
     const at = (id) => panelAt(id).then((p) => p && fire('controller-right', p, fromLeft));
     await at('holo:village-map');
     check('a shot on the table places the object', !!(await village())?.position);
+    // VS-T29: status and buttons stand above the table's far edge, not under its near edge.
+    const insertAt = await panelAt('holo:village-insert');
+    check(
+      'the table buttons sit above the table (readable, not under it)',
+      !!insertAt && insertAt.y > tableAt.y + 0.15,
+      insertAt ? `button ${(insertAt.y - tableAt.y).toFixed(2)} m above the table centre` : ''
+    );
     await shot('3g2-village-placed');
     await at('holo:village-insert');
     check(
@@ -338,6 +384,24 @@ try {
       !!(await village())?.inSimulation && !!(await panelAt('holo:village-simulation'))
     );
     await shot('3g3-village-added');
+    if (process.env.VR_PROBE_HANDOFF) {
+      // « Go to the simulation » (VS-T29, VS-T36 regression): /simulation opens its VR by itself.
+      await press('holo:village-simulation');
+      const onSim = await waitFor(async () => page.url().includes('/simulation'), 30000);
+      const inVr = await waitFor(
+        async () => !!(await rc('get_session_status').catch(() => null))?.sessionActive,
+        60000
+      );
+      await sleep(1500);
+      await shot('3g4-simulation-handoff');
+      check('« Go to the simulation » lands on /simulation', onSim);
+      check('…in its VR session, no click', inVr);
+      check('…with ?immersion=vr kept in the URL', page.url().includes('immersion=vr'));
+      console.log(`URL: ${page.url()}`);
+      if (errors.length) console.log(errors.slice(0, 10).join('\n'));
+      await browser.close();
+      process.exit(results.every((r) => r.ok) ? 0 : 1);
+    }
     const exitAt = await panelAt('holo:lab-exit');
     if (exitAt) await rc('look_at', { device: 'headset', target: exitAt });
     await sleep(600);
@@ -347,9 +411,20 @@ try {
   await sleep(1500);
   await shot('3h-fridge-miniature');
 
+  const dismissAt = await panelAt('holo:mini-dismiss-*');
+  check('the new miniature has its card with « Put away »', !!dismissAt);
   await fire('controller-right', MINI_0, { x: 0.25, y: 1.3, z: 0 });
+  // The notice lasts 4.5 s: read it right after the event (the screenshots take seconds).
+  check('connecting it shows a notice (no telemetry HUD)', (await shownN('xr-event-toast')) > 0);
   await shot('4-fridge-connected');
   check('one scan only (no double fire)', scans === 1);
+  const pressedAway = await press('holo:mini-dismiss-*');
+  await sleep(500);
+  await shot('4b-fridge-put-away');
+  check(
+    '« Put away » removes the miniature',
+    pressedAway && !(await panelAt('holo:mini-dismiss-*'))
+  );
 
   await rc('set_input_mode', { mode: 'hand' });
   await fire('hand-right', panoPoint(...LAMP_UV, uF, 3), { x: 0.2, y: 1.35, z: -0.1 });

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { XRControllerModelFactory, XRHandModelFactory } from './three-xr-factories';
+import { putOnInputLayer } from './xr-inputs-shown';
 
 /**
  * Real input models in the headset (VS-T26): a skinned, articulated hand (the WebXR input
@@ -123,6 +124,7 @@ export function attachInputModels(
   let handModel: THREE.Object3D | null = null;
   let gripModel: THREE.Object3D | null = null;
   let skinned = false;
+  let gripLayered = false;
   if (typeof window === 'undefined')
     return { handLoaded: () => false, gripLoaded: () => false, dispose: () => undefined };
   try {
@@ -164,11 +166,16 @@ export function attachInputModels(
   return {
     handLoaded: () => {
       if (!modelLoaded(handModel)) return false;
-      if (!skinned && material) skinned = skinHand(handModel!, material) > 0;
+      if (!skinned && material) {
+        skinned = skinHand(handModel!, material) > 0;
+        // Own render layer, like the stand-ins (VS-T30: hidden with one camera switch).
+        if (skinned) putOnInputLayer(handModel!);
+      }
       return true;
     },
     gripLoaded: () => {
       const ready = modelLoaded(gripModel);
+      if (ready && !gripLayered) gripLayered = !!putOnInputLayer(gripModel!);
       if (slots.gripFallback) slots.gripFallback.visible = !ready;
       return ready;
     },

@@ -1,7 +1,9 @@
 'use client';
 
+import { XrInputsLayer } from './xr-inputs-layer';
 import {
   Suspense,
+  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -54,7 +56,7 @@ import { SolarArray } from './solar-array';
 import { BatteryUnit } from './battery-unit';
 import { DispatchControllerUnit } from './dispatch-controller-unit';
 import { FeederTags } from './feeder-tags';
-import { ApplianceMarkers, MarkerDragGhost } from './appliance-markers';
+import { ApplianceMarkers, MarkerDragGhost, type ApplianceMarkersProps } from './appliance-markers';
 import { DistributionLines } from './distribution-lines';
 import { VillageBuildings } from './buildings';
 import { CameraController } from './camera-controller';
@@ -71,6 +73,9 @@ import { BakedContactShadows, ResumeOnVisible, ShadowBake } from './render-contr
 import { ImmersionLabels } from './immersion-labels';
 import { SimXrSectorPanel } from './sim-xr-sector-panel';
 import { SimXrInterior } from './sim-xr-interior';
+import { SimXrDispatchPanel } from './sim-xr-dispatch-panel';
+import { SimXrMinimap } from './sim-xr-minimap';
+import { dispatchMixerStrips } from '../utils/dispatch-mixer';
 import { SimXrDevProbe } from './sim-xr-dev-probe';
 import { useSimXr } from '../hooks/use-sim-xr';
 import { primeXrInputs } from '../utils/xr-hands';
@@ -96,6 +101,8 @@ function DraggableApplianceMarkers({
   htmlPortal,
   tier,
   sectorStatuses,
+  lampGlow,
+  immersionTags,
 }: {
   markers: ApplianceMarkerSceneModel[];
   selectedSector: SectorId | null;
@@ -105,6 +112,8 @@ function DraggableApplianceMarkers({
   htmlPortal?: RefObject<HTMLElement | null> | null;
   tier?: 'high' | 'low';
   sectorStatuses?: Partial<Record<SectorId, SectorStateOverride>>;
+  lampGlow?: number;
+  immersionTags?: ApplianceMarkersProps['immersionTags'];
 }) {
   const moveMarker = useMoveMarker();
   const { selectedId, dragId, ghostRef, bindMarker, toggleSelect } = useMarkerDrag({
@@ -125,6 +134,8 @@ function DraggableApplianceMarkers({
         bindMarker={bindMarker}
         tier={tier}
         sectorStatuses={sectorStatuses}
+        {...(lampGlow !== undefined ? { lampGlow } : {})}
+        immersionTags={immersionTags ?? null}
       />
       <MarkerDragGhost ghostRef={ghostRef} visible={dragId !== null} />
     </>
@@ -420,7 +431,20 @@ export function VillageCanvas({
   const feeders = useFeederLabels(model);
   // VR: label / building click → power panel, room, door teleports, controls (VSIM-T1–T4).
   const simXr = useSimXr({ xrActive, model, onSelectSector });
+  // Immersion's 3D tags (village types and inserted objects, VS-T35): one switch, the headset's in
+  // VR, this one on screen; both start shown.
+  const [screenTags, setScreenTags] = useState(true);
+  const tagsShown = xrActive ? simXr.labels : screenTags;
+  const toggleTags = useCallback(
+    () => (xrActive ? simXr.toggleLabels() : setScreenTags((v) => !v)),
+    [xrActive, simXr]
+  );
   const xrSector = simXr.inside ?? simXr.panel;
+  // Dispatcher mixing desk (VS-T34): its strips, from the engine result and the input.
+  const { mixerBattery, mixerSectors, mixerAppliances } = useMemo(
+    () => dispatchMixerStrips(model, simXr.caps, simXr.appliances, simXr.minSocPct),
+    [model, simXr.caps, simXr.appliances, simXr.minSocPct]
+  );
 
   const reducedMotion = useReducedMotion();
   // A modified scenario shows the last result frozen: no flow animation.
@@ -589,6 +613,7 @@ export function VillageCanvas({
             args={[palette.fog, 48 * palette.fogScale, (high ? 210 : 170) * palette.fogScale]}
           />
 
+          <XrInputsLayer />
           <hemisphereLight args={[palette.hemiSky, palette.hemiGround, palette.hemiIntensity]} />
           <CelestialLighting
             timeIndex={model.timeIndex}
@@ -644,7 +669,8 @@ export function VillageCanvas({
             modeLabel={tDiagram(`controller.mode.${model.controller.mode}`)}
             feederTitles={feeders.titles}
             hasResult={model.hasResult}
-            onFocus={() => onSelectPreset?.('controller')}
+            // VR: the dispatcher opens its mixing desk (VS-T34); on screen, its camera preset.
+            onFocus={() => (xrActive ? simXr.openMixer() : onSelectPreset?.('controller'))}
             nameLabel={tDiagram('controller.shortTitle')}
             htmlPortal={activeHtmlPortal}
           />
@@ -674,6 +700,20 @@ export function VillageCanvas({
             htmlPortal={activeHtmlPortal}
             tier={quality}
             sectorStatuses={sectorStatuses}
+            lampGlow={palette.lampGlow}
+            immersionTags={
+              isImmersion
+                ? {
+                    active: tagsShown,
+                    category: tSim('villageTypes.appliance'),
+                    describe: (m) =>
+                      tSim('villageTags.appliance', {
+                        priority: m.tag ? priorityLabels[m.tag.priority] : '—',
+                        kw: fmtKw(m.kwNow, 2),
+                      }),
+                  }
+                : null
+            }
           />
           <VillageBuildings
             buildings={model.buildings}
@@ -696,8 +736,9 @@ export function VillageCanvas({
               sectorNames={sectorNames}
               priorityLabels={priorityLabels}
               xrActive={xrActive}
-              showLabels={xrActive ? simXr.labels : undefined}
-              onToggleLabels={xrActive ? simXr.toggleLabels : undefined}
+              showLabels={tagsShown}
+              onToggleLabels={toggleTags}
+              {...(xrActive ? { onSelectDispatcher: simXr.openMixer } : {})}
             />
           )}
 
@@ -726,6 +767,33 @@ export function VillageCanvas({
               onClose={() => simXr.setPanel(null)}
             />
           )}
+          {xrActive && simXr.mixer && (
+            <SimXrDispatchPanel
+              battery={mixerBattery}
+              hasResult={model.hasResult}
+              sectors={mixerSectors}
+              appliances={mixerAppliances}
+              refused={simXr.refused !== null}
+              canUndo={simXr.canUndo}
+              onStart={simXr.startDispatch}
+              onReserve={simXr.mixReserve}
+              onSector={simXr.mixSector}
+              onSectorCut={simXr.cutSector}
+              onAppliance={simXr.mixAppliance}
+              onUndo={simXr.undo}
+              onClose={simXr.closeMixer}
+            />
+          )}
+          {/* GTA-like map: mini low right, big hologram on a tap; a pin opens its controls (VS-T37) */}
+          {xrActive && (
+            <SimXrMinimap
+              buildings={model.buildings}
+              open={simXr.map}
+              onOpen={simXr.openMap}
+              onClose={simXr.closeMap}
+              onSelect={(id) => (id === 'dispatcher' ? simXr.openMixer() : simXr.selectSector(id))}
+            />
+          )}
           {xrActive && process.env.NODE_ENV !== 'production' && (
             <SimXrDevProbe
               state={{
@@ -734,6 +802,8 @@ export function VillageCanvas({
                 labels: simXr.labels,
                 help: simXr.help,
                 refused: simXr.refused,
+                mixer: simXr.mixer,
+                map: simXr.map,
               }}
               walkGridRef={simXr.walkGridRef}
             />

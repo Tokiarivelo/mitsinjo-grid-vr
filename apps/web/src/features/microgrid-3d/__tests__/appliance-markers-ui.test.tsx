@@ -6,7 +6,6 @@ import { usePlacedModelsStore } from '@/stores';
 import type { ObjectRecipe } from '@/lib/object-shape';
 import { ApplianceMarkers, MarkerDragGhost } from '../ui/appliance-markers';
 import { BADGE_ABOVE_BEACON, BADGE_DISTANCE_FACTOR } from '../ui/scene-badge';
-import { APPLIANCE_FOCUS_SCALE } from '../utils/camera-focus';
 import { applianceMarkers } from '../utils/appliance-markers';
 import { SECTOR_POSITIONS } from '../utils/to-scene-model';
 
@@ -383,7 +382,7 @@ describe('ApplianceMarkers badge like the buildings (PT-11)', () => {
     expect(beaconPos[1]! - markers[0]!.position[1]).toBeGreaterThan(0.62);
   });
 
-  it('badge scale follows the camera focus scale: focused, it reads like a focused building', () => {
+  it("badge reads at the village buildings' size in the overview (VS-T35)", () => {
     const { container } = render(
       <ApplianceMarkers markers={tagged('medium')} selectedSector={null} tagOf={(m) => m.name} />
     );
@@ -391,7 +390,7 @@ describe('ApplianceMarkers badge like the buildings (PT-11)', () => {
       .querySelector('[data-scene-badge="p1"]')!
       .closest('[data-html-position]')!;
     expect(Number(anchor.getAttribute('data-distance-factor'))).toBeCloseTo(
-      BADGE_DISTANCE_FACTOR * APPLIANCE_FOCUS_SCALE,
+      BADGE_DISTANCE_FACTOR,
       6
     );
   });

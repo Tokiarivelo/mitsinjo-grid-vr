@@ -83,3 +83,35 @@ export function markEmulatedImmersion(active: boolean): void {
   if (typeof document === 'undefined') return;
   document.documentElement.toggleAttribute('data-xr-emulated', active && isDevXREmulated());
 }
+
+let captureGuarded = false;
+
+/**
+ * Dev only: the Immersive Web Emulator extension forwards its controller rays to the page as
+ * pointer events and calls `setPointerCapture` with a pointer id the browser does not know: it
+ * throws `InvalidStateError`, the extension never records the capture, then its release reads that
+ * missing state (« Cannot read properties of undefined (reading 'position') »). Both surfaced as
+ * runtime errors. Pointer capture of an unknown pointer is now a no-op (as the spec intends for an
+ * inactive pointer) instead of a throw. Other errors still throw. Idempotent.
+ */
+export function guardEmulatorPointerCapture(proto: Element = globalThis.Element?.prototype): void {
+  if (captureGuarded || !proto) return;
+  captureGuarded = true;
+  for (const key of ['setPointerCapture', 'releasePointerCapture'] as const) {
+    const original = proto[key];
+    if (typeof original !== 'function') continue;
+    proto[key] = function guarded(this: Element, pointerId: number) {
+      try {
+        original.call(this, pointerId);
+      } catch (e) {
+        const name = (e as { name?: string } | null)?.name;
+        if (name !== 'InvalidStateError' && name !== 'NotFoundError') throw e;
+      }
+    };
+  }
+}
+
+/** Test hook: forget the guard (a fresh prototype per test). */
+export function resetPointerCaptureGuard(): void {
+  captureGuarded = false;
+}

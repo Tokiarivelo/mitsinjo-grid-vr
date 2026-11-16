@@ -64,4 +64,49 @@ describe('useVoiceInput (VS-T27)', () => {
     act(() => FakeRecognition.last!.onerror!({ error: 'not-allowed' }));
     expect(r.current.error).toBe('not-allowed');
   });
+
+  it('taps the microphone for the level meter while listening, and frees it at the end (VS-T29)', async () => {
+    (window as unknown as Record<string, unknown>).webkitSpeechRecognition = FakeRecognition;
+    const track = { stop: vi.fn() };
+    const stream = { getTracks: () => [track] } as unknown as MediaStream;
+    const node = { frequencyBinCount: 2048 } as unknown as AnalyserNode;
+    const close = vi.fn(() => Promise.resolve());
+    const connect = vi.fn();
+    class FakeAudioContext {
+      createAnalyser = () => node;
+      createMediaStreamSource = () => ({ connect });
+      close = close;
+    }
+    vi.stubGlobal('AudioContext', FakeAudioContext);
+    const getUserMedia = vi.fn(() => Promise.resolve(stream));
+    Object.defineProperty(navigator, 'mediaDevices', {
+      value: { getUserMedia },
+      configurable: true,
+    });
+    const { result: r } = renderHook(() => useVoiceInput('en', vi.fn()));
+    expect(r.current.analyser).toBeNull();
+    await act(async () => r.current.start());
+    expect(getUserMedia).toHaveBeenCalledWith({ audio: true });
+    expect(connect).toHaveBeenCalledWith(node);
+    expect(r.current.analyser).toBe(node);
+    act(() => r.current.stop());
+    expect(r.current.analyser).toBeNull();
+    expect(track.stop).toHaveBeenCalled();
+    expect(close).toHaveBeenCalled();
+    vi.unstubAllGlobals();
+    Reflect.deleteProperty(navigator, 'mediaDevices');
+  });
+
+  it('dictation still works when the microphone is refused (no meter)', async () => {
+    (window as unknown as Record<string, unknown>).webkitSpeechRecognition = FakeRecognition;
+    Object.defineProperty(navigator, 'mediaDevices', {
+      value: { getUserMedia: () => Promise.reject(new Error('denied')) },
+      configurable: true,
+    });
+    const { result: r } = renderHook(() => useVoiceInput('en', vi.fn()));
+    await act(async () => r.current.start());
+    expect(r.current.listening).toBe(true);
+    expect(r.current.analyser).toBeNull();
+    Reflect.deleteProperty(navigator, 'mediaDevices');
+  });
 });

@@ -31,7 +31,7 @@ flowchart TD
     F2 --> D
     F --> G["7. Impact lumineux + Audio FX → Génération procédurale du modèle 3D"]
     G --> H["8. L'objet 3D final apparaît et s'anime à l'emplacement exact dans la pièce"]
-    H --> I["9. Deuxième tir : Raccordement au microgrid + Conduit d'énergie 3D + HUD Holo"]
+    H --> I["9. Deuxième tir : Raccordement au microgrid + Conduit d'énergie 3D + notice"]
 ```
 
 ---
@@ -90,11 +90,11 @@ flowchart TD
 - **Menu au poignet (VS-T13) :** à l'entrée, aucun panneau flottant. Un petit bouton (Ø 4,4 cm, étiquette « Menu » / « Fermer »)
   est porté sur le poignet gauche (joint `wrist` en suivi des mains, poignée gauche avec manettes ; sans entrée gauche
   suivie, en bas à gauche de la vue). Le doigt de l'autre main, le laser, le pincement ou la souris l'ouvre / le ferme.
-  Le menu (bouton de scan, guide, HUD) apparaît à 0,9 m devant, 32 cm sous les yeux, dans le monde (règle Meta : menu
+  Le menu (bouton de scan, guide, « Fermer ») apparaît à 0,9 m devant, 32 cm sous les yeux, dans le monde (règle Meta : menu
   lancé _depuis_ le poignet, jamais accroché au poignet ; ≥ 0,8 m pour le rayon) et **suit la personne en différé**
   (`wrist-menu.ts`, `updateLazyFollow`) : il reste immobile, puis se recentre en douceur si l'on tourne la tête
   de plus de ~35° ou si l'on s'éloigne de plus de 35 cm. Fermé, le bouton pulse en orange à chaque nouvel événement.
-- **Source d'entrée unique :** `XRBlasterController` gère manettes, mains, doigt et souris. Les composants (bouton, cibles, HUD) n'ont plus de `onClick` R3F propre (un clic tirait deux fois).
+- **Source d'entrée unique :** `XRBlasterController` gère manettes, mains, doigt et souris. Les composants (bouton, cibles, panneaux) n'ont plus de `onClick` R3F propre (un clic tirait deux fois).
 - **Visée sur la vidéo :** le rayon coupe l'écran webcam → point image $(u, v)$ → la plus petite boîte de détection qui le contient (une prise sur une table gagne sur la table). Hors de toute boîte : avant tout scan, le tir lance le scan puis transforme en 3D l'objet sous ce point ; après un scan, notification « Aucun objet détecté à cet endroit ».
 - **Action de tir :**
   - Un tir par appui : `selectstart` seulement (gâchette, ou pincement natif des mains). Le rayon des mains est celui du système (`getController(i)`), pas un rayon poignet → index ; plus de détection de pincement maison (elle doublait le tir).
@@ -128,6 +128,9 @@ flowchart TD
     (ou glisser la souris) la fait tourner (lacet + inclinaison ≤ 60°) ; relâcher → elle reprend sa rotation après 1,5 s.
   - **Tap** (relâché sans rotation, < 0,15 rad, en moins de 1,2 s) → raccorde / déconnecte l'appareil.
   - Un pincement la main posée sur la miniature (origine du rayon dedans) la saisit aussi.
+  - Carte au-dessus (VS-T32, `miniature-label.tsx`) : nom, état (raccordée ou non), aide « Gâchette : raccorder /
+    débrancher · Grip : tourner », et « Ranger » qui enlève la miniature (la simulation ne change pas). Une notice
+    le dit aussi quand elle apparaît (en sortant du labo).
 
 #### Checklist Phase 4 :
 
@@ -162,6 +165,8 @@ flowchart TD
 ---
 
 ### Phase 6 : Tableau de bord HUD Holo dans les Airs (Diegetic In-Air Telemetry HUD)
+
+> Retiré en VS-T32 : plus de HUD dans le menu ; une notice (`XrEventToast`) affiche les événements quelques secondes.
 
 - **Vision :** Afficher un tableau de bord holographique flottant dans le champ de vision périphérique (`[-1.25, 1.55, -1.4]` m), orienté vers le joueur, affichant en temps réel les données de la simulation du micro-réseau sans quitter la VR :
   - Niveau de batterie (%) avec barre de jauge lumineuse et indicateur de charge/décharge.
@@ -267,7 +272,32 @@ l'émulateur : [`vr-iwer-tools.md`](vr-iwer-tools.md).
   (point lu sur l'UV du disque, puis le placement de la page : sur le terrain, hors bâtiments / chemins,
   départ le plus proche) avec son câble de dérivation (`tapPoint`) ; « Insérer dans la simulation » = le même
   appel que le panneau web (`hooks/use-appliance-insert.ts` : ligne + modèle 3D édité, moteur relancé) ;
-  « Aller à la simulation » termine la session XR puis ouvre `/simulation`.
+  « Aller à la simulation » demande l'entrée VR à `/simulation` (`microgrid-3d/utils/xr-handoff.ts`, en
+  mémoire), termine la session XR puis ouvre `/simulation?immersion=vr` (VS-T33) : la vue 3D ouvre sa session seule et place
+  l'utilisateur à 2,5 m de l'objet ajouté, côté centre du village, face à lui (`standNear`). Un casque qui
+  refuse une session sans nouveau geste garde la demande : « Voir en VR » arrive alors au même endroit.
+  Titre, état et boutons de la table sont debout au-dessus de son bord éloigné, à hauteur des yeux (VS-T29).
+- **Immersion dans l'URL** (VS-T33, `microgrid-3d/utils/immersion-query.ts`, `useImmersionQuery`) : `/village`
+  porte `?immersion=vr` tant que l'immersion est affichée, plus `&lab=2d` (bureau des vues 2D) ou `&lab=3d`
+  (construction, labo 3D) ; `history.replaceState`, sans navigation. Recharger `/village?immersion=vr` rouvre
+  l'immersion (la session casque demande toujours « Voir en VR ») ; le bureau du labo n'est pas restauré.
+- **Lisibilité des panneaux** (VS-T29) : tailles de texte en dmm (1 dmm = 1 mm vu à 1 m ; Meta : 14 px
+  minimum, 18 px confortable) converties en px de canevas pour la largeur du plan et la distance de lecture
+  (`holoTextPx`, `HOLO_TEXT_DMM` : titre 30, libellé 24, texte 20, légende 16). `HoloButton` : icône en
+  traits (`holo-icons.ts`, pas d'emoji) et, au survol, une bulle au-dessus qui répète le libellé en grand avec
+  ce que fait le bouton (`tip`). Chat : boutons « Clavier » · « Dicter » · « Envoyer » avec icônes ; pendant
+  la dictée, un graphe « Niveau de voix » dans le champ (`holo-voice-meter.tsx` : 28 barres d'un
+  `InstancedMesh` sur les bandes du spectre du copilote, `lib/voice-analyser.ts` partagé avec le copilote).
+- **Mains, manettes et lasers** (VS-T30, toutes les immersions) : les modèles de mains et de manettes
+  (vrais modèles et substituts) sont sur leur propre calque de rendu (`XR_INPUT_LAYER`,
+  `microgrid-3d/utils/xr-inputs-shown.ts`) ; `XrInputsLayer`, monté dans les deux canevas, l'allume ou
+  l'éteint d'après le choix « mains et manettes » (stick maintenu 0,8 s, ou Menu › « Masquer mains et
+  manettes » sur /village ; gardé dans le navigateur), et rapproche le plan proche à 5 cm pendant la session
+  (celui de /simulation, 0,5 m, coupait les manettes à ~0,45 m des yeux : elles étaient invisibles). Un clic
+  court sur le stick bascule toujours l'aide, au relâchement. Les lasers restent affichés et changent de
+  couleur selon ce qui les entoure (`xr-ray-contrast.ts`) : couleur de la première surface touchée (matière ×
+  texture au point touché, + émissif) ou du ciel, échantillonnée toutes les 4 images ; clair sur fond sombre,
+  bleu nuit sur fond clair, avec un halo du ton opposé autour du faisceau et de l'anneau.
 
 ## 5. Architecture des fichiers & Modules
 
