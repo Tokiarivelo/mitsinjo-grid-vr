@@ -243,7 +243,8 @@
         "battery": "Fitehirizana vatoaratra BESS",
         "controller": "Mpibaiko ny tambajotra EMS",
         "wind": "Fikomian-drivotra",
-        "lake": "Farihy & Fari-dranomaso"
+        "lake": "Farihy & Fari-dranomaso",
+        "appliance": "Zavatra nampidirina"
       },
       "villageDemand": "Filan'ny tanàna",
       "tabMetrics": "Kajy & refy",
@@ -385,6 +386,18 @@
         "start": "Alefaso ny bateria ary zarao ny herinaratra",
         "running": "Mizara ankehitriny",
         "more": "+{count} hafa ao amin'ny tabilao 2D"
+      },
+      "villageTags": {
+        "standby": "Miandry",
+        "solar": "{kw} · Angovo madio",
+        "battery": "{pct} herinaratra · Fitehirizana lithium",
+        "controllerTitle": "Mpitantana ny fizarana",
+        "controller": "Fon'ny tamba-jotra kely · bus 240 V",
+        "windTitle": "Rivotra eny an-kavoana",
+        "wind": "Angovo avy amin'ny rivotra · Tendrombohitra",
+        "lakeTitle": "Fitsangatsanganana amoron-drano",
+        "lake": "Fefy fiarovana · Jiro amin'ny alina",
+        "appliance": "{priority} · {kw}"
       }
     },
     "strategyLab": {

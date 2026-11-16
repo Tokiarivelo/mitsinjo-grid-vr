@@ -203,7 +203,8 @@ describe('ApplianceInsert (PV-T12)', () => {
     expect(placed).toBeDefined();
     expect(placed?.applianceId).toBe(id);
     expect(placed?.recipe).toEqual(recipe);
-    expect(placed?.scale).toBe(0.9); // machine / pump scale
+    // No stored scale: the scene sizes it from its proportions (VS-T35, `sceneScale`).
+    expect(placed?.scale).toBeUndefined();
 
     // Removing clears from placed models store
     fireEvent.click(screen.getByRole('button', { name: 'Remove from simulation' }));

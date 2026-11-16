@@ -243,7 +243,8 @@
         "battery": "Stockage batterie BESS",
         "controller": "Contrôleur de réseau EMS",
         "wind": "Production éolienne",
-        "lake": "Plan d'eau & Promenade"
+        "lake": "Plan d'eau & Promenade",
+        "appliance": "Objet inséré"
       },
       "villageDemand": "Demande du village",
       "tabMetrics": "Métriques",
@@ -385,6 +386,18 @@
         "start": "Lancer la batterie et dispatcher",
         "running": "Dispatch en cours",
         "more": "+{count} autres sur le panneau 2D"
+      },
+      "villageTags": {
+        "standby": "En veille",
+        "solar": "{kw} · Énergie propre",
+        "battery": "{pct} de charge · Stockage lithium",
+        "controllerTitle": "Contrôleur de dispatch",
+        "controller": "Cœur du micro-réseau · bus 240 V",
+        "windTitle": "Éoliennes de la colline",
+        "wind": "Énergie éolienne propre · Crête",
+        "lakeTitle": "Promenade du lac",
+        "lake": "Garde-corps · Éclairage de nuit",
+        "appliance": "{priority} · {kw}"
       }
     },
     "strategyLab": {

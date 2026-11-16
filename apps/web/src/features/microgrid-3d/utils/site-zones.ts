@@ -113,7 +113,11 @@ export function placedItemZone(item: PlacedZoneItem, index = 0): KeepOutZone | n
 
   let emprise = 0.4;
   if (item.recipe) {
-    emprise = footprint(item.recipe, item.scale, item.yaw).radius;
+    emprise = footprint(
+      item.recipe,
+      item.scale ?? sceneScale(item.archetype ?? item.category, item.recipe.proportions),
+      item.yaw
+    ).radius;
   } else if (item.archetype || item.category) {
     const arch = item.archetype ?? (item.category ? defaultArchetype(item.category) : undefined);
     const scale = item.scale ?? sceneScale(arch);

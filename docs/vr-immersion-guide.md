@@ -210,6 +210,10 @@ au-dessus de chaque manette 25 s à l'entrée, puis d'un clic de stick.
 
 ---
 
+### Objets insérés dans l'immersion (VS-T35)
+
+Chaque objet ajouté depuis /village porte une étiquette 3D (« Objet inséré », nom, priorité · kW du moteur, couleur de son secteur), montrée avec celles des types de village par le même interrupteur (affiché au départ, A au casque). Il a la taille de son genre au ½ du village (`sceneScale`) et la lumière du village : tel quel le jour, éteint la nuit s'il n'est pas alimenté. Vérification : `make placed-shot` (captures écran et immersion).
+
 ## 6. Commandes de l'immersion `/village` (visite 360°, détection, extraction 3D) — VS-T23
 
 Un seul principe partout : **on vise, on valide** (gâchette, pincement ou clic). Une **bulle ambre** près du

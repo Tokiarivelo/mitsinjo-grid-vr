@@ -51,6 +51,8 @@ export interface PlacedDrawnModel {
   scale: number;
   yaw: number;
   state: 'served' | 'unserved' | 'fire';
+  /** Colour kept when unpowered (`placedDim`): 1 = as drawn. */
+  dim: number;
 }
 
 /**
@@ -66,6 +68,21 @@ export interface SectorStateOverride {
 
 /** Triangles the low tier spends on placed models (budget 150 k for the whole scene). */
 export const PLACED_LOW_TRIANGLES = 40_000;
+
+/** Colour left on an unpowered object at full night (the village's dark windows, VS-T35). */
+export const PLACED_NIGHT_DIM = 0.45;
+
+/**
+ * An inserted object lit like the village's buildings (VS-T35): as built in daylight whatever its
+ * feeder state (the status shows on its beacon and label), unpowered ones going dark only as night
+ * falls. `darkness` from `duskDarkness`, 0 day … 1 night; snapped to tenths so the merged mesh is
+ * rebuilt a few times at dusk, not on every hour step. Pure.
+ */
+export function placedDim(unserved: boolean, darkness: number): number {
+  if (!unserved) return 1;
+  const d = Math.round(Math.max(0, Math.min(1, darkness)) * 10) / 10;
+  return 1 - (1 - PLACED_NIGHT_DIM) * d;
+}
 
 /** The model as one box of its main colour, same bounds and yaw (low-tier fallback). */
 function boxRecipe(recipe: ObjectRecipe): ObjectRecipe {
@@ -100,7 +117,8 @@ const PLINTH_SINK = 0.04;
 export function buildPlacedModelsGeometry(
   items: readonly PlacedModelItem[],
   sectorStatus?: Partial<Record<SectorId, SectorStateOverride>>,
-  tier: 'high' | 'low' = 'high'
+  tier: 'high' | 'low' = 'high',
+  darkness = 1
 ): PlacedModelsGeometryResult {
   if (items.length === 0) {
     return { modelsGeometry: null, plinths: [], modelBounds: {}, drawn: [] };
@@ -194,8 +212,9 @@ export function buildPlacedModelsGeometry(
     // Apply feeder / departure states to vertex colors
     const sec = sectorStatus?.[item.sector];
     const onFire = sec?.onFire ?? false;
-    // Dimmed when the sector is unserved or the appliance draws nothing now (same as the box markers).
-    const unserved = (sec?.unserved ?? false) || !item.running;
+    // Unpowered (sector unserved or the appliance draws nothing now): dark at night only, like
+    // the village's buildings (VS-T35).
+    const dim = placedDim((sec?.unserved ?? false) || !item.running, darkness);
 
     if (faces || house || carMesh || plantPlan) {
       // Wears its drawings: its own mesh and texture, same place, same bounds.
@@ -205,7 +224,8 @@ export function buildPlacedModelsGeometry(
         position: [x, restY - bottomY * effScale, z],
         scale: effScale,
         yaw: effYaw,
-        state: onFire ? 'fire' : unserved ? 'unserved' : 'served',
+        state: onFire ? 'fire' : dim < 1 ? 'unserved' : 'served',
+        dim,
       });
       g.dispose();
       continue;
@@ -227,11 +247,11 @@ export function buildPlacedModelsGeometry(
           r = Math.min(1, r * 1.5 + 0.3);
           gr = gr * 0.35;
           b = b * 0.25;
-        } else if (unserved) {
-          // Unpowered / darkened lights out
-          r = r * 0.45;
-          gr = gr * 0.45;
-          b = b * 0.45;
+        } else if (dim < 1) {
+          // Unpowered at night: lights out
+          r = r * dim;
+          gr = gr * dim;
+          b = b * dim;
         }
         colorAttr.setXYZ(j, r, gr, b);
       }
@@ -258,7 +278,8 @@ export function buildPlacedModelsGeometry(
 export function placedGeometryKey(
   items: readonly PlacedModelItem[],
   sectorStatuses: Partial<Record<SectorId, SectorStateOverride>> | undefined,
-  tier: 'high' | 'low'
+  tier: 'high' | 'low',
+  darkness = 1
 ): string {
   const sectors = new Set(items.map((i) => i.sector));
   const status = [...sectors]
@@ -272,7 +293,7 @@ export function placedGeometryKey(
     (i) =>
       `${i.id}@${i.position.join(',')}:${i.running ? 1 : 0}:${i.scale ?? ''}:${i.yaw ?? ''}:${i.archetype ?? ''}:${recipeId(i.recipe)}`
   );
-  return `${tier}|${status}|${parts.join(';')}`;
+  return `${tier}|${Math.round(Math.max(0, Math.min(1, darkness)) * 10)}|${status}|${parts.join(';')}`;
 }
 
 /** Identity tag per recipe object, so a new recipe for the same appliance changes the key. */

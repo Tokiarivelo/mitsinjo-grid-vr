@@ -2,7 +2,12 @@ import { z } from 'zod';
 import { create } from 'zustand';
 import type { ApplianceCategory } from '@mitsinjo/engine';
 import { ObjectRecipeSchema, type ObjectRecipe } from '@/lib/object-shape';
-import { KIT_ARCHETYPES, type KitArchetype, defaultArchetype } from '@/lib/object-kit';
+import {
+  ARCHETYPE_SIZE_MM,
+  KIT_ARCHETYPES,
+  type KitArchetype,
+  defaultArchetype,
+} from '@/lib/object-kit';
 import { useSimulationStore, type SimulationState } from './simulation.store';
 
 export const ConnectionModeSchema = z.enum(['branch', 'ems']);
@@ -51,20 +56,68 @@ export const ARCHETYPE_SCENE_SCALE: Record<KitArchetype, number> = {
 };
 
 /**
- * Computes the real size multiplier in scene units (PI-T1):
- * returns the appropriate scale factor so objects render at realistic sizes.
+ * Scene units per real metre: the village is a half-scale model (house walls 1.3 units for a
+ * 2.6 m wall, VS-T35), the same ratio as the VR walker's scale (`XR_VILLAGE_SCALE`).
+ */
+export const VILLAGE_UNITS_PER_M = 0.5;
+
+/**
+ * Typical real height per archetype (VS-T35), metres: an inserted object stands as tall as its
+ * kind does in the village (a house as tall as the village's, a fridge at a person's shoulder).
+ * Water (a flat sheet) and `other` have none: their largest side keeps `ARCHETYPE_SCENE_SCALE`.
+ */
+export const ARCHETYPE_HEIGHT_M: Partial<Record<KitArchetype, number>> = {
+  house: 4,
+  building: 7,
+  vehicle: 1.5,
+  tree: 6,
+  bush: 1.2,
+  lamp_post: 5,
+  pole: 7,
+  tank: 2,
+  panel: 1.6,
+  cabinet: 1.8,
+  machine: 0.8,
+  screen: 0.6,
+  fan: 1.2,
+  person: 1.7,
+  animal: 1.4,
+};
+
+function resolveArchetype(archetype?: string): KitArchetype | undefined {
+  if (!archetype) return undefined;
+  if ((KIT_ARCHETYPES as readonly string[]).includes(archetype)) return archetype as KitArchetype;
+  return defaultArchetype(archetype as ApplianceCategory);
+}
+
+/**
+ * Scene scale of an inserted object (PI-T1, VS-T35): the scene length of its largest side
+ * (proportions are largest side = 1). With its proportions, it stands at its archetype's typical
+ * height (`ARCHETYPE_HEIGHT_M`), kept inside the archetype's real width and height ranges
+ * (`ARCHETYPE_SIZE_MM`, the height range wins when both cannot hold): a slim pump grows until its
+ * width is plausible, a wide house stays as tall as the village's. Without proportions, or for
+ * an archetype without a typical height, the fixed largest side (`ARCHETYPE_SCENE_SCALE`). Pure.
  */
 export function sceneScale(
   archetype?: KitArchetype | ApplianceCategory | string,
-  _proportions?: { w: number; h: number; d: number }
+  proportions?: { w: number; h: number; d: number }
 ): number {
-  void _proportions;
-  if (!archetype) return 1.0;
-  if ((KIT_ARCHETYPES as readonly string[]).includes(archetype)) {
-    return ARCHETYPE_SCENE_SCALE[archetype as KitArchetype] ?? 1.0;
-  }
-  const resolved = defaultArchetype(archetype as ApplianceCategory);
-  return ARCHETYPE_SCENE_SCALE[resolved] ?? 1.0;
+  const arch = resolveArchetype(archetype);
+  if (!arch) return 1.0;
+  const fixed = ARCHETYPE_SCENE_SCALE[arch] ?? 1.0;
+  const heightM = ARCHETYPE_HEIGHT_M[arch];
+  if (!proportions || !heightM || !(proportions.h > 0)) return fixed;
+  const U = VILLAGE_UNITS_PER_M;
+  // Scale bounds that keep one axis (proportion p) inside a real range [lo, hi] mm.
+  const bounds = (p: number, range?: readonly [number, number]): [number, number] =>
+    range && p > 0 ? [(range[0] / 1000) * (U / p), (range[1] / 1000) * (U / p)] : [0, Infinity];
+  const size = ARCHETYPE_SIZE_MM[arch];
+  const byH = bounds(proportions.h, size?.h);
+  const byW = bounds(proportions.w, size?.w);
+  let [lo, hi] = [Math.max(byH[0], byW[0]), Math.min(byH[1], byW[1])];
+  if (lo > hi) [lo, hi] = byH;
+  const target = (heightM * U) / proportions.h;
+  return Math.round(Math.min(hi, Math.max(lo, target)) * 1000) / 1000;
 }
 
 export interface FootprintBox {
@@ -148,7 +201,7 @@ export function footprint(recipe: ObjectRecipe, scale?: number, yaw?: number): M
   };
 }
 
-function loadStoredModels(): Record<string, PlacedModel> {
+export function loadStoredModels(): Record<string, PlacedModel> {
   if (typeof window === 'undefined' || !window.localStorage) return {};
   try {
     const raw = window.localStorage.getItem(PLACED_MODELS_STORAGE_KEY);
@@ -158,7 +211,12 @@ function loadStoredModels(): Record<string, PlacedModel> {
     const valid: Record<string, PlacedModel> = {};
     for (const [k, v] of Object.entries(parsed)) {
       const p = PlacedModelSchema.safeParse(v);
-      if (p.success) valid[k] = p.data;
+      if (!p.success) continue;
+      // Stored scales were always derived from the archetype (fixed largest side, before VS-T35):
+      // dropped, so the scene re-sizes every object from its proportions.
+      const { scale: _scale, ...model } = p.data;
+      void _scale;
+      valid[k] = model;
     }
     return valid;
   } catch {

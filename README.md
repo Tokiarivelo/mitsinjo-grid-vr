@@ -336,6 +336,9 @@ make vr-probe
 # /simulation VR check: /village controls, walls stop you, label → power panel (cut / restore), room inside, clinic never cut
 make vr-sim-probe
 
+# Inserted objects (real fridge, TV, fan, pump) in /simulation 3D: screenshots on screen and in immersion → test-results/placed-shot (TAG=name)
+make placed-shot
+
 # Every IWER emulator tool + the /village controls (A/B/X/Y, sticks, thumb gestures, legends); tools reference: docs/vr-iwer-tools.md
 make vr-iwer-tools
 

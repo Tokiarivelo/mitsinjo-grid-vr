@@ -5,7 +5,7 @@ import { MAX_APPLIANCES } from '@mitsinjo/engine';
 import type { ApplianceDetection } from '@/lib/vision';
 import type { ObjectRecipe } from '@/lib/object-shape';
 import { defaultArchetype } from '@/lib/object-kit';
-import { sceneScale, usePlacedModelsStore } from '@/stores';
+import { usePlacedModelsStore } from '@/stores';
 import { useApplianceDraft } from './use-appliance-draft';
 import { useSimulationAppliances } from './use-simulation-appliances';
 import { applianceIdFor } from '../utils/appliance-draft';
@@ -48,7 +48,6 @@ export function useApplianceInsert({ detection, name, photo, recipe }: Appliance
       applianceId: id,
       recipe: modelRecipe,
       yaw: recipe ? recipe.yaw : storedModel?.yaw,
-      scale: recipe ? sceneScale(archetype, recipe.proportions) : storedModel?.scale,
       archetype,
       connectionMode,
     });

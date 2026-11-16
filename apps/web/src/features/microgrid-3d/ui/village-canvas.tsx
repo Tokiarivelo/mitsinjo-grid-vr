@@ -3,6 +3,7 @@
 import { XrInputsLayer } from './xr-inputs-layer';
 import {
   Suspense,
+  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -55,7 +56,7 @@ import { SolarArray } from './solar-array';
 import { BatteryUnit } from './battery-unit';
 import { DispatchControllerUnit } from './dispatch-controller-unit';
 import { FeederTags } from './feeder-tags';
-import { ApplianceMarkers, MarkerDragGhost } from './appliance-markers';
+import { ApplianceMarkers, MarkerDragGhost, type ApplianceMarkersProps } from './appliance-markers';
 import { DistributionLines } from './distribution-lines';
 import { VillageBuildings } from './buildings';
 import { CameraController } from './camera-controller';
@@ -99,6 +100,8 @@ function DraggableApplianceMarkers({
   htmlPortal,
   tier,
   sectorStatuses,
+  lampGlow,
+  immersionTags,
 }: {
   markers: ApplianceMarkerSceneModel[];
   selectedSector: SectorId | null;
@@ -108,6 +111,8 @@ function DraggableApplianceMarkers({
   htmlPortal?: RefObject<HTMLElement | null> | null;
   tier?: 'high' | 'low';
   sectorStatuses?: Partial<Record<SectorId, SectorStateOverride>>;
+  lampGlow?: number;
+  immersionTags?: ApplianceMarkersProps['immersionTags'];
 }) {
   const moveMarker = useMoveMarker();
   const { selectedId, dragId, ghostRef, bindMarker, toggleSelect } = useMarkerDrag({
@@ -128,6 +133,8 @@ function DraggableApplianceMarkers({
         bindMarker={bindMarker}
         tier={tier}
         sectorStatuses={sectorStatuses}
+        {...(lampGlow !== undefined ? { lampGlow } : {})}
+        immersionTags={immersionTags ?? null}
       />
       <MarkerDragGhost ghostRef={ghostRef} visible={dragId !== null} />
     </>
@@ -423,6 +430,14 @@ export function VillageCanvas({
   const feeders = useFeederLabels(model);
   // VR: label / building click → power panel, room, door teleports, controls (VSIM-T1–T4).
   const simXr = useSimXr({ xrActive, model, onSelectSector });
+  // Immersion's 3D tags (village types and inserted objects, VS-T35): one switch, the headset's in
+  // VR, this one on screen; both start shown.
+  const [screenTags, setScreenTags] = useState(true);
+  const tagsShown = xrActive ? simXr.labels : screenTags;
+  const toggleTags = useCallback(
+    () => (xrActive ? simXr.toggleLabels() : setScreenTags((v) => !v)),
+    [xrActive, simXr]
+  );
   const xrSector = simXr.inside ?? simXr.panel;
   // Dispatcher mixing desk (VS-T34): its strips, from the engine result and the input.
   const { mixerBattery, mixerSectors, mixerAppliances } = useMemo(
@@ -684,6 +699,20 @@ export function VillageCanvas({
             htmlPortal={activeHtmlPortal}
             tier={quality}
             sectorStatuses={sectorStatuses}
+            lampGlow={palette.lampGlow}
+            immersionTags={
+              isImmersion
+                ? {
+                    active: tagsShown,
+                    category: tSim('villageTypes.appliance'),
+                    describe: (m) =>
+                      tSim('villageTags.appliance', {
+                        priority: m.tag ? priorityLabels[m.tag.priority] : '—',
+                        kw: fmtKw(m.kwNow, 2),
+                      }),
+                  }
+                : null
+            }
           />
           <VillageBuildings
             buildings={model.buildings}
@@ -706,8 +735,8 @@ export function VillageCanvas({
               sectorNames={sectorNames}
               priorityLabels={priorityLabels}
               xrActive={xrActive}
-              showLabels={xrActive ? simXr.labels : undefined}
-              onToggleLabels={xrActive ? simXr.toggleLabels : undefined}
+              showLabels={tagsShown}
+              onToggleLabels={toggleTags}
               {...(xrActive ? { onSelectDispatcher: simXr.openMixer } : {})}
             />
           )}

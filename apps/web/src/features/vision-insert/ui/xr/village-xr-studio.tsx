@@ -23,7 +23,7 @@ import { HoloViewsCarousel } from './holo-views-carousel';
 import { XrObjectLab } from './xr-object-lab';
 import { defaultArchetype, kitToRecipe, type ObjectKit } from '@/lib/object-kit';
 import { fitRecipe } from '@/lib/object-shape';
-import { sceneScale, usePlacedModelsStore } from '@/stores';
+import { usePlacedModelsStore } from '@/stores';
 import { useSimulationAppliances } from '../../hooks/use-simulation-appliances';
 import { aiDraft, applianceIdFor, toAppliance } from '../../utils/appliance-draft';
 import { projectDetectionsTo3D, type SpatialTarget } from './spatial-projection';
@@ -321,7 +321,6 @@ export const VillageXRStudio = memo(function VillageXRStudio({
           usePlacedModelsStore.getState().upsert({
             applianceId,
             recipe,
-            scale: sceneScale(archetype, recipe.proportions),
             archetype,
             connectionMode: 'branch',
           });

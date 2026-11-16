@@ -159,13 +159,20 @@ export function VillageViewport({
   const requestXr = useXrHandoff((s) => s.request);
   const arriveInXr = useCallback(() => requestXr(null), [requestXr]);
   useImmersionQuery({ immersion: xrActive || xrRequested }, arriveInXr);
-  // Dev only: lets `make vr-sim-probe` ask for the lab's hand-off (same pattern as __VR_SIM__).
+  // Dev only: lets `make vr-sim-probe` ask for the lab's hand-off (same pattern as __VR_SIM__),
+  // and scripted shots reach the stores.
   useEffect(() => {
     if (process.env.NODE_ENV === 'production') return;
-    const w = window as Window & { __XR_HANDOFF__?: (at: [number, number]) => void };
+    const w = window as Window & {
+      __XR_HANDOFF__?: (at: [number, number]) => void;
+      __SIM_STORES__?: { sim: typeof useSimulationStore; placed: typeof usePlacedModelsStore };
+    };
     w.__XR_HANDOFF__ = (at) => useXrHandoff.getState().request(at);
+    // Dev only: scripted shots seed an inserted object (VS-T35, `make placed-shot`).
+    w.__SIM_STORES__ = { sim: useSimulationStore, placed: usePlacedModelsStore };
     return () => {
       delete w.__XR_HANDOFF__;
+      delete w.__SIM_STORES__;
     };
   }, []);
   const [cameraPreset, setCameraPreset] = useState<CameraPreset>('village');

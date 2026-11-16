@@ -243,7 +243,8 @@
         "battery": "BESS Storage",
         "controller": "EMS Dispatch Hub",
         "wind": "Wind Generation",
-        "lake": "Scenic Reservoir"
+        "lake": "Scenic Reservoir",
+        "appliance": "Inserted object"
       },
       "villageDemand": "Village demand",
       "tabMetrics": "Metrics",
@@ -385,6 +386,18 @@
         "start": "Start the battery & dispatch",
         "running": "Dispatching",
         "more": "+{count} more on the 2D panel"
+      },
+      "villageTags": {
+        "standby": "Standby",
+        "solar": "{kw} · Clean energy",
+        "battery": "{pct} charge · Lithium storage",
+        "controllerTitle": "Dispatch controller",
+        "controller": "Microgrid core · 240 V bus",
+        "windTitle": "Hilltop wind turbines",
+        "wind": "Clean wind power · Ridge array",
+        "lakeTitle": "Lake promenade",
+        "lake": "Safety railing · Night lighting",
+        "appliance": "{priority} · {kw}"
       }
     },
     "strategyLab": {

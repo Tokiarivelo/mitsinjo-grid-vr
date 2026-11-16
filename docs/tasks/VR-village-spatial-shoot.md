@@ -346,3 +346,13 @@ Style : hologramme futuriste (cyan / ambre, lignes de balayage, coins lumineux, 
 - [x] Curseurs « DJ » : glisser au laser (`utils/xr-drag.ts`, `xr-hands.ts`), moteur relancé au relâchement, annulable ; clinique jamais coupée.
 - [x] Patches moteur purs et testés (`utils/dispatch-mixer.ts`) ; bouton holo et placement partagés (`ui/sim-xr-holo.tsx`).
 - [ ] **Done when :** `make vr-sim-probe` vert (table, couper / allumer, refus clinique) ; glisser joué au casque.
+
+### VS-T35 : Objets insérés étiquetés, éclairés et dimensionnés comme le village (/simulation)
+
+- [x] Tout traduit : étiquettes 3D de l'immersion (solaire, batterie, dispatcher, éoliennes, lac, « En veille »), noms par défaut du solaire et de la batterie retirés (`features.simulation.villageTags`, `villageTypes.appliance`).
+- [x] Écran : au-delà de 6 objets, chaque objet inséré avec son modèle depuis /village garde son badge (`taggedMarkers`) ; badges à la taille de ceux des bâtiments.
+- [x] Immersion (écran et VR) : une étiquette 3D par objet inséré (`ImmersionTag`, couleur de son secteur), sous le même interrupteur « Types de village & Étiquettes » (affiché au départ).
+- [x] Lumière du village : objet non alimenté tel quel le jour, assombri seulement la nuit (`duskDarkness`, `placedDim`, `drawnTint`) ; finition des murs du village (rugosité 0.68, métal 0.05).
+- [x] Taille selon les proportions (`sceneScale`) : hauteur type de son genre (`ARCHETYPE_HEIGHT_M`, village au ½ : `VILLAGE_UNITS_PER_M` 0.5) gardée dans sa plage réelle de largeur ; l'ancienne échelle stockée est ignorée au chargement.
+- [x] `make placed-shot` : réfrigérateur, TV, ventilateur et pompe réels posés dans /simulation, captures écran et immersion.
+- [ ] **Done when :** vu au casque (étiquettes, taille, nuit).
