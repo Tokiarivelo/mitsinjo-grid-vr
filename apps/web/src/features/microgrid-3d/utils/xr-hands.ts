@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { attachInputModels } from './xr-input-models';
+import { putOnInputLayer } from './xr-inputs-shown';
+import { createSurroundingProbe } from './xr-ray-contrast';
 import { createRayVisual, type RayVisual } from './xr-ray-visual';
 
 export const HAND_JOINTS = [
@@ -97,7 +99,8 @@ export function createControllerGripModel(): THREE.Group {
   ringGeo.translate(0, 0.03, -0.015);
   group.add(new THREE.Mesh(ringGeo, gripMat));
 
-  return group;
+  // Own render layer: « hands & controllers » hides it with one camera switch (VS-T30).
+  return putOnInputLayer(group);
 }
 
 /**
@@ -120,7 +123,7 @@ export function createHandMesh(): THREE.InstancedMesh {
   mesh.frustumCulled = false;
   mesh.castShadow = true;
   mesh.name = 'hand-joints-mesh';
-  return mesh;
+  return putOnInputLayer(mesh);
 }
 
 const _handMatrix = new THREE.Matrix4();
@@ -350,6 +353,7 @@ export function setupXRHandsAndControllers(
   let usable: THREE.Object3D[] = [];
   let frame = 0;
   let last = performance.now();
+  const probe = createSurroundingProbe();
   const update = () => {
     const now = performance.now();
     const dt = Math.min(0.1, (now - last) / 1000);
@@ -387,6 +391,9 @@ export function setupXRHandsAndControllers(
         input: 'controller',
         pressed: r.pressed,
         tint: '#7dd3fc',
+        surrounding: scene
+          ? probe(rays.indexOf(r) as 0 | 1, scene, _rayO, _rayD, _rayCaster.camera)
+          : 0,
         dt,
       });
     }

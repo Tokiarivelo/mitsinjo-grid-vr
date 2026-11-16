@@ -35,16 +35,34 @@ function run(frames: ControlSource[][], dt = 0.016) {
 }
 
 describe('XR controls map (VS-T23)', () => {
-  it('A / X analyse, B / Y go back, a stick click toggles help (once per press)', () => {
+  it('A / X analyse, B / Y go back, a stick click toggles help on release (once per press)', () => {
     const out = run([
       [pad('right'), pad('left')],
       [pad('right', [PAD.primary]), pad('left', [PAD.secondary])],
       [pad('right', [PAD.primary]), pad('left', [PAD.secondary])],
       [pad('right', [PAD.stick]), pad('left')],
+      [pad('right'), pad('left')],
     ]);
     expect(out[1]).toEqual([{ type: 'analyse' }, { type: 'back' }]);
     expect(out[2]).toEqual([]);
-    expect(out[3]).toEqual([{ type: 'help' }]);
+    expect(out[3]).toEqual([]);
+    expect(out[4]).toEqual([{ type: 'help' }]);
+  });
+
+  it('a stick held 0.8 s toggles the hand / controller models, not the help (VS-T30)', () => {
+    const memory = createControlMemory();
+    readControls([pad('right')], memory, 0);
+    expect(readControls([pad('right', [PAD.stick])], memory, 0.1)).toEqual([]);
+    expect(readControls([pad('right', [PAD.stick])], memory, 0.5)).toEqual([]);
+    expect(readControls([pad('right', [PAD.stick])], memory, 0.95)).toEqual([{ type: 'inputs' }]);
+    expect(readControls([pad('right', [PAD.stick])], memory, 1.5)).toEqual([]);
+    expect(readControls([pad('right')], memory, 1.6)).toEqual([]);
+  });
+
+  it('a stick already held when the session starts fires nothing on release', () => {
+    const memory = createControlMemory();
+    readControls([pad('right', [PAD.stick])], memory, 0);
+    expect(readControls([pad('right')], memory, 0.1)).toEqual([]);
   });
 
   it('buttons already held when the session starts fire nothing', () => {

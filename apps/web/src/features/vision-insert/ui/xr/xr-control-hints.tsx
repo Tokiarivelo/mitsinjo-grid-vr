@@ -132,6 +132,7 @@ export function legendKeys(kind: 'controller' | 'hand', handedness: XRHandedness
       'legendX',
       'legendY',
       'legendStickPress',
+      'legendStickHold',
     ];
   }
   return [
@@ -142,6 +143,7 @@ export function legendKeys(kind: 'controller' | 'hand', handedness: XRHandedness
     'legendA',
     'legendB',
     'legendStickPress',
+    'legendStickHold',
   ];
 }
 

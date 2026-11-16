@@ -365,7 +365,8 @@
         "legendStickPress": "Clic sur un stick : masquer cette aide",
         "legendPinch": "Pincer : sélectionner une étiquette, un bâtiment, un bouton",
         "legendThumbTurn": "Pouce glissé ←/→ : pivoter · ↑/↓ : un pas",
-        "legendThumbTap": "Tap du pouce : afficher / masquer les étiquettes"
+        "legendThumbTap": "Tap du pouce : afficher / masquer les étiquettes",
+        "legendStickHold": "Stick maintenu 1 s : afficher / masquer mains et manettes"
       }
     },
     "strategyLab": {
@@ -1620,7 +1621,12 @@
         "helpShown": "Aide affichée : clic sur un stick, ou Menu › Aide, pour la masquer",
         "helpHidden": "Aide masquée : clic sur un stick, ou Menu › Aide, pour l’afficher",
         "helpShow": "Afficher l’aide des commandes",
-        "helpHide": "Masquer l’aide des commandes"
+        "helpHide": "Masquer l’aide des commandes",
+        "inputsShow": "Afficher mains et manettes",
+        "inputsHide": "Masquer mains et manettes",
+        "inputsShownEvent": "Mains et manettes affichées",
+        "inputsHiddenEvent": "Mains et manettes masquées (les lasers restent)",
+        "legendStickHold": "Stick maintenu 1 s : afficher / masquer mains et manettes"
       },
       "vrStudio": {
         "viewsTitle": "Dessin des vues 2D de « {name} »",

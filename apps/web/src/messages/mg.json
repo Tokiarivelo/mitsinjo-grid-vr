@@ -365,7 +365,8 @@
         "legendStickPress": "Tsindrio ny stick : afenina ity fanampiana ity",
         "legendPinch": "Tsongoy : misafidy marika, trano, bokotra",
         "legendThumbTurn": "Ankihibe ←/→ : mihodina · ↑/↓ : dingana iray",
-        "legendThumbTap": "Kitiho ny ankihibe : aseho / afenina ny marika"
+        "legendThumbTap": "Kitiho ny ankihibe : aseho / afenina ny marika",
+        "legendStickHold": "Tazomy 1 s ny stick: aseho / afeno ny tanana sy ny fitantanana"
       }
     },
     "strategyLab": {
@@ -1620,7 +1621,12 @@
         "helpShown": "Miseho ny fanampiana : tsindrio ny stick, na Menu › Fanampiana, hanafenana azy",
         "helpHidden": "Miafina ny fanampiana : tsindrio ny stick, na Menu › Fanampiana, hanehoana azy",
         "helpShow": "Asehoy ny fanampiana momba ny fanaraha-maso",
-        "helpHide": "Afeno ny fanampiana momba ny fanaraha-maso"
+        "helpHide": "Afeno ny fanampiana momba ny fanaraha-maso",
+        "inputsShow": "Asehoy ny tanana sy ny fitantanana",
+        "inputsHide": "Afeno ny tanana sy ny fitantanana",
+        "inputsShownEvent": "Aseho ny tanana sy ny fitantanana",
+        "inputsHiddenEvent": "Miafina ny tanana sy ny fitantanana (mijanona ny laser)",
+        "legendStickHold": "Tazomy 1 s ny stick: aseho / afeno ny tanana sy ny fitantanana"
       },
       "vrStudio": {
         "viewsTitle": "Manao ny sary 2D an’i « {name} »",

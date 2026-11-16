@@ -279,6 +279,16 @@ l'émulateur : [`vr-iwer-tools.md`](vr-iwer-tools.md).
   ce que fait le bouton (`tip`). Chat : boutons « Clavier » · « Dicter » · « Envoyer » avec icônes ; pendant
   la dictée, un graphe « Niveau de voix » dans le champ (`holo-voice-meter.tsx` : 28 barres d'un
   `InstancedMesh` sur les bandes du spectre du copilote, `lib/voice-analyser.ts` partagé avec le copilote).
+- **Mains, manettes et lasers** (VS-T30, toutes les immersions) : les modèles de mains et de manettes
+  (vrais modèles et substituts) sont sur leur propre calque de rendu (`XR_INPUT_LAYER`,
+  `microgrid-3d/utils/xr-inputs-shown.ts`) ; `XrInputsLayer`, monté dans les deux canevas, l'allume ou
+  l'éteint d'après le choix « mains et manettes » (stick maintenu 0,8 s, ou Menu › « Masquer mains et
+  manettes » sur /village ; gardé dans le navigateur), et rapproche le plan proche à 5 cm pendant la session
+  (celui de /simulation, 0,5 m, coupait les manettes à ~0,45 m des yeux : elles étaient invisibles). Un clic
+  court sur le stick bascule toujours l'aide, au relâchement. Les lasers restent affichés et changent de
+  couleur selon ce qui les entoure (`xr-ray-contrast.ts`) : couleur de la première surface touchée (matière ×
+  texture au point touché, + émissif) ou du ciel, échantillonnée toutes les 4 images ; clair sur fond sombre,
+  bleu nuit sur fond clair, avec un halo du ton opposé autour du faisceau et de l'anneau.
 
 ## 5. Architecture des fichiers & Modules
 

@@ -13,6 +13,8 @@ export const MENU_SCAN_OFFSET: Vec3 = [0, 0.06, 0];
 export const MENU_GUIDE_OFFSET: Vec3 = [0, -0.25, 0];
 /** « Show the controls help » button, under the guide (Meta: let people recall the help). */
 export const MENU_HELP_OFFSET: Vec3 = [0, -0.37, 0];
+/** « Hide the hands & controllers » button, under the help one (VS-T30). */
+export const MENU_INPUTS_OFFSET: Vec3 = [0, -0.47, 0];
 export const MENU_HUD_OFFSET: Vec3 = [-0.66, 0.06, 0.22];
 /**
  * « Leave the studio » / « Back to the studio » (VS-T26): right of where the menu opens, clear of

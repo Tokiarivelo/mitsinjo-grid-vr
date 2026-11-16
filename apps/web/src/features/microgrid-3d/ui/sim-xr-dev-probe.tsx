@@ -6,6 +6,7 @@ import { useFrame, useThree } from '@react-three/fiber';
 import { useSimulationStore } from '@/stores';
 import { bodyBlocked, type WalkGrid } from '../utils/walk-grid';
 import { describeXrHands } from '../utils/xr-input-models';
+import { useXrInputsShown, XR_INPUT_LAYER } from '../utils/xr-inputs-shown';
 
 export interface SimXrProbeState {
   panel: string | null;
@@ -51,6 +52,38 @@ export function SimXrDevProbe({
       frames: () => frames.current,
       /** Real hand model vs joint spheres on each hand (VS-T26). */
       hands: () => describeXrHands(gl),
+      /**
+       * Per input (0 / 1): its grip and ray spaces (shown, parent, distance to the head) and the
+       * meshes drawn under the grip (what the viewer should see in the hand).
+       */
+      inputs: () =>
+        ([0, 1] as const).map((i) => {
+          const xr = gl.xr as THREE.WebXRManager & {
+            getControllerGrip: (n: number) => THREE.Group;
+          };
+          const grip = xr.getControllerGrip(i);
+          const ray = gl.xr.getController(i);
+          const head = camera.getWorldPosition(new THREE.Vector3());
+          let meshes = 0;
+          grip.traverseVisible((o) => {
+            if ((o as THREE.Mesh).isMesh) meshes++;
+          });
+          return {
+            grip: grip.visible,
+            ray: ray.visible,
+            gripParent: grip.parent?.name || grip.parent?.type || null,
+            fromHead: Number(
+              grip.getWorldPosition(new THREE.Vector3()).distanceTo(head).toFixed(2)
+            ),
+            meshes,
+          };
+        }),
+      /** Hands & controllers choice, whether the camera draws their layer, and its near plane (VS-T30). */
+      inputsShown: () => ({
+        shown: useXrInputsShown.getState().shown,
+        drawn: camera.layers.isEnabled(XR_INPUT_LAYER),
+        near: (camera as THREE.PerspectiveCamera).near,
+      }),
       head: () => camera.getWorldPosition(_v).toArray(),
       yaw: () => _e.setFromQuaternion(camera.getWorldQuaternion(_q), 'YXZ').y,
       shown: (name: string) => {

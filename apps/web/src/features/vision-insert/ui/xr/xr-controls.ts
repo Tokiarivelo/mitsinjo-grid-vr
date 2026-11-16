@@ -7,7 +7,8 @@
  * - Trigger: select what the ray points at (both hands). Grip held: turn a miniature.
  * - Left stick: walk (slide, head-relative). Right stick ←/→: snap turn 30°, ↑/↓: one step.
  * - A / X: analyse the current view. B / Y: back (close what is open, else the menu).
- * - Stick press: show / hide the help labels.
+ * - Stick click: show / hide the help labels (on release). Stick held 0.8 s: show / hide the
+ *   hand and controller models (VS-T30; the lasers stay).
  * Hands (both the same, Meta: left and right gestures never differ):
  * - Pinch: select; pinch held: turn a miniature / drag the views.
  * - Thumb microgestures (hand gamepad buttons 5–9, when the browser exposes them): swipe ←/→
@@ -19,7 +20,8 @@ export type XrControlAction =
   | { type: 'step'; direction: -1 | 1 }
   | { type: 'analyse' }
   | { type: 'back' }
-  | { type: 'help' };
+  | { type: 'help' }
+  | { type: 'inputs' };
 
 /** Snap turn (rad): 30°, Meta's default increment. */
 export const SNAP_TURN = Math.PI / 6;
@@ -28,6 +30,8 @@ export const STEP_DISTANCE = 0.8;
 /** Stick past this fires a snap / step; it re-arms once back under `STICK_REARM`. */
 export const STICK_FIRE = 0.7;
 export const STICK_REARM = 0.3;
+/** Stick pressed this long (s) toggles the hand / controller models instead of the help. */
+export const STICK_HOLD = 0.8;
 /** Held stick repeats a snap / step every this many seconds. */
 export const STICK_REPEAT = 0.6;
 
@@ -56,6 +60,9 @@ interface SourceMemory {
   armedX: boolean;
   armedY: boolean;
   repeatAt: number;
+  /** When the stick was pressed (s), and whether that press already fired its hold action. */
+  stickAt: number;
+  stickHeld: boolean;
 }
 
 export type ControlMemory = Map<string, SourceMemory>;
@@ -89,11 +96,19 @@ export function readControls(
     let m = memory.get(key);
     if (!m) {
       // First sight: buttons already down do not fire (no action on entering the session).
-      m = { buttons: [...s.buttons], armedX: true, armedY: true, repeatAt: 0 };
+      m = {
+        buttons: [...s.buttons],
+        armedX: true,
+        armedY: true,
+        repeatAt: 0,
+        stickAt: Number.NaN,
+        stickHeld: false,
+      };
       memory.set(key, m);
       continue;
     }
     const rose = (i: number) => !!s.buttons[i] && !m.buttons[i];
+    const fell = (i: number) => !s.buttons[i] && !!m.buttons[i];
     if (s.hand) {
       if (rose(MICROGESTURE.swipeLeft)) out.push({ type: 'turn', direction: -1 });
       if (rose(MICROGESTURE.swipeRight)) out.push({ type: 'turn', direction: 1 });
@@ -103,7 +118,17 @@ export function readControls(
     } else {
       if (rose(PAD.primary)) out.push({ type: 'analyse' });
       if (rose(PAD.secondary)) out.push({ type: 'back' });
-      if (rose(PAD.stick)) out.push({ type: 'help' });
+      // Stick: a click toggles the help on release; held STICK_HOLD it toggles the models.
+      if (rose(PAD.stick)) {
+        m.stickAt = now;
+        m.stickHeld = false;
+      } else if (s.buttons[PAD.stick] && !m.stickHeld && now - m.stickAt >= STICK_HOLD) {
+        out.push({ type: 'inputs' });
+        m.stickHeld = true;
+      } else if (fell(PAD.stick)) {
+        if (!m.stickHeld && !Number.isNaN(m.stickAt)) out.push({ type: 'help' });
+        m.stickAt = Number.NaN;
+      }
       // The right stick turns and steps back; the left one walks (Meta: left moves, right turns).
       if (s.handedness !== 'left') {
         const [x, y] = stickOf(s.axes);

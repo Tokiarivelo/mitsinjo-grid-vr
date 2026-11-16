@@ -1,5 +1,6 @@
 'use client';
 
+import { useXrInputsShown } from '@/features/microgrid-3d/utils/xr-inputs-shown';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { useThree } from '@react-three/fiber';
@@ -50,6 +51,7 @@ import { yawPitchOf } from './tour/equirect';
 import {
   MENU_GUIDE_OFFSET,
   MENU_HELP_OFFSET,
+  MENU_INPUTS_OFFSET,
   MENU_SCAN_OFFSET,
   miniatureSlot,
   SCAN_CONTROL_OFFSET,
@@ -109,6 +111,7 @@ const NO_HOTSPOTS: [] = [];
  */
 const HELP_ON_ENTRY_MS = 12000;
 export const MENU_HELP_ID = 'holo:menu-help';
+export const MENU_INPUTS_ID = 'holo:menu-inputs';
 /** « Leave the studio » / « Back to the studio » (VS-T26). */
 export const STUDIO_DOOR_ID = 'holo:studio-door';
 /** « Cancel the analysis » / « Retry the analysis » (VS-T26). */
@@ -460,6 +463,13 @@ export const VillageXRStudio = memo(function VillageXRStudio({
     setHelp(next);
     notifyEvent(tc(next ? 'helpShown' : 'helpHidden'));
   }, [notifyEvent, tc]);
+  // Hands & controllers shown or hidden (VS-T30), shared with /simulation and kept between visits.
+  const inputsShown = useXrInputsShown((s) => s.shown);
+  const toggleInputs = useCallback(() => {
+    const next = !useXrInputsShown.getState().shown;
+    useXrInputsShown.getState().setShown(next);
+    notifyEvent(tc(next ? 'inputsShownEvent' : 'inputsHiddenEvent'));
+  }, [notifyEvent, tc]);
   // A model that fell back to its outline says so when the lab opens by itself.
   const outlineOnly = extract?.shape.shape?.mode !== 'recipe';
   useEffect(() => {
@@ -492,6 +502,9 @@ export const VillageXRStudio = memo(function VillageXRStudio({
         case 'help':
           toggleHelp();
           return;
+        case 'inputs':
+          toggleInputs();
+          return;
       }
     },
     [
@@ -510,6 +523,7 @@ export const VillageXRStudio = memo(function VillageXRStudio({
       extract,
       menu,
       toggleHelp,
+      toggleInputs,
     ]
   );
   // Dev only: lets `make vr-probe` read the controls (help, live gamepads, view heading, hints).
@@ -697,6 +711,17 @@ export const VillageXRStudio = memo(function VillageXRStudio({
             on={help}
             hovered={hoveredTargetId === MENU_HELP_ID}
             onSelect={toggleHelp}
+          />
+          <HoloButton
+            registry={panels}
+            id={MENU_INPUTS_ID}
+            label={inputsShown ? tc('inputsHide') : tc('inputsShow')}
+            width={0.36}
+            height={0.08}
+            position={MENU_INPUTS_OFFSET}
+            on={!inputsShown}
+            hovered={hoveredTargetId === MENU_INPUTS_ID}
+            onSelect={toggleInputs}
           />
           <VillageSpatialHUD recentEvent={recentEvent} />
         </WristMenuPanel>

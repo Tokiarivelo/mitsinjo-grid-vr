@@ -1,5 +1,6 @@
 'use client';
 
+import { useXrInputsShown } from '../utils/xr-inputs-shown';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { SectorId } from '@mitsinjo/engine';
 import { useSimulationStore } from '@/stores';
@@ -131,11 +132,15 @@ export function useSimXr({
     undoLastChange();
   }, [undoLastChange]);
 
-  /** A/X: labels · B/Y: close the panel, else leave the room · stick click: legends. */
+  /**
+   * A/X: labels · B/Y: close the panel, else leave the room · stick click: legends · stick held:
+   * hands & controllers (VS-T30).
+   */
   const onXrAction = useCallback(
     (a: XrControlAction) => {
       if (a.type === 'analyse') setLabels((v) => !v);
       else if (a.type === 'help') setHelp((v) => !v);
+      else if (a.type === 'inputs') useXrInputsShown.getState().toggle();
       else if (a.type === 'back') {
         if (panel) setPanel(null);
         else if (inside) exit();

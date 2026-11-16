@@ -307,3 +307,10 @@ Style : hologramme futuriste (cyan / ambre, lignes de balayage, coins lumineux, 
 - [x] Table du village : titre, état et boutons au-dessus du bord éloigné, à hauteur des yeux (plus sous la table).
 - [x] « Aller à la simulation » : `/simulation` entre seule en VR, à côté de l'objet ajouté (`utils/xr-handoff.ts`).
 - [ ] **Done when :** `make vr-probe` + `make vr-sim-probe` verts ; joué au casque (entrée VR sans geste sur Quest à vérifier).
+
+### VS-T30 : Mains et manettes visibles (et masquables), lasers de couleur adaptative
+
+- [x] /simulation : mains et manettes coupées par le plan proche (0,5 m) → 5 cm pendant la session (`XrInputsLayer`).
+- [x] Afficher / masquer mains et manettes partout : calque `XR_INPUT_LAYER`, stick maintenu 0,8 s, Menu › bouton sur /village, choix gardé.
+- [x] Lasers : couleur selon l'environnement (`xr-ray-contrast.ts`) + halo du ton opposé, sur /village et /simulation.
+- [ ] **Done when :** `make vr-probe` + `make vr-sim-probe` verts ; joué au casque (ciel clair, intérieur sombre).

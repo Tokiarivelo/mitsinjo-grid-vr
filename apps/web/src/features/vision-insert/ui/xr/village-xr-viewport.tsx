@@ -1,5 +1,6 @@
 'use client';
 
+import { XrInputsLayer } from '@/features/microgrid-3d/ui/xr-inputs-layer';
 import { memo, useCallback, useRef, useState, type ComponentRef, type RefObject } from 'react';
 import * as THREE from 'three';
 import type { WebGLRenderer } from 'three';
@@ -247,6 +248,7 @@ export const VillageXRViewport = memo(function VillageXRViewport({
           onCreated={handleCreated}
           className="w-full h-full"
         >
+          <XrInputsLayer />
           {/* Desktop preview: drag to look around from the eye (Street View), no dolly or pan */}
           {!xrActive && (
             <OrbitControls

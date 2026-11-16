@@ -1,5 +1,6 @@
 'use client';
 
+import { XrInputsLayer } from './xr-inputs-layer';
 import {
   Suspense,
   useEffect,
@@ -589,6 +590,7 @@ export function VillageCanvas({
             args={[palette.fog, 48 * palette.fogScale, (high ? 210 : 170) * palette.fogScale]}
           />
 
+          <XrInputsLayer />
           <hemisphereLight args={[palette.hemiSky, palette.hemiGround, palette.hemiIntensity]} />
           <CelestialLighting
             timeIndex={model.timeIndex}

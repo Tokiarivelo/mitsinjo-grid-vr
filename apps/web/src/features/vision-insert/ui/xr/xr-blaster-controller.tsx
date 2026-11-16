@@ -10,6 +10,7 @@ import {
 } from '@/features/microgrid-3d/utils/xr-hands';
 import { attachInputModels } from '@/features/microgrid-3d/utils/xr-input-models';
 import { createRayVisual } from '@/features/microgrid-3d/utils/xr-ray-visual';
+import { createSurroundingProbe } from '@/features/microgrid-3d/utils/xr-ray-contrast';
 import type { SpatialTarget } from './spatial-projection';
 import { photoRay, type PhotoGround } from './tour/grounded';
 import {
@@ -473,6 +474,8 @@ export const XRBlasterController = memo(function XRBlasterController({
   const fx = useMemo(
     () => ({
       rays: [createRayVisual(), createRayVisual()] as const,
+      /** What surrounds each laser, so its colour contrasts with it (VS-T30). */
+      probe: createSurroundingProbe(),
       projectile: createDot(0.035, BEAM_IDLE),
       impact: createImpactRing(),
     }),
@@ -967,6 +970,7 @@ export const XRBlasterController = memo(function XRBlasterController({
       input,
       pressed,
       tint: beamColor(aim.kind),
+      surrounding: fx.probe(index, scene, origin, direction, camera),
       dt,
     });
     const out = aimOut?.pointers[index];

@@ -365,7 +365,8 @@
         "legendStickPress": "Click a stick: hide this help",
         "legendPinch": "Pinch: select a label, building or button",
         "legendThumbTurn": "Thumb swipe ←/→: turn · ↑/↓: one step",
-        "legendThumbTap": "Thumb tap: show / hide labels"
+        "legendThumbTap": "Thumb tap: show / hide labels",
+        "legendStickHold": "Hold a stick 1 s: show / hide hands & controllers"
       }
     },
     "strategyLab": {
@@ -1620,7 +1621,12 @@
         "helpShown": "Help shown: click a stick, or Menu › Help, to hide it",
         "helpHidden": "Help hidden: click a stick, or Menu › Help, to show it",
         "helpShow": "Show the controls help",
-        "helpHide": "Hide the controls help"
+        "helpHide": "Hide the controls help",
+        "inputsShow": "Show hands & controllers",
+        "inputsHide": "Hide hands & controllers",
+        "inputsShownEvent": "Hands & controllers shown",
+        "inputsHiddenEvent": "Hands & controllers hidden (the lasers stay)",
+        "legendStickHold": "Hold a stick 1 s: show / hide hands & controllers"
       },
       "vrStudio": {
         "viewsTitle": "Drawing the 2D views of « {name} »",

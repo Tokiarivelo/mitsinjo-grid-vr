@@ -152,13 +152,53 @@ try {
   );
   await shot('sim-1-entry');
 
+  // --- Hands & controllers (VS-T30) -----------------------------------------------------------
+  const ins = await sim((s) => s.inputs());
+  const shownAtEntry = await sim((s) => s.inputsShown());
+  check(
+    'the controllers are drawn in VR (near plane pulled in)',
+    shownAtEntry.shown &&
+      shownAtEntry.drawn &&
+      shownAtEntry.near <= 0.1 &&
+      ins.every((i) => i.meshes > 0 && i.fromHead < 1),
+    `near ${shownAtEntry.near}, meshes ${ins.map((i) => i.meshes).join('/')}`
+  );
+  const holdStick = async () => {
+    await rc('set_gamepad_state', {
+      device: 'controller-right',
+      buttons: [{ index: 2, value: 1, touched: true }],
+    });
+    await sleep(1500);
+    await frames(3);
+    await rc('set_gamepad_state', {
+      device: 'controller-right',
+      buttons: [{ index: 2, value: 0, touched: false }],
+    });
+    await frames(2);
+  };
+  const help0 = (await state()).help;
+  await holdStick();
+  const hidden = await sim((s) => s.inputsShown());
+  check(
+    'holding a stick hides the hands & controllers (help untouched)',
+    !hidden.shown && !hidden.drawn && (await state()).help === help0
+  );
+  await shot('sim-1b-inputs-hidden');
+  await holdStick();
+  check('holding it again shows them back', (await sim((s) => s.inputsShown())).drawn);
+
   // --- Same controls as /village ------------------------------------------------------------
   const y0 = await sim((s) => s.yaw());
   await stick('controller-right', 0.9, 0);
-  await sleep(250);
+  // Read the first snap as soon as it shows: on slow software GL a frame can last over the 0.6 s
+  // held-stick repeat, so the total after release may hold two snaps (by design).
+  let y1 = y0;
+  await waitFor(async () => {
+    y1 = await sim((s) => s.yaw());
+    return Math.abs(wrap(y1 - y0)) > 0.01;
+  }, 180000);
   await stick('controller-right', 0, 0);
-  await sleep(600);
-  const y1 = await sim((s) => s.yaw());
+  await frames(2);
   check(
     'right stick → : snap turn 30° right',
     Math.abs(deg(wrap(y1 - y0)) + 30) <= 2,
