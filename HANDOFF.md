@@ -20,7 +20,9 @@ on `fix/vs-t25-studio-text-pot-highlights`, which has no PR yet). Tasks VS-T27, 
   Test `ui/xr/__tests__/aim-at.test.ts`.
 - **Probe:** « wrist menu closed on entry » expected a worn button; in the emulator it floats by design
   (`eefd12e`). Check now asserts closed + floating.
-- `make vr-probe` with `make dev-mock`: 37/37 PASS (lab, village table, Cancel, walks included).
+- `make vr-probe` with `make dev-mock`: 37/37 PASS (lab, village table, Cancel, walks included);
+  `make vr-sim-probe`: 19/19 PASS (slow: load ≈ 16, software GL stalls; allow > 15 min).
+- `scripts/iwer-bridge-stop.sh` (orphaned bridges) committed (`33a4e74`).
 
 ## Decisions
 
@@ -30,4 +32,3 @@ on `fix/vs-t25-studio-text-pot-highlights`, which has no PR yet). Tasks VS-T27, 
 ## Open
 
 - `make check`: green except the `recon` time-budget test under full-suite load (passes alone).
-- Uncommitted, not mine: `scripts/iwer-bridge-stop.sh` (orphaned bridges), left as is.
