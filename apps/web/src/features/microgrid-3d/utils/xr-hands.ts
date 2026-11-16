@@ -3,6 +3,7 @@ import { attachInputModels } from './xr-input-models';
 import { putOnInputLayer } from './xr-inputs-shown';
 import { createSurroundingProbe } from './xr-ray-contrast';
 import { createRayVisual, type RayVisual } from './xr-ray-visual';
+import { dragPoint, findDraggable, type XrDraggable } from './xr-drag';
 
 export const HAND_JOINTS = [
   'wrist',
@@ -170,6 +171,8 @@ interface RayData {
   space: THREE.XRTargetRaySpace;
   visual: RayVisual;
   pressed: boolean;
+  /** What the held trigger drags (a fader, VS-T34), null otherwise. */
+  drag: XrDraggable | null;
 }
 
 /** Things a pointer can use: panels (`userData.xrUi`) and anything with a select handler. */
@@ -180,6 +183,7 @@ function usableObjects(scene: THREE.Scene): THREE.Object3D[] {
     if (
       o.userData?.xrUi ||
       o.userData?.onSelect ||
+      o.userData?.onDrag ||
       o.userData?.onClick ||
       h.__r3f?.handlers?.onClick
     )
@@ -197,6 +201,10 @@ const _rayD = new THREE.Vector3();
 const _rayLocalO = new THREE.Vector3(0, 0, 0);
 const _rayLocalD = new THREE.Vector3(0, 0, -1);
 const _rayEnd = new THREE.Vector3();
+const _dragCaster = new THREE.Raycaster();
+const _dragO = new THREE.Vector3();
+const _dragD = new THREE.Vector3();
+const _dragLocal = new THREE.Vector3();
 
 interface ModelRef {
   parent: THREE.Object3D;
@@ -258,12 +266,41 @@ export function setupXRHandsAndControllers(
 
     // 2. Controller Target Ray: a short beam + cursor ring (Meta ray spec, VS-T26).
     const controllerRay = gl.xr.getController(i);
-    const ray: RayData = { space: controllerRay, visual: createRayVisual(), pressed: false };
+    const ray: RayData = {
+      space: controllerRay,
+      visual: createRayVisual(),
+      pressed: false,
+      drag: null,
+    };
     controllerRay.add(ray.visual.group);
     rig.add(controllerRay);
     rays.push(ray);
-    const onPress = () => (ray.pressed = true);
-    const onLift = () => (ray.pressed = false);
+    const onPress = () => {
+      ray.pressed = true;
+      // Trigger pressed on a fader: it follows the ray until release (VS-T34).
+      if (!scene) return;
+      controllerRay.updateMatrixWorld(true);
+      controllerRay.getWorldPosition(_dragO);
+      _dragD.set(0, 0, -1).transformDirection(controllerRay.matrixWorld);
+      _dragCaster.set(_dragO, _dragD);
+      _dragCaster.camera = (gl.xr.isPresenting ? gl.xr.getCamera() : camera) ?? _dragCaster.camera;
+      let hits: THREE.Intersection[] = [];
+      try {
+        hits = _dragCaster.intersectObjects(scene.children, true);
+      } catch {
+        hits = [];
+      }
+      ray.drag = findDraggable(hits);
+      if (ray.drag && dragPoint(ray.drag, _dragO, _dragD, _dragLocal)) {
+        ray.drag.userData.onDrag?.(_dragLocal);
+      }
+    };
+    const onLift = () => {
+      ray.pressed = false;
+      const held = ray.drag;
+      ray.drag = null;
+      held?.userData.onDragEnd?.();
+    };
     controllerRay.addEventListener?.('selectstart', onPress);
     controllerRay.addEventListener?.('selectend', onLift);
     selectListeners.push({ controller: controllerRay, listener: onPress, type: 'selectstart' });
@@ -372,6 +409,8 @@ export function setupXRHandsAndControllers(
       r.space.updateMatrixWorld(true);
       r.space.getWorldPosition(_rayO);
       _rayD.set(0, 0, -1).transformDirection(r.space.matrixWorld);
+      if (r.drag && dragPoint(r.drag, _rayO, _rayD, _dragLocal))
+        r.drag.userData.onDrag?.(_dragLocal);
       _rayCaster.set(_rayO, _rayD);
       _rayCaster.camera = (gl.xr.isPresenting ? gl.xr.getCamera() : camera) ?? _rayCaster.camera;
       _rayHits.length = 0;

@@ -367,6 +367,24 @@
         "legendThumbTurn": "Ankihibe ←/→ : mihodina · ↑/↓ : dingana iray",
         "legendThumbTap": "Kitiho ny ankihibe : aseho / afenina ny marika",
         "legendStickHold": "Tazomy 1 s ny stick: aseho / afeno ny tanana sy ny fitantanana"
+      },
+      "vrMixer": {
+        "title": "Dispatcher · latabatra fampifangaroana",
+        "hint": "Tazomy ny gâchette eo amin'ny curseur, tariho miakatra na midina ; avelao mba handefa. Ambony indrindra = tsy misy fetra.",
+        "battery": "Bateria",
+        "soc": "Herinaratra {pct}",
+        "reserve": "Tahiry {pct}",
+        "served": "Nomena {kw}",
+        "limit": "Fetra {kw}",
+        "noLimit": "Tsy misy fetra",
+        "cutState": "Tapaka",
+        "direct": "Mivantana · {kw}",
+        "level": "Haavo {pct}",
+        "cut": "Tapaho",
+        "restore": "Alefaso",
+        "start": "Alefaso ny bateria ary zarao ny herinaratra",
+        "running": "Mizara ankehitriny",
+        "more": "+{count} hafa ao amin'ny tabilao 2D"
       }
     },
     "strategyLab": {

@@ -28,6 +28,8 @@ const xz = (a, b) => Math.hypot(a[0] - b[0], a[2] - b[2]);
 const HOUSEHOLDS = [-9, 0, 11];
 const HOUSEHOLDS_LABEL = [-9, 4.2, 11];
 const HEALTH_LABEL = [12.5, 5.8, -0.5];
+/** The dispatcher's label (anchor above BUS_POSITION). */
+const CONTROLLER_LABEL = [0, 4.4, 1];
 
 const browser = await chromium.launch({
   headless: true,
@@ -151,6 +153,37 @@ try {
     (await state()).help && (await sim((s) => s.shown('xr-control-legend'))) >= 1
   );
   await shot('sim-1-entry');
+
+  // --- Dispatcher mixing desk (VS-T34) --------------------------------------------------------
+  await aimSelect(CONTROLLER_LABEL);
+  check('the dispatcher label opens its mixing desk', (await state()).mixer === true);
+  const faders = await sim((s) =>
+    ['battery', 'households', 'health'].map((n) => s.shown(`sim-xr-fader-${n}`))
+  );
+  check(
+    'the desk has the battery and sector faders',
+    faders.every((n) => n === 1),
+    `${faders}`
+  );
+  await shot('sim-0-mixer');
+  await pressPanel('mixer-cut-households');
+  check(
+    'mixer « Cut » sets a 0 kW households limit through the engine',
+    (await sim((s) => s.caps())).some((c) => c.sector === 'households' && c.maxKw === 0)
+  );
+  await pressPanel('mixer-on-households');
+  check(
+    'mixer « On » removes it',
+    !(await sim((s) => s.caps())).some((c) => c.sector === 'households')
+  );
+  await pressPanel('mixer-cut-health');
+  check(
+    'mixer refuses to cut the clinic (constitution)',
+    !(await sim((s) => s.caps())).some((c) => c.sector === 'health') &&
+      (await state()).refused === 'health'
+  );
+  await tapButton('controller-right', 4);
+  check('B closes the mixing desk', (await state()).mixer === false);
 
   // --- Hands & controllers (VS-T30) -----------------------------------------------------------
   const ins = await sim((s) => s.inputs());

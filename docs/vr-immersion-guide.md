@@ -189,6 +189,25 @@ au-dessus de chaque manette 25 s à l'entrée, puis d'un clic de stick.
    tout s'éteint si on coupe. Le même panneau est au mur ; **« Sortir »**, la porte ou B/Y vous ramènent dehors.
 4. La limite porte sur le **secteur** (« Ménages » = toutes les maisons d'habitation), comme dans le moteur.
 
+### Table de mixage du dispatcher (VS-T34)
+
+1. Visez l'étiquette **du dispatcher** (ou l'abri du dispatcher) et sélectionnez : une **table de mixage**
+   holographique s'ouvre devant vous (`ui/sim-xr-dispatch-panel.tsx`), une tranche par canal :
+   - **Batterie** (maître, vert) : charge (moteur) et réserve. Curseur vers le haut = plus de batterie envoyée
+     (réserve plus basse, 90 % → 5 %, `minSocPct`). **« Lancer la batterie et dispatcher »** = premier calcul du
+     moteur de la journée (sans résultat, rien ne circule) ; ensuite « Dispatch en cours ».
+   - **Un curseur par secteur** : « Servi » (moteur) et la limite. Glisser = limite en kW de l'heure affichée à
+     minuit (`sectorCaps`, échelle = la demande du secteur maintenant) ; tout en haut = sans limite.
+     **« Couper » / « Allumer »** sous la tranche (mêmes patches que le panneau du bâtiment).
+   - **Un curseur par appareil branché directement au dispatcher** (ajouté depuis `/village` avec le raccordement
+     « EMS », violet) : il apparaît **tout seul** dans la table. Glisser = son niveau (cycle de marche × 0–100 % dès
+     l'heure affichée, `hourlyDuty`) ; « Couper » = 0 %. Six tranches au plus, les autres restent au panneau 2D.
+2. **Glisser** : gâchette maintenue sur le curseur, monter / descendre le laser ; le moteur est relancé au
+   **relâchement** (une seule fois, annulable par « Annuler »). Le glisser au laser est générique
+   (`utils/xr-drag.ts` : `userData.onDrag` / `onDragEnd`, lu par `xr-hands.ts`).
+3. Règles dures inchangées : la clinique n'est jamais coupée (« Refusé »), tout est annulable, tous les nombres
+   viennent du moteur (DONNÉES SIMULÉES). B/Y ferme la table.
+
 ---
 
 ## 6. Commandes de l'immersion `/village` (visite 360°, détection, extraction 3D) — VS-T23

@@ -34,6 +34,8 @@ export interface ImmersionLabelsProps {
   showLabels?: boolean;
   /** Controlled toggle callback (optional). */
   onToggleLabels?: () => void;
+  /** The dispatcher's label was selected (VR: its mixing desk, VS-T34). */
+  onSelectDispatcher?: () => void;
 }
 
 interface VillageTypeItem extends VillageTypeTextureSpec {
@@ -281,6 +283,7 @@ export const ImmersionLabels = memo(function ImmersionLabels({
   airOptionPosition = [0, 3.6, 9.5],
   showLabels,
   onToggleLabels,
+  onSelectDispatcher,
 }: ImmersionLabelsProps) {
   const tSim = useTranslations('features.simulation');
   const [internalActive, setInternalActive] = useState(false);
@@ -446,7 +449,10 @@ export const ImmersionLabels = memo(function ImmersionLabels({
             key={item.id}
             item={item}
             selected={item.sectorId ? selectedSector === item.sectorId : false}
-            onSelect={() => item.sectorId && onSelectSector(item.sectorId)}
+            onSelect={() => {
+              if (item.sectorId) onSelectSector(item.sectorId);
+              else if (item.id === 'controller') onSelectDispatcher?.();
+            }}
           />
         ))}
     </group>

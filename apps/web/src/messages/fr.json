@@ -367,6 +367,24 @@
         "legendThumbTurn": "Pouce glissé ←/→ : pivoter · ↑/↓ : un pas",
         "legendThumbTap": "Tap du pouce : afficher / masquer les étiquettes",
         "legendStickHold": "Stick maintenu 1 s : afficher / masquer mains et manettes"
+      },
+      "vrMixer": {
+        "title": "Dispatcher · table de mixage",
+        "hint": "Gâchette maintenue sur un curseur, glisser vers le haut ou le bas ; relâcher pour envoyer. Tout en haut = sans limite.",
+        "battery": "Batterie",
+        "soc": "Charge {pct}",
+        "reserve": "Réserve {pct}",
+        "served": "Servi {kw}",
+        "limit": "Limite {kw}",
+        "noLimit": "Sans limite",
+        "cutState": "Coupé",
+        "direct": "Direct · {kw}",
+        "level": "Niveau {pct}",
+        "cut": "Couper",
+        "restore": "Allumer",
+        "start": "Lancer la batterie et dispatcher",
+        "running": "Dispatch en cours",
+        "more": "+{count} autres sur le panneau 2D"
       }
     },
     "strategyLab": {

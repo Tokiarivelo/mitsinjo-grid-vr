@@ -339,3 +339,10 @@ Style : hologramme futuriste (cyan / ambre, lignes de balayage, coins lumineux, 
 - [x] /simulation VR : rig réduit à 0,5 dans le village à demi-échelle (yeux ≈ 0,8 m, sous les murs de 1,3 m), 1:1 dans les pièces ; pas, vitesse, laser et panneau de secteur suivent (`utils/xr-walk.ts`).
 - [x] Clavier : `←`/`→` tournent la tête (90°/s) pendant la marche (le pavé tactile d'un portable est coupé pendant la frappe) ; `A`/`Q`/`D` restent le pas de côté.
 - [ ] **Done when :** `make vr-sim-probe` vert ; joué au casque (taille ressentie, confort).
+
+### VS-T34 : Table de mixage du dispatcher en VR (/simulation)
+
+- [x] Étiquette (ou abri) du dispatcher → table de mixage VR : tranche Batterie (réserve, « Lancer la batterie et dispatcher »), une tranche par secteur (limite kW, Couper / Allumer), une par appareil raccordé directement au dispatcher (`connectionMode: 'ems'`, ajouté depuis /village, auto-ajouté).
+- [x] Curseurs « DJ » : glisser au laser (`utils/xr-drag.ts`, `xr-hands.ts`), moteur relancé au relâchement, annulable ; clinique jamais coupée.
+- [x] Patches moteur purs et testés (`utils/dispatch-mixer.ts`) ; bouton holo et placement partagés (`ui/sim-xr-holo.tsx`).
+- [ ] **Done when :** `make vr-sim-probe` vert (table, couper / allumer, refus clinique) ; glisser joué au casque.

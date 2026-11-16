@@ -367,6 +367,24 @@
         "legendThumbTurn": "Thumb swipe ←/→: turn · ↑/↓: one step",
         "legendThumbTap": "Thumb tap: show / hide labels",
         "legendStickHold": "Hold a stick 1 s: show / hide hands & controllers"
+      },
+      "vrMixer": {
+        "title": "Dispatcher · mixing desk",
+        "hint": "Hold the trigger on a fader and slide it up or down; release to send. Top notch = no limit.",
+        "battery": "Battery",
+        "soc": "Charge {pct}",
+        "reserve": "Reserve {pct}",
+        "served": "Served {kw}",
+        "limit": "Limit {kw}",
+        "noLimit": "No limit",
+        "cutState": "Cut",
+        "direct": "Direct · {kw}",
+        "level": "Level {pct}",
+        "cut": "Cut",
+        "restore": "On",
+        "start": "Start the battery & dispatch",
+        "running": "Dispatching",
+        "more": "+{count} more on the 2D panel"
       }
     },
     "strategyLab": {

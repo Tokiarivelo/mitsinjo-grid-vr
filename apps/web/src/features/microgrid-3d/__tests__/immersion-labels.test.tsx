@@ -138,4 +138,31 @@ describe('ImmersionLabels', () => {
     });
     expect(onToggle).toHaveBeenCalledTimes(1);
   });
+
+  it('the dispatcher label opens its mixing desk, not a sector (VS-T34)', () => {
+    const onSelectSector = vi.fn();
+    const onSelectDispatcher = vi.fn();
+    const { container } = render(
+      <I18nProvider>
+        <ImmersionLabels
+          model={model}
+          selectedSector={null}
+          onSelectSector={onSelectSector}
+          sectorNames={mockSectorNames}
+          priorityLabels={mockPriorityLabels}
+          showLabels={true}
+          onSelectDispatcher={onSelectDispatcher}
+        />
+      </I18nProvider>
+    );
+    const badge = container.querySelector(
+      '[name="vtag-controller"] [data-testid="mock-billboard"] mesh'
+    );
+    expect(badge).not.toBeNull();
+    act(() => {
+      fireEvent.click(badge!);
+    });
+    expect(onSelectDispatcher).toHaveBeenCalledTimes(1);
+    expect(onSelectSector).not.toHaveBeenCalled();
+  });
 });

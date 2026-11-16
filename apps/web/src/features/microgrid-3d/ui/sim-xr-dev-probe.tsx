@@ -15,6 +15,8 @@ export interface SimXrProbeState {
   labels: boolean;
   help: boolean;
   refused: string | null;
+  /** The dispatcher's mixing desk is open (VS-T34). */
+  mixer: boolean;
 }
 
 const _v = new THREE.Vector3();

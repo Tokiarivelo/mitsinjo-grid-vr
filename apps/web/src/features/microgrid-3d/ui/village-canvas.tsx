@@ -72,6 +72,8 @@ import { BakedContactShadows, ResumeOnVisible, ShadowBake } from './render-contr
 import { ImmersionLabels } from './immersion-labels';
 import { SimXrSectorPanel } from './sim-xr-sector-panel';
 import { SimXrInterior } from './sim-xr-interior';
+import { SimXrDispatchPanel } from './sim-xr-dispatch-panel';
+import { dispatchMixerStrips } from '../utils/dispatch-mixer';
 import { SimXrDevProbe } from './sim-xr-dev-probe';
 import { useSimXr } from '../hooks/use-sim-xr';
 import { primeXrInputs } from '../utils/xr-hands';
@@ -422,6 +424,11 @@ export function VillageCanvas({
   // VR: label / building click → power panel, room, door teleports, controls (VSIM-T1–T4).
   const simXr = useSimXr({ xrActive, model, onSelectSector });
   const xrSector = simXr.inside ?? simXr.panel;
+  // Dispatcher mixing desk (VS-T34): its strips, from the engine result and the input.
+  const { mixerBattery, mixerSectors, mixerAppliances } = useMemo(
+    () => dispatchMixerStrips(model, simXr.caps, simXr.appliances, simXr.minSocPct),
+    [model, simXr.caps, simXr.appliances, simXr.minSocPct]
+  );
 
   const reducedMotion = useReducedMotion();
   // A modified scenario shows the last result frozen: no flow animation.
@@ -646,7 +653,8 @@ export function VillageCanvas({
             modeLabel={tDiagram(`controller.mode.${model.controller.mode}`)}
             feederTitles={feeders.titles}
             hasResult={model.hasResult}
-            onFocus={() => onSelectPreset?.('controller')}
+            // VR: the dispatcher opens its mixing desk (VS-T34); on screen, its camera preset.
+            onFocus={() => (xrActive ? simXr.openMixer() : onSelectPreset?.('controller'))}
             nameLabel={tDiagram('controller.shortTitle')}
             htmlPortal={activeHtmlPortal}
           />
@@ -700,6 +708,7 @@ export function VillageCanvas({
               xrActive={xrActive}
               showLabels={xrActive ? simXr.labels : undefined}
               onToggleLabels={xrActive ? simXr.toggleLabels : undefined}
+              {...(xrActive ? { onSelectDispatcher: simXr.openMixer } : {})}
             />
           )}
 
@@ -728,6 +737,23 @@ export function VillageCanvas({
               onClose={() => simXr.setPanel(null)}
             />
           )}
+          {xrActive && simXr.mixer && (
+            <SimXrDispatchPanel
+              battery={mixerBattery}
+              hasResult={model.hasResult}
+              sectors={mixerSectors}
+              appliances={mixerAppliances}
+              refused={simXr.refused !== null}
+              canUndo={simXr.canUndo}
+              onStart={simXr.startDispatch}
+              onReserve={simXr.mixReserve}
+              onSector={simXr.mixSector}
+              onSectorCut={simXr.cutSector}
+              onAppliance={simXr.mixAppliance}
+              onUndo={simXr.undo}
+              onClose={simXr.closeMixer}
+            />
+          )}
           {xrActive && process.env.NODE_ENV !== 'production' && (
             <SimXrDevProbe
               state={{
@@ -736,6 +762,7 @@ export function VillageCanvas({
                 labels: simXr.labels,
                 help: simXr.help,
                 refused: simXr.refused,
+                mixer: simXr.mixer,
               }}
               walkGridRef={simXr.walkGridRef}
             />
