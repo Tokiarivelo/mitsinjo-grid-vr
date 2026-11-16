@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { renderHook } from '@testing-library/react';
-import { useImmersionQuery } from '../use-immersion-query';
+import { leaveImmersionFor, useImmersionQuery } from '../use-immersion-query';
 
 const go = (url: string) => window.history.replaceState(null, '', url);
 
@@ -36,5 +36,26 @@ describe('useImmersionQuery', () => {
     renderHook(() => useImmersionQuery({ immersion: false }, onArrive));
     expect(onArrive).toHaveBeenCalledWith({ immersion: true, lab: '2d' });
     expect(window.location.search).toBe('?immersion=vr&lab=2d');
+  });
+
+  it('the page left for another immersion keeps its hands off the URL (VS-T36 regression)', () => {
+    // Before: « Go to the simulation » ended the /village session, its hook wrote `/village`
+    // back with replaceState and Next.js dropped the pending push to /simulation.
+    go('/village?immersion=vr&lab=3d');
+    const village = renderHook(({ on }) => useImmersionQuery({ immersion: on, lab: '3d' }), {
+      initialProps: { on: true },
+    });
+    leaveImmersionFor('/simulation?immersion=vr');
+    village.rerender({ on: false });
+    expect(window.location.search).toBe('?immersion=vr&lab=3d');
+    village.unmount();
+    // The next page arrives: it owns the URL again.
+    go('/simulation?immersion=vr');
+    const sim = renderHook(({ on }) => useImmersionQuery({ immersion: on }), {
+      initialProps: { on: true },
+    });
+    expect(window.location.search).toBe('?immersion=vr');
+    sim.rerender({ on: false });
+    expect(window.location.search).toBe('');
   });
 });

@@ -5,7 +5,7 @@
 
 ## NEXT
 
-1. Headset: V463–V465 (VS-T36 follow dock), S146–S150 (VS-T35 tags, size, night), V450–V458 (desk turn comfort 1.1 s, menu « Close », miniature card), then V442, V444–V449, S133–S135.
+1. Headset: V463–V466 (VS-T36 follow dock, « Go to the simulation » fixed; `make vr-handoff-probe` not run yet), S146–S150 (VS-T35 tags, size, night), V450–V458 (desk turn comfort 1.1 s, menu « Close », miniature card), then V442, V444–V449, S133–S135.
    Check Quest Browser opens /simulation's VR session without a new gesture after « Go to the simulation ».
 2. Quest Browser voice = system keyboard dictation (no Web Speech API): the level meter needs the mic there too.
 3. PR #15 (`feat/pq-q4`, Q4 surfaces & light) stays open: main rewrote the perception pipeline, needs a port.
@@ -13,7 +13,8 @@
 ## Done this session
 
 - **VS-T36:** floating « Menu » and « Leave / Back to the studio » moved to a low follow dock
-  (`FOLLOW_DOCK_Y`/`_X` in `wrist-menu.ts`, ~34° down, ±0.48 m): no longer over the lab panels / table, no stolen clicks.
+  (`FOLLOW_DOCK_Y`/`_X` in `wrist-menu.ts`, ~34° down, ±0.48 m): no longer over the lab panels / table, no stolen clicks. « Go to the simulation » stayed on /village
+  (VS-T33 replaceState cancelled the push): `leaveImmersionFor` freezes the left page's URL.
 - **VS-T35:** inserted objects labelled like the village: on screen past 6 markers (`taggedMarkers`), badges at
   the buildings' size; in immersion a 3D tag each (`ImmersionTag`, same switch, shown at start). Lit like the
   village (dark at night only: `duskDarkness`, `placedDim`, `drawnTint`), sized from proportions (`sceneScale`,

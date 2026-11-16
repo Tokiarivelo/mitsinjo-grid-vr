@@ -384,6 +384,24 @@ try {
       !!(await village())?.inSimulation && !!(await panelAt('holo:village-simulation'))
     );
     await shot('3g3-village-added');
+    if (process.env.VR_PROBE_HANDOFF) {
+      // « Go to the simulation » (VS-T29, VS-T36 regression): /simulation opens its VR by itself.
+      await press('holo:village-simulation');
+      const onSim = await waitFor(async () => page.url().includes('/simulation'), 30000);
+      const inVr = await waitFor(
+        async () => !!(await rc('get_session_status').catch(() => null))?.sessionActive,
+        60000
+      );
+      await sleep(1500);
+      await shot('3g4-simulation-handoff');
+      check('« Go to the simulation » lands on /simulation', onSim);
+      check('…in its VR session, no click', inVr);
+      check('…with ?immersion=vr kept in the URL', page.url().includes('immersion=vr'));
+      console.log(`URL: ${page.url()}`);
+      if (errors.length) console.log(errors.slice(0, 10).join('\n'));
+      await browser.close();
+      process.exit(results.every((r) => r.ok) ? 0 : 1);
+    }
     const exitAt = await panelAt('holo:lab-exit');
     if (exitAt) await rc('look_at', { device: 'headset', target: exitAt });
     await sleep(600);

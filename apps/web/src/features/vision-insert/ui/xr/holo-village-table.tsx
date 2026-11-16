@@ -19,6 +19,7 @@ import {
 import { tapPoint } from '@/features/microgrid-3d/utils/tap-point';
 import { useXrHandoff } from '@/features/microgrid-3d/utils/xr-handoff';
 import { immersionHref } from '@/features/microgrid-3d/utils/immersion-query';
+import { leaveImmersionFor } from '@/features/microgrid-3d/hooks/use-immersion-query';
 import { useApplianceInsert } from '../../hooks/use-appliance-insert';
 import {
   pathSegmentsInRange,
@@ -202,12 +203,15 @@ export const HoloVillageTable = memo(function HoloVillageTable({
   const goSimulation = () => {
     // The simulation opens its own VR session next to the object (VS-T29).
     if (pos) requestXr([pos.x, pos.z]);
+    const href = immersionHref('/simulation');
+    // This page must not rewrite its URL while it leaves (it would cancel the push).
+    leaveImmersionFor(href);
     // Leave this immersive session first: one session at a time.
     void gl.xr
       .getSession()
       ?.end()
       .catch(() => {});
-    router.push(immersionHref('/simulation'));
+    router.push(href);
   };
 
   const summary = draft.summary;

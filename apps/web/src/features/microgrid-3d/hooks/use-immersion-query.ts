@@ -7,6 +7,24 @@ import {
   type ImmersionQuery,
 } from '../utils/immersion-query';
 
+/** Pathname another page's immersion is navigating to (« Go to the simulation », VS-T29). */
+let leavingTo: string | null = null;
+
+/**
+ * Call before `router.push(href)` out of an immersion: until the URL reaches `href`'s path, the
+ * page being left stops writing its own URL. Its session ends during the navigation and its
+ * `replaceState` back to it made Next.js drop the pending push (VS-T36 regression). A navigation
+ * that never lands gives the URL back after `LEAVE_TIMEOUT_MS`.
+ */
+export const LEAVE_TIMEOUT_MS = 10_000;
+export function leaveImmersionFor(href: string): void {
+  const to = href.split(/[?#]/)[0] || null;
+  leavingTo = to;
+  setTimeout(() => {
+    if (leavingTo === to) leavingTo = null;
+  }, LEAVE_TIMEOUT_MS);
+}
+
 /**
  * Keeps `?immersion=vr` (and `lab=`) in the URL in step with the page's immersion (VS-T33), with
  * `history.replaceState` (no navigation, no history entry; Next.js syncs `useSearchParams`).
@@ -27,6 +45,10 @@ export function useImmersionQuery(
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const { pathname, search, hash } = window.location;
+    if (leavingTo !== null) {
+      if (pathname !== leavingTo) return; // the page being left: never touch the URL
+      leavingTo = null; // arrived
+    }
     if (!arrived.current) {
       arrived.current = true;
       const from = readImmersionQuery(search);

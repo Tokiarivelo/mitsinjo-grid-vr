@@ -361,4 +361,5 @@ Style : hologramme futuriste (cyan / ambre, lignes de balayage, coins lumineux, 
 
 - [x] Le bouton flottant « Menu » (sans poignet gauche, émulateur) et « Quitter le studio / Revenir au studio » descendent dans un dock bas du cadre suiveur (`FOLLOW_DOCK_Y` −0.3 m, ~34° sous le regard, `FOLLOW_DOCK_X` ±0.48 m) : ils ne couvrent plus les panneaux du labo, la table du village ni le panneau de placement, et n'interceptent plus leurs clics.
 - [x] Hors du menu ouvert (carte de scan, guide, boutons) ; test `xr-layout.test.ts` « follow dock ».
-- [ ] **Done when :** vu au casque (V463–V465).
+- [x] Régression VS-T33 corrigée : « Aller à la simulation » restait sur /village (la fin de session réécrivait l'URL `/village` par `replaceState`, ce qui annulait le `router.push`). `leaveImmersionFor(href)` gèle l'URL de la page quittée jusqu'à l'arrivée (10 s max) ; test `use-immersion-query.test.tsx`, `make vr-handoff-probe`.
+- [ ] **Done when :** vu au casque (V463–V466).
