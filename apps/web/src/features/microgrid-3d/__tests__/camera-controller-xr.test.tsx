@@ -141,7 +141,7 @@ describe('CameraController XR (VR-T2)', () => {
     window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyW' }));
     window.dispatchEvent(new KeyboardEvent('keydown', { code: 'ArrowLeft' }));
     frameCallback?.({ invalidate: vi.fn(), gl: { xr: { getSession: () => null } } }, 0.1);
-    expect(rig.rotation.y).toBeGreaterThan(startYaw);
+    expect(rig.rotation.y).toBeLessThan(startYaw); // VS-T36: ← / → swapped
     expect(rig.position.z).toBeLessThan(startZ);
     window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyW' }));
     window.dispatchEvent(new KeyboardEvent('keyup', { code: 'ArrowLeft' }));

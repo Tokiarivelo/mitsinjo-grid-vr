@@ -192,6 +192,38 @@ function usableObjects(scene: THREE.Scene): THREE.Object3D[] {
   return out;
 }
 
+/**
+ * Hits of `caster` on the usable objects, nearest first, into `out`. Each object is tried alone:
+ * one that throws (a `Line2` cable, a sprite without camera…) is skipped instead of emptying the
+ * whole pick. Before, a click raycast the whole scene in one call and a throw anywhere on the ray
+ * made it hit nothing: « Close » or the left laser did nothing while the beam sat on a button.
+ */
+export function pickUsable(
+  caster: THREE.Raycaster,
+  objects: readonly THREE.Object3D[],
+  out: THREE.Intersection[]
+): THREE.Intersection[] {
+  out.length = 0;
+  for (const o of objects) {
+    try {
+      caster.intersectObject(o, true, out);
+    } catch {
+      // Not pickable from this ray: ignore it.
+    }
+  }
+  out.sort((a, b) => a.distance - b.distance);
+  // A usable object inside another usable one is hit twice: keep its nearest hit only.
+  let n = 0;
+  for (let i = 0; i < out.length; i++) {
+    const h = out[i]!;
+    let seen = false;
+    for (let j = 0; j < n && !seen; j++) seen = out[j]!.object === h.object;
+    if (!seen) out[n++] = h;
+  }
+  out.length = n;
+  return out;
+}
+
 /** Frames between two refreshes of the usable objects list (they rarely change). */
 const USABLE_REFRESH_FRAMES = 30;
 const _rayCaster = new THREE.Raycaster();
@@ -284,12 +316,7 @@ export function setupXRHandsAndControllers(
       _dragD.set(0, 0, -1).transformDirection(controllerRay.matrixWorld);
       _dragCaster.set(_dragO, _dragD);
       _dragCaster.camera = (gl.xr.isPresenting ? gl.xr.getCamera() : camera) ?? _dragCaster.camera;
-      let hits: THREE.Intersection[] = [];
-      try {
-        hits = _dragCaster.intersectObjects(scene.children, true);
-      } catch {
-        hits = [];
-      }
+      const hits = pickUsable(_dragCaster, usableObjects(scene), []);
       ray.drag = findDraggable(hits);
       if (ray.drag && dragPoint(ray.drag, _dragO, _dragD, _dragLocal)) {
         ray.drag.userData.onDrag?.(_dragLocal);
@@ -324,12 +351,7 @@ export function setupXRHandsAndControllers(
       direction.transformDirection(controllerRay.matrixWorld).normalize();
       raycaster.set(origin, direction);
 
-      let intersects: THREE.Intersection[] = [];
-      try {
-        intersects = raycaster.intersectObjects(scene.children, true);
-      } catch {
-        intersects = [];
-      }
+      const intersects = pickUsable(raycaster, usableObjects(scene), []);
       // Panels drawn on top of everything (`userData.xrUi`) win over what the ray crosses first
       // (a house wall between you and the panel when you stand against it).
       const ui = intersects.find((h) => h.object.userData?.xrUi && h.object.userData?.onSelect);
@@ -413,12 +435,7 @@ export function setupXRHandsAndControllers(
         r.drag.userData.onDrag?.(_dragLocal);
       _rayCaster.set(_rayO, _rayD);
       _rayCaster.camera = (gl.xr.isPresenting ? gl.xr.getCamera() : camera) ?? _rayCaster.camera;
-      _rayHits.length = 0;
-      try {
-        _rayCaster.intersectObjects(usable, true, _rayHits);
-      } catch {
-        _rayHits.length = 0;
-      }
+      pickUsable(_rayCaster, usable, _rayHits);
       const hit = _rayHits[0];
       // The visual lives in the controller's space: the hit is put back in it (the rig may be
       // scaled, VS-T33: world metres ÷ that scale).

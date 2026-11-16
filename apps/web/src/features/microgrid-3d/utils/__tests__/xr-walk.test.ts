@@ -28,12 +28,13 @@ describe('readXrKeys', () => {
     expect(keys('KeyA').moveX).toBe(-1);
     expect(keys('KeyQ').moveX).toBe(-1);
     expect(keys('KeyD').moveX).toBe(1);
-    expect(keys('ArrowLeft')).toMatchObject({ moveX: 0, turn: 1 });
-    expect(keys('ArrowRight')).toMatchObject({ moveX: 0, turn: -1 });
+    // VS-T36: the turn was felt inverted; ← and → swapped.
+    expect(keys('ArrowLeft')).toMatchObject({ moveX: 0, turn: -1 });
+    expect(keys('ArrowRight')).toMatchObject({ moveX: 0, turn: 1 });
   });
 
   it('turns while walking forward (regression: no head turn during a walk)', () => {
-    expect(keys('KeyW', 'ArrowLeft')).toEqual({ moveX: 0, moveZ: -1, turn: 1, run: false });
+    expect(keys('KeyW', 'ArrowLeft')).toEqual({ moveX: 0, moveZ: -1, turn: -1, run: false });
   });
 
   it('runs with Shift, nothing held = still', () => {

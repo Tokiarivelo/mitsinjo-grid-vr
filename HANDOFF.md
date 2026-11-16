@@ -5,7 +5,7 @@
 
 ## NEXT
 
-1. Headset: V463–V466 (VS-T36 follow dock, « Go to the simulation » fixed; `make vr-handoff-probe` not run yet), S146–S150 (VS-T35 tags, size, night), V450–V458 (desk turn comfort 1.1 s, menu « Close », miniature card), then V442, V444–V449, S133–S135.
+1. Headset: S151–S153 (close ✕, left laser, ← / → swapped), V463–V466 (VS-T36 follow dock, « Go to the simulation » fixed; `make vr-handoff-probe` not run yet), S146–S150 (VS-T35 tags, size, night), V450–V458 (desk turn comfort 1.1 s, menu « Close », miniature card), then V442, V444–V449, S133–S135.
    Check Quest Browser opens /simulation's VR session without a new gesture after « Go to the simulation ».
 2. Quest Browser voice = system keyboard dictation (no Web Speech API): the level meter needs the mic there too.
 3. PR #15 (`feat/pq-q4`, Q4 surfaces & light) stays open: main rewrote the perception pipeline, needs a port.

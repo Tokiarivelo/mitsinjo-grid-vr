@@ -262,7 +262,11 @@ try {
   await page.keyboard.up('KeyW');
   await frames(2);
   const k1 = await sim((s) => s.yaw());
-  check('keyboard ← turns the head while walking', wrap(k1 - k0) > 0.05, `${deg(wrap(k1 - k0))}°`);
+  check(
+    'keyboard ← turns the rig while walking (VS-T36 sign)',
+    wrap(k1 - k0) < -0.05,
+    `${deg(wrap(k1 - k0))}°`
+  );
   const labels0 = (await state()).labels;
   await tapButton('controller-right', 3);
   const labels1 = (await state()).labels;
