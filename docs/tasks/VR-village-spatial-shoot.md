@@ -395,3 +395,12 @@ Style : hologramme futuriste (cyan / ambre, lignes de balayage, coins lumineux, 
 - [x] Choix « Électrique · poteau et câble » / « Non électrique · sans poteau » (panneau d'insertion web et table du village du labo VR) ; décor = non électrique par défaut.
 - [x] Non électrique = ligne moteur à profil horaire nul (`NO_LOAD_DUTY`, 0 kWh calculé) ; aucun piquage, poteau ni câble (scène, carte de placement, table VR), pas de branche au schéma électrique, jamais relié au dispatcher.
 - [ ] **Done when :** vu à l'écran (V473–V476) et au casque (V477).
+
+### VS-T41 : Mock IA de la visite 360° : contours, 3D, vues 2D fidèles aux photos (mode mock)
+
+- [x] Contours tracés à la main des 46 objets de la visite (`tour-outlines.ts`, `make tour-trace` → `make tour-outlines`) ; la boîte de chaque objet en découle ; la détection attendue envoie le contour projeté dans la photo du scan.
+- [x] Modèle construit à la main par objet (`server/perception/tour-mock/specs-*.ts`, en mètres ; plantes via `reconstructTree` sur le contour), couleurs mesurées pièce par pièce sur la photo (occultants écartés), score IoU / bord / ΔE (`make tour-mock` → `tour-mock.json` + planches `test-results/tour-mock/`).
+- [x] Mode mock, objet de la visite : `/api/vision/shape` rend ce modèle (recette, masques de pièces, couverture, 6 angles), `/api/vision/views` ses angles, façade et faces = dessins du modèle sur papier blanc (voiture : profil d'abord).
+- [x] Libellé corrigé : `loft-hood` = « Hotte de cuisine » (pas une suspension).
+- [ ] Scores sous l'arrêt (IoU ≥ 0,85 et ΔE ≤ 8) : 1/46 ok, IoU moyen 0,77, 14 IoU ≥ 0,85, 22 ΔE ≤ 8 ; plafonniers vus de dessous plafonnés en ΔE (ombrage plat des faces basses), plantes en IoU (couronnes en sphères).
+- [ ] **Done when :** vu à l'écran (L-scénarios VS-T41) et au casque.

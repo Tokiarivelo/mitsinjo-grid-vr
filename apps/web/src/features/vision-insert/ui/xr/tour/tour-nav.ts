@@ -3,6 +3,7 @@ import {
   dirFromYawPitch,
   equirectYawPitch,
   projectPanoBox,
+  projectPanoRings,
   type CaptureView,
   type Vec3,
 } from './equirect';
@@ -218,6 +219,7 @@ export function tourExpectedDetections(
   for (const o of room.objects) {
     const box = projectPanoBox(o.box, uFront, view);
     if (!box) continue;
+    const outline = o.outline ? projectPanoRings(o.outline, uFront, view) : null;
     out.push({
       id: o.id,
       label: o.label,
@@ -226,6 +228,7 @@ export function tourExpectedDetections(
       ...(o.kind ? { kind: o.kind, scenery: o.scenery } : {}),
       confidence: 0.9,
       box,
+      ...(outline ? { outline } : {}),
     });
   }
   return out;

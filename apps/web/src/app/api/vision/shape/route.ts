@@ -6,6 +6,7 @@ import { ShapeTargetSchema } from '@/lib/object-shape';
 import { getShapeStepModels } from '@/server/db/neon';
 import { getPerceptionClient } from '@/server/perception';
 import { shapeWithCritic } from '@/server/perception/spark-critic';
+import { tourMockShape } from '@/server/perception/tour-mock';
 import {
   jsonField,
   jsonResponse,
@@ -22,6 +23,7 @@ import {
  * `shape_result { shape: ObjectShape }` (`recipe` or `silhouette` + reason), `done`.
  * 400 (JSON) missing / invalid target. The crop is sent inline: nothing is stored.
  * One Spark critic round when the match scores below 70 with time left (PR-0.6).
+ * Mock mode and a 360° tour object (VS-T41): its hand-built model (`tour-mock/`), no pipeline run.
  * Houses and objects: `shape_stage` events for the code rounds (PQ-T60); the 3D model is written
  * and refined as code only (no JSON-ops stage loop, no background job).
  */
@@ -39,6 +41,13 @@ export async function POST(req: NextRequest) {
   const size = await photoSize(photo.buffer);
   const fullUrl = `data:${photo.contentType};base64,${photo.buffer.toString('base64')}`;
   return sseResponse(async (send) => {
+    // Mock mode, 360° tour object (VS-T41): its hand-built model, as the real analysis returns it.
+    const tour = perception.callsMeta ? null : await tourMockShape(target, size);
+    if (tour) {
+      for (const step of ['crop', 'model', 'fit'] as const) send('shape_step', { step });
+      send('shape_result', { shape: tour });
+      return;
+    }
     const jobId = randomUUID();
     const shape = await shapeWithCritic(perception, size, fullUrl, target, {
       signal: req.signal,

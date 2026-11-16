@@ -1,5 +1,6 @@
 import type { ApplianceDetection } from '@/lib/vision';
-import type { PanoBox } from './equirect';
+import { panoRingsBounds, type PanoBox, type PanoRing } from './equirect';
+import { TOUR_OUTLINES } from './tour-outlines';
 
 /**
  * Walkable 360° test space of the /village VR immersion (emulator / desktop, not on a real
@@ -36,7 +37,10 @@ export interface TourObject extends Pick<
   'label' | 'labels' | 'category' | 'kind' | 'scenery'
 > {
   id: string;
+  /** The outline's bounds when it has one (VS-T41), else the hand-drawn box. */
   box: PanoBox;
+  /** Hand-traced outline (`tour-outlines.ts`), sent as the detection's SAM-like outline. */
+  outline?: ReadonlyArray<PanoRing>;
 }
 
 export interface TourRoom {
@@ -60,7 +64,11 @@ const obj = (
   v0: number,
   u1: number,
   v1: number
-): TourObject => ({ id, label, labels: { fr, mg }, category, box: { u0, v0, u1, v1 } });
+): TourObject => {
+  const outline = TOUR_OUTLINES[id];
+  const box = (outline && panoRingsBounds(outline)) ?? { u0, v0, u1, v1 };
+  return { id, label, labels: { fr, mg }, category, box, ...(outline ? { outline } : {}) };
+};
 
 /** Scenery (house, car, tree…): outlined and selectable, no load (`kind: 'scenery'`). */
 const scene = (
@@ -116,10 +124,10 @@ export const TOUR_ROOMS: Record<TourRoomId, TourRoom> = {
       ),
       obj(
         'loft-hood',
-        'Pendant lamp',
-        'Suspension',
-        'Jiro mihantona',
-        'lamp',
+        'Range hood',
+        'Hotte de cuisine',
+        'Fanalana setroka',
+        'other',
         0.919,
         0.44,
         0.938,

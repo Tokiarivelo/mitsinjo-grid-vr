@@ -199,6 +199,55 @@ export interface PanoBox {
   v1: number;
 }
 
+/** A closed outline on the panorama: (u, v) image fractions, like a SAM ring (VS-T41). */
+export type PanoRing = ReadonlyArray<readonly [number, number]>;
+
+/** `u` moved by whole turns to sit within half a turn of `ref` (outlines across the image seam). */
+const nearU = (u: number, ref: number) => u + Math.round(ref - u);
+
+/** Bounds of panorama rings as a box (`u1 < u0` when they cross the seam); null without points. */
+export function panoRingsBounds(rings: ReadonlyArray<PanoRing>): PanoBox | null {
+  const first = rings[0]?.[0];
+  if (!first) return null;
+  let [u0, u1, v0, v1] = [Infinity, -Infinity, Infinity, -Infinity];
+  for (const ring of rings)
+    for (const [u, v] of ring) {
+      const uu = nearU(u, first[0]);
+      u0 = Math.min(u0, uu);
+      u1 = Math.max(u1, uu);
+      v0 = Math.min(v0, v);
+      v1 = Math.max(v1, v);
+    }
+  const r = (n: number) => Number(n.toFixed(5));
+  return { u0: r(frac(u0)), v0: r(v0), u1: r(frac(u1)), v1: r(v1) };
+}
+
+/**
+ * Panorama rings drawn in the photo of `view` as an outline path (photo fractions, the SAM path
+ * format), or null when a point falls behind the camera. Points may fall outside [0, 1]: the
+ * outline is clipped by the photo like a real mask cut at the frame.
+ */
+export function projectPanoRings(
+  rings: ReadonlyArray<PanoRing>,
+  uFront: number,
+  view: CaptureView
+): string | null {
+  const b = viewBasis(view);
+  const r = (n: number) => Math.round(Math.min(1, Math.max(0, n)) * 10000) / 10000;
+  const parts: string[] = [];
+  for (const ring of rings) {
+    const pts: string[] = [];
+    for (const [u, v] of ring) {
+      const { yaw, pitch } = equirectYawPitch(u, v, uFront);
+      const p = projectInView(dirFromYawPitch(yaw, pitch), view, b);
+      if (!p) return null;
+      pts.push(`${r(p.u)} ${r(p.v)}`);
+    }
+    if (pts.length >= 3) parts.push(`M${pts.join('L')}Z`);
+  }
+  return parts.length ? parts.join('') : null;
+}
+
 const SAMPLES = 7;
 
 /**

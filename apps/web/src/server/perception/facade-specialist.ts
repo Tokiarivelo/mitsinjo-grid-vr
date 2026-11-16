@@ -2,12 +2,13 @@ import 'server-only';
 
 import sharp from 'sharp';
 import { archetypeOf, type KitArchetype } from '@/lib/object-kit';
-import type { ShapeTarget } from '@/lib/object-shape';
+import type { FaceName, ShapeTarget } from '@/lib/object-shape';
 import { env } from '@/lib/env';
 import { isR2Configured, uploadBufferToR2 } from '@/server/storage/r2';
 import { DEFAULT_META_BASE_URL } from '@/server/copilot/providers/meta';
 import type { PhotoForRegions } from './region';
 import { cropForShape } from './shape-crop';
+import { tourMockDrawing } from './tour-mock';
 import { inlineImageUrl } from './inline-image';
 import { imageCard } from './skills';
 import { buildCarProfilePrompt } from './car/car-views';
@@ -250,6 +251,22 @@ export interface FacadeResult {
 }
 
 /**
+ * The mock's drawing of one view: a 360° tour object's view drawn from its hand-built model
+ * (VS-T41), else the synthetic placeholder of its archetype. PNG.
+ */
+export async function mockFaceDrawing(
+  target: Pick<ShapeTarget, 'id' | 'label' | 'scenery'>,
+  archetype: KitArchetype,
+  face: FaceName | 'main'
+): Promise<Buffer> {
+  const tour = await tourMockDrawing(target, face);
+  if (tour) return tour;
+  return sharp(Buffer.from(createSyntheticFacadeSvg(archetype, target.label)))
+    .png()
+    .toBuffer();
+}
+
+/**
  * Generates an orthographic 2D facade image with Meta Muse Image (or mock),
  * uploads it to R2 (or server storage), and returns the consultable result.
  */
@@ -299,16 +316,14 @@ export async function generateFacadeImage(options: GenerateFacadeOptions): Promi
         `[facade-specialist] Muse Image call failed, falling back to mock elevation:`,
         err instanceof Error ? err.message : err
       );
-      const svg = createSyntheticFacadeSvg(archetype, target.label);
-      pngBuffer = await sharp(Buffer.from(svg)).png().toBuffer();
+      pngBuffer = await mockFaceDrawing(target, archetype, 'main');
       source = 'mock';
     }
   } else {
     console.info(
       `[facade-specialist] Mock mode: generating synthetic elevation for "${target.label}"`
     );
-    const svg = createSyntheticFacadeSvg(archetype, target.label);
-    pngBuffer = await sharp(Buffer.from(svg)).png().toBuffer();
+    pngBuffer = await mockFaceDrawing(target, archetype, 'main');
     source = 'mock';
   }
 

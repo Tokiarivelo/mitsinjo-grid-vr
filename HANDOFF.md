@@ -1,39 +1,28 @@
 # HANDOFF — read first, overwrite at end of session (≤40 lines)
 
-**Updated:** 2026-11-16 · **By:** Claude Code · **Branch:** `feat/vs-t39-village-map` (from `main`, VS-T39–T40). Tasks in `docs/tasks/VR-village-spatial-shoot.md`.
-`feat/vs-t31-desk-turn` ← `feat/vs-t29-chat-readable-voice-level` (PR #20, open). Tasks VS-T29–T38 in `docs/tasks/VR-village-spatial-shoot.md`.
+**Updated:** 2026-11-16 · **By:** Claude Code · **Branch:** `feat/vs-t41-tour-mock-3d` (from `main` d3485390, VS-T41). Tasks in `docs/tasks/VR-village-spatial-shoot.md`.
 
 ## NEXT
 
-0. Vercel services: root `vercel.json` (one public `web` service, `ignoreCommand` moved in) is **uncommitted**, waiting for the owner's OK; it needs Vercel → Root Directory = `.` and `apps/web/vercel.json` deleted. Screen V467–V476, headset V471–V472, V477.
-1. Headset: S158–S161 (VS-T38 map follows, roads, laser), S154–S157 (VS-T37 map), S151–S152 (close ✕, left laser; ← / → swap reverted), V463–V466 (VS-T36 follow dock, « Go to the simulation » fixed; `make vr-handoff-probe` not run yet), S146–S150 (VS-T35 tags, size, night), V450–V458 (desk turn comfort 1.1 s, menu « Close », miniature card), then V442, V444–V449, S133–S135.
-   Check Quest Browser opens /simulation's VR session without a new gesture after « Go to the simulation ».
-2. Quest Browser voice = system keyboard dictation (no Web Speech API): the level meter needs the mic there too.
-3. PR #15 (`feat/pq-q4`, Q4 surfaces & light) stays open: main rewrote the perception pipeline, needs a port.
+1. VS-T41 scores below the stop (IoU ≥ 0.85, ΔE ≤ 8): 1/46 ok, mean IoU 0.77, 14 IoU ≥ 0.85, 22 ΔE ≤ 8. Worst: plants (palm .56, pines .55–.58, forest-tree-1 .59), lounge-sconce-2 .58, softbox .64, chandelier .66 / ΔE 27, cars ΔE 20–22, ceiling lights ΔE 26–32.
+   Iterate specs in `server/perception/tour-mock/specs-*.ts`, `make tour-mock ONLY=<regex>`, look at `test-results/tour-mock/sheet-*.png`.
+2. Ceiling lights: `renderFlat` shades a face seen from below at ≈ 0.5, so a white disc can't reach the photo's white. Fix needs lit (`kind: 'light'`) parts unshaded in **both** `renderFlat` and the 3D viewer (`surface-look.ts`), or the score drifts from the viewer.
+3. Screen check V478–V483; headset later. Then previous NEXT: Vercel `vercel.json` (uncommitted on main side, owner's OK), headset S146–S161, V442–V477.
 
-## Done this session
+## Done this session (VS-T41)
 
-- **VS-T40:** non-electric objects: « Electric · pole and cable » / « Non-electric · no pole » (web insert panel, VR lab table); zero-duty line (`non-electric.ts`), no tap/pole/cable/diagram branch.
-- **VS-T39:** /village placement map like /simulation's: web `PlaceMinimap` (roads, water, paddy, names, N, zoom), VR lab table drawn with `drawVillageMap`.
-- **VS-T37:** /simulation VR map: GTA-like mini map low right (`sim-xr-minimap.tsx`), tap → big hologram map, a pin
-  opens the sector panel / mixing desk. `make vr-sim-map-probe` passes.
-- **VS-T36:** floating « Menu » and « Leave / Back to the studio » moved to a low follow dock
-  (`FOLLOW_DOCK_Y`/`_X` in `wrist-menu.ts`, ~34° down, ±0.48 m): no longer over the lab panels / table, no stolen clicks. « Go to the simulation » stayed on /village
-  (VS-T33 replaceState cancelled the push): `leaveImmersionFor` freezes the left page's URL.
-- **VS-T35:** inserted objects labelled like the village: on screen past 6 markers (`taggedMarkers`), badges at
-  the buildings' size; in immersion a 3D tag each (`ImmersionTag`, same switch, shown at start). Lit like the
-  village (dark at night only: `duskDarkness`, `placedDim`, `drawnTint`), sized from proportions (`sceneScale`,
-  `ARCHETYPE_HEIGHT_M`, stored scale dropped). Immersion tags all translated (`villageTags`). `make placed-shot`.
-
-- **VS-T29–T35:** see `docs/tasks/VR-village-spatial-shoot.md`.
+- 46 hand-traced outlines (`tour/tour-outlines.ts`; tools `apps/web/scripts/tour-mock/`, `make tour-trace` → edit `outlines-src.mjs` → `make tour-outlines`); boxes derived from them; scan detections carry the projected outline (`projectPanoRings`).
+- `server/perception/tour-mock/`: specs in metres (`spec.ts` helpers incl. `plate`/`rod`/`leaf`), `generate.ts` (pano rolled to the object, colours measured per part with occluder rejection, score), `render.ts`, `index.ts` (shape, part masks, coverage, face drawings), `tour-mock.json` (built by `make tour-mock`, ~4 min).
+- Wired in mock mode: `/api/vision/shape`, `/api/vision/views`, facade + faces (`mockFaceDrawing`).
+- `loft-hood` relabelled « Hotte de cuisine ».
 
 ## Decisions
 
-- Scale the viewer, not the village: the scene stays as is; speed, steps, laser, sector panel follow the rig scale.
-- Hand-off lives in memory (zustand): a reload drops it (the URL param now re-asks for VR, at the usual viewpoint). No Neon migration, no HF dataset change.
+- Mock never pastes the photo: colours measured only; plant models from `reconstructTree` on the outlined photo (as the real path).
+- Real Meta path untouched (`perception.callsMeta` → normal pipeline).
+- No Neon migration, no HF dataset change (mock answers, not bench).
 
 ## Open
 
-- `make vr-sim-probe` (software GL) is flaky: last run failed mixer / turn / Enter steps (frames too slow), passes vary run to run.
 - `make check`: `recon` / chart time-budget tests flake under full-suite load (pass alone).
 - Commits need the GPG key unlocked (signing on).
