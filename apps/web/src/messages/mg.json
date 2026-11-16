@@ -1589,7 +1589,10 @@
       "vrStudio": {
         "viewsTitle": "Manao ny sary 2D an’i « {name} »",
         "buildSub": "Misokatra ho azy ny labo 3D raha vao vonona ny modely"
-      }
+      },
+      "cancelAnalysis": "Ajanony ny famakafakana",
+      "analysisCancelled": "Najanona ny famakafakana.",
+      "retryAnalysis": "Avereno ny famakafakana"
     },
     "dispatch": {
       "modeLabel": "Fomba fandefasana",

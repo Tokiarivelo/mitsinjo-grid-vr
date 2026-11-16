@@ -11,8 +11,28 @@ import { prepareVisionImage } from '../utils/prepare-image';
 import { expectedDetectionsFor } from '../utils/expected-detections';
 import { useKeptRef, useKeptState } from './use-kept-state';
 
-/** `loading` = waiting for boxes · `refining` = boxes shown, SAM outlines coming · `ready` · `error`. */
-export type VisionStatus = 'idle' | 'loading' | 'refining' | 'ready' | 'error';
+/**
+ * `loading` = waiting for boxes · `refining` = boxes shown, SAM outlines coming · `ready` · `error` ·
+ * `cancelled` = stopped by the operator before any box (VS-T26: « Retry » asks again).
+ */
+export type VisionStatus = 'idle' | 'loading' | 'refining' | 'ready' | 'error' | 'cancelled';
+
+/** The analysis is running (it can be cancelled). */
+export const isAnalysing = (status: VisionStatus) => status === 'loading' || status === 'refining';
+/** The analysis stopped without boxes (it can be retried). */
+export const analysisStopped = (status: VisionStatus) =>
+  status === 'error' || status === 'cancelled';
+
+/**
+ * State after the operator cancels: boxes already there are kept (their outlines stay boxes),
+ * otherwise the analysis shows as cancelled. Pure.
+ */
+export function cancelledState(prev: VisionState): VisionState {
+  if (!isAnalysing(prev.status)) return prev;
+  return prev.detections.length > 0
+    ? { ...prev, status: 'ready' }
+    : { status: 'cancelled', detections: [] };
+}
 
 export interface VisionState {
   status: VisionStatus;
@@ -92,11 +112,18 @@ export function useVisionDetection(scope?: string) {
     [abortRef, setDetectedFor, setState]
   );
 
+  /** Stops the running analysis (VS-T26). */
+  const cancel = useCallback(() => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setState(cancelledState);
+  }, [abortRef, setState]);
+
   const reset = useCallback(() => {
     abortRef.current?.abort();
     setDetectedFor(null);
     setState(IDLE);
   }, [abortRef, setDetectedFor, setState]);
 
-  return { ...state, detectedFor, detect, reset };
+  return { ...state, detectedFor, detect, cancel, reset };
 }

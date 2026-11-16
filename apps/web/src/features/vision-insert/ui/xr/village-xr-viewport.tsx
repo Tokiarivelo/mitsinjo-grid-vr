@@ -25,6 +25,12 @@ import type { XrExtract } from '../../hooks/use-xr-extract';
 export interface VillageXRViewportProps {
   detections: ApplianceDetection[];
   isScanning: boolean;
+  /** The last analysis stopped without objects (cancelled or failed): it can be retried. */
+  scanStopped?: boolean;
+  /** Stops the running analysis (VS-T26). */
+  onCancelScan?: () => void;
+  /** Asks again for the last analysed view. */
+  onRetryScan?: () => void;
   onTriggerScan: (capturedUrl?: string) => void;
   onSelectAppliance?: (id: string) => void;
   rendererRef: RefObject<WebGLRenderer | null>;
@@ -47,6 +53,9 @@ export interface VillageXRViewportProps {
 export const VillageXRViewport = memo(function VillageXRViewport({
   detections,
   isScanning,
+  scanStopped,
+  onCancelScan,
+  onRetryScan,
   onTriggerScan,
   onSelectAppliance,
   rendererRef,
@@ -256,6 +265,9 @@ export const VillageXRViewport = memo(function VillageXRViewport({
           <VillageXRStudio
             detections={detections}
             isScanning={isScanning}
+            {...(scanStopped ? { scanStopped } : {})}
+            {...(onCancelScan ? { onCancelScan } : {})}
+            {...(onRetryScan ? { onRetryScan } : {})}
             onTriggerScan={onTriggerScan}
             onSelectAppliance={onSelectAppliance}
             photoKey={photoKey}

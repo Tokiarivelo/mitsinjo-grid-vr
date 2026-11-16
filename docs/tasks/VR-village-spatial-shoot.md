@@ -280,3 +280,4 @@ Style : hologramme futuriste (cyan / ambre, lignes de balayage, coins lumineux, 
 - [x] Menu poignet cliquable (main, laser, souris) et qui ne tourne plus avec la souris : bouton flottant dans l'émulateur ou sans poignet gauche suivi, latéralité lue sur la session.
 - [x] Bouton « Quitter le studio » / « Revenir au studio » ; l'objet du labo est gardé tant qu'on n'en extrait pas un autre. (`away` dans `utils/xr-extract.ts`, `FollowGroup`).
 - [x] Calques dans le labo immersif, liste défilable verticalement (comme le carrousel) : axe `y` des panneaux (`holo-panel.ts`), `clampScroll` / `rowShown` (`utils/xr-lab.ts`).
+- [x] Annuler / réessayer l'analyse : web (`DetectionCanvas`, statut `cancelled`) et immersion (bouton flottant, B/Y) ; bouton Menu ouvert au regard + gâchette dans l'émulateur.

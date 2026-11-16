@@ -57,7 +57,7 @@ the engine catalog gives power (never the AI). Sidebar + MobileNav entry « Vill
   objects (« Added by you », « Identifying… »), then named and sorted by the vision model, outline refined by SAM. Removable.
 - Photo zoom (− / 100 % / +, pan by scrolling or the hand toggle while drawing) and « Adjust the box » on the selected object
   (AI box moved / resized, then saved) — `components.md` § DetectionCanvas.
-- States: loading / refining / ready / empty / error + retry (states-copy.md « vision »). Mobile: one column, `pb-20`.
+- States: loading / refining / ready / empty / error + retry / cancelled + retry (states-copy.md « vision »); « Cancel the analysis » while loading (over the photo) and refining (header, boxes kept). Mobile: one column, `pb-20`.
 - 3D Studio (PQ-T77, every model: house, car, drawn hull, parts recipe; built without mockup): « Full screen »
   (maximize icon, top right of the 3D viewer, ready model only) opens a full-viewport overlay (`fixed inset-0`, `bg-canvas`,
   browser full screen when allowed, Esc closes). Top toolbar (scrolls sideways on mobile, 44 px targets, icon + label ≥ md,

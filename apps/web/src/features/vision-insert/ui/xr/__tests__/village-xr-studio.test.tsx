@@ -108,9 +108,15 @@ const fridge: ApplianceDetection = {
 function setup(tourMode = false, extract?: XrExtract) {
   const onTriggerScan = vi.fn();
   const onSelectAppliance = vi.fn();
-  const view = (detections: ApplianceDetection[], isScanning: boolean, ex = extract) => (
+  const view = (
+    detections: ApplianceDetection[],
+    isScanning: boolean,
+    ex = extract,
+    more: Partial<React.ComponentProps<typeof VillageXRStudio>> = {}
+  ) => (
     <I18nProvider>
       <VillageXRStudio
+        {...more}
         detections={detections}
         isScanning={isScanning}
         onTriggerScan={onTriggerScan}
@@ -305,6 +311,22 @@ describe('VillageXRStudio — 3D extraction (VS-T18–T22)', () => {
     rerender(view([fridge], false, inLab));
     fireEvent.click(getByRole('button', { name: 'Leave the studio' }));
     expect(inLab.exitLab).toHaveBeenCalledOnce();
+  });
+
+  it('cancels a running analysis (button or B/Y), then offers a retry (VS-T26)', () => {
+    const onCancelScan = vi.fn();
+    const onRetryScan = vi.fn();
+    const { rerender, view, getByRole } = setup(false, extractAt('idle', null));
+    rerender(view([], true, extractAt('idle', null), { onCancelScan, onRetryScan }));
+    fireEvent.click(getByRole('button', { name: 'Cancel the analysis' }));
+    expect(onCancelScan).toHaveBeenCalledOnce();
+    act(() => controls.onAction!({ type: 'back' }));
+    expect(onCancelScan).toHaveBeenCalledTimes(2);
+    rerender(
+      view([], false, extractAt('idle', null), { onCancelScan, onRetryScan, scanStopped: true })
+    );
+    fireEvent.click(getByRole('button', { name: 'Retry the analysis' }));
+    expect(onRetryScan).toHaveBeenCalledOnce();
   });
 
   it('« Back to the studio » shows in the 360° view once the studio was left', () => {

@@ -1589,7 +1589,10 @@
       "vrStudio": {
         "viewsTitle": "Drawing the 2D views of « {name} »",
         "buildSub": "The 3D lab opens by itself as soon as the model is ready"
-      }
+      },
+      "cancelAnalysis": "Cancel the analysis",
+      "analysisCancelled": "Analysis cancelled.",
+      "retryAnalysis": "Retry the analysis"
     },
     "dispatch": {
       "modeLabel": "Dispatch mode",

@@ -16,6 +16,7 @@ import {
 } from './holo-extract-panels';
 import { HoloBuildStage, HoloGenerationColumn, StudioRoom } from './xr-extract-studio';
 import { HoloButton } from './holo-ui';
+import { HOLO } from './holo-style';
 import { HoloViewsCarousel } from './holo-views-carousel';
 import { XrObjectLab } from './xr-object-lab';
 import { defaultArchetype, kitToRecipe, type ObjectKit } from '@/lib/object-kit';
@@ -50,6 +51,7 @@ import {
   MENU_HELP_OFFSET,
   MENU_SCAN_OFFSET,
   miniatureSlot,
+  SCAN_CONTROL_OFFSET,
   STUDIO_DOOR_OFFSET,
 } from './xr-layout';
 import { createWristMenu, WRIST_BUTTON_ID } from './wrist-menu';
@@ -65,6 +67,12 @@ import { FollowGroup, WristMenuButton, WristMenuPanel } from './xr-wrist-menu';
 export interface VillageXRStudioProps {
   detections: ApplianceDetection[];
   isScanning: boolean;
+  /** The last analysis stopped without objects (cancelled or failed): it can be retried. */
+  scanStopped?: boolean;
+  /** Stops the running analysis (VS-T26). */
+  onCancelScan?: () => void;
+  /** Asks again for the last analysed view. */
+  onRetryScan?: () => void;
   onTriggerScan: (capturedUrl?: string) => void;
   onSelectAppliance?: (id: string) => void;
   photoKey?: string;
@@ -102,10 +110,15 @@ const HELP_ON_ENTRY_MS = 12000;
 export const MENU_HELP_ID = 'holo:menu-help';
 /** « Leave the studio » / « Back to the studio » (VS-T26). */
 export const STUDIO_DOOR_ID = 'holo:studio-door';
+/** « Cancel the analysis » / « Retry the analysis » (VS-T26). */
+export const SCAN_CONTROL_ID = 'holo:scan-control';
 
 export const VillageXRStudio = memo(function VillageXRStudio({
   detections,
   isScanning,
+  scanStopped = false,
+  onCancelScan,
+  onRetryScan,
   onTriggerScan,
   onSelectAppliance,
   photoKey,
@@ -469,6 +482,7 @@ export const VillageXRStudio = memo(function VillageXRStudio({
           // Back closes what is open, innermost first; with nothing open it toggles the menu.
           if (stage === 'lab') leaveLab();
           else if (modal) extract?.cancel();
+          else if (isScanning && onCancelScan) onCancelScan();
           else menu.toggle();
           return;
         case 'help':
@@ -485,6 +499,7 @@ export const VillageXRStudio = memo(function VillageXRStudio({
       tour.ground,
       modal,
       isScanning,
+      onCancelScan,
       handleTriggerScan,
       stage,
       leaveLab,
@@ -695,6 +710,23 @@ export const VillageXRStudio = memo(function VillageXRStudio({
             on={door === 'back'}
             hovered={hoveredTargetId === STUDIO_DOOR_ID}
             onSelect={door === 'leave' ? leaveStudio : extract.back}
+          />
+        </FollowGroup>
+      )}
+
+      {/* 5b. Analysis control (VS-T26): cancel it while it runs, retry it once stopped */}
+      {!studio && !modal && ((isScanning && onCancelScan) || (scanStopped && onRetryScan)) && (
+        <FollowGroup offset={SCAN_CONTROL_OFFSET} name="xr-scan-control">
+          <HoloButton
+            registry={panels}
+            id={SCAN_CONTROL_ID}
+            label={isScanning ? t('cancelAnalysis') : t('retryAnalysis')}
+            width={0.34}
+            height={0.08}
+            position={[0, 0, 0]}
+            color={isScanning ? HOLO.amber : HOLO.cyan}
+            hovered={hoveredTargetId === SCAN_CONTROL_ID}
+            onSelect={() => (isScanning ? onCancelScan?.() : onRetryScan?.())}
           />
         </FollowGroup>
       )}

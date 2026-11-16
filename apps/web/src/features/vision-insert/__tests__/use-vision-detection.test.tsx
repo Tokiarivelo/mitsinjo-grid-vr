@@ -8,6 +8,7 @@ vi.mock('../utils/prepare-image', () => ({
 }));
 
 import { useVisionDetection, VisionDialog } from '../index';
+import { analysisStopped, cancelledState, isAnalysing } from '../hooks/use-vision-detection';
 
 const fridge: ApplianceDetection = {
   id: 'det-1',
@@ -96,6 +97,44 @@ describe('useVisionDetection (PV-T7)', () => {
     await act(() => result.current.detect('data:x'));
     expect(result.current.detections).toEqual([]);
     expect(result.current.status).toBe('ready');
+  });
+});
+
+describe('cancel (VS-T26)', () => {
+  it('stops a running analysis: cancelled without boxes, then a retry asks again', async () => {
+    // A call that never answers until aborted.
+    fetchMock.mockImplementation(
+      (_url: string, init: RequestInit) =>
+        new Promise((_, reject) =>
+          init.signal?.addEventListener('abort', () => reject(new Error('aborted')))
+        )
+    );
+    const { result } = renderHook(() => useVisionDetection());
+    let running!: Promise<void>;
+    act(() => {
+      running = result.current.detect('data:image/png;base64,AA');
+    });
+    await waitFor(() => expect(result.current.status).toBe('loading'));
+    act(() => result.current.cancel());
+    await act(() => running);
+    expect(result.current.status).toBe('cancelled');
+    const signal = (fetchMock.mock.calls[0]![1] as RequestInit).signal!;
+    expect(signal.aborted).toBe(true);
+
+    fetchMock.mockResolvedValue(sse(['vision_detections', boxes('mock')], ['done', {}]));
+    await act(() => result.current.detect('data:image/png;base64,AA'));
+    expect(result.current.status).toBe('ready');
+  });
+
+  it('keeps the boxes already shown when cancelled while refining', () => {
+    expect(cancelledState({ status: 'refining', detections: [fridge] })).toEqual({
+      status: 'ready',
+      detections: [fridge],
+    });
+    const ready = { status: 'ready' as const, detections: [fridge] };
+    expect(cancelledState(ready)).toBe(ready);
+    expect(analysisStopped('cancelled')).toBe(true);
+    expect(isAnalysing('refining')).toBe(true);
   });
 });
 

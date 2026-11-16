@@ -251,6 +251,8 @@ Pilotage scripté (MCP IWER ou `remote.dispatch`) : voir [`vr-iwer-tools.md`](vr
 
 1. **Analyser** (bouton en l'air, A/X ou tap du pouce) : barre de progression, puis contour complet + description
    au-dessus de chaque objet de la partie visible (bande de 180° × 112°).
+   Pendant l'analyse, un bouton « Annuler l'analyse » flotte sous la vue (B/Y aussi) ; une analyse annulée ou en
+   échec propose « Réessayer l'analyse » (même vue). Les contours déjà reçus restent.
 2. Marcher : les contours restent **collés aux objets** (ils sont posés sur la photo, pas devant les yeux).
 3. **Viser un objet et valider** → « Extraire en 3D ? » → _Extraire_ / _Annuler_ (ou B/Y pour annuler).
 4. **Studio 3D** (VS-T24) : dès « Extraire en 3D », la vue 360° laisse place au studio (dôme, grille, socle).

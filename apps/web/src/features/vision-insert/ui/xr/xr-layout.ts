@@ -19,6 +19,8 @@ export const MENU_HUD_OFFSET: Vec3 = [-0.66, 0.06, 0.22];
  * the scan panel, mirroring the floating « Menu » button on the left; lazy-follows the viewer.
  */
 export const STUDIO_DOOR_OFFSET: Vec3 = [0.54, 0.06, 0];
+/** « Cancel / Retry the analysis » (VS-T26): centred under the view, where the menu opens. */
+export const SCAN_CONTROL_OFFSET: Vec3 = [0, 0.02, 0];
 export const MENU_HUD_ROTATION: Vec3 = [-0.1, 0.55, 0];
 /** Ray-pick radius around the scan button (its panel is 0.62 × 0.38 m). */
 export const AIR_BUTTON_RADIUS = 0.32;
