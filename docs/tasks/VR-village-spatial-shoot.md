@@ -356,3 +356,9 @@ Style : hologramme futuriste (cyan / ambre, lignes de balayage, coins lumineux, 
 - [x] Taille selon les proportions (`sceneScale`) : hauteur type de son genre (`ARCHETYPE_HEIGHT_M`, village au ½ : `VILLAGE_UNITS_PER_M` 0.5) gardée dans sa plage réelle de largeur ; l'ancienne échelle stockée est ignorée au chargement.
 - [x] `make placed-shot` : réfrigérateur, TV, ventilateur et pompe réels posés dans /simulation, captures écran et immersion.
 - [ ] **Done when :** vu au casque (étiquettes, taille, nuit).
+
+### VS-T36 : Boutons suiveurs dans un dock bas (studio /village)
+
+- [x] Le bouton flottant « Menu » (sans poignet gauche, émulateur) et « Quitter le studio / Revenir au studio » descendent dans un dock bas du cadre suiveur (`FOLLOW_DOCK_Y` −0.3 m, ~34° sous le regard, `FOLLOW_DOCK_X` ±0.48 m) : ils ne couvrent plus les panneaux du labo, la table du village ni le panneau de placement, et n'interceptent plus leurs clics.
+- [x] Hors du menu ouvert (carte de scan, guide, boutons) ; test `xr-layout.test.ts` « follow dock ».
+- [ ] **Done when :** vu au casque (V463–V465).

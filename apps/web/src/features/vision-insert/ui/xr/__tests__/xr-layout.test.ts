@@ -18,7 +18,12 @@ import {
   LAB_TO_VIEWS,
   EXTRACT_DROP,
   slidePose,
+  MENU_INPUTS_OFFSET,
+  STUDIO_DOOR_OFFSET,
+  STUDIO_DOOR_SIZE,
+  VILLAGE_TABLE,
 } from '../xr-layout';
+import { MENU_DISTANCE, MENU_DROP, WRIST_OFFSET_FLOAT } from '../wrist-menu';
 
 describe('anchorAhead (VS-T19)', () => {
   it('sits ahead along the horizontal heading, below the eyes, level', () => {
@@ -114,5 +119,28 @@ describe('faceOrigin (VS-T32)', () => {
       expect(Math.sin(yaw)).toBeCloseTo(-slot[0] / len, 2);
       expect(Math.cos(yaw)).toBeCloseTo(-slot[2] / len, 2);
     }
+  });
+});
+
+describe('follow dock (VS-T36)', () => {
+  // Angle under the horizon (rad) of a point `drop` m under the eyes, `ahead` m away.
+  const down = (drop: number, ahead: number) => Math.atan2(drop, ahead);
+
+  it('« Menu » and « Leave the studio » sit under the studio panels and table (regression)', () => {
+    // Before: 0.06 m above the follow centre, over the lab tools and the village table.
+    const dock = down(MENU_DROP - STUDIO_DOOR_OFFSET[1], MENU_DISTANCE);
+    const labBottom = down(EXTRACT_DROP + 0.29, EXTRACT_DISTANCE);
+    const tableBottom = down(EXTRACT_DROP - VILLAGE_TABLE.position[1] + VILLAGE_TABLE.radius, 1.3);
+    expect(dock).toBeGreaterThan(labBottom + 0.1);
+    expect(dock).toBeGreaterThan(tableBottom + 0.1);
+    expect(dock).toBeLessThan(0.7); // ≤ 40° down: a glance, not a neck bend
+    expect(WRIST_OFFSET_FLOAT[1]).toBe(STUDIO_DOOR_OFFSET[1]);
+  });
+
+  it('stays wide of the opened menu (scan card, guide, buttons)', () => {
+    const menuHalf = Math.max(AIR_CARD.width, 0.56, 0.36) / 2;
+    expect(STUDIO_DOOR_OFFSET[0] - STUDIO_DOOR_SIZE.width / 2).toBeGreaterThan(menuHalf);
+    expect(-WRIST_OFFSET_FLOAT[0]).toBeGreaterThan(menuHalf);
+    expect(MENU_INPUTS_OFFSET[0]).toBe(0);
   });
 });

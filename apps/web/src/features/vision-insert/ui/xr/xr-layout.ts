@@ -3,6 +3,8 @@
  * Panels sit about 1 m away, below eye level, so the centre of the webcam video stays clear
  * (Meta comfort guidance: ~1 m, slightly below the line of sight, ~70 cm reach for hands).
  */
+import { FOLLOW_DOCK_X, FOLLOW_DOCK_Y } from './wrist-menu';
+
 export type Vec3 = [number, number, number];
 
 /**
@@ -16,10 +18,11 @@ export const MENU_HELP_OFFSET: Vec3 = [0, -0.37, 0];
 /** « Hide the hands & controllers » button, under the help one (VS-T30). */
 export const MENU_INPUTS_OFFSET: Vec3 = [0, -0.47, 0];
 /**
- * « Leave the studio » / « Back to the studio » (VS-T26): right of where the menu opens, clear of
- * the scan panel, mirroring the floating « Menu » button on the left; lazy-follows the viewer.
+ * « Leave the studio » / « Back to the studio » (VS-T26): right of the follow dock (VS-T36), under
+ * the studio panels and wide of the opened menu, mirroring the floating « Menu » button on the left.
  */
-export const STUDIO_DOOR_OFFSET: Vec3 = [0.54, 0.06, 0];
+export const STUDIO_DOOR_OFFSET: Vec3 = [FOLLOW_DOCK_X, FOLLOW_DOCK_Y, 0];
+export const STUDIO_DOOR_SIZE = { width: 0.3, height: 0.08 } as const;
 /** « Cancel / Retry the analysis » (VS-T26): centred under the view, where the menu opens. */
 export const SCAN_CONTROL_OFFSET: Vec3 = [0, 0.02, 0];
 /** Scan card size (m), centred on `MENU_SCAN_OFFSET`. */

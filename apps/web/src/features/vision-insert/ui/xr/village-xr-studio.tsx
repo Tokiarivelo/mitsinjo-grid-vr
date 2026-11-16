@@ -59,6 +59,7 @@ import {
   miniatureSlot,
   SCAN_CONTROL_OFFSET,
   STUDIO_DOOR_OFFSET,
+  STUDIO_DOOR_SIZE,
 } from './xr-layout';
 import { createWristMenu, WRIST_BUTTON_ID } from './wrist-menu';
 import { createAimReadout } from './xr-blaster-controller';
@@ -767,8 +768,8 @@ export const VillageXRStudio = memo(function VillageXRStudio({
                 ? t('vrExtract.leaveStudio')
                 : t('vrExtract.backToStudio', { name: awayName })
             }
-            width={0.34}
-            height={0.08}
+            width={STUDIO_DOOR_SIZE.width}
+            height={STUDIO_DOOR_SIZE.height}
             position={[0, 0, 0]}
             on={door === 'back'}
             hovered={hoveredTargetId === STUDIO_DOOR_ID}

@@ -43,11 +43,19 @@ export const WRIST_OFFSET_GRIP: [number, number, number] = [0, 0.035, 0.11];
 /** Fallback when not presenting (desktop, mouse): camera space, bottom-left. */
 export const WRIST_OFFSET_CAMERA: [number, number, number] = [-0.24, -0.16, -0.6];
 /**
- * In the headset with no left wrist to wear it (no left input, or the emulator, whose hands and
- * controllers turn with the head and can't touch each other): the button floats in the world, left of where the menu opens, and
- * lazy-follows like the menu (VS-T26). Head-locked, it turned with the mouse and no ray could reach it.
+ * Dock of the controls that lazy-follow the viewer (floating « Menu », « Leave the studio »):
+ * low in the follow frame (≈ 0.6 m under the eyes at 0.9 m, ~34° down), under every studio panel,
+ * table and miniature, and wide of the opened menu, so they never cover one nor catch its clicks.
  */
-export const WRIST_OFFSET_FLOAT: [number, number, number] = [-0.42, 0.06, 0];
+export const FOLLOW_DOCK_Y = -0.3;
+export const FOLLOW_DOCK_X = 0.48;
+/**
+ * In the headset with no left wrist to wear it (no left input, or the emulator, whose hands and
+ * controllers turn with the head and can't touch each other): the button floats in the world, at
+ * the left of the follow dock, and lazy-follows like the menu (VS-T26, VS-T36). Head-locked, it
+ * turned with the mouse and no ray could reach it.
+ */
+export const WRIST_OFFSET_FLOAT: [number, number, number] = [-FOLLOW_DOCK_X, FOLLOW_DOCK_Y, 0];
 
 /** Menu distance in front of the viewer (Meta ray range 0.8–3 m) and drop below the eyes. */
 export const MENU_DISTANCE = 0.9;
