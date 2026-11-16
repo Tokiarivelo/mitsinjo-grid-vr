@@ -6,23 +6,21 @@ on `fix/vs-t25-studio-text-pot-highlights`, which has no PR yet). Tasks VS-T27, 
 
 ## NEXT
 
-1. Run `make vr-probe` with `make dev-mock` (the dev server ran `LLM_PROVIDER=meta`: the real 3D build missed
-   the probe's 240 s wait, so the lab and village-table steps didn't run in the emulator yet).
-2. Open the PRs: VS-T25/T26 branch first, then this one (after `make rebase-main`); play V434–V442 by hand.
-3. Headset: Quest Browser voice = system keyboard dictation (no Web Speech API there): check it.
+1. Open the PRs: VS-T25/T26 branch first, then this one (after `make rebase-main`); play V434–V443 by hand.
+2. Headset: Quest Browser voice = system keyboard dictation (no Web Speech API there): check it.
 
 ## Done this session
 
-- **VS-T27:** AI chat left of the 2D views carousel (`holo-face-chat.tsx`): history per view (`utils/face-chat.ts`,
-  bot line settles only after the view was seen drawing), holo keyboard (`utils/xr-keyboard.ts`, UV keys),
-  voice (`use-voice-input.ts`, fallback `use-system-keyboard.ts`), « Send » = redraw with details. Robot
-  ring-tailed lemur head (`lemur-bot.tsx`, gaze/blink in `utils/lemur-bot.ts`): original design, not a film
-  character. Probe: chat keys → send → bot « done » PASS.
-- **VS-T28:** village hologram table in the lab (`holo-village-table.tsx`, `utils/village-holo.ts`): place by
-  UV, page placement rules, feeder cable, insert via the new shared `hooks/use-appliance-insert.ts` (web
-  `ApplianceInsert` uses it too), « Go to the simulation » ends the XR session then pushes `/simulation`.
-- **Fix:** a shot that starts the analysis no longer opens « Extract to 3D? » by itself (studio mode);
-  regression test in `village-xr-studio.test.tsx`, probe check « the analysis alone asks nothing » PASS.
+- **VS-T27 / VS-T28** (earlier commit): views AI chat + maki bot, village hologram table in the lab.
+- **`make dev-mock` was never offline:** turbo 2 strict env dropped `LLM_PROVIDER` from the `dev` task, so
+  `port.mjs` read `meta` from `.env`. Fix: `LLM_PROVIDER` in `turbo.json` `dev.passThroughEnv`.
+- **Floating Menu button over a panel:** in the emulator the Menu button floats (lazy follow) and could sit on
+  « Cancel »; `aimAt` tested it first, so Cancel was unreachable and the question stayed open (it then broke
+  the probe's walk steps). Now a panel wins over the _floating_ button; a worn wrist button keeps priority.
+  Test `ui/xr/__tests__/aim-at.test.ts`.
+- **Probe:** « wrist menu closed on entry » expected a worn button; in the emulator it floats by design
+  (`eefd12e`). Check now asserts closed + floating.
+- `make vr-probe` with `make dev-mock`: 37/37 PASS (lab, village table, Cancel, walks included).
 
 ## Decisions
 
@@ -32,5 +30,4 @@ on `fix/vs-t25-studio-text-pot-highlights`, which has no PR yet). Tasks VS-T27, 
 ## Open
 
 - `make check`: green except the `recon` time-budget test under full-suite load (passes alone).
-- Probe: « wrist menu closed on entry » failed in the last 3 runs; not investigated (no change here touches the wrist menu).
 - Uncommitted, not mine: `scripts/iwer-bridge-stop.sh` (orphaned bridges), left as is.

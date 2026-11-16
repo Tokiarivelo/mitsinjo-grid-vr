@@ -316,11 +316,13 @@ const _vPhotoO = new THREE.Vector3();
 const _vPhotoD = new THREE.Vector3();
 
 /**
- * What a ray points at, nearest first: the wrist button, a miniature, the scan button (menu
- * open), a tour floor arrow, then the scanned image (resolved to the detection whose box holds
- * that image point). Writes the beam end to `end`.
+ * What a ray points at, nearest first: the wrist button, a panel, a miniature, the scan button
+ * (menu open), a tour floor arrow, then the scanned image (resolved to the detection whose box
+ * holds that image point). The floating Menu button (no wrist wears it) lags behind the head
+ * and can drift over a panel: there the panel wins, else « Cancel » under it could never be hit.
+ * Writes the beam end to `end`.
  */
-function aimAt(
+export function aimAt(
   origin: THREE.Vector3,
   direction: THREE.Vector3,
   end: THREE.Vector3,
@@ -329,7 +331,8 @@ function aimAt(
   _raycaster.ray.origin.copy(origin);
   _raycaster.ray.direction.copy(direction);
 
-  if (menu.buttonVisible && rayNear(origin, direction, menu.button, WRIST_RAY_RADIUS)) {
+  const onWrist = menu.buttonVisible && rayNear(origin, direction, menu.button, WRIST_RAY_RADIUS);
+  if (onWrist && menu.wearer !== null) {
     end.copy(menu.button);
     return { kind: 'wrist', id: WRIST_BUTTON_ID, u: 0, v: 0 };
   }
@@ -338,6 +341,11 @@ function aimAt(
   if (onPanel) {
     end.copy(onPanel.hit.point);
     return { kind: 'panel', id: onPanel.panel.id, u: 0, v: 0, ...onPanel };
+  }
+
+  if (onWrist) {
+    end.copy(menu.button);
+    return { kind: 'wrist', id: WRIST_BUTTON_ID, u: 0, v: 0 };
   }
 
   const mini = miniatureOnRay(origin, direction, miniatures);

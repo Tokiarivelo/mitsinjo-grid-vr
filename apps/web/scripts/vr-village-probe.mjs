@@ -120,7 +120,8 @@ try {
   await sleep(2000);
   await shot('1-entered');
 
-  // Wrist menu: hidden on entry, opened by aiming at the button on the left wrist.
+  // Menu: hidden on entry. In the emulator the button floats in front (controllers turn with the head
+  // there, a worn button could never be aimed at): wearer stays null by design (eefd12e).
   await rc('set_input_mode', { mode: 'controller' });
   await rc('set_transform', { device: 'controller-left', position: { x: -0.2, y: 1.1, z: -0.35 } });
   await sleep(800);
@@ -131,14 +132,15 @@ try {
         m && {
           open: m.open,
           wearer: m.wearer,
+          visible: m.buttonVisible,
           button: { x: m.button.x, y: m.button.y, z: m.button.z },
         }
       );
     });
   const m0 = await menu();
   check(
-    'wrist menu closed on entry, button worn on the left controller',
-    !!m0 && !m0.open && m0.wearer !== null
+    'menu closed on entry, Menu button floating in view (emulator)',
+    !!m0 && !m0.open && m0.visible && m0.wearer === null
   );
   await shot('0-menu-closed');
   if (m0) await fire('controller-right', m0.button, { x: 0.2, y: 1.3, z: -0.1 });
