@@ -11,6 +11,7 @@ export { useReducedMotion } from './hooks/use-reduced-motion';
 export { useFullscreen } from './hooks/use-fullscreen';
 export { useSceneQuality, type SceneQuality } from './hooks/use-scene-quality';
 export { useWebXR, type WebXRStatus } from './hooks/use-webxr';
+export { useXrHandoff, standNear, type XrHandoff } from './utils/xr-handoff';
 export { useContextLoss, type ContextLoss } from './hooks/use-context-loss';
 export { disableIWERFrameClear } from './utils/xr-session';
 export { isDevXREmulated } from './utils/dev-xr-emulator';

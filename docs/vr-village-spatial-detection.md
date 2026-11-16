@@ -267,7 +267,18 @@ l'émulateur : [`vr-iwer-tools.md`](vr-iwer-tools.md).
   (point lu sur l'UV du disque, puis le placement de la page : sur le terrain, hors bâtiments / chemins,
   départ le plus proche) avec son câble de dérivation (`tapPoint`) ; « Insérer dans la simulation » = le même
   appel que le panneau web (`hooks/use-appliance-insert.ts` : ligne + modèle 3D édité, moteur relancé) ;
-  « Aller à la simulation » termine la session XR puis ouvre `/simulation`.
+  « Aller à la simulation » demande l'entrée VR à `/simulation` (`microgrid-3d/utils/xr-handoff.ts`, en
+  mémoire), termine la session XR puis ouvre `/simulation` : la vue 3D ouvre sa session seule et place
+  l'utilisateur à 2,5 m de l'objet ajouté, côté centre du village, face à lui (`standNear`). Un casque qui
+  refuse une session sans nouveau geste garde la demande : « Voir en VR » arrive alors au même endroit.
+  Titre, état et boutons de la table sont debout au-dessus de son bord éloigné, à hauteur des yeux (VS-T29).
+- **Lisibilité des panneaux** (VS-T29) : tailles de texte en dmm (1 dmm = 1 mm vu à 1 m ; Meta : 14 px
+  minimum, 18 px confortable) converties en px de canevas pour la largeur du plan et la distance de lecture
+  (`holoTextPx`, `HOLO_TEXT_DMM` : titre 30, libellé 24, texte 20, légende 16). `HoloButton` : icône en
+  traits (`holo-icons.ts`, pas d'emoji) et, au survol, une bulle au-dessus qui répète le libellé en grand avec
+  ce que fait le bouton (`tip`). Chat : boutons « Clavier » · « Dicter » · « Envoyer » avec icônes ; pendant
+  la dictée, un graphe « Niveau de voix » dans le champ (`holo-voice-meter.tsx` : 28 barres d'un
+  `InstancedMesh` sur les bandes du spectre du copilote, `lib/voice-analyser.ts` partagé avec le copilote).
 
 ## 5. Architecture des fichiers & Modules
 

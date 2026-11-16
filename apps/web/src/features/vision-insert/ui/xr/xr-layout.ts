@@ -132,10 +132,13 @@ export const STUDIO_COLUMN_YAW = 1.1;
  * left neighbour, turned toward the viewer (~1.4 m away: ray range). Lifted 8 cm so its holo
  * keyboard, tilted up below it, stays above ~30° under the line of sight (Meta: no neck strain).
  */
-export const STUDIO_CHAT_POSITION: Vec3 = [-1.25, 0.08, 0.55];
+export const STUDIO_CHAT_POSITION: Vec3 = [-1.25, 0.12, 0.55];
 export const STUDIO_CHAT_YAW = 1.1;
-/** Chat panel width and history height (m); keys ≈ 6.8 cm wide (≥ 3° hit target at 1.4 m). */
-export const CHAT_PANEL = { width: 0.68, historyHeight: 0.4 } as const;
+/**
+ * Chat panel width and history height (m), and the distance it is read from (text sized in dmm
+ * for it, VS-T29); keys ≈ 6.8 cm wide (≥ 3° hit target at 1.4 m).
+ */
+export const CHAT_PANEL = { width: 0.68, historyHeight: 0.4, distance: 1.4 } as const;
 
 /**
  * Village hologram of the lab (VS-T28): a round table of the village core on the right, past the
@@ -147,4 +150,6 @@ export const VILLAGE_TABLE = {
   tilt: 0.6,
   /** Table radius (m): the 30-unit village core, a building ≈ 4 cm. */
   radius: 0.32,
+  /** Distance (m) its title, status and buttons (above the far edge) are read from. */
+  distance: 1.55,
 } as const;

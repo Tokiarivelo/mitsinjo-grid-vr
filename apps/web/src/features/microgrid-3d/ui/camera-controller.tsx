@@ -15,6 +15,7 @@ import { SECTOR_POSITIONS } from '../utils/to-scene-model';
 import { terrainHeight } from '../utils/landscape';
 import { setupXRHandsAndControllers, type XRHandsHandle } from '../utils/xr-hands';
 import { buildWalkGrid, resolveWalk, type WalkGrid } from '../utils/walk-grid';
+import { standNear, useXrHandoff } from '../utils/xr-handoff';
 import {
   clampToInterior,
   INTERIOR_ORIGIN,
@@ -279,12 +280,18 @@ export function CameraController({
     wasXrActive.current = true;
     if (xrRig.current) return; // StrictMode double-invoke / focus change mid-session.
     const rig = new THREE.Group();
-    rig.position.set(...XR_VIEWPOINT.position);
+    // Arriving from the /village lab (VS-T29): stand next to the object just added.
+    const handoff = useXrHandoff.getState();
+    const view = handoff.pending
+      ? standNear(handoff.pending.at[0], handoff.pending.at[1], EYE_HEIGHT)
+      : XR_VIEWPOINT;
+    if (handoff.pending) handoff.clear();
+    rig.position.set(...view.position);
     // Align rig yaw only with target on the horizontal plane (XZ).
     // NEVER pitch or roll the XR rig: tilting the rig's Y-axis causes
     // headset yaw to induce artificial visual roll, triggering severe motion sickness.
-    const dx = XR_VIEWPOINT.target[0] - XR_VIEWPOINT.position[0];
-    const dz = XR_VIEWPOINT.target[2] - XR_VIEWPOINT.position[2];
+    const dx = view.target[0] - view.position[0];
+    const dz = view.target[2] - view.position[2];
     const yaw = Math.atan2(-dx, -dz);
     rig.quaternion.setFromAxisAngle(UP, yaw);
     scene.add(rig);

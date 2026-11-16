@@ -20,11 +20,11 @@ export interface ChatBubble {
   height: number;
 }
 
+/** Default text size (px on the 1024-wide canvas); callers pass a dmm-based size. */
 const FONT_SIZE = 34;
-const ROW = FONT_SIZE * 1.25;
-const PAD = 18;
-const GAP = 16;
 const MAX_ROWS = 4;
+/** Row height, bubble padding and gap scale with the text size. */
+const metrics = (font: number) => ({ row: font * 1.25, pad: font * 0.53, gap: font * 0.47 });
 
 /**
  * Bubbles of the chat history on a `w`×`h` canvas, newest at the bottom: the operator's on the
@@ -35,8 +35,10 @@ export function layoutChat(
   measure: (s: string) => number,
   items: readonly ChatBubbleItem[],
   w: number,
-  h: number
+  h: number,
+  font = FONT_SIZE
 ): ChatBubble[] {
+  const { row: ROW, pad: PAD, gap: GAP } = metrics(font);
   const maxText = w * 0.72 - 2 * PAD;
   const out: ChatBubble[] = [];
   let bottom = h - GAP;
@@ -44,7 +46,7 @@ export function layoutChat(
     const item = items[i]!;
     const rows = wrapText(measure, item.text, maxText, MAX_ROWS);
     const width = Math.min(w * 0.72, Math.max(...rows.map(measure), 40) + 2 * PAD);
-    const height = rows.length * ROW + 2 * PAD - (ROW - FONT_SIZE);
+    const height = rows.length * ROW + 2 * PAD - (ROW - font);
     const y = bottom - height;
     if (y < GAP) break;
     out.unshift({ item, rows, x: item.role === 'user' ? w - GAP - width : GAP, y, width, height });
@@ -73,8 +75,10 @@ export function drawChatTexture(
   empty: string,
   w = 1024,
   h = 640,
-  reuse?: THREE.CanvasTexture
+  reuse?: THREE.CanvasTexture,
+  font = FONT_SIZE
 ): THREE.CanvasTexture {
+  const { row: ROW, pad: PAD } = metrics(font);
   const canvas =
     (reuse?.image as HTMLCanvasElement | undefined) ?? document.createElement('canvas');
   canvas.width = w;
@@ -82,7 +86,7 @@ export function drawChatTexture(
   const ctx = canvas.getContext('2d');
   if (ctx) {
     ctx.clearRect(0, 0, w, h);
-    ctx.font = holoFont(FONT_SIZE, 600);
+    ctx.font = holoFont(font, 600);
     ctx.textBaseline = 'top';
     if (!items.length) {
       ctx.fillStyle = HOLO.ink;
@@ -93,7 +97,7 @@ export function drawChatTexture(
       ctx.globalAlpha = 1;
     }
     ctx.textAlign = 'left';
-    for (const b of layoutChat((s) => ctx.measureText(s).width, items, w, h)) {
+    for (const b of layoutChat((s) => ctx.measureText(s).width, items, w, h, font)) {
       const bot = b.item.role === 'bot';
       const tint = b.item.error ? HOLO.red : bot ? HOLO.violet : HOLO.cyan;
       roundRect(ctx, b.x, b.y, b.width, b.height);

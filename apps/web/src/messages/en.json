@@ -1539,23 +1539,28 @@
       "vrChat": {
         "title": "AI chat · {view}",
         "aiLabel": "AI EDIT · redraws this view, check it before validating",
-        "empty": "Ask the AI to change the {view}: type with « Keys » or speak with « Voice », then « Send ».",
+        "empty": "Ask the AI to change the {view}: type with « Keyboard » or speak with « Dictate », then « Send ».",
         "placeholder": "Describe the change…",
         "listening": "Listening… speak now",
         "working": "Redrawing the {view} with your request…",
         "done": "Done: the new drawing is on the slide. Validate it or ask for another change.",
         "failed": "The drawing failed. Send the request again.",
-        "keyboard": "Keys",
-        "voice": "Voice",
+        "keyboard": "Keyboard",
+        "voice": "Dictate",
         "stop": "Stop",
         "send": "Send",
         "wait": "Wait for the drawing to finish",
-        "voiceUnavailable": "Voice unavailable in this browser: use « Keys »",
-        "voiceError": "Voice not heard (microphone allowed?): try again or use « Keys »",
+        "voiceUnavailable": "Voice unavailable in this browser: use « Keyboard »",
+        "voiceError": "Voice not heard (microphone allowed?): try again or use « Keyboard »",
         "keyShift": "⇧ Caps",
         "keySpace": "space",
         "keyBack": "⌫ Erase",
-        "keyClear": "Clear"
+        "keyClear": "Clear",
+        "keyboardTip": "Open or close the holo keyboard to type your request",
+        "voiceTip": "Speak your request: it is written in the field",
+        "stopTip": "Stop listening; the text heard stays in the field",
+        "sendTip": "Send the request: the AI redraws this view with it",
+        "meterTitle": "Voice level"
       },
       "vrVillage": {
         "title": "Place « {name} » in the village",
@@ -1563,7 +1568,9 @@
         "placed": "Placed at {x}, {z} · feeder: {sector}",
         "notPlaced": "Not placed yet: aim at the village table and press",
         "inSimulation": "In the simulation: strategies recomputed",
-        "goSimulation": "Go to the simulation"
+        "goSimulation": "Go to the simulation",
+        "insertTip": "Add the object to the simulation: the strategies are recomputed",
+        "goSimulationTip": "Open the simulation in VR, next to this object"
       },
       "vrLab": {
         "title": "3D lab · {name}",

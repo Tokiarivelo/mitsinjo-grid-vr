@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useMediaQuery } from '@/lib/use-media-query';
 import { useElementHeight } from '@/lib/use-element-height';
 import { GlassPanel } from '@/components/ui/glass-panel';
@@ -43,11 +43,15 @@ import {
   useFullscreen,
   useSceneQuality,
   useWebXR,
+  useXrHandoff,
   EmulatedXRExit,
   type CameraPreset,
   type SceneQuality,
 } from '@/features/microgrid-3d';
 
+/** Wait for the 3D canvas renderer before opening a requested VR session (VS-T29): ≤ 10 s. */
+const XR_HANDOFF_WAIT_MS = 250;
+const XR_HANDOFF_WAIT_TRIES = 40;
 export interface VillageViewportProps {
   input: SimulationInput;
   result?: SimulationResult;
@@ -126,7 +130,39 @@ export function VillageViewport({
   }, [xr]);
 
   const [userViewMode, setUserViewMode] = useState<'3d' | 'schematic' | 'circuit' | null>(null);
-  const viewMode = userViewMode ?? (hasWebGL ? '3d' : 'schematic');
+  // A VR entry requested by the /village lab (VS-T29) shows the 3D view, whatever was chosen.
+  const xrRequested = useXrHandoff((s) => s.pending !== null);
+  const clearXrRequest = useXrHandoff((s) => s.clear);
+  const viewMode =
+    xrRequested && hasWebGL ? '3d' : (userViewMode ?? (hasWebGL ? '3d' : 'schematic'));
+
+  // Arriving from the /village VR lab (VS-T29): open the 3D view and its VR session at once (the
+  // camera rig then stands next to the added object). A headset that refuses a session without a
+  // fresh gesture keeps the request: the « View in VR » button then lands next to the object too.
+  const { status: xrStatus, enter: xrEnter } = xr;
+  useEffect(() => {
+    if (!xrRequested) return;
+    if (xrStatus === 'unsupported') return clearXrRequest();
+    if (xrStatus !== 'supported') return;
+    let tries = 0;
+    const timer = window.setInterval(() => {
+      // The canvas fills `rendererRef` once its renderer mounts.
+      if (rendererRef.current) {
+        window.clearInterval(timer);
+        xrEnter();
+      } else if (++tries > XR_HANDOFF_WAIT_TRIES) window.clearInterval(timer);
+    }, XR_HANDOFF_WAIT_MS);
+    return () => window.clearInterval(timer);
+  }, [xrRequested, xrStatus, xrEnter, clearXrRequest]);
+  // Dev only: lets `make vr-sim-probe` ask for the lab's hand-off (same pattern as __VR_SIM__).
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'production') return;
+    const w = window as Window & { __XR_HANDOFF__?: (at: [number, number]) => void };
+    w.__XR_HANDOFF__ = (at) => useXrHandoff.getState().request(at);
+    return () => {
+      delete w.__XR_HANDOFF__;
+    };
+  }, []);
   const [cameraPreset, setCameraPreset] = useState<CameraPreset>('village');
   // Glass copilot terminal and controls in full screen; closed in VR immersion.
   const [terminalOpen, setTerminalOpen] = useState(true);

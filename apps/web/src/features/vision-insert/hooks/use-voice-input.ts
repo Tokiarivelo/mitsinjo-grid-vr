@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { createVoiceAnalyser } from '@/lib/voice-analyser';
 
 /** The part of the Web Speech API the chat uses (Chromium ships it prefixed). */
 interface RecognitionResultList {
@@ -41,6 +42,8 @@ export interface VoiceInput {
   interim: string;
   /** Last failure (`not-allowed`, `no-speech`…), cleared on the next start. */
   error: string | null;
+  /** Live microphone spectrum while listening (the voice level meter); null otherwise. */
+  analyser: AnalyserNode | null;
   start: () => void;
   stop: () => void;
 }
@@ -48,18 +51,47 @@ export interface VoiceInput {
 /**
  * Dictation for the VR chat (VS-T27): the Web Speech API, one utterance per press; each settled
  * phrase goes to `onFinal`. Unsupported browsers report `supported: false` and the caller falls
- * back to the system keyboard's own dictation (Meta: « WebXR system keyboard »).
+ * back to the system keyboard's own dictation (Meta: « WebXR system keyboard »). While listening,
+ * the microphone is also tapped for the level meter (VS-T29); without it dictation still works.
  */
 export function useVoiceInput(locale: string, onFinal: (text: string) => void): VoiceInput {
   const [supported] = useState(() => recognitionCtor() !== null);
   const [listening, setListening] = useState(false);
   const [interim, setInterim] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [analyser, setAnalyser] = useState<AnalyserNode | null>(null);
   const rec = useRef<Recognition | null>(null);
+  const mic = useRef<{ stream: MediaStream; ctx: AudioContext } | null>(null);
   const onFinalRef = useRef(onFinal);
   useEffect(() => {
     onFinalRef.current = onFinal;
   });
+
+  const closeMic = useCallback(() => {
+    const m = mic.current;
+    mic.current = null;
+    m?.stream.getTracks().forEach((t) => t.stop());
+    void m?.ctx.close().catch(() => undefined);
+    setAnalyser(null);
+  }, []);
+
+  /** Taps the microphone for the meter; dropped if listening ended before it opened. */
+  const openMic = useCallback(() => {
+    const media = typeof navigator !== 'undefined' ? navigator.mediaDevices : undefined;
+    if (!media?.getUserMedia) return;
+    media.getUserMedia({ audio: true }).then(
+      (stream) => {
+        const tap = rec.current ? createVoiceAnalyser(stream) : null;
+        if (!tap) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
+        mic.current = { stream, ctx: tap.ctx };
+        setAnalyser(tap.node);
+      },
+      () => undefined
+    );
+  }, []);
 
   const stop = useCallback(() => rec.current?.stop(), []);
   const start = useCallback(() => {
@@ -85,20 +117,28 @@ export function useVoiceInput(locale: string, onFinal: (text: string) => void): 
       rec.current = null;
       setListening(false);
       setInterim('');
+      closeMic();
     };
     rec.current = r;
     setError(null);
     setListening(true);
     try {
       r.start();
+      openMic();
     } catch {
       rec.current = null;
       setListening(false);
       setError('start');
     }
-  }, [locale]);
+  }, [locale, openMic, closeMic]);
 
-  useEffect(() => () => rec.current?.abort(), []);
+  useEffect(
+    () => () => {
+      rec.current?.abort();
+      closeMic();
+    },
+    [closeMic]
+  );
 
-  return { supported, listening, interim, error, start, stop };
+  return { supported, listening, interim, error, analyser, start, stop };
 }

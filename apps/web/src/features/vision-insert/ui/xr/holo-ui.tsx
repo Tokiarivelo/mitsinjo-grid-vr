@@ -4,11 +4,15 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
 import { useHoloPanel, type HoloPanelHandlers, type PanelRegistry } from './holo-panel';
+import { holoIconTexture, type HoloIcon } from './holo-icons';
 import {
   createHoloFrameMaterial,
   createHoloImageMaterial,
   holoCardTexture,
+  holoTextPx,
   HOLO,
+  HOLO_TEXT_DMM,
+  HOLO_VIEW_DISTANCE,
   type HoloCardSpec,
   type HoloFrameMaterial,
   type HoloImageMaterial,
@@ -138,12 +142,32 @@ export interface HoloButtonProps extends HoloPanelHandlers {
   disabled?: boolean;
   /** Pressed / on state (toggle). */
   on?: boolean;
+  /** Line icon left of the label. */
+  icon?: HoloIcon;
+  /** What a press does, shown in the hover popover under the label. */
+  tip?: string;
+  /** Distance (m) the button is read from: sets the label size in dmm. */
+  distance?: number;
   children?: ReactNode;
 }
 
+/** Popover over a pointed button: wide enough for the label at title size and a 2-row tip. */
+const POPOVER_W = 0.5;
+const POPOVER_GAP = 0.025;
+/** Popover a little toward the viewer, so the button's frame never cuts it. */
+const POPOVER_Z = 0.05;
+
+/** Hover popover height (m): label row, plus 2 tip rows when there is a tip. */
+export function popoverHeight(distance: number, tip: boolean): number {
+  const row = (dmm: number) => (dmm / 1000) * distance * 1.3;
+  return row(HOLO_TEXT_DMM.title) + (tip ? 2 * row(HOLO_TEXT_DMM.body) : 0) + 0.04;
+}
+
 /**
- * Holographic button: frame + label, a registered panel (tap = `onSelect`). Size ≥ 6 cm on its
- * short side (Meta: ≥ 3° hit target at ray distance).
+ * Holographic button: frame + icon + label, a registered panel (tap = `onSelect`). Size ≥ 6 cm on
+ * its short side (Meta: ≥ 3° hit target at ray distance). The label is sized in dmm for
+ * `distance`. Pointed at, a popover above it repeats the label large with what it does (`tip`):
+ * low or small buttons stay readable.
  */
 export const HoloButton = memo(function HoloButton({
   registry,
@@ -157,6 +181,9 @@ export const HoloButton = memo(function HoloButton({
   color = HOLO.cyan,
   disabled = false,
   on = false,
+  icon,
+  tip,
+  distance = HOLO_VIEW_DISTANCE,
   onSelect,
   onDrag,
   onDragEnd,
@@ -168,16 +195,62 @@ export const HoloButton = memo(function HoloButton({
     ...(onDragEnd ? { onDragEnd } : {}),
     ...(axis ? { axis } : {}),
   });
+  const iconSize = icon ? Math.min(height * 0.6, width * 0.3) : 0;
+  const textW = width * 0.94 - (icon ? iconSize + 0.012 : 0);
+  const ink = on ? color : HOLO.ink;
   const spec = useMemo<HoloCardSpec>(
     () => ({
       glass: false,
       accent: color,
       lines: [
-        { text: label, size: sub ? 46 : 54, weight: 700, color: on ? color : HOLO.ink },
-        ...(sub ? [{ text: sub, size: 32, weight: 400 as const, color: HOLO.ink }] : []),
+        {
+          text: label,
+          size: holoTextPx(sub ? HOLO_TEXT_DMM.body : HOLO_TEXT_DMM.label, textW * 0.9, distance),
+          weight: 700,
+          color: ink,
+        },
+        ...(sub
+          ? [
+              {
+                text: sub,
+                size: holoTextPx(HOLO_TEXT_DMM.caption, textW * 0.9, distance),
+                weight: 400 as const,
+                color: HOLO.ink,
+              },
+            ]
+          : []),
       ],
     }),
-    [label, sub, color, on]
+    [label, sub, color, ink, textW, distance]
+  );
+  const iconTex = useMemo(() => (icon ? holoIconTexture(icon, ink) : null), [icon, ink]);
+  const shown = hovered && !disabled;
+  const popH = popoverHeight(distance, Boolean(tip));
+  const popover = useMemo<HoloCardSpec | null>(
+    () =>
+      shown
+        ? {
+            accent: color,
+            lines: [
+              {
+                text: label,
+                size: holoTextPx(HOLO_TEXT_DMM.title, POPOVER_W, distance),
+                weight: 700,
+              },
+              ...(tip
+                ? [
+                    {
+                      text: tip,
+                      size: holoTextPx(HOLO_TEXT_DMM.body, POPOVER_W, distance),
+                      weight: 400 as const,
+                      color,
+                    },
+                  ]
+                : []),
+            ],
+          }
+        : null,
+    [shown, label, tip, color, distance]
   );
   return (
     <group position={position}>
@@ -185,18 +258,39 @@ export const HoloButton = memo(function HoloButton({
         width={width}
         height={height}
         color={color}
-        hovered={hovered && !disabled}
+        hovered={shown}
         active={on}
         opacity={disabled ? 0.35 : 1}
         panelRef={ref}
       />
+      {iconTex && (
+        <mesh position={[-width * 0.47 + iconSize / 2 + 0.01, 0, 0.002]} renderOrder={3}>
+          <planeGeometry args={[iconSize, iconSize]} />
+          <meshBasicMaterial
+            map={iconTex}
+            transparent
+            opacity={disabled ? 0.4 : 1}
+            depthWrite={false}
+            toneMapped={false}
+            side={THREE.DoubleSide}
+          />
+        </mesh>
+      )}
       <HoloText
         spec={spec}
-        width={width * 0.94}
+        width={textW}
         height={height * 0.9}
-        position={[0, 0, 0.002]}
+        position={[icon ? (width * 0.94 - textW) / 2 : 0, 0, 0.002]}
         opacity={disabled ? 0.4 : 1}
       />
+      {popover && (
+        <HoloText
+          spec={popover}
+          width={POPOVER_W}
+          height={popH}
+          position={[0, height / 2 + POPOVER_GAP + popH / 2, POPOVER_Z]}
+        />
+      )}
     </group>
   );
 });

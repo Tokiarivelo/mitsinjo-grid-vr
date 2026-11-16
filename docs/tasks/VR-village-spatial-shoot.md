@@ -298,3 +298,12 @@ Style : hologramme futuriste (cyan / ambre, lignes de balayage, coins lumineux, 
 - [x] « Insérer dans la simulation » : même appel que le panneau web, extrait dans `hooks/use-appliance-insert.ts` (ligne + modèle 3D édité dans le labo, moteur relancé) ; « Mettre à jour » ensuite.
 - [x] « Aller à la simulation » (une fois inséré) : termine la session XR, ouvre `/simulation`.
 - [ ] **Done when :** `make vr-probe` vert (table, pose, insertion) ; joué au casque.
+
+### VS-T29 : Panneaux lisibles, icônes et bulles au survol, niveau de voix, arrivée en VR dans la simulation
+
+- [x] Texte en dmm (`holoTextPx`, `HOLO_TEXT_DMM`) : boutons, champ, historique et titres du chat lisibles à 1,4 m (≥ 18 px Meta).
+- [x] Icônes sur les boutons (`holo-icons.ts`) ; bulle au survol qui répète le libellé en grand + ce que fait le bouton (`HoloButton.tip`).
+- [x] Graphe « Niveau de voix » dans le champ pendant la dictée (`holo-voice-meter.tsx`, `lib/voice-analyser.ts` partagé avec le copilote).
+- [x] Table du village : titre, état et boutons au-dessus du bord éloigné, à hauteur des yeux (plus sous la table).
+- [x] « Aller à la simulation » : `/simulation` entre seule en VR, à côté de l'objet ajouté (`utils/xr-handoff.ts`).
+- [ ] **Done when :** `make vr-probe` + `make vr-sim-probe` verts ; joué au casque (entrée VR sans geste sur Quest à vérifier).

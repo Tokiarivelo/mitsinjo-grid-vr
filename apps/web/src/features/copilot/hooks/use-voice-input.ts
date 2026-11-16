@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toVoiceWav } from '../utils/wav';
 import { createSpeechEndDetector } from '../utils/voice-activity';
+import { createVoiceAnalyser } from '@/lib/voice-analyser';
+
+export { VOICE_FFT_SIZE } from '@/lib/voice-analyser';
 
 /** Longest recording; the route refuses more (60 s of 16 kHz WAV). */
 export const VOICE_MAX_MS = 60_000;
-/** FFT size of the spectrum display: ≈ 11.7 Hz per bin at 48 kHz, fine enough for voice pitch. */
-export const VOICE_FFT_SIZE = 4096;
 /** Microphone energy sampling step for hands-free end-of-speech detection. */
 const VOICE_SAMPLE_MS = 100;
 
@@ -98,21 +99,10 @@ export function useVoiceInput({ locale, sessionId, onText, onAutoSend }: UseVoic
 
   /** Taps the microphone for the spectrum display. Optional: recording works without it. */
   const openAnalyser = useCallback((stream: MediaStream) => {
-    if (typeof window.AudioContext === 'undefined') return;
-    try {
-      const ctx = new AudioContext();
-      const node = ctx.createAnalyser();
-      node.fftSize = VOICE_FFT_SIZE;
-      node.smoothingTimeConstant = 0.6;
-      node.minDecibels = -90;
-      node.maxDecibels = -20;
-      ctx.createMediaStreamSource(stream).connect(node);
-      audioCtxRef.current = ctx;
-      analyserNodeRef.current = node;
-      setAnalyser(node);
-    } catch {
-      setAnalyser(null);
-    }
+    const tap = createVoiceAnalyser(stream);
+    audioCtxRef.current = tap?.ctx ?? null;
+    analyserNodeRef.current = tap?.node ?? null;
+    setAnalyser(tap?.node ?? null);
   }, []);
 
   const closeAnalyser = useCallback(() => {

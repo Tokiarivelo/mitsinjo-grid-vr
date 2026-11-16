@@ -17,6 +17,7 @@ import {
   VILLAGE_PATHS,
 } from '@/features/microgrid-3d/utils/landscape';
 import { tapPoint } from '@/features/microgrid-3d/utils/tap-point';
+import { useXrHandoff } from '@/features/microgrid-3d/utils/xr-handoff';
 import { useApplianceInsert } from '../../hooks/use-appliance-insert';
 import {
   pathSegmentsInRange,
@@ -26,7 +27,7 @@ import {
 } from '../../utils/village-holo';
 import { useHoloPanel, type PanelRegistry } from './holo-panel';
 import { HoloButton, HoloFrame, HoloText } from './holo-ui';
-import { HOLO, type HoloCardSpec } from './holo-style';
+import { HOLO, HOLO_TEXT_DMM, holoTextPx, type HoloCardSpec } from './holo-style';
 import type { AimReadout } from './xr-blaster-controller';
 import { VILLAGE_TABLE } from './xr-layout';
 
@@ -38,6 +39,21 @@ export const VILLAGE_IDS = {
 
 const R = VILLAGE_TABLE.radius;
 const K = R / VILLAGE_HOLO_RANGE;
+const D = VILLAGE_TABLE.distance;
+/**
+ * Title, status and buttons stand upright above the table's far edge, at eye level (VS-T29): under
+ * the table they sat ~30° below the line of sight and read squashed when looking down.
+ */
+const STACK_W = 0.84;
+const BTN_H = 0.1;
+const BTN_W = (STACK_W - 0.03) / 2;
+const STATUS_H = 0.17;
+const HEADER_H = 0.12;
+const STACK_Z = -R * Math.cos(VILLAGE_TABLE.tilt) - 0.02;
+const BTN_Y = R * Math.sin(VILLAGE_TABLE.tilt) + 0.03 + BTN_H / 2;
+const STATUS_Y = BTN_Y + BTN_H / 2 + 0.02 + STATUS_H / 2;
+const HEADER_Y = STATUS_Y + STATUS_H / 2 + 0.02 + HEADER_H / 2;
+const px = (dmm: number, width: number) => holoTextPx(dmm, width, D);
 /** Placed objects drawn at most (the simulation holds fewer lines). */
 const MAX_DOTS = 48;
 const STATIC_IDS = new Set(KEEP_OUT_ZONES.map((z) => z.id));
@@ -181,8 +197,11 @@ export const HoloVillageTable = memo(function HoloVillageTable({
     c.position.set(_local.x, 0.004, _local.z);
   });
 
+  const requestXr = useXrHandoff((st) => st.request);
   const goSimulation = () => {
-    // Leave the immersive session first: the next page starts in the browser view.
+    // The simulation opens its own VR session next to the object (VS-T29).
+    if (pos) requestXr([pos.x, pos.z]);
+    // Leave this immersive session first: one session at a time.
     void gl.xr
       .getSession()
       ?.end()
@@ -195,8 +214,17 @@ export const HoloVillageTable = memo(function HoloVillageTable({
     () => ({
       glass: false,
       lines: [
-        { text: t('vrVillage.title', { name }), size: 52, weight: 700 },
-        { text: t('vrVillage.hint'), size: 34, weight: 400, color: HOLO.cyan },
+        {
+          text: t('vrVillage.title', { name }),
+          size: px(HOLO_TEXT_DMM.title, STACK_W),
+          weight: 700,
+        },
+        {
+          text: t('vrVillage.hint'),
+          size: px(HOLO_TEXT_DMM.caption, STACK_W),
+          weight: 400,
+          color: HOLO.cyan,
+        },
       ],
     }),
     [t, name]
@@ -220,10 +248,22 @@ export const HoloVillageTable = memo(function HoloVillageTable({
     return {
       glass: false,
       lines: [
-        { text: where, size: 38, weight: 600, color: pos ? HOLO.ink : HOLO.amber },
-        { text: engine, size: 32, weight: 400, color: HOLO.cyan },
+        {
+          text: where,
+          size: px(HOLO_TEXT_DMM.body, STACK_W),
+          weight: 600,
+          color: pos ? HOLO.ink : HOLO.amber,
+        },
+        { text: engine, size: px(HOLO_TEXT_DMM.caption, STACK_W), weight: 400, color: HOLO.cyan },
         ...(state
-          ? [{ text: state, size: 34, weight: 600 as const, color: full ? HOLO.amber : HOLO.green }]
+          ? [
+              {
+                text: state,
+                size: px(HOLO_TEXT_DMM.body, STACK_W),
+                weight: 600 as const,
+                color: full ? HOLO.amber : HOLO.green,
+              },
+            ]
           : []),
       ],
     };
@@ -248,12 +288,7 @@ export const HoloVillageTable = memo(function HoloVillageTable({
       rotation={[0, VILLAGE_TABLE.yaw, 0]}
       name="holo-village-table"
     >
-      <HoloText
-        spec={header}
-        width={0.8}
-        height={0.12}
-        position={[0, R * Math.sin(tilt) + 0.12, -R * Math.cos(tilt)]}
-      />
+      <HoloText spec={header} width={STACK_W} height={HEADER_H} position={[0, HEADER_Y, STACK_Z]} />
       <group ref={table} position={[0, 0, 0]} rotation={[tilt, 0, 0]}>
         {/* Table disc: the aim / tap surface */}
         <mesh ref={mapRef} rotation={[-Math.PI / 2, 0, 0]} renderOrder={1}>
@@ -316,35 +351,46 @@ export const HoloVillageTable = memo(function HoloVillageTable({
         </mesh>
       </group>
 
-      {/* Status and actions, just in front of and below the table's near edge */}
-      <group position={[0, -R * Math.sin(tilt) - 0.15, R * Math.cos(tilt) + 0.02]}>
-        <HoloFrame width={0.62} height={0.14} />
-        <HoloText spec={status} width={0.6} height={0.13} position={[0, 0, 0.003]} />
-        <HoloButton
-          registry={registry}
-          id={VILLAGE_IDS.insert}
-          label={inSimulation || added ? t('insertUpdate') : t('insertButton')}
-          width={0.34}
-          height={0.08}
-          position={[-0.14, -0.13, 0.004]}
-          color={HOLO.green}
-          disabled={!canInsert}
-          hovered={hoveredId === VILLAGE_IDS.insert}
-          onSelect={() => setAdded(insert())}
-        />
-        <HoloButton
-          registry={registry}
-          id={VILLAGE_IDS.simulation}
-          label={t('vrVillage.goSimulation')}
-          width={0.26}
-          height={0.08}
-          position={[0.18, -0.13, 0.004]}
-          color={HOLO.cyan}
-          disabled={!(added || inSimulation)}
-          hovered={hoveredId === VILLAGE_IDS.simulation}
-          onSelect={goSimulation}
+      {/* Status and actions above the far edge, upright at eye level */}
+      <group position={[0, STATUS_Y, STACK_Z]}>
+        <HoloFrame width={STACK_W} height={STATUS_H} />
+        <HoloText
+          spec={status}
+          width={STACK_W * 0.96}
+          height={STATUS_H * 0.94}
+          position={[0, 0, 0.003]}
         />
       </group>
+      <HoloButton
+        registry={registry}
+        id={VILLAGE_IDS.insert}
+        label={inSimulation || added ? t('insertUpdate') : t('insertButton')}
+        icon="insert"
+        tip={t('vrVillage.insertTip')}
+        distance={D}
+        width={BTN_W}
+        height={BTN_H}
+        position={[-(BTN_W + 0.03) / 2, BTN_Y, STACK_Z + 0.004]}
+        color={HOLO.green}
+        disabled={!canInsert}
+        hovered={hoveredId === VILLAGE_IDS.insert}
+        onSelect={() => setAdded(insert())}
+      />
+      <HoloButton
+        registry={registry}
+        id={VILLAGE_IDS.simulation}
+        label={t('vrVillage.goSimulation')}
+        icon="go"
+        tip={t('vrVillage.goSimulationTip')}
+        distance={D}
+        width={BTN_W}
+        height={BTN_H}
+        position={[(BTN_W + 0.03) / 2, BTN_Y, STACK_Z + 0.004]}
+        color={HOLO.cyan}
+        disabled={!(added || inSimulation)}
+        hovered={hoveredId === VILLAGE_IDS.simulation}
+        onSelect={goSimulation}
+      />
     </group>
   );
 });

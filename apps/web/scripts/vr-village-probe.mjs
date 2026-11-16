@@ -331,6 +331,13 @@ try {
     const at = (id) => panelAt(id).then((p) => p && fire('controller-right', p, fromLeft));
     await at('holo:village-map');
     check('a shot on the table places the object', !!(await village())?.position);
+    // VS-T29: status and buttons stand above the table's far edge, not under its near edge.
+    const insertAt = await panelAt('holo:village-insert');
+    check(
+      'the table buttons sit above the table (readable, not under it)',
+      !!insertAt && insertAt.y > tableAt.y + 0.15,
+      insertAt ? `button ${(insertAt.y - tableAt.y).toFixed(2)} m above the table centre` : ''
+    );
     await shot('3g2-village-placed');
     await at('holo:village-insert');
     check(

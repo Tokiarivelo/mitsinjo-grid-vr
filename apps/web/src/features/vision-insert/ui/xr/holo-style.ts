@@ -156,6 +156,27 @@ export function createHoloImageMaterial(map: THREE.Texture | null): HoloImageMat
   }) as HoloImageMaterial;
 }
 
+/**
+ * Text sizes in dmm (distance-independent millimetres: 1 dmm = 1 mm seen at 1 m). Meta typography:
+ * 14 px minimum, 18 px or more for comfortable reading; Horizon panels draw 1 px ≈ 1 dmm.
+ */
+export const HOLO_TEXT_DMM = { title: 30, label: 24, body: 20, caption: 16 } as const;
+/** Distance (m) the studio panels are read from when a caller does not say. */
+export const HOLO_VIEW_DISTANCE = 1.3;
+
+/**
+ * Canvas px for text `dmm` tall, seen from `distance` m, on a plane `planeWidth` m wide drawn on a
+ * `canvasWidth` px canvas (the plane's texture is stretched over its width).
+ */
+export function holoTextPx(
+  dmm: number,
+  planeWidth: number,
+  distance = HOLO_VIEW_DISTANCE,
+  canvasWidth = 1024
+): number {
+  return Math.round(((dmm / 1000) * distance * canvasWidth) / Math.max(planeWidth, 1e-3));
+}
+
 /** One line of a holographic card. */
 export interface HoloLine {
   text: string;
@@ -241,8 +262,14 @@ export function layoutHoloCard(
       };
     });
     const total = blocks.reduce((acc, b) => acc + b.rows.length * b.size * LINE_HEIGHT, 0);
-    if (total <= room || scale <= 0.3) return { blocks, total };
-    scale *= Math.max(0.6, Math.min(0.95, room / total));
+    // A single word wider than the card cannot wrap: it shrinks too (« Keyboard » was cut).
+    const widest = Math.max(
+      0,
+      ...blocks.flatMap((b) => b.rows.map((r) => measure(b.font, r.replace(/…$/, ''))))
+    );
+    const fit = Math.min(room / total, (w - 2 * pad) / Math.max(widest, 1));
+    if (fit >= 1 || scale <= 0.3) return { blocks, total };
+    scale *= Math.max(0.6, Math.min(0.95, fit));
   }
 }
 

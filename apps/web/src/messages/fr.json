@@ -1539,14 +1539,14 @@
       "vrChat": {
         "title": "Chat IA · {view}",
         "aiLabel": "MODIF. IA · redessine cette vue, vérifiez-la avant de valider",
-        "empty": "Demandez à l'IA de modifier la vue {view} : tapez avec « Clavier » ou parlez avec « Voix », puis « Envoyer ».",
+        "empty": "Demandez à l'IA de modifier la vue {view} : tapez avec « Clavier » ou parlez avec « Dicter », puis « Envoyer ».",
         "placeholder": "Décrivez la modification…",
         "listening": "J'écoute… parlez",
         "working": "Je redessine la vue {view} avec votre demande…",
         "done": "C'est fait : le nouveau dessin est sur la diapositive. Validez-le ou demandez une autre modification.",
         "failed": "Le dessin a échoué. Renvoyez la demande.",
         "keyboard": "Clavier",
-        "voice": "Voix",
+        "voice": "Dicter",
         "stop": "Stop",
         "send": "Envoyer",
         "wait": "Attendez la fin du dessin",
@@ -1555,7 +1555,12 @@
         "keyShift": "⇧ Maj",
         "keySpace": "espace",
         "keyBack": "⌫ Effacer",
-        "keyClear": "Vider"
+        "keyClear": "Vider",
+        "keyboardTip": "Ouvrir ou fermer le clavier holo pour taper votre demande",
+        "voiceTip": "Dites votre demande : elle s’écrit dans le champ",
+        "stopTip": "Arrêter l’écoute ; le texte entendu reste dans le champ",
+        "sendTip": "Envoyer la demande : l’IA redessine cette vue avec",
+        "meterTitle": "Niveau de voix"
       },
       "vrVillage": {
         "title": "Placer « {name} » dans le village",
@@ -1563,7 +1568,9 @@
         "placed": "Posé en {x}, {z} · départ : {sector}",
         "notPlaced": "Pas encore posé : visez la table du village et appuyez",
         "inSimulation": "Dans la simulation : stratégies recalculées",
-        "goSimulation": "Aller à la simulation"
+        "goSimulation": "Aller à la simulation",
+        "insertTip": "Ajouter l’objet à la simulation : les stratégies sont recalculées",
+        "goSimulationTip": "Ouvrir la simulation en VR, à côté de cet objet"
       },
       "vrLab": {
         "title": "Labo 3D · {name}",

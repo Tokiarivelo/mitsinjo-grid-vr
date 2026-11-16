@@ -1539,14 +1539,14 @@
       "vrChat": {
         "title": "Resaka AI · {view}",
         "aiLabel": "FANOVANA AI · averina hosoratana ity sary ity, hamarino alohan'ny hankatoavina",
-        "empty": "Angataho amin'ny AI ny fanovana ny {view} : soraty amin'ny « Fitendry » na lazao amin'ny « Feo », avy eo « Alefa ».",
+        "empty": "Angataho amin'ny AI ny fanovana ny {view} : soraty amin'ny « Fitendry » na lazao amin'ny « Lazao », avy eo « Alefa ».",
         "placeholder": "Lazao ny fanovana…",
         "listening": "Mihaino… mitenena",
         "working": "Averiko hosoratana ny {view} araka ny fangatahanao…",
         "done": "Vita : eo amin'ny sary ny sary vaovao. Ankatoavy na mangataha fanovana hafa.",
         "failed": "Tsy nahomby ny sary. Alefaso indray ny fangatahana.",
         "keyboard": "Fitendry",
-        "voice": "Feo",
+        "voice": "Lazao",
         "stop": "Ajanony",
         "send": "Alefa",
         "wait": "Andraso ho vita ny sary",
@@ -1555,7 +1555,12 @@
         "keyShift": "⇧ Lehibe",
         "keySpace": "elanelana",
         "keyBack": "⌫ Fafao",
-        "keyClear": "Fafao daholo"
+        "keyClear": "Fafao daholo",
+        "keyboardTip": "Sokafy na hidio ny fitendry holo hanoratana ny fangatahanao",
+        "voiceTip": "Lazao ny fangatahanao : voasoratra ao amin'ny saha izany",
+        "stopTip": "Ajanony ny fihainoana ; mijanona ao amin'ny saha ny lahatsoratra re",
+        "sendTip": "Alefaso ny fangatahana : averin'ny AI hosoratana ity sary ity",
+        "meterTitle": "Haavon'ny feo"
       },
       "vrVillage": {
         "title": "Apetraho ao an-tanàna ny « {name} »",
@@ -1563,7 +1568,9 @@
         "placed": "Napetraka ao amin'ny {x}, {z} · fizarana : {sector}",
         "notPlaced": "Mbola tsy napetraka : tondroy ny latabatry ny tanàna ary tsindrio",
         "inSimulation": "Ao anaty simulation : naverina nokajiana ny paikady",
-        "goSimulation": "Mankany amin'ny simulation"
+        "goSimulation": "Mankany amin'ny simulation",
+        "insertTip": "Ampidiro ao amin'ny simulation ilay zavatra : averina kajiana ny paikady",
+        "goSimulationTip": "Sokafy amin'ny VR ny simulation, eo akaikin'ity zavatra ity"
       },
       "vrLab": {
         "title": "Labo 3D · {name}",

@@ -268,6 +268,37 @@ try {
   );
   await shot('sim-7-clinic-refused');
 
+  // --- Arriving from the /village lab (VS-T29): VR opens by itself, next to the object ------
+  const SPOT = [3.3, 0, 23.8];
+  const exitVr = page.getByRole('button', { name: /Exit VR/i }).first();
+  await exitVr.evaluate((el) => setTimeout(() => el.click(), 0)).catch(() => {});
+  await waitFor(
+    async () => !(await rc('get_session_status').catch(() => null))?.sessionActive,
+    30000
+  );
+  await page.evaluate((at) => window.__XR_HANDOFF__?.(at), [SPOT[0], SPOT[2]]);
+  let again = false;
+  for (let i = 0; i < 40 && !again; i++) {
+    await sleep(1000);
+    again = !!(await rc('get_session_status').catch(() => null))?.sessionActive;
+  }
+  // Head straight ahead in its own space: the rig alone then sets where it faces.
+  await rc('look_at', { device: 'headset', target: { x: 0, y: 1.6, z: -2 } }).catch(() => {});
+  await sleep(800);
+  check('« Go to the simulation » from the lab opens VR by itself (no click)', again);
+  await waitFor(async () => !!(await sim((s) => s.head())), 30000);
+  const h2 = await head();
+  const dist = h2 ? xz(h2, SPOT) : Infinity;
+  const yawTo = h2 ? Math.atan2(-(SPOT[0] - h2[0]), -(SPOT[2] - h2[2])) : 0;
+  const yaw2 = (await sim((s) => s.yaw())) ?? 99;
+  const off = Math.abs(Math.atan2(Math.sin(yaw2 - yawTo), Math.cos(yaw2 - yawTo)));
+  check(
+    '… standing next to the added object, facing it',
+    dist > 1 && dist < 4 && off < 0.5,
+    `${dist.toFixed(1)} m away, ${((off * 180) / Math.PI).toFixed(0)}° off`
+  );
+  await shot('sim-8-from-lab');
+
   check('no page errors', errors.length === 0, errors.slice(0, 2).join(' | '));
 } finally {
   await browser.close();
