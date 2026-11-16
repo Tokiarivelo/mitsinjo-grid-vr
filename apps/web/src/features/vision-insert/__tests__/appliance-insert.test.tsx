@@ -150,6 +150,9 @@ describe('ApplianceInsert (PV-T12)', () => {
   it('scenery can become a load by hand; out-of-range power blocks the insert', () => {
     renderInsert(house, 'House');
     expect(screen.getByText(/Scenery has no load by default/)).toBeTruthy();
+    // Scenery starts non-electric (VS-T40): no power field until « Electric ».
+    expect(screen.queryByLabelText('Power per unit (W)')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Electric · pole and cable' }));
     fireEvent.change(screen.getByLabelText('Power per unit (W)'), { target: { value: '99999' } });
     expect(screen.getByText('Check the name and the power range.')).toBeTruthy();
     const insert = screen.getByRole('button', {
@@ -161,6 +164,33 @@ describe('ApplianceInsert (PV-T12)', () => {
     expect(useSimulationStore.getState().input.appliances).toEqual([
       expect.objectContaining({ category: 'other', sector: 'households', watts: 400 }),
     ]);
+  });
+
+  it('non-electric (VS-T40): no pole or cable on the map, zero-duty line, no connection choice', () => {
+    renderInsert(house, 'House');
+    expect(
+      screen.getByRole('button', { name: 'Non-electric · no pole' }).getAttribute('aria-pressed')
+    ).toBe('true');
+    expect(screen.getByText(/no pole or cable run to it/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Place on the map' }));
+    const map = screen.getByRole('application', { name: 'Village map' });
+    vi.spyOn(map, 'getBoundingClientRect').mockReturnValue({
+      left: 0,
+      top: 0,
+      width: 230,
+      height: 230,
+      right: 230,
+      bottom: 230,
+    } as DOMRect);
+    fireEvent.click(map, { clientX: 150, clientY: 150 });
+    expect(screen.queryByTestId('minimap-derivation')).toBeNull();
+    expect(screen.queryByTestId('minimap-pole')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Insert into simulation' }));
+    const line = useSimulationStore.getState().input.appliances?.[0];
+    expect(line?.hourlyDuty?.every((d) => d === 0)).toBe(true);
+    // Back to electric: the cable shows again.
+    fireEvent.click(screen.getByRole('button', { name: 'Electric · pole and cable' }));
+    expect(screen.getByTestId('minimap-derivation')).toBeTruthy();
   });
 
   it('free placement (PP-T4): place on the map, feeder follows, back to ring', () => {
@@ -177,7 +207,8 @@ describe('ApplianceInsert (PV-T12)', () => {
       right: 230,
       bottom: 230,
     } as DOMRect);
-    // Top-left (−95, −95) clamps onto the disc near the school; the feeder follows.
+    // Whole terrain view; top-left (−95, −95) clamps onto the disc near the school; the feeder follows.
+    fireEvent.click(screen.getByRole('button', { name: 'Whole terrain' }));
     fireEvent.click(map, { clientX: 20, clientY: 20 });
     expect(screen.getByText('Placed: -75.0, -75.0')).toBeTruthy();
     expect(screen.getByLabelText('Feeder line')).toHaveValue('school');

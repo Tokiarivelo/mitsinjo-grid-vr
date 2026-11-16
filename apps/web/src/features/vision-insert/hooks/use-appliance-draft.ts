@@ -116,6 +116,8 @@ export function useApplianceDraft(
     (v: ConnectionMode) => edit((d) => ({ ...d, connectionMode: v })),
     [edit]
   );
+  /** Electric or not (VS-T40): a non-electric object gets no load, pole or cable. */
+  const setElectric = useCallback((v: boolean) => edit((d) => ({ ...d, electric: v })), [edit]);
   const setWatts = useCallback((v: number) => edit((d) => ({ ...d, watts: v })), [edit]);
   const setQuantity = useCallback((v: number) => edit((d) => ({ ...d, quantity: v })), [edit]);
   const setCategory = useCallback(
@@ -146,6 +148,7 @@ export function useApplianceDraft(
     setCategory,
     setSector,
     setConnectionMode,
+    setElectric,
     setPosition,
     useNearestFeeder,
     setWatts,

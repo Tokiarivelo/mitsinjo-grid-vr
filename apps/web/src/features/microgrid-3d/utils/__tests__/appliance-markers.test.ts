@@ -18,6 +18,7 @@ import {
 import { terrainHeight } from '../landscape';
 import { defaultPosition } from '../placement';
 import { SECTOR_POSITIONS, toSceneModel } from '../to-scene-model';
+import { NO_LOAD_DUTY } from '../non-electric';
 
 const pump: Appliance = {
   id: 'p1',
@@ -159,5 +160,31 @@ describe('applianceTagState (PT-11b)', () => {
     const b = model.buildings.water;
     expect(m!.tag).toEqual(applianceTagState(m!, b));
     expect(m!.tag!.priority).toBe(b.priority);
+  });
+});
+
+describe('non-electric objects (VS-T40)', () => {
+  it('a zero-duty line is flagged, draws 0 kW and gets no pole or cable in the scene', () => {
+    const tree: Appliance = {
+      id: 't1',
+      name: 'Tree',
+      category: 'other',
+      sector: 'households',
+      watts: 100,
+      quantity: 1,
+      hourlyDuty: [...NO_LOAD_DUTY],
+      position: { x: 20, z: 20 },
+    };
+    const input = applyPatch(base, { appliances: [pump, tree] });
+    const model = toSceneModel({ input, result: simulate(input, 'proportional'), timeIndex: 12 });
+    const [p, t] = model.appliances!;
+    expect(p!.nonElectric).toBeUndefined();
+    expect(t!.nonElectric).toBe(true);
+    expect(t!.kwNow).toBe(0);
+    expect(applianceProfileKw(tree).every((kw) => kw === 0)).toBe(true);
+    // Only the pump is wired: every derivation cable ends at the pump, none at the tree.
+    const ends = model.lines.applianceDerivations!.map((l) => l.to);
+    expect(ends.some((e) => e[0] === t!.position[0] && e[2] === t!.position[2])).toBe(false);
+    expect(ends.some((e) => e[0] === p!.position[0] && e[2] === p!.position[2])).toBe(true);
   });
 });

@@ -125,9 +125,13 @@ actions: `loadScenario, patchInput, run, reset, selectStrategy, selectSector, se
 
 ## 6. Deployment
 
-Vercel project `mitsinjo-grid` (Next native, Node 22, root directory `apps/web`; pnpm installs the whole workspace,
-the engine ships as TS source via `transpilePackages`). **Only `main` deploys:** a push to `main` → production;
-`apps/web/vercel.json` `ignoreCommand` skips every other branch (no previews). Manual fallback: `make deploy`
+Vercel project `mitsinjo-grid` in services mode: root `vercel.json` declares one public service `web`
+(`apps/web`, Next native, Node 22; rewrite `/(.*)` → `web`, no bindings); the Vercel project's Root Directory is `.`
+(pnpm installs the whole workspace, the engine ships as TS source via `transpilePackages`). The bridge
+(`apps/bridge`, MQTT + WebSocket) stays local on the demo laptop: the browser reaches it via `?bridge=ws://…`.
+Immersion without a headset uses the IWER emulator in production too (`NEXT_PUBLIC_XR_EMULATOR`, default `on`).
+**Only `main` deploys:** a push to `main` → production; the `web` service's `ignoreCommand` skips every other
+branch (no previews). Manual fallback: `make deploy`
 (`scripts/deploy.sh`, refuses unless on a clean `main` equal to `origin/main`).
 Env (Vercel → Production): `LLM_PROVIDER=meta|mock` (currently `mock`), `META_API_KEY`, `META_MODEL`, `META_BASE_URL`.
 Copilot route: `runtime='nodejs'`, rate limit per IP (in-memory, demo-grade), timeout 20 s.

@@ -172,6 +172,7 @@ export function ApplianceMarkers({
   const feederLinks = useMemo(
     () =>
       shown.flatMap((m) => {
+        if (m.nonElectric) return [];
         const h = modelBounds[m.id]?.height ?? PLINTH[1] + BODY[1];
         return [
           new THREE.Vector3(m.position[0], m.position[1] + h, m.position[2]),

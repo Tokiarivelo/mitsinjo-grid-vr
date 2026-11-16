@@ -42,6 +42,12 @@ export interface ApplianceInsertPanelProps {
 const BUTTON =
   'inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg px-3 text-sm font-medium transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-50';
 
+/** Electric or not (VS-T40): a non-electric object gets no load, pole or cable. */
+const POWER_KINDS = [
+  { electric: true, label: 'insertElectric' },
+  { electric: false, label: 'insertNonElectric' },
+] as const;
+
 const CONNECTION_MODES = [
   { mode: 'branch', label: 'connectionBranch' },
   { mode: 'ems', label: 'connectionEms' },
@@ -117,6 +123,37 @@ export function ApplianceInsertPanel({
         {t(source === 'ai' ? 'insertAiNote' : 'insertManualNote')}
       </p>
 
+      <div className="flex flex-col gap-1.5">
+        <span className="text-xs text-text-secondary">{t('insertPowerKind')}</span>
+        <div
+          role="group"
+          aria-label={t('insertPowerKind')}
+          className="grid grid-cols-1 gap-1.5 sm:grid-cols-2"
+        >
+          {POWER_KINDS.map(({ electric, label }) => {
+            const on = d.electric === electric;
+            return (
+              <button
+                key={label}
+                type="button"
+                aria-pressed={on}
+                onClick={() => draft.setElectric(electric)}
+                className={cn(
+                  BUTTON,
+                  'border px-2 text-center text-xs',
+                  on
+                    ? 'border-energy-cyan/60 bg-energy-cyan/15 text-text-primary'
+                    : 'border-border bg-surface-elevated text-text-secondary hover:bg-surface-hover'
+                )}
+              >
+                {t(label)}
+              </button>
+            );
+          })}
+        </div>
+        {!d.electric && <p className="text-[11px] text-text-muted">{t('insertNonElectricNote')}</p>}
+      </div>
+
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
         <label className="flex flex-col gap-1 text-xs text-text-secondary sm:col-span-2 lg:col-span-1 xl:col-span-2">
           {t('insertName')}
@@ -180,6 +217,7 @@ export function ApplianceInsertPanel({
               value={d.position}
               sector={d.sector}
               connectionMode={d.connectionMode}
+              electric={d.electric}
               onPlace={draft.setPosition}
               zones={zones}
               excludeId={draft.id}
@@ -214,7 +252,7 @@ export function ApplianceInsertPanel({
             )}
           </p>
         )}
-        {canConnect && (
+        {canConnect && d.electric && (
           <div className="flex flex-col gap-1.5 sm:col-span-2 lg:col-span-1 xl:col-span-2">
             <span className="text-xs text-text-secondary">{t('insertConnection')}</span>
             <div
@@ -248,31 +286,33 @@ export function ApplianceInsertPanel({
             </p>
           </div>
         )}
-        <div className="flex flex-col gap-1">
-          <label className="flex flex-col gap-1 text-xs text-text-secondary">
-            {t('insertWatts')}
-            <input
-              type="number"
-              inputMode="numeric"
-              min={range.minW}
-              max={range.maxW}
-              value={Number.isFinite(d.watts) ? d.watts : ''}
-              aria-invalid={!wattsOk}
-              aria-describedby={`${id}-range`}
-              onChange={(e) =>
-                draft.setWatts(e.target.value === '' ? Number.NaN : Number(e.target.value))
-              }
-              onBlur={() => !wattsOk && draft.setWatts(clampWatts(d.category, d.watts))}
-              className={cn(FIELD_CLASS, !wattsOk && 'border-critical-red')}
-            />
-          </label>
-          <span
-            id={`${id}-range`}
-            className={cn('text-[11px]', wattsOk ? 'text-text-muted' : 'text-critical-red')}
-          >
-            {t('insertWattsRange', { min: range.minW, max: range.maxW })}
-          </span>
-        </div>
+        {d.electric && (
+          <div className="flex flex-col gap-1">
+            <label className="flex flex-col gap-1 text-xs text-text-secondary">
+              {t('insertWatts')}
+              <input
+                type="number"
+                inputMode="numeric"
+                min={range.minW}
+                max={range.maxW}
+                value={Number.isFinite(d.watts) ? d.watts : ''}
+                aria-invalid={!wattsOk}
+                aria-describedby={`${id}-range`}
+                onChange={(e) =>
+                  draft.setWatts(e.target.value === '' ? Number.NaN : Number(e.target.value))
+                }
+                onBlur={() => !wattsOk && draft.setWatts(clampWatts(d.category, d.watts))}
+                className={cn(FIELD_CLASS, !wattsOk && 'border-critical-red')}
+              />
+            </label>
+            <span
+              id={`${id}-range`}
+              className={cn('text-[11px]', wattsOk ? 'text-text-muted' : 'text-critical-red')}
+            >
+              {t('insertWattsRange', { min: range.minW, max: range.maxW })}
+            </span>
+          </div>
+        )}
         <label className="flex flex-col gap-1 text-xs text-text-secondary">
           {t('insertQuantity')}
           <input
@@ -302,7 +342,7 @@ export function ApplianceInsertPanel({
             })
           : t('insertInvalid')}
       </p>
-      {appliance && summary && curve && (
+      {d.electric && appliance && summary && curve && (
         <ApplianceCurveChart curve={curve} peakKw={summary.peakKw} dailyKwh={summary.dailyKwh} />
       )}
 

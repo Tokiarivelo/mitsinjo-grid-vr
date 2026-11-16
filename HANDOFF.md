@@ -1,10 +1,11 @@
 # HANDOFF — read first, overwrite at end of session (≤40 lines)
 
-**Updated:** 2026-11-16 · **By:** Claude Code · **Branch:** `feat/vs-t36-follow-dock` ← `feat/vs-t35-placed-objects-i18n` ← `feat/vs-t34-dispatcher-mixer` ← `feat/vs-t33-xr-query-scale` ←
+**Updated:** 2026-11-16 · **By:** Claude Code · **Branch:** `feat/vs-t39-village-map` (from `main`, VS-T39–T40). Tasks in `docs/tasks/VR-village-spatial-shoot.md`.
 `feat/vs-t31-desk-turn` ← `feat/vs-t29-chat-readable-voice-level` (PR #20, open). Tasks VS-T29–T38 in `docs/tasks/VR-village-spatial-shoot.md`.
 
 ## NEXT
 
+0. Vercel services: root `vercel.json` (one public `web` service, `ignoreCommand` moved in) is **uncommitted**, waiting for the owner's OK; it needs Vercel → Root Directory = `.` and `apps/web/vercel.json` deleted. Screen V467–V476, headset V471–V472, V477.
 1. Headset: S158–S161 (VS-T38 map follows, roads, laser), S154–S157 (VS-T37 map), S151–S152 (close ✕, left laser; ← / → swap reverted), V463–V466 (VS-T36 follow dock, « Go to the simulation » fixed; `make vr-handoff-probe` not run yet), S146–S150 (VS-T35 tags, size, night), V450–V458 (desk turn comfort 1.1 s, menu « Close », miniature card), then V442, V444–V449, S133–S135.
    Check Quest Browser opens /simulation's VR session without a new gesture after « Go to the simulation ».
 2. Quest Browser voice = system keyboard dictation (no Web Speech API): the level meter needs the mic there too.
@@ -12,6 +13,8 @@
 
 ## Done this session
 
+- **VS-T40:** non-electric objects: « Electric · pole and cable » / « Non-electric · no pole » (web insert panel, VR lab table); zero-duty line (`non-electric.ts`), no tap/pole/cable/diagram branch.
+- **VS-T39:** /village placement map like /simulation's: web `PlaceMinimap` (roads, water, paddy, names, N, zoom), VR lab table drawn with `drawVillageMap`.
 - **VS-T37:** /simulation VR map: GTA-like mini map low right (`sim-xr-minimap.tsx`), tap → big hologram map, a pin
   opens the sector panel / mixing desk. `make vr-sim-map-probe` passes.
 - **VS-T36:** floating « Menu » and « Leave / Back to the studio » moved to a low follow dock
@@ -22,16 +25,7 @@
   village (dark at night only: `duskDarkness`, `placedDim`, `drawnTint`), sized from proportions (`sceneScale`,
   `ARCHETYPE_HEIGHT_M`, stored scale dropped). Immersion tags all translated (`villageTags`). `make placed-shot`.
 
-- **VS-T34:** dispatcher label / shelter in /simulation VR → mixing desk (`sim-xr-dispatch-panel.tsx`): battery
-  master (reserve, « Start the battery & dispatch » = first run), sector faders (kW cap, Cut / On), one fader per
-  appliance wired to the dispatcher (`ems`, auto-listed); laser drag (`utils/xr-drag.ts` in `xr-hands.ts`);
-  patches in `utils/dispatch-mixer.ts`; shared `ui/sim-xr-holo.tsx`. Probe: mixer steps in `make vr-sim-probe`.
-- **VS-T33:** `?immersion=vr` on /simulation and /village, `&lab=2d|3d` at the studio desks
-  (`microgrid-3d/utils/immersion-query.ts`, `hooks/use-immersion-query.ts`; reload reopens); « Go to the
-  simulation » → `/simulation?immersion=vr`. Sim VR rig scaled 0.5 in the half-scale village (eyes ≈ 0.8 m), 1:1
-  in rooms (`utils/xr-walk.ts`); ← / → turn the head from the keyboard while walking (touchpad off while typing).
-- **VS-T29–T32:** readable panels and icons, voice meter, controllers / hands / lasers, desks turntable (2D ↔ 3D
-  lab), menu « Close », miniature card — details in `docs/tasks/VR-village-spatial-shoot.md`.
+- **VS-T29–T35:** see `docs/tasks/VR-village-spatial-shoot.md`.
 
 ## Decisions
 

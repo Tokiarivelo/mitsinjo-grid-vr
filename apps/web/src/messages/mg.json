@@ -1236,6 +1236,15 @@
       "minimapLabel": "Sarintany",
       "minimapHelp": "Zana-tsipika hamindra, Enter hametrahana.",
       "minimapBlocked": "Toerana efa misy (trano, lalana, dobo na zavatra): hafindra any amin'ny sisiny malalaka akaiky indrindra izy.",
+      "insertPowerKind": "Fampifandraisana herinaratra",
+      "insertElectric": "Mampiasa herinaratra · andry sy tariby",
+      "insertNonElectric": "Tsy mampiasa herinaratra · tsy misy andry",
+      "insertNonElectricNote": "Tsy misy enta-mavesatra (0 kWh no isain'ny motera) ary tsy misy andry na tariby mankany aminy: apetraka ao an-tanàna fotsiny izy.",
+      "minimapVillageCaption": "Tanàna · lalana, dobo, tanimbary · avaratra any ambony",
+      "minimapWideCaption": "Tany manontolo · farihy any avaratra atsinanana · avaratra any ambony",
+      "minimapZoomWide": "Tany manontolo",
+      "minimapZoomVillage": "Tanàna",
+      "minimapNorth": "A",
       "insertWatts": "Hery isaky ny iray (W)",
       "insertWattsRange": "Fetran'ny katalaogy: {min}–{max} W",
       "insertQuantity": "Isa",
@@ -1605,6 +1614,7 @@
         "inSimulation": "Ao anaty simulation : naverina nokajiana ny paikady",
         "goSimulation": "Mankany amin'ny simulation",
         "insertTip": "Ampidiro ao amin'ny simulation ilay zavatra : averina kajiana ny paikady",
+        "electricTip": "Tsindrio: tsy mampiasa herinaratra ity zavatra ity (tsy misy andry na tariby)",
         "goSimulationTip": "Sokafy amin'ny VR ny simulation, eo akaikin'ity zavatra ity"
       },
       "vrLab": {

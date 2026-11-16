@@ -10,23 +10,15 @@ import { fmtKw, fmtKwh } from '@/lib/format';
 import type { ObjectRecipe } from '@/lib/object-shape';
 import type { ApplianceDetection } from '@/lib/vision';
 import { useSiteZones } from '@/features/microgrid-3d/hooks/use-site-zones';
-import {
-  KEEP_OUT_ZONES,
-  POND_CENTER,
-  POND_RADIUS,
-  VILLAGE_PATHS,
-} from '@/features/microgrid-3d/utils/landscape';
+import { KEEP_OUT_ZONES } from '@/features/microgrid-3d/utils/landscape';
+import { drawVillageMap } from '@/features/microgrid-3d/utils/sim-xr-map-draw';
+import { mapTransform, type MapPinId } from '@/features/microgrid-3d/utils/sim-xr-minimap';
 import { tapPoint } from '@/features/microgrid-3d/utils/tap-point';
 import { useXrHandoff } from '@/features/microgrid-3d/utils/xr-handoff';
 import { immersionHref } from '@/features/microgrid-3d/utils/immersion-query';
 import { leaveImmersionFor } from '@/features/microgrid-3d/hooks/use-immersion-query';
 import { useApplianceInsert } from '../../hooks/use-appliance-insert';
-import {
-  pathSegmentsInRange,
-  tableUvToVillage,
-  villageToTable,
-  VILLAGE_HOLO_RANGE,
-} from '../../utils/village-holo';
+import { tableUvToVillage, villageToTable, VILLAGE_HOLO_RANGE } from '../../utils/village-holo';
 import { useHoloPanel, type PanelRegistry } from './holo-panel';
 import { HoloButton, HoloFrame, HoloText } from './holo-ui';
 import { HOLO, HOLO_TEXT_DMM, holoTextPx, type HoloCardSpec } from './holo-style';
@@ -36,6 +28,7 @@ import { VILLAGE_TABLE } from './xr-layout';
 export const VILLAGE_IDS = {
   map: 'holo:village-map',
   insert: 'holo:village-insert',
+  electric: 'holo:village-electric',
   simulation: 'holo:village-simulation',
 } as const;
 
@@ -53,12 +46,62 @@ const STATUS_H = 0.17;
 const HEADER_H = 0.12;
 const STACK_Z = -R * Math.cos(VILLAGE_TABLE.tilt) - 0.02;
 const BTN_Y = R * Math.sin(VILLAGE_TABLE.tilt) + 0.03 + BTN_H / 2;
-const STATUS_Y = BTN_Y + BTN_H / 2 + 0.02 + STATUS_H / 2;
+/** Electric / non-electric switch (VS-T40), full width, between the status and the actions. */
+const POWER_Y = BTN_Y + BTN_H + 0.02;
+const STATUS_Y = POWER_Y + BTN_H / 2 + 0.02 + STATUS_H / 2;
 const HEADER_Y = STATUS_Y + STATUS_H / 2 + 0.02 + HEADER_H / 2;
 const px = (dmm: number, width: number) => holoTextPx(dmm, width, D);
 /** Placed objects drawn at most (the simulation holds fewer lines). */
 const MAX_DOTS = 48;
 const STATIC_IDS = new Set(KEEP_OUT_ZONES.map((z) => z.id));
+/** Table map canvas (px) and its name size: read from ~1.5 m, larger than /simulation's map. */
+const TABLE_MAP_PX = 1024;
+const TABLE_FONT_SCALE = 1.35;
+/** North-up map of the village core, centred on the village (world x, z → canvas px). */
+const TABLE_TRANSFORM = mapTransform(0, 0, 0, -1, TABLE_MAP_PX, VILLAGE_HOLO_RANGE, []);
+
+/** Draws the table map and flags its texture for upload. */
+function paintTable(
+  texture: THREE.Texture,
+  ctx: CanvasRenderingContext2D,
+  options: Parameters<typeof drawVillageMap>[1]
+): void {
+  drawVillageMap(ctx, options);
+  texture.needsUpdate = true;
+}
+
+/**
+ * Canvas texture of the table (VS-T39): the /simulation map drawing (paddy, lake and pond, laterite
+ * roads and paths, buildings and the dispatcher with their names), no walker. The feeder sector of
+ * the object is green; redrawn only when the feeder or the language changes.
+ */
+function useTableMapTexture(feeder: string): THREE.CanvasTexture | null {
+  const tSector = useTranslations('sectors');
+  const tTags = useTranslations('features.simulation.villageTags');
+  const surface = useMemo(() => {
+    const canvas = document.createElement('canvas');
+    canvas.width = TABLE_MAP_PX;
+    canvas.height = TABLE_MAP_PX;
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.anisotropy = 4;
+    return { ctx: canvas.getContext('2d'), texture };
+  }, []);
+  useEffect(() => () => surface.texture.dispose(), [surface]);
+  useEffect(() => {
+    if (!surface.ctx) return;
+    paintTable(surface.texture, surface.ctx, {
+      size: TABLE_MAP_PX,
+      transform: TABLE_TRANSFORM,
+      tone: (pin: MapPinId) =>
+        pin === 'dispatcher' ? HOLO.violet : pin === feeder ? HOLO.green : HOLO.cyan,
+      names: (pin: MapPinId) => (pin === 'dispatcher' ? tTags('controllerTitle') : tSector(pin)),
+      fontScale: TABLE_FONT_SCALE,
+    });
+  }, [surface, feeder, tSector, tTags]);
+  // No 2D canvas (tests, very old browsers): the plain glass disc.
+  return surface.ctx ? surface.texture : null;
+}
 
 const _local = new THREE.Vector3();
 const _m = new THREE.Matrix4();
@@ -81,10 +124,10 @@ export interface HoloVillageTableProps {
 }
 
 /**
- * Village hologram of the VR lab (VS-T28): the village core as a round table (paths, pond,
- * buildings, the objects already placed), turned toward the viewer. Aim at the table and press to
- * place the object (the page's placement: snapped onto the terrain, out of buildings and paths,
- * nearest feeder), see its feeder cable, « Add to the simulation » (same call as the page: line +
+ * Village hologram of the VR lab (VS-T28, VS-T39): the village core as a round table drawn like the
+ * /simulation map (roads, paths, lake, pond, paddy, named buildings, the objects already placed),
+ * turned toward the viewer. Aim at the table and press to place the object (the page's placement:
+ * snapped onto the terrain, out of buildings and paths, nearest feeder), see its feeder cable, « Add to the simulation » (same call as the page: line +
  * edited 3D model, engine re-run), then « Go to the simulation » (leaves the headset session).
  */
 export const HoloVillageTable = memo(function HoloVillageTable({
@@ -120,30 +163,8 @@ export const HoloVillageTable = memo(function HoloVillageTable({
     },
   });
 
-  // Static geometry: paths (one line set), buildings (one instanced mesh).
-  const paths = useMemo(() => {
-    const seg = pathSegmentsInRange(VILLAGE_PATHS);
-    const pts: number[] = [];
-    for (let i = 0; i < seg.length; i += 4)
-      pts.push(seg[i]! * K, 0.002, seg[i + 1]! * K, seg[i + 2]! * K, 0.002, seg[i + 3]! * K);
-    const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
-    return g;
-  }, []);
-  useEffect(() => () => paths.dispose(), [paths]);
-  const buildings = useMemo(() => KEEP_OUT_ZONES.filter((z) => z.id !== 'pond'), []);
-  const buildingsRef = useRef<THREE.InstancedMesh>(null);
-  useEffect(() => {
-    const m = buildingsRef.current;
-    if (!(m instanceof THREE.InstancedMesh)) return; // not mounted in a three scene
-    buildings.forEach((z, i) => {
-      const w = z.r * 1.1 * K;
-      const h = (z.id?.startsWith('sector:') ? 0.025 : 0.012) * (R / 0.32);
-      const [x, tz] = villageToTable(z.x, z.z, R);
-      m.setMatrixAt(i, _m.compose(_p.set(x, h / 2, tz), _q.identity(), _s.set(w, h, w)));
-    });
-    m.instanceMatrix.needsUpdate = true;
-  }, [buildings]);
+  // The village drawn like the /simulation map (roads, water, named buildings).
+  const mapTexture = useTableMapTexture(sector);
 
   // Objects already placed (other lines), as amber dots.
   const others = useMemo(
@@ -168,8 +189,10 @@ export const HoloVillageTable = memo(function HoloVillageTable({
   }, [others]);
 
   // Feeder cable of the placed spot (the page's `tapPoint`).
+  const electric = draft.draft.electric;
   const cable = useMemo(() => {
-    if (!pos) return null;
+    // A non-electric object (VS-T40) gets no cable.
+    if (!pos || !electric) return null;
     const tap = tapPoint(pos, sector, draft.draft.connectionMode ?? 'branch', {
       zones,
       excludeId: id,
@@ -180,7 +203,7 @@ export const HoloVillageTable = memo(function HoloVillageTable({
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
     return g;
-  }, [pos, sector, draft.draft.connectionMode, zones, id]);
+  }, [pos, electric, sector, draft.draft.connectionMode, zones, id]);
   useEffect(() => () => cable?.dispose(), [cable]);
 
   // Hover cursor on the table; the placed pin bobs a little.
@@ -297,35 +320,26 @@ export const HoloVillageTable = memo(function HoloVillageTable({
       <group ref={table} position={[0, 0, 0]} rotation={[tilt, 0, 0]}>
         {/* Table disc: the aim / tap surface */}
         <mesh ref={mapRef} rotation={[-Math.PI / 2, 0, 0]} renderOrder={1}>
-          <circleGeometry args={[R, 48]} />
-          <meshBasicMaterial
-            color={HOLO.dome}
-            transparent
-            opacity={0.85}
-            depthWrite={false}
-            toneMapped={false}
-            side={THREE.DoubleSide}
-          />
+          <circleGeometry args={[R, 64]} />
+          {mapTexture ? (
+            <meshBasicMaterial
+              map={mapTexture}
+              transparent
+              depthWrite={false}
+              toneMapped={false}
+              side={THREE.DoubleSide}
+            />
+          ) : (
+            <meshBasicMaterial
+              color={HOLO.dome}
+              transparent
+              opacity={0.85}
+              depthWrite={false}
+              toneMapped={false}
+              side={THREE.DoubleSide}
+            />
+          )}
         </mesh>
-        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.001, 0]} renderOrder={2}>
-          <ringGeometry args={[R * 0.985, R, 64]} />
-          <meshBasicMaterial color={HOLO.cyan} toneMapped={false} side={THREE.DoubleSide} />
-        </mesh>
-        <lineSegments geometry={paths} renderOrder={2}>
-          <lineBasicMaterial color={HOLO.gridDim} toneMapped={false} />
-        </lineSegments>
-        <mesh
-          rotation={[-Math.PI / 2, 0, 0]}
-          position={[POND_CENTER[0] * K, 0.002, POND_CENTER[1] * K]}
-          renderOrder={2}
-        >
-          <circleGeometry args={[POND_RADIUS * K, 20]} />
-          <meshBasicMaterial color={HOLO.cyan} transparent opacity={0.5} toneMapped={false} />
-        </mesh>
-        <instancedMesh ref={buildingsRef} args={[undefined, undefined, buildings.length]}>
-          <boxGeometry />
-          <meshLambertMaterial color={HOLO.violet} emissive={HOLO.violet} emissiveIntensity={0.4} />
-        </instancedMesh>
         <instancedMesh ref={dotsRef} args={[undefined, undefined, MAX_DOTS]}>
           <cylinderGeometry args={[1, 1, 1, 12]} />
           <meshBasicMaterial color={HOLO.amber} toneMapped={false} />
@@ -366,6 +380,22 @@ export const HoloVillageTable = memo(function HoloVillageTable({
           position={[0, 0, 0.003]}
         />
       </group>
+      <HoloButton
+        registry={registry}
+        id={VILLAGE_IDS.electric}
+        label={electric ? t('insertElectric') : t('insertNonElectric')}
+        tip={electric ? t('vrVillage.electricTip') : t('insertNonElectricNote')}
+        distance={D}
+        width={STACK_W}
+        height={BTN_H}
+        position={[0, POWER_Y, STACK_Z + 0.004]}
+        color={electric ? HOLO.cyan : HOLO.amber}
+        hovered={hoveredId === VILLAGE_IDS.electric}
+        onSelect={() => {
+          draft.setElectric(!electric);
+          setAdded(false);
+        }}
+      />
       <HoloButton
         registry={registry}
         id={VILLAGE_IDS.insert}

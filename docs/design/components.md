@@ -200,8 +200,11 @@ Common: every interactive element has hover, active, disabled, focus-visible (2p
 
 ## Free placement (PV-P)
 
-- `PlaceMinimap` (`features/vision-insert`, PP-T4): top-down village SVG (terrain disc + one dot per sector building,
-  current feeder cyan), `role="application"`, labelled + help line (`minimapLabel`, `minimapHelp`), crosshair cursor.
+- `PlaceMinimap` (`features/vision-insert`, PP-T4, VS-T39): top-down village SVG drawn like the /simulation map
+  (shared `MAP_FEATURES` / `MAP_PINS`): paddy, lake and pond, laterite roads and paths, one named dot per sector
+  building (current feeder cyan), the EMS shelter, a north arrow. Opens on the village (±40 units); « Whole terrain »
+  toggle (`aria-pressed`, 44 px) shows ±115 (auto when the spot is out of the village); marks and names keep their
+  on-screen size at both zooms (text halo on `stroke-canvas-sunken`). `role="application"`, labelled + help line (`minimapLabel`, `minimapHelp`), crosshair cursor.
   Click / tap places; arrows move the cursor (Shift = ×5), Enter / Space places; screen-reader live readout of the
   cursor (`cursorAt`). Rounded panel on `bg-canvas-sunken`, cyan focus ring; full width down to 320 px.
 - Marker select + drag (`features/microgrid-3d`, PP-T5): click a marker = select (flat ground ring + cyan tag

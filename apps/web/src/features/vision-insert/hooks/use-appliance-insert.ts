@@ -36,7 +36,8 @@ export function useApplianceInsert({ detection, name, photo, recipe }: Appliance
   const storedModel = usePlacedModelsStore((s) => s.models[id]);
   const modelRecipe = recipe ?? storedModel?.recipe;
   const { appliance } = draft;
-  const connectionMode = draft.draft.connectionMode ?? 'branch';
+  // A non-electric object (VS-T40) is never wired to the dispatcher.
+  const connectionMode = draft.draft.electric ? (draft.draft.connectionMode ?? 'branch') : 'branch';
 
   const insert = useCallback((): boolean => {
     if (!appliance) return false;

@@ -1236,6 +1236,15 @@
       "minimapLabel": "Carte du village",
       "minimapHelp": "Flèches : déplacer le curseur. Entrée : placer.",
       "minimapBlocked": "Emplacement occupé (bâtiment, chemin, mare ou objet) : il sera déplacé vers le bord libre le plus proche.",
+      "insertPowerKind": "Raccordement électrique",
+      "insertElectric": "Électrique · poteau et câble",
+      "insertNonElectric": "Non électrique · sans poteau",
+      "insertNonElectricNote": "Aucune charge (le moteur compte 0 kWh) et aucun poteau ni câble jusqu'à lui : il est seulement posé dans le village.",
+      "minimapVillageCaption": "Village · routes, mare, rizière · nord en haut",
+      "minimapWideCaption": "Tout le terrain · lac au nord-est · nord en haut",
+      "minimapZoomWide": "Tout le terrain",
+      "minimapZoomVillage": "Village",
+      "minimapNorth": "N",
       "insertWatts": "Puissance par unité (W)",
       "insertWattsRange": "Plage du catalogue : {min}–{max} W",
       "insertQuantity": "Quantité",
@@ -1605,6 +1614,7 @@
         "inSimulation": "Dans la simulation : stratégies recalculées",
         "goSimulation": "Aller à la simulation",
         "insertTip": "Ajouter l’objet à la simulation : les stratégies sont recalculées",
+        "electricTip": "Toucher : cet objet ne consomme pas d'électricité (sans poteau ni câble)",
         "goSimulationTip": "Ouvrir la simulation en VR, à côté de cet objet"
       },
       "vrLab": {

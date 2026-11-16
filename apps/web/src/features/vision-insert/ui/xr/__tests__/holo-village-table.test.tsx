@@ -10,6 +10,7 @@ import type { HoloPanelHandlers } from '../holo-panel';
 
 const nav = vi.hoisted(() => ({ push: vi.fn(), end: vi.fn(() => Promise.resolve()) }));
 const panels = vi.hoisted(() => new Map<string, HoloPanelHandlers>());
+const draws = vi.hoisted(() => [] as Array<Record<string, unknown>>);
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: nav.push }) }));
 vi.mock('@react-three/fiber', () => ({
@@ -35,7 +36,12 @@ vi.mock('../holo-ui', () => ({
   ),
 }));
 
+vi.mock('@/features/microgrid-3d/utils/sim-xr-map-draw', () => ({
+  drawVillageMap: (_ctx: unknown, o: Record<string, unknown>) => draws.push(o),
+}));
+
 import { HoloVillageTable } from '../holo-village-table';
+import { HOLO } from '../holo-style';
 
 const v = en.features.visionInsert;
 const pump: ApplianceDetection = {
@@ -109,5 +115,40 @@ describe('HoloVillageTable (VS-T28)', () => {
     fireEvent.click(screen.getByRole('button', { name: v.vrVillage.goSimulation }));
     expect(nav.end).toHaveBeenCalled();
     expect(nav.push).toHaveBeenCalledWith('/simulation?immersion=vr');
+  });
+
+  it('the table is the /simulation map: named buildings, feeder in green, no walker (VS-T39)', () => {
+    draws.length = 0;
+    const spy = vi
+      .spyOn(HTMLCanvasElement.prototype, 'getContext')
+      .mockReturnValue({} as CanvasRenderingContext2D);
+    setup();
+    spy.mockRestore();
+    const o = draws.at(-1) as {
+      names: (id: string) => string;
+      tone: (id: string) => string;
+      arrow?: number;
+    };
+    expect(o.arrow).toBeUndefined();
+    expect(o.names('school')).toBe(en.sectors.school);
+    expect(o.names('dispatcher')).toBe(en.features.simulation.villageTags.controllerTitle);
+    // The pump's default feeder (water) is highlighted; the other buildings stay cyan.
+    expect(o.tone('water')).toBe(HOLO.green);
+    expect(o.tone('school')).toBe(HOLO.cyan);
+    expect(o.tone('dispatcher')).toBe(HOLO.violet);
+  });
+
+  it('electric switch (VS-T40): « Non-electric · no pole » inserts a zero-duty line', () => {
+    setup();
+    tapTable(0.7, 0.4);
+    fireEvent.click(screen.getByRole('button', { name: v.insertElectric }));
+    expect(screen.getByRole('button', { name: v.insertNonElectric })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: v.insertButton }));
+    const line = useSimulationStore
+      .getState()
+      .input.appliances?.find((a) => a.id.includes('det-1'));
+    expect(line?.hourlyDuty?.every((d) => d === 0)).toBe(true);
+    // Never wired to the dispatcher.
+    expect(Object.values(usePlacedModelsStore.getState().models)[0]?.connectionMode).toBe('branch');
   });
 });

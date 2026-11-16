@@ -8,6 +8,7 @@ import {
 } from '@mitsinjo/engine';
 import type { BuildingSceneModel, StatusColor } from '../types';
 import { terrainHeight } from './landscape';
+import { isNonElectric } from './non-electric';
 import { clampToTerrain, defaultPosition, snapAwayFromBuildings } from './placement';
 
 /** One inserted appliance in the 3D village (PV-T13). kW values come from the engine profile. */
@@ -28,6 +29,8 @@ export interface ApplianceMarkerSceneModel {
   feeder: [number, number, number];
   /** Grid connection mode (PI-T8/PI-T9): 'branch' (default) or 'ems'. */
   connectionMode?: 'branch' | 'ems';
+  /** Draws no power (VS-T40, zero duty): no pole, tap, cable or diagram branch. */
+  nonElectric?: true;
   /** Badge state from its sector (PT-11b), set by `toSceneModel`; absent = plain badge. */
   tag?: ApplianceTagState;
 }
@@ -104,6 +107,7 @@ export function applianceMarkers(
       running: served && kwNow > RUNNING_KW,
       position: [spot.x, terrainHeight(spot.x, spot.z), spot.z],
       feeder: [bx, terrainHeight(bx, bz) + MARKER_FEEDER_H, bz],
+      ...(isNonElectric(a) ? { nonElectric: true as const } : {}),
     };
   });
 }

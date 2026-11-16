@@ -496,6 +496,8 @@ The project is configured for continuous deployment on [Vercel](https://vercel.c
 - **Continuous Deployment**: Only pushes and merges to `main` trigger production deployments.
 - **Zero Secret Exposure**: All keys are injected through Vercel Project Environment Variables. No secrets are committed to the Git repository.
 - **Vercel env vars**: what to set (and what not to) in [docs/setup/env.md](docs/setup/env.md).
+- **Vercel services**: root [`vercel.json`](vercel.json) declares one public Next.js service `web` (`apps/web`); the Vercel project's Root Directory must be `.`. The scale-model bridge stays local (open the site with `?bridge=ws://localhost:8787`).
+- **Immersion in production**: a Quest uses its native WebXR; a desktop without a headset gets the Meta IWER emulator, so VR immersion and the 3D labs open there too (`NEXT_PUBLIC_XR_EMULATOR=off` to disable).
 
 ```bash
 make deploy-link   # Link clone to Vercel project (once per machine)

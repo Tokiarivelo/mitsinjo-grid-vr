@@ -124,7 +124,16 @@ export const env = envSchema.parse({
  * Browser-visible settings (NEXT_PUBLIC_*, inlined at build). Empty string = unset.
  * NEXT_PUBLIC_BRIDGE_URL: WebSocket of the local scale-model bridge (`make bridge`), e.g. ws://localhost:8787.
  * Unset → the scale-model panel is hidden (production).
+ * NEXT_PUBLIC_XR_EMULATOR: `on` (default) = a browser without a headset gets the Meta IWER
+ * emulator, so /simulation and /village immersion and the 3D labs open on a desktop too
+ * (production included); `off` = only real WebXR headsets.
  */
 export const publicEnv = z
-  .object({ NEXT_PUBLIC_BRIDGE_URL: z.string().url().optional() })
-  .parse({ NEXT_PUBLIC_BRIDGE_URL: process.env.NEXT_PUBLIC_BRIDGE_URL || undefined });
+  .object({
+    NEXT_PUBLIC_BRIDGE_URL: z.string().url().optional(),
+    NEXT_PUBLIC_XR_EMULATOR: z.enum(['on', 'off']).default('on'),
+  })
+  .parse({
+    NEXT_PUBLIC_BRIDGE_URL: process.env.NEXT_PUBLIC_BRIDGE_URL || undefined,
+    NEXT_PUBLIC_XR_EMULATOR: process.env.NEXT_PUBLIC_XR_EMULATOR || undefined,
+  });

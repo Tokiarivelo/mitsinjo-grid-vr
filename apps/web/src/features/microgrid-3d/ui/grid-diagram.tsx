@@ -85,13 +85,12 @@ export function GridDiagram({
   useEffect(() => reset(), [variant, reset]);
   const feeders = useFeederLabels(model);
   const { lines, solar, battery, buildings } = model;
-  const applianceCounts = useMemo(() => appliancesPerSector(model.appliances), [model.appliances]);
-  const branchSlots = useMemo(
-    () => applianceBranchSlots(model.appliances ?? []),
-    [model.appliances]
-  );
+  // Non-electric objects (VS-T40) have no branch on the electrical diagram.
+  const wired = useMemo(() => model.appliances?.filter((a) => !a.nonElectric), [model.appliances]);
+  const applianceCounts = useMemo(() => appliancesPerSector(wired), [wired]);
+  const branchSlots = useMemo(() => applianceBranchSlots(wired ?? []), [wired]);
   // Placement depends only on which lines exist, not on the hour: recompute on that key alone.
-  const pillKey = (model.appliances ?? [])
+  const pillKey = (wired ?? [])
     .map((a) => `${a.id}|${a.sector}|${a.connectionMode ?? 'branch'}`)
     .join(',');
   const pills = useMemo(
@@ -243,7 +242,7 @@ export function GridDiagram({
               })}
 
               {/* Inserted appliance branch lines & nodes (PI-T9) */}
-              {model.appliances?.map((appliance) => {
+              {wired?.map((appliance) => {
                 const mode = appliance.connectionMode ?? 'branch';
                 const pill = pills[appliance.id];
                 const route = pill
@@ -430,7 +429,7 @@ export function GridDiagram({
             ))}
 
             {/* Inserted appliances: named card at the end of their branch */}
-            {model.appliances?.map((appliance) => {
+            {wired?.map((appliance) => {
               const pill = pills[appliance.id];
               if (!pill) return null;
               const mode = appliance.connectionMode ?? 'branch';
