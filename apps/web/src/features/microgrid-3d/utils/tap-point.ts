@@ -393,6 +393,8 @@ export function buildApplianceDerivations(
   const poles: SectorPole[] = [];
 
   for (const m of appliances) {
+    // A non-electric object (VS-T40) gets no pole, tap or cable.
+    if (m.nonElectric) continue;
     const mode = options.placedModels?.[m.id]?.connectionMode ?? 'branch';
     const tap = tapPoint(m.position, m.sector, mode, {
       zones: options.zones,

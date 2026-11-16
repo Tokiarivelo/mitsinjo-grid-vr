@@ -28,6 +28,7 @@ import { VILLAGE_TABLE } from './xr-layout';
 export const VILLAGE_IDS = {
   map: 'holo:village-map',
   insert: 'holo:village-insert',
+  electric: 'holo:village-electric',
   simulation: 'holo:village-simulation',
 } as const;
 
@@ -45,7 +46,9 @@ const STATUS_H = 0.17;
 const HEADER_H = 0.12;
 const STACK_Z = -R * Math.cos(VILLAGE_TABLE.tilt) - 0.02;
 const BTN_Y = R * Math.sin(VILLAGE_TABLE.tilt) + 0.03 + BTN_H / 2;
-const STATUS_Y = BTN_Y + BTN_H / 2 + 0.02 + STATUS_H / 2;
+/** Electric / non-electric switch (VS-T40), full width, between the status and the actions. */
+const POWER_Y = BTN_Y + BTN_H + 0.02;
+const STATUS_Y = POWER_Y + BTN_H / 2 + 0.02 + STATUS_H / 2;
 const HEADER_Y = STATUS_Y + STATUS_H / 2 + 0.02 + HEADER_H / 2;
 const px = (dmm: number, width: number) => holoTextPx(dmm, width, D);
 /** Placed objects drawn at most (the simulation holds fewer lines). */
@@ -186,8 +189,10 @@ export const HoloVillageTable = memo(function HoloVillageTable({
   }, [others]);
 
   // Feeder cable of the placed spot (the page's `tapPoint`).
+  const electric = draft.draft.electric;
   const cable = useMemo(() => {
-    if (!pos) return null;
+    // A non-electric object (VS-T40) gets no cable.
+    if (!pos || !electric) return null;
     const tap = tapPoint(pos, sector, draft.draft.connectionMode ?? 'branch', {
       zones,
       excludeId: id,
@@ -198,7 +203,7 @@ export const HoloVillageTable = memo(function HoloVillageTable({
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
     return g;
-  }, [pos, sector, draft.draft.connectionMode, zones, id]);
+  }, [pos, electric, sector, draft.draft.connectionMode, zones, id]);
   useEffect(() => () => cable?.dispose(), [cable]);
 
   // Hover cursor on the table; the placed pin bobs a little.
@@ -375,6 +380,22 @@ export const HoloVillageTable = memo(function HoloVillageTable({
           position={[0, 0, 0.003]}
         />
       </group>
+      <HoloButton
+        registry={registry}
+        id={VILLAGE_IDS.electric}
+        label={electric ? t('insertElectric') : t('insertNonElectric')}
+        tip={electric ? t('vrVillage.electricTip') : t('insertNonElectricNote')}
+        distance={D}
+        width={STACK_W}
+        height={BTN_H}
+        position={[0, POWER_Y, STACK_Z + 0.004]}
+        color={electric ? HOLO.cyan : HOLO.amber}
+        hovered={hoveredId === VILLAGE_IDS.electric}
+        onSelect={() => {
+          draft.setElectric(!electric);
+          setAdded(false);
+        }}
+      />
       <HoloButton
         registry={registry}
         id={VILLAGE_IDS.insert}

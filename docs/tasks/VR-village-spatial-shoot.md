@@ -389,3 +389,9 @@ Style : hologramme futuriste (cyan / ambre, lignes de balayage, coins lumineux, 
 - [x] Carte web « Placer sur la carte » (`PlaceMinimap`) : routes et chemins, mare, lac, rizière, noms des bâtiments (desserte en cyan), abri EMS, flèche du nord ; vue « Village » par défaut, bouton « Tout le terrain ».
 - [x] Table du village du labo VR (`HoloVillageTable`) : même dessin que la carte de /simulation (`drawVillageMap`, sans flèche du marcheur, noms 1,35×), desserte en vert ; visée / clic inchangés.
 - [ ] **Done when :** vu à l'écran (V467–V470) et au casque (V471–V472).
+
+### VS-T40 : Objet non électrique : pas de poteau ni de câble (/village web et labo VR)
+
+- [x] Choix « Électrique · poteau et câble » / « Non électrique · sans poteau » (panneau d'insertion web et table du village du labo VR) ; décor = non électrique par défaut.
+- [x] Non électrique = ligne moteur à profil horaire nul (`NO_LOAD_DUTY`, 0 kWh calculé) ; aucun piquage, poteau ni câble (scène, carte de placement, table VR), pas de branche au schéma électrique, jamais relié au dispatcher.
+- [ ] **Done when :** vu à l'écran (V473–V476) et au casque (V477).

@@ -12,6 +12,7 @@ import {
   toAppliance,
   upsertAppliance,
 } from '../utils/appliance-draft';
+import { isNonElectric } from '@/features/microgrid-3d/utils/non-electric';
 
 describe('appliance draft (PV-T11)', () => {
   it('AI estimate = recognised category + catalog default power + suggested sector', () => {
@@ -24,6 +25,7 @@ describe('appliance draft (PV-T11)', () => {
       position: null,
       feederAuto: true,
       connectionMode: 'branch',
+      electric: true,
     });
     expect(aiDraft({ category: 'water_pump' }, 'Pump').sector).toBe('water');
     expect(aiDraft({ category: 'tv' }, 'TV').sector).toBe('households');
@@ -33,6 +35,18 @@ describe('appliance draft (PV-T11)', () => {
     const house = aiDraft({ kind: 'scenery', category: 'other', scenery: 'building' }, 'House');
     expect(house).toMatchObject({ category: 'other', sector: 'households' });
     expect(suggestSector({ kind: 'scenery', category: 'other', scenery: 'water' })).toBe('water');
+  });
+
+  it('non-electric (VS-T40): scenery starts without load; zero duty in and out of the engine line', () => {
+    const tree = aiDraft({ kind: 'scenery', category: 'other', scenery: 'tree' }, 'Mango tree');
+    expect(tree.electric).toBe(false);
+    const line = toAppliance('a1', tree)!;
+    expect(isNonElectric(line)).toBe(true);
+    expect(fromAppliance(line).electric).toBe(false);
+    const lamp = toAppliance('a2', { ...tree, electric: true })!;
+    expect(lamp.hourlyDuty).toBeUndefined();
+    expect(fromAppliance(lamp).electric).toBe(true);
+    expect(sameDraft(tree, { ...tree, electric: true })).toBe(false);
   });
 
   it('keeps watts and quantity inside the engine bounds', () => {

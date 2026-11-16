@@ -300,7 +300,8 @@ export const VillageXRStudio = memo(function VillageXRStudio({
       } else {
         // Connect to microgrid with catalog defaults
         playGridConnectSound();
-        const appliance = toAppliance(applianceId, draft);
+        // A shot « connects » the object: it is electric by definition (VS-T40 choice is in the lab).
+        const appliance = toAppliance(applianceId, { ...draft, electric: true });
         if (appliance) {
           upsert(appliance);
           const archetype = defaultArchetype(

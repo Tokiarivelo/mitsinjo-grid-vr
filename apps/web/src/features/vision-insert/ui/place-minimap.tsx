@@ -27,6 +27,8 @@ export interface PlaceMinimapProps {
   excludeId?: string;
   /** Grid connection mode (PI-T8/PI-T9): 'branch' (default) or 'ems'. */
   connectionMode?: ConnectionMode;
+  /** False = non-electric object (VS-T40): no feeder cable, tap or pole drawn. */
+  electric?: boolean;
 }
 
 /** Half-side of the square map (scene units), whole terrain: the terrain disc plus a margin. */
@@ -59,6 +61,7 @@ export function PlaceMinimap({
   zones = KEEP_OUT_ZONES,
   excludeId,
   connectionMode = 'branch',
+  electric = true,
 }: PlaceMinimapProps) {
   const t = useTranslations('features.visionInsert');
   const tSector = useTranslations('sectors');
@@ -84,9 +87,9 @@ export function PlaceMinimap({
 
   // Derivation cable for the placed spot (PI-T9)
   const derivation = useMemo(() => {
-    if (!value) return null;
+    if (!value || !electric) return null;
     return tapPoint(value, sector, connectionMode, { zones, excludeId });
-  }, [value, sector, connectionMode, zones, excludeId]);
+  }, [value, electric, sector, connectionMode, zones, excludeId]);
 
   const derivationPath = useMemo(() => {
     if (!derivation || !value) return null;

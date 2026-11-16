@@ -1236,6 +1236,10 @@
       "minimapLabel": "Village map",
       "minimapHelp": "Arrows move the cursor. Enter places.",
       "minimapBlocked": "Spot taken (building, path, pond or object): it will move to the nearest free edge.",
+      "insertPowerKind": "Electrical connection",
+      "insertElectric": "Electric · pole and cable",
+      "insertNonElectric": "Non-electric · no pole",
+      "insertNonElectricNote": "No load (the engine counts 0 kWh) and no pole or cable run to it: it only stands in the village.",
       "minimapVillageCaption": "Village · roads, pond and paddy · north up",
       "minimapWideCaption": "Whole terrain · lake to the north-east · north up",
       "minimapZoomWide": "Whole terrain",
@@ -1610,6 +1614,7 @@
         "inSimulation": "In the simulation: strategies recomputed",
         "goSimulation": "Go to the simulation",
         "insertTip": "Add the object to the simulation: the strategies are recomputed",
+        "electricTip": "Tap: this object draws no power (no pole or cable)",
         "goSimulationTip": "Open the simulation in VR, next to this object"
       },
       "vrLab": {

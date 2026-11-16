@@ -137,4 +137,18 @@ describe('HoloVillageTable (VS-T28)', () => {
     expect(o.tone('school')).toBe(HOLO.cyan);
     expect(o.tone('dispatcher')).toBe(HOLO.violet);
   });
+
+  it('electric switch (VS-T40): « Non-electric · no pole » inserts a zero-duty line', () => {
+    setup();
+    tapTable(0.7, 0.4);
+    fireEvent.click(screen.getByRole('button', { name: v.insertElectric }));
+    expect(screen.getByRole('button', { name: v.insertNonElectric })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: v.insertButton }));
+    const line = useSimulationStore
+      .getState()
+      .input.appliances?.find((a) => a.id.includes('det-1'));
+    expect(line?.hourlyDuty?.every((d) => d === 0)).toBe(true);
+    // Never wired to the dispatcher.
+    expect(Object.values(usePlacedModelsStore.getState().models)[0]?.connectionMode).toBe('branch');
+  });
 });

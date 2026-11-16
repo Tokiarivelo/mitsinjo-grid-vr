@@ -10,6 +10,7 @@ import {
 import { fnv1a32 } from '@/lib/hash';
 import { isAppliance, type ApplianceDetection } from '@/lib/vision';
 import { nearestSector } from '@/features/microgrid-3d/utils/placement';
+import { isNonElectric, NO_LOAD_DUTY } from '@/features/microgrid-3d/utils/non-electric';
 
 import type { ConnectionMode } from '@/stores/placed-models.store';
 
@@ -20,7 +21,8 @@ export type { ConnectionMode };
  * from the operator (manual), always inside the catalog bounds of the category. Never from a model.
  * `position` (PP-T4) = free placement on the village map, null = the ring around the building;
  * `feederAuto` = the feeder (sector) follows the nearest building to the position;
- * `connectionMode` (PI-T8) = 'branch' (default) or 'ems' (direct to Dispatch EMS).
+ * `connectionMode` (PI-T8) = 'branch' (default) or 'ems' (direct to Dispatch EMS);
+ * `electric` (VS-T40) = false for an object that draws no power: zero duty, no pole or cable.
  */
 export interface ApplianceDraft {
   name: string;
@@ -31,6 +33,7 @@ export interface ApplianceDraft {
   position: AppliancePosition | null;
   feederAuto: boolean;
   connectionMode?: ConnectionMode;
+  electric: boolean;
 }
 
 export const MAX_QUANTITY = 50;
@@ -89,6 +92,8 @@ export function aiDraft(
     position: null,
     feederAuto: true,
     connectionMode: 'branch',
+    // Scenery (house, car, tree…) draws no power until the operator says so.
+    electric: isAppliance(d),
   };
 }
 
@@ -100,6 +105,7 @@ export const sameDraft = (a: ApplianceDraft, b: ApplianceDraft) =>
   a.watts === b.watts &&
   a.quantity === b.quantity &&
   a.feederAuto === b.feederAuto &&
+  a.electric === b.electric &&
   (a.connectionMode ?? 'branch') === (b.connectionMode ?? 'branch') &&
   a.position?.x === b.position?.x &&
   a.position?.z === b.position?.z;
@@ -114,13 +120,14 @@ export function toAppliance(id: string, draft: ApplianceDraft): Appliance | null
     watts: draft.watts,
     quantity: draft.quantity,
     ...(draft.position ? { position: draft.position } : {}),
+    ...(draft.electric ? {} : { hourlyDuty: [...NO_LOAD_DUTY] }),
   });
   return parsed.success ? parsed.data : null;
 }
 
 /** Engine line → draft (reopening an object already in the simulation). */
 export const fromAppliance = (
-  { name, category, sector, watts, quantity, position }: Appliance,
+  { name, category, sector, watts, quantity, position, hourlyDuty }: Appliance,
   connectionMode: ConnectionMode = 'branch'
 ): ApplianceDraft => ({
   name,
@@ -131,6 +138,7 @@ export const fromAppliance = (
   position: position ?? null,
   feederAuto: !position || nearestSector(position) === sector,
   connectionMode,
+  electric: !isNonElectric({ hourlyDuty }),
 });
 
 /**
