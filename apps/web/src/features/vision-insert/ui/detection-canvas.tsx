@@ -11,6 +11,7 @@ import {
   Sparkles,
   SquareDashedMousePointer,
   Trash2,
+  X,
 } from 'lucide-react';
 import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
@@ -42,6 +43,8 @@ export interface DetectionCanvasProps {
   selectedId: string | null;
   onSelect: (id: string) => void;
   onRetry?: () => void;
+  /** Stops the running analysis (VS-T26). Absent = no « Cancel » button. */
+  onCancel?: () => void;
   /** The mock answered instead of the vision model (offline or fallback). */
   isDemo?: boolean;
   /**
@@ -73,6 +76,7 @@ export function DetectionCanvas({
   selectedId,
   onSelect,
   onRetry,
+  onCancel,
   isDemo,
   onSendShapes,
   onRemoveManual,
@@ -182,6 +186,16 @@ export function DetectionCanvas({
             {t('refining')}
           </span>
         )}
+        {status === 'refining' && onCancel && (
+          <button
+            type="button"
+            onClick={onCancel}
+            className="inline-flex min-h-11 items-center gap-1 rounded-lg px-2 text-text-secondary hover:bg-surface-hover hover:text-text-primary cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-energy-cyan"
+          >
+            <X className="h-3.5 w-3.5" aria-hidden="true" />
+            {t('cancelAnalysis')}
+          </button>
+        )}
         <div className="ml-auto flex items-center gap-1">
           {onRetry && !busy && !editing && (
             <button
@@ -285,12 +299,21 @@ export function DetectionCanvas({
           {drawing && <DrawOverlay editor={editor} tool={tool} passThrough={panOn} />}
           {adjusting && <DrawOverlay editor={adjustEditor} tool="box" passThrough={panOn} />}
           {busy && (
-            <div
-              role="status"
-              className="absolute inset-0 flex items-center justify-center gap-2 text-sm font-medium text-text-primary"
-            >
-              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-              {t('loading')}
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-sm font-medium text-text-primary">
+              <span role="status" className="inline-flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                {t('loading')}
+              </span>
+              {onCancel && (
+                <button
+                  type="button"
+                  onClick={onCancel}
+                  className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-border bg-surface-elevated/95 px-3 text-sm font-medium text-text-primary shadow-sm hover:bg-surface-hover cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-energy-cyan"
+                >
+                  <X className="h-4 w-4" aria-hidden="true" />
+                  {t('cancelAnalysis')}
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -375,6 +398,28 @@ export function DetectionCanvas({
               type="button"
               onClick={onRetry}
               className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-border bg-surface px-3 text-sm font-medium text-text-primary hover:bg-surface-hover cursor-pointer"
+            >
+              <RotateCcw className="h-4 w-4" aria-hidden="true" />
+              {t('retry')}
+            </button>
+          )}
+        </div>
+      )}
+
+      {status === 'cancelled' && (
+        <div
+          role="status"
+          className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-surface p-3 text-sm text-text-primary"
+        >
+          <span className="inline-flex items-center gap-2">
+            <X className="h-4 w-4 text-text-muted" aria-hidden="true" />
+            {t('analysisCancelled')}
+          </span>
+          {onRetry && (
+            <button
+              type="button"
+              onClick={onRetry}
+              className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-border bg-surface-elevated px-3 text-sm font-medium text-text-primary hover:bg-surface-hover cursor-pointer"
             >
               <RotateCcw className="h-4 w-4" aria-hidden="true" />
               {t('retry')}

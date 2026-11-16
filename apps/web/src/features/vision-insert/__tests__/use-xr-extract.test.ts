@@ -190,4 +190,40 @@ describe('useXrExtract (VS-T19–T22)', () => {
     act(() => result.current.redraw('back'));
     expect(faces.generate).toHaveBeenCalledWith('back');
   });
+
+  it('a chat request redraws that view with it and logs it; the bot line follows the drawing', () => {
+    facade.state = {
+      status: 'ready',
+      facade: { imageUrl: 'data:image/png;base64,F', fileKey: 'k-front' },
+    };
+    const { result, rerender } = setup();
+    act(() => result.current.ask('det-1'));
+    rerender({ target: fridge });
+    act(() => result.current.sendChat('side', '  make the roof red  '));
+    expect(faces.generate).toHaveBeenCalledWith('side', 'make the roof red');
+    expect(result.current.chatOf('side').map((m) => m.kind)).toEqual(['prompt', 'working']);
+    expect(result.current.chatOf('back')).toEqual([]);
+    act(() => result.current.sendChat('main', 'no awning'));
+    expect(facade.retry).toHaveBeenCalledWith('no awning');
+    // Still showing the previous drawing: no answer yet. Drawing, then drawn: done.
+    rerender({ target: fridge });
+    expect(result.current.chatOf('side').at(-1)?.kind).toBe('working');
+    const side = faces.faces.side as Record<string, unknown>;
+    faces.faces.side = { ...side, status: 'generating' };
+    rerender({ target: fridge });
+    faces.faces.side = { ...side, status: 'ready' };
+    rerender({ target: fridge });
+    expect(result.current.chatOf('side').at(-1)?.kind).toBe('done');
+  });
+
+  it('sends nothing empty, nor while a view is drawing', () => {
+    facade.state = { status: 'generating', facade: undefined };
+    const { result, rerender } = setup();
+    act(() => result.current.ask('det-1'));
+    rerender({ target: fridge });
+    act(() => result.current.sendChat('side', 'make it blue'));
+    act(() => result.current.sendChat('back', '   '));
+    expect(faces.generate).not.toHaveBeenCalled();
+    expect(result.current.chatOf('side')).toEqual([]);
+  });
 });

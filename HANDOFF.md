@@ -1,39 +1,34 @@
 # HANDOFF — read first, overwrite at end of session (≤40 lines)
 
-**Updated:** 2026-11-15 · **By:** Claude Code · **Branch:** `feat/vsim-controls-houses` (stacked on PR #17
-`feat/vs-t17-xr-extract`); the shape stream (PQ-T67–T82) lives on `feat/pq-t76-cars`.
+**Updated:** 2026-11-16 · **By:** Claude Code · **Branch:** `feat/vs-t27-face-chat-lemur-bot` (pushed; stacked
+on `fix/vs-t25-studio-text-pot-highlights`, which has no PR yet). Tasks VS-T27, VS-T28 in
+`docs/tasks/VR-village-spatial-shoot.md`.
 
 ## NEXT
 
-1. Merge PR #17 (VS-T17–T23, /village extraction + controls), then rebase this branch on `main` and open its PR
-   (VSIM-T1–T4 + VS-T24).
-2. Play V412–V416 on a headset / the emulator by hand (carousel drag no longer turns the view).
-3. Shape stream (other branch): plants PQ-T82 live re-runs, then the PQ phase PR.
+1. Open the PRs: VS-T25/T26 branch first, then this one (after `make rebase-main`); play V434–V443 by hand.
+2. Headset: Quest Browser voice = system keyboard dictation (no Web Speech API there): check it.
 
 ## Done this session
 
-- **/village VS-T24:**
-  - Mouse clicks reach the scene during the emulated session: the IWER DevUI full-screen canvas used to
-    swallow them (wrist « Menu », « Extract in 3D / Cancel »). The mouse is listened on the document
-    (capture), aimed with the XR eye camera (`xrEyeAt`), never through HTML panels.
-  - A drag that grabbed a panel or a model keeps its events, so the DevUI no longer turns the view.
-  - Menu › « Show / Hide the controls help » (Meta: recall help from a menu); legends 12 s on entry, smaller.
-  - « Extract in 3D » opens the studio room (`xr-extract-studio.tsx`): carousel in the centre, generation
-    column + turning miniature on the right, hologram on the pedestal while building, and the lab opens by
-    itself when the model is ready (`HoloBuildPanel` and « Enter the 3D lab » removed). Shared hooks:
-    `useHoloImageMaterial`, `useSlideText`. `make vr-probe` 28/28 (lamp check accepts « range hood »).
-- **/simulation (VSIM-T1–T4, earlier, committed):** /village control map, walls stop the walker, holo power
-  panel per building (undo via `approveChange`), rooms; panel buttons (`userData.xrUi`) win the select ray
-  over a wall it crosses first; `make vr-sim-probe` 19/19.
+- **VS-T27 / VS-T28** (earlier commit): views AI chat + maki bot, village hologram table in the lab.
+- **`make dev-mock` was never offline:** turbo 2 strict env dropped `LLM_PROVIDER` from the `dev` task, so
+  `port.mjs` read `meta` from `.env`. Fix: `LLM_PROVIDER` in `turbo.json` `dev.passThroughEnv`.
+- **Floating Menu button over a panel:** in the emulator the Menu button floats (lazy follow) and could sit on
+  « Cancel »; `aimAt` tested it first, so Cancel was unreachable and the question stayed open (it then broke
+  the probe's walk steps). Now a panel wins over the _floating_ button; a worn wrist button keeps priority.
+  Test `ui/xr/__tests__/aim-at.test.ts`.
+- **Probe:** « wrist menu closed on entry » expected a worn button; in the emulator it floats by design
+  (`eefd12e`). Check now asserts closed + floating.
+- `make vr-probe` with `make dev-mock`: 37/37 PASS (lab, village table, Cancel, walks included);
+  `make vr-sim-probe`: 19/19 PASS (slow: load ≈ 16, software GL stalls; allow > 15 min).
+- `scripts/iwer-bridge-stop.sh` (orphaned bridges) committed (`33a4e74`).
 
 ## Decisions
 
-- Power control is per **sector** (engine `sectorCaps`); direct VR power actions apply via `approveChange`.
-- The studio shares the extraction's anchor: the question, studio and lab open in one place.
-- Emulator mouse hover never overrides what a controller laser aims at.
+- Bot replies are the drawing's status (i18n), never generated text. One request at a time.
+- No Neon migration, no HF dataset change.
 
 ## Open
 
-- `make vr-probe` depends on live Muse calls (2D views, Spark build): waits are 240 s; a slow call cascades.
-- /simulation probe on software GL is slow (minutes).
-- Not played on a headset: S125–S132, V400–V416.
+- `make check`: green except the `recon` time-budget test under full-suite load (passes alone).

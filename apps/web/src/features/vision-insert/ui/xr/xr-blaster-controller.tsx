@@ -8,6 +8,8 @@ import {
   createHandMesh,
   updateHandMesh,
 } from '@/features/microgrid-3d/utils/xr-hands';
+import { attachInputModels } from '@/features/microgrid-3d/utils/xr-input-models';
+import { createRayVisual } from '@/features/microgrid-3d/utils/xr-ray-visual';
 import type { SpatialTarget } from './spatial-projection';
 import { photoRay, type PhotoGround } from './tour/grounded';
 import {
@@ -18,6 +20,7 @@ import {
 } from './webcam-screen';
 import { AIR_BUTTON_RADIUS, AIR_BUTTON_TOUCH_RADIUS, MINIATURE_GRAB_RADIUS } from './xr-layout';
 import {
+  gazeHits,
   WRIST_BUTTON_ID,
   WRIST_RAY_RADIUS,
   WRIST_TOUCH_RADIUS,
@@ -26,6 +29,7 @@ import {
 import { playLaserShootSound, playScanRadarSound, playTargetHitSound } from './xr-audio-fx';
 import { grabTurntable, releaseTurntable, rotateTurntable, type Turntable } from './turntable';
 import {
+  dragAngle,
   dragTo,
   endDrag,
   panelOf,
@@ -169,6 +173,18 @@ const MOUSE_GAIN = 0.012;
 const MOUSE_PANEL_GAIN = 0.004;
 const BEAM_PANEL = '#67e8f9';
 
+/** Head turn per pixel of locked mouse move in the IWER DevUI Play mode (its own gain, rad). */
+export const LOCKED_TURN_GAIN = 0.002;
+
+/**
+ * Turn a locked mouse move (IWER DevUI Play mode) would give the headset — and the controllers
+ * carried with it — as a ray yaw / pitch step (yaw > 0 = right, pitch > 0 = up). While a
+ * controller holds a panel or a model, the studio applies it to the held thing instead of the view.
+ */
+export function lockedTurn(movementX: number, movementY: number): { yaw: number; pitch: number } {
+  return { yaw: movementX * LOCKED_TURN_GAIN, pitch: -movementY * LOCKED_TURN_GAIN };
+}
+
 /** Horizontal / vertical angle of a ray direction. */
 const yawOf = (d: THREE.Vector3) => Math.atan2(d.x, -d.z);
 const pitchOf = (d: THREE.Vector3) => Math.asin(Math.max(-1, Math.min(1, d.y)));
@@ -195,16 +211,6 @@ function createImpactRing(): THREE.Mesh {
   );
   mesh.visible = false;
   return mesh;
-}
-
-function createPointerLine(): THREE.Line {
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
-  const mat = new THREE.LineBasicMaterial({ color: BEAM_IDLE, transparent: true, opacity: 0.65 });
-  const line = new THREE.Line(geo, mat);
-  line.visible = false;
-  line.frustumCulled = false;
-  return line;
 }
 
 /**
@@ -289,6 +295,8 @@ interface AimScene {
 }
 
 const _panelHits: THREE.Intersection[] = [];
+const _vGazeO = new THREE.Vector3();
+const _vGazeD = new THREE.Vector3();
 
 /** Nearest shown panel the ray hits (the raycaster ray is already set). */
 function panelOnRay(panels: PanelRegistry | undefined) {
@@ -308,11 +316,13 @@ const _vPhotoO = new THREE.Vector3();
 const _vPhotoD = new THREE.Vector3();
 
 /**
- * What a ray points at, nearest first: the wrist button, a miniature, the scan button (menu
- * open), a tour floor arrow, then the scanned image (resolved to the detection whose box holds
- * that image point). Writes the beam end to `end`.
+ * What a ray points at, nearest first: the wrist button, a panel, a miniature, the scan button
+ * (menu open), a tour floor arrow, then the scanned image (resolved to the detection whose box
+ * holds that image point). The floating Menu button (no wrist wears it) lags behind the head
+ * and can drift over a panel: there the panel wins, else « Cancel » under it could never be hit.
+ * Writes the beam end to `end`.
  */
-function aimAt(
+export function aimAt(
   origin: THREE.Vector3,
   direction: THREE.Vector3,
   end: THREE.Vector3,
@@ -321,7 +331,8 @@ function aimAt(
   _raycaster.ray.origin.copy(origin);
   _raycaster.ray.direction.copy(direction);
 
-  if (menu.buttonVisible && rayNear(origin, direction, menu.button, WRIST_RAY_RADIUS)) {
+  const onWrist = menu.buttonVisible && rayNear(origin, direction, menu.button, WRIST_RAY_RADIUS);
+  if (onWrist && menu.wearer !== null) {
     end.copy(menu.button);
     return { kind: 'wrist', id: WRIST_BUTTON_ID, u: 0, v: 0 };
   }
@@ -330,6 +341,11 @@ function aimAt(
   if (onPanel) {
     end.copy(onPanel.hit.point);
     return { kind: 'panel', id: onPanel.panel.id, u: 0, v: 0, ...onPanel };
+  }
+
+  if (onWrist) {
+    end.copy(menu.button);
+    return { kind: 'wrist', id: WRIST_BUTTON_ID, u: 0, v: 0 };
   }
 
   const mini = miniatureOnRay(origin, direction, miniatures);
@@ -426,9 +442,17 @@ export const XRBlasterController = memo(function XRBlasterController({
   /** Last mouse move over the scene (ms): in the headset view the mouse hovers for a while. */
   const mouseAtRef = useRef(-Infinity);
   const handsRef = useRef<
-    Array<{ group: Parameters<typeof updateHandMesh>[0]; mesh: THREE.InstancedMesh }>
+    Array<{
+      group: Parameters<typeof updateHandMesh>[0];
+      mesh: THREE.InstancedMesh;
+      /** The real hand model (VS-T26) has loaded: the joint spheres hide. */
+      real: () => boolean;
+    }>
   >([]);
-  const gripsRef = useRef<THREE.Object3D[]>([]);
+  /** Fallback controller bodies: shown in the headset until the real model loads (it hides them). */
+  const gripsRef = useRef<Array<{ model: THREE.Object3D; real: () => boolean }>>([]);
+  /** Real hand / controller models of inputs 0 and 1 (attached once per renderer). */
+  const inputModelsRef = useRef<ReturnType<typeof attachInputModels>[]>([]);
   const lastTouchRef = useRef(0);
   const inputKindsRef = useRef<['controller' | 'hand', 'controller' | 'hand']>([
     'controller',
@@ -437,6 +461,10 @@ export const XRBlasterController = memo(function XRBlasterController({
   const grabsRef = useRef(new Map<InputKey, Grab>());
   /** Selects held on a panel: a tap on release, or a sideways drag (carousel). */
   const dragsRef = useRef(new Map<InputKey, PanelDrag>());
+  /** Locked mouse turn (Play mode) kept off the headset while a controller holds something. */
+  const heldTurnRef = useRef({ yaw: 0, pitch: 0 });
+  /** Select held on each XR pointer: the cursor turns dark blue and shrinks (Meta ray spec). */
+  const pressedRef = useRef<[boolean, boolean]>([false, false]);
   const blastRef = useRef<{ origin: THREE.Vector3; to: THREE.Vector3; progress: number } | null>(
     null
   );
@@ -444,18 +472,18 @@ export const XRBlasterController = memo(function XRBlasterController({
   // Imperative Three objects, mutated in the frame loop without React renders.
   const fx = useMemo(
     () => ({
-      pointers: [createPointerLine(), createPointerLine()] as const,
-      pips: [createDot(0.022, BEAM_IDLE), createDot(0.022, BEAM_IDLE)] as const,
+      rays: [createRayVisual(), createRayVisual()] as const,
       projectile: createDot(0.035, BEAM_IDLE),
       impact: createImpactRing(),
     }),
     []
   );
-  const { pointers, pips, projectile, impact } = fx;
+  const { rays, projectile, impact } = fx;
 
   useEffect(
     () => () => {
-      for (const o of [...fx.pointers, ...fx.pips, fx.projectile, fx.impact]) {
+      for (const r of fx.rays) r.dispose();
+      for (const o of [fx.projectile, fx.impact]) {
         o.geometry.dispose();
         (o.material as THREE.Material).dispose();
       }
@@ -500,7 +528,7 @@ export const XRBlasterController = memo(function XRBlasterController({
         dragsRef.current.set(key, {
           panel: aim.panel,
           hit: aim.hit,
-          yaw: yawOf(direction),
+          yaw: dragAngle(aim.panel, yawOf(direction), pitchOf(direction)),
           moved: 0,
         });
         try {
@@ -559,6 +587,22 @@ export const XRBlasterController = memo(function XRBlasterController({
         toggleMenu();
         return;
       }
+      // The floating Menu button looked at (head / mouse in Play mode) while the laser points at
+      // nothing it can use: select opens it, like Meta's gaze-and-pinch.
+      if (
+        (aim.kind === 'none' || aim.kind === 'screen') &&
+        gl.xr?.isPresenting &&
+        camera &&
+        menu.buttonVisible &&
+        menu.wearer === null
+      ) {
+        camera.getWorldPosition(_vGazeO);
+        camera.getWorldDirection(_vGazeD);
+        if (gazeHits(_vGazeO, _vGazeD, menu.button)) {
+          toggleMenu();
+          return;
+        }
+      }
       if (aim.kind === 'hotspot' && aim.id) {
         playTargetHitSound();
         onHotspot?.(aim.id);
@@ -615,6 +659,7 @@ export const XRBlasterController = memo(function XRBlasterController({
       onShootScreen?.(aim.u, aim.v);
     },
     [
+      gl,
       camera,
       scene,
       targets,
@@ -645,12 +690,16 @@ export const XRBlasterController = memo(function XRBlasterController({
       const space = gl.xr.getController(i);
       scene?.add(space);
       const onStart = (e: THREE.Event) => {
+        pressedRef.current[i] = true;
         rayFrom(space, _vOrigin, _vDirection);
         const gamepad = (e as { data?: XRInputSource }).data?.gamepad ?? null;
         if (tryGrab(i, _vOrigin, _vDirection, gamepad)) return;
         triggerShot(_vOrigin, _vDirection, gamepad);
       };
-      const onEnd = () => release(i);
+      const onEnd = () => {
+        pressedRef.current[i] = false;
+        release(i);
+      };
       // Grip (squeeze) held on a miniature turns it, like Meta's grab (VS-T23).
       const gripKey = (i + 2) as InputKey;
       const onSqueezeStart = (e: THREE.Event) => {
@@ -675,26 +724,37 @@ export const XRBlasterController = memo(function XRBlasterController({
       listeners.push({ space, type: 'squeezeend', fn: onSqueezeEnd });
       listeners.push({ space, type: 'connected', fn: onConnected });
 
-      if (gl.xr.getHand && scene) {
-        const hand = gl.xr.getHand(i) as Parameters<typeof updateHandMesh>[0];
-        const mesh = createHandMesh();
-        hand.add(mesh);
-        scene.add(hand);
-        handsRef.current.push({ group: hand, mesh });
-        added.push({ parent: hand, child: mesh });
+      const hand =
+        typeof gl.xr.getHand === 'function' && scene
+          ? (gl.xr.getHand(i) as Parameters<typeof updateHandMesh>[0])
+          : null;
+      const handMesh = hand ? createHandMesh() : null;
+      if (hand && handMesh) {
+        hand.add(handMesh);
+        scene?.add(hand);
+        added.push({ parent: hand, child: handMesh });
       }
 
       const getGrip = (gl.xr as unknown as { getControllerGrip?: (idx: number) => THREE.Group })
         .getControllerGrip;
-      if (typeof getGrip === 'function' && scene) {
-        const grip = getGrip.call(gl.xr, i);
-        const model = createControllerGripModel();
-        model.visible = false;
-        grip.add(model);
-        scene.add(grip);
-        gripsRef.current.push(model);
-        added.push({ parent: grip, child: model });
+      const grip = typeof getGrip === 'function' && scene ? getGrip.call(gl.xr, i) : null;
+      const gripModel = grip ? createControllerGripModel() : null;
+      if (grip && gripModel) {
+        gripModel.visible = false;
+        grip.add(gripModel);
+        scene?.add(grip);
+        added.push({ parent: grip, child: gripModel });
       }
+      // Real hand and controller models (attached once, below); the simple ones until they load.
+      const real = () => inputModelsRef.current[i];
+      if (hand && handMesh)
+        handsRef.current.push({
+          group: hand,
+          mesh: handMesh,
+          real: () => real()?.handLoaded() ?? false,
+        });
+      if (gripModel)
+        gripsRef.current.push({ model: gripModel, real: () => real()?.gripLoaded() ?? false });
     }
 
     return () => {
@@ -710,6 +770,26 @@ export const XRBlasterController = memo(function XRBlasterController({
       gripsRef.current = [];
     };
   }, [gl, scene, triggerShot, tryGrab, release]);
+
+  // Real hand and controller models (VS-T26), attached once per renderer: the effect above runs
+  // again whenever the targets change (each analysis), and re-attaching there reloaded the model
+  // each time, showing the dark stand-in meanwhile (or for good when the reload missed the input).
+  useEffect(() => {
+    const xr = gl?.xr as
+      (THREE.WebXRManager & { getControllerGrip?: (i: number) => THREE.Group }) | undefined;
+    if (!xr?.getController) return;
+    const attached = ([0, 1] as const).map((i) =>
+      attachInputModels(gl, i, {
+        ...(typeof xr.getHand === 'function' ? { hand: xr.getHand(i) } : {}),
+        ...(typeof xr.getControllerGrip === 'function' ? { grip: xr.getControllerGrip(i) } : {}),
+      })
+    );
+    inputModelsRef.current = attached;
+    return () => {
+      inputModelsRef.current = [];
+      for (const m of attached) m.dispose();
+    };
+  }, [gl]);
 
   // Mouse: aim on move, shoot on left click (desktop preview and IWER emulator).
   // Listened on the document: in the emulator the IWER DevUI draws its own full-screen canvas
@@ -734,6 +814,7 @@ export const XRBlasterController = memo(function XRBlasterController({
     const px = (e: MouseEvent) => (typeof e.clientX === 'number' ? e.clientX : 0);
     /** Last pointer x of a panel drag (px). */
     let lastX = 0;
+    let lastY = 0;
     const py = (e: MouseEvent) => (typeof e.clientY === 'number' ? e.clientY : 0);
     /**
      * A press that grabbed a panel or a model owns the gesture until release: its events stop
@@ -755,8 +836,11 @@ export const XRBlasterController = memo(function XRBlasterController({
       mouseAtRef.current = performance.now();
       const drag = dragsRef.current.get('mouse');
       if (drag) {
-        dragTo(drag, drag.yaw + (px(e) - lastX) * MOUSE_PANEL_GAIN);
+        // Mouse up scrolls a vertical list up (pitch grows upward, screen y downward).
+        const d = drag.panel.axis === 'y' ? lastY - py(e) : px(e) - lastX;
+        dragTo(drag, drag.yaw + d * MOUSE_PANEL_GAIN);
         lastX = px(e);
+        lastY = py(e);
         return;
       }
       const grab = grabsRef.current.get('mouse');
@@ -793,6 +877,7 @@ export const XRBlasterController = memo(function XRBlasterController({
         owned = true;
         own(e);
         lastX = px(e);
+        lastY = py(e);
         const grab = grabsRef.current.get('mouse');
         if (grab) {
           grab.x = px(e);
@@ -820,6 +905,22 @@ export const XRBlasterController = memo(function XRBlasterController({
       owned = false;
       release('mouse');
     };
+    // Emulator Play mode (pointer locked): the DevUI turns the headset, controllers included, on
+    // every mouse move. While a controller holds a panel or a model, the move turns that instead
+    // (stopped before the DevUI's document listener), so the view stays still, as on a headset.
+    const view = doc.defaultView;
+    const onLockedMove = (e: MouseEvent) => {
+      if (!doc.pointerLockElement || !presenting()) return;
+      const holding = [...dragsRef.current.keys(), ...grabsRef.current.keys()].some(
+        (k) => k !== 'mouse'
+      );
+      if (!holding) return;
+      own(e);
+      const step = lockedTurn(e.movementX || 0, e.movementY || 0);
+      heldTurnRef.current.yaw += step.yaw;
+      heldTurnRef.current.pitch += step.pitch;
+    };
+    view?.addEventListener('mousemove', onLockedMove, true);
     const MOUSE_EVENTS = ['mousedown', 'mousemove', 'mouseup'] as const;
     for (const type of MOUSE_EVENTS) doc.addEventListener(type, onMouse, true);
     doc.addEventListener('pointermove', onMove, true);
@@ -828,6 +929,7 @@ export const XRBlasterController = memo(function XRBlasterController({
     doc.addEventListener('pointercancel', onLeave, true);
     dom.addEventListener('pointerleave', onLeave);
     return () => {
+      view?.removeEventListener('mousemove', onLockedMove, true);
       for (const type of MOUSE_EVENTS) doc.removeEventListener(type, onMouse, true);
       doc.removeEventListener('pointermove', onMove, true);
       doc.removeEventListener('pointerdown', onDown, true);
@@ -840,7 +942,8 @@ export const XRBlasterController = memo(function XRBlasterController({
   const drawBeam = (
     index: 0 | 1,
     origin: THREE.Vector3,
-    direction: THREE.Vector3
+    direction: THREE.Vector3,
+    dt: number
   ): string | null => {
     const aim = aimAt(origin, direction, _vEnd, {
       targets,
@@ -851,32 +954,34 @@ export const XRBlasterController = memo(function XRBlasterController({
       panels,
       photo,
     });
-    const pointer = pointers[index];
-    const pip = pips[index];
-    const color = beamColor(aim.kind);
-    const attr = pointer.geometry.attributes.position as THREE.BufferAttribute;
-    attr.setXYZ(0, origin.x, origin.y, origin.z);
-    attr.setXYZ(1, _vEnd.x, _vEnd.y, _vEnd.z);
-    attr.needsUpdate = true;
-    (pointer.material as THREE.LineBasicMaterial).color.set(color);
-    pointer.visible = true;
-    pip.visible = true;
-    pip.position.copy(_vEnd);
-    (pip.material as THREE.MeshBasicMaterial).color.set(color);
+    const input = gl.xr?.isPresenting ? inputKindsRef.current[index] : 'mouse';
+    const pressed =
+      input === 'mouse'
+        ? dragsRef.current.has('mouse') || grabsRef.current.has('mouse')
+        : pressedRef.current[index];
+    rays[index].update({
+      origin,
+      direction,
+      end: _vEnd,
+      usable: aim.kind !== 'none',
+      input,
+      pressed,
+      tint: beamColor(aim.kind),
+      dt,
+    });
     const out = aimOut?.pointers[index];
     if (out) {
       out.visible = true;
       out.kind = aim.kind;
       out.id = aim.id;
       out.end.copy(_vEnd);
-      out.input = gl.xr?.isPresenting ? inputKindsRef.current[index] : 'mouse';
+      out.input = input;
     }
     return aim.id;
   };
 
   const hideBeam = (index: 0 | 1) => {
-    pointers[index].visible = false;
-    pips[index].visible = false;
+    rays[index].hide();
     const out = aimOut?.pointers[index];
     if (out) out.visible = false;
   };
@@ -891,7 +996,8 @@ export const XRBlasterController = memo(function XRBlasterController({
     let anyHand = false;
     handsRef.current.forEach((h, index) => {
       const tracked = updateHandMesh(h.group, h.mesh) > 0 && presenting;
-      h.mesh.visible = tracked;
+      // Joint spheres only until the real hand has loaded (offline: they stay).
+      h.mesh.visible = tracked && !h.real();
       if (!tracked) return;
       anyHand = true;
       const tip = h.group.joints?.['index-finger-tip'];
@@ -915,7 +1021,7 @@ export const XRBlasterController = memo(function XRBlasterController({
         pressButton();
       }
     });
-    for (const grip of gripsRef.current) grip.visible = presenting && !anyHand;
+    for (const g of gripsRef.current) g.model.visible = presenting && !anyHand && !g.real();
 
     // 2. Projectile and impact ring.
     const blast = blastRef.current;
@@ -942,6 +1048,12 @@ export const XRBlasterController = memo(function XRBlasterController({
     // 3. Beams: both XR pointers in the headset, the mouse/camera ray otherwise.
     //    A pointer holding a miniature turns its motion into rotation instead.
     if (presenting) {
+      // The Play-mode mouse turn applies only while something is held; it restarts at 0.
+      const held = heldTurnRef.current;
+      if (![...dragsRef.current.keys(), ...grabsRef.current.keys()].some((k) => k !== 'mouse')) {
+        held.yaw = 0;
+        held.pitch = 0;
+      }
       for (const i of [0, 1] as const) {
         const space = gl.xr.getController(i);
         if (!space || !space.visible || space.matrixWorld.elements[15] === 0) {
@@ -952,11 +1064,15 @@ export const XRBlasterController = memo(function XRBlasterController({
         }
         rayFrom(space, _vOrigin, _vDirection);
         const drag = dragsRef.current.get(i);
-        if (drag) dragTo(drag, yawOf(_vDirection));
+        if (drag)
+          dragTo(
+            drag,
+            dragAngle(drag.panel, yawOf(_vDirection) + held.yaw, pitchOf(_vDirection) + held.pitch)
+          );
         const grab = grabsRef.current.get(i) ?? grabsRef.current.get((i + 2) as InputKey);
         if (grab) {
-          const yaw = yawOf(_vDirection);
-          const pitch = pitchOf(_vDirection);
+          const yaw = yawOf(_vDirection) + held.yaw;
+          const pitch = pitchOf(_vDirection) + held.pitch;
           rotateTurntable(
             grab.miniature.turntable,
             wrapPi(yaw - grab.yaw) * RAY_GAIN + (_vOrigin.x - grab.x) * MOVE_GAIN,
@@ -967,7 +1083,13 @@ export const XRBlasterController = memo(function XRBlasterController({
           grab.x = _vOrigin.x;
           grab.y = _vOrigin.y;
         }
-        hovered = drawBeam(i, _vOrigin, _vDirection) ?? hovered;
+        hovered = drawBeam(i, _vOrigin, _vDirection, delta) ?? hovered;
+      }
+      // The floating Menu button lights up when looked at: a select then opens it.
+      if (!hovered && menu.buttonVisible && menu.wearer === null && camera) {
+        camera.getWorldPosition(_vGazeO);
+        camera.getWorldDirection(_vGazeD);
+        if (gazeHits(_vGazeO, _vGazeD, menu.button)) hovered = WRIST_BUTTON_ID;
       }
       // Emulator mouse: hover what it points at (no beam), so buttons light up before a click.
       // The lasers keep priority: a mouse left still never hides what a controller aims at.
@@ -1005,7 +1127,7 @@ export const XRBlasterController = memo(function XRBlasterController({
         _vOrigin.copy(camera.position);
         camera.getWorldDirection(_vDirection);
       }
-      hovered = drawBeam(0, _vOrigin, _vDirection) ?? hovered;
+      hovered = drawBeam(0, _vOrigin, _vDirection, delta) ?? hovered;
     }
 
     if (hovered !== hoveredRef.current) {
@@ -1017,10 +1139,8 @@ export const XRBlasterController = memo(function XRBlasterController({
 
   return (
     <group name="xr-blaster-controller-root">
-      <primitive object={pointers[0]} />
-      <primitive object={pointers[1]} />
-      <primitive object={pips[0]} />
-      <primitive object={pips[1]} />
+      <primitive object={rays[0].group} />
+      <primitive object={rays[1].group} />
       <primitive object={projectile} />
       <primitive object={impact} />
     </group>

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { editPiece } from '@/lib/piece-edits';
-import { LAB_PAGE, labRotate, labScale, nextOpacity, pagePieces } from '../utils/xr-lab';
+import { clampScroll, LAB_PAGE, labRotate, labScale, nextOpacity, rowShown } from '../utils/xr-lab';
 
 describe('VR lab edits (VS-T22)', () => {
   it('scales round the piece, inside the edit bounds', () => {
@@ -28,11 +28,19 @@ describe('VR lab edits (VS-T22)', () => {
     );
   });
 
-  it('pages the pieces list', () => {
-    const names = Array.from({ length: LAB_PAGE + 2 }, (_, i) => `glass-${i}`);
-    expect(pagePieces(names, 0).items).toHaveLength(LAB_PAGE);
-    expect(pagePieces(names, 1)).toMatchObject({ pages: 2, page: 1 });
-    expect(pagePieces(names, 1).items).toHaveLength(2);
-    expect(pagePieces([], 3)).toEqual({ items: [], pages: 1, page: 0 });
+  it('scrolls the pieces list between its first row and its last full window (VS-T26)', () => {
+    const count = LAB_PAGE + 2;
+    expect(clampScroll(-3, count)).toBe(0);
+    expect(clampScroll(1.4, count)).toBe(1.4);
+    expect(clampScroll(99, count)).toBe(2);
+    expect(clampScroll(5, 3)).toBe(0); // fits: never scrolls
+  });
+
+  it('shows the rows inside the window, a row half out hidden', () => {
+    const shown = (scroll: number) =>
+      Array.from({ length: LAB_PAGE + 2 }, (_, i) => i).filter((i) => rowShown(i, scroll));
+    expect(shown(0)).toEqual(Array.from({ length: LAB_PAGE }, (_, i) => i));
+    expect(shown(2)).toEqual(Array.from({ length: LAB_PAGE }, (_, i) => i + 2));
+    expect(shown(0.6)).toEqual(Array.from({ length: LAB_PAGE }, (_, i) => i + 1));
   });
 });

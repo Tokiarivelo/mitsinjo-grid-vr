@@ -15,7 +15,9 @@ import {
   usePanelAnchor,
 } from './holo-extract-panels';
 import { HoloBuildStage, HoloGenerationColumn, StudioRoom } from './xr-extract-studio';
+import { describeXrHands } from '@/features/microgrid-3d/utils/xr-input-models';
 import { HoloButton } from './holo-ui';
+import { HOLO } from './holo-style';
 import { HoloViewsCarousel } from './holo-views-carousel';
 import { XrObjectLab } from './xr-object-lab';
 import { defaultArchetype, kitToRecipe, type ObjectKit } from '@/lib/object-kit';
@@ -27,7 +29,12 @@ import { projectDetectionsTo3D, type SpatialTarget } from './spatial-projection'
 import { SpatialAirButton } from './spatial-air-button';
 import { HoloDetectionTarget } from './holo-detection-target';
 import { SpawnedObject3D } from './spawned-object-3d';
-import { AIR_BUTTON_ID, XRBlasterController, type MiniatureHandle } from './xr-blaster-controller';
+import {
+  AIR_BUTTON_ID,
+  mouseTarget,
+  XRBlasterController,
+  type MiniatureHandle,
+} from './xr-blaster-controller';
 import { createTurntable, type Turntable } from './turntable';
 import { playGridConnectSound, playGridDisconnectSound, playSnapSound } from './xr-audio-fx';
 import { VillageSpatialHUD } from './village-spatial-hud';
@@ -40,19 +47,33 @@ import { photoRay } from './tour/grounded';
 import { PhotoAnchored } from './tour/photo-anchored';
 import { TOUR_EYE } from './tour/tour-nav';
 import { yawPitchOf } from './tour/equirect';
-import { MENU_GUIDE_OFFSET, MENU_HELP_OFFSET, MENU_SCAN_OFFSET, miniatureSlot } from './xr-layout';
+import {
+  MENU_GUIDE_OFFSET,
+  MENU_HELP_OFFSET,
+  MENU_SCAN_OFFSET,
+  miniatureSlot,
+  SCAN_CONTROL_OFFSET,
+  STUDIO_DOOR_OFFSET,
+} from './xr-layout';
 import { createWristMenu, WRIST_BUTTON_ID } from './wrist-menu';
 import { createAimReadout } from './xr-blaster-controller';
 import { XrAimHint, XrControlLegend } from './xr-control-hints';
 import { XrControlsDriver } from './xr-controls-driver';
 import { SNAP_TURN, snapshotSources, STEP_DISTANCE, type XrControlAction } from './xr-controls';
 import { snapTurn } from './xr-rig';
+import { newStudioWalk, StudioWalk, wheelStep } from './studio-walk';
 import type { AimHintContext } from './xr-aim-hint';
-import { WristMenuButton, WristMenuPanel } from './xr-wrist-menu';
+import { FollowGroup, WristMenuButton, WristMenuPanel } from './xr-wrist-menu';
 
 export interface VillageXRStudioProps {
   detections: ApplianceDetection[];
   isScanning: boolean;
+  /** The last analysis stopped without objects (cancelled or failed): it can be retried. */
+  scanStopped?: boolean;
+  /** Stops the running analysis (VS-T26). */
+  onCancelScan?: () => void;
+  /** Asks again for the last analysed view. */
+  onRetryScan?: () => void;
   onTriggerScan: (capturedUrl?: string) => void;
   onSelectAppliance?: (id: string) => void;
   photoKey?: string;
@@ -88,10 +109,17 @@ const NO_HOTSPOTS: [] = [];
  */
 const HELP_ON_ENTRY_MS = 12000;
 export const MENU_HELP_ID = 'holo:menu-help';
+/** « Leave the studio » / « Back to the studio » (VS-T26). */
+export const STUDIO_DOOR_ID = 'holo:studio-door';
+/** « Cancel the analysis » / « Retry the analysis » (VS-T26). */
+export const SCAN_CONTROL_ID = 'holo:scan-control';
 
 export const VillageXRStudio = memo(function VillageXRStudio({
   detections,
   isScanning,
+  scanStopped = false,
+  onCancelScan,
+  onRetryScan,
   onTriggerScan,
   onSelectAppliance,
   photoKey,
@@ -118,6 +146,23 @@ export const VillageXRStudio = memo(function VillageXRStudio({
   const modal = stage !== 'idle';
   /** « Extract in 3D » said: the studio room replaces the 360° view until the lab is left. */
   const studio = stage === 'views' || stage === 'build' || stage === 'lab';
+  /** Where the viewer walked in the studio (VS-T25); back at its door each time it opens. */
+  const studioWalk = useRef(newStudioWalk());
+  useEffect(() => {
+    if (!studio) studioWalk.current = newStudioWalk();
+  }, [studio, studioWalk]);
+  // Mouse wheel over the headset view walks in the studio (emulator, desktop preview).
+  useEffect(() => {
+    const dom = gl?.domElement;
+    const doc = dom?.ownerDocument;
+    if (!studio || !dom || !doc) return;
+    const onWheel = (e: WheelEvent) => {
+      if (!mouseTarget(e.target, dom, !!gl.xr?.isPresenting)) return;
+      studioWalk.current.step = wheelStep(studioWalk.current.step, e.deltaY);
+    };
+    doc.addEventListener('wheel', onWheel, { capture: true, passive: true });
+    return () => doc.removeEventListener('wheel', onWheel, { capture: true });
+  }, [studio, studioWalk, gl]);
   /** Wrist menu: closed on entry; the wrist button toggles it (read by the input controller). */
   const [menuOpen, setMenuOpen] = useState(false);
   const menu = useMemo(() => {
@@ -342,10 +387,13 @@ export const VillageXRStudio = memo(function VillageXRStudio({
     }
     if (!pending.sawScan) return;
     pendingShotRef.current = null;
+    // With the extraction studio, the shot only started the analysis: « Extract to 3D? » opens
+    // only when the operator then shoots an outlined object (never by itself after a scan).
+    if (extract) return;
     const hit = pickTargetAtUv(targets, pending.u, pending.v);
     if (hit) handleShootTarget(hit.id);
     else notifyEvent(t('vrHudEventNoObject'));
-  }, [isScanning, targets, handleShootTarget, notifyEvent, t]);
+  }, [isScanning, targets, handleShootTarget, notifyEvent, t, extract]);
 
   const miniatures = useMemo<Array<MiniatureHandle & { target: SpatialTarget }>>(() => {
     const byId = new Map(targets.map((tg) => [tg.id, tg]));
@@ -383,6 +431,16 @@ export const VillageXRStudio = memo(function VillageXRStudio({
     notifyEvent(t('vrHudEventMaterialized', { name: extractName }));
     extract.exitLab();
   }, [extract, findTarget, notifyEvent, t, extractName]);
+  /** Leaves the studio from any step; the step and the object wait for « Back to the studio ». */
+  const leaveStudio = useCallback(() => {
+    if (stage === 'lab') leaveLab();
+    else extract?.leave();
+  }, [stage, leaveLab, extract]);
+  const awayTarget = extract?.awayId ? findTarget(extract.awayId) : undefined;
+  const awayName = awayTarget
+    ? localLabel(awayTarget.detection, locale) || awayTarget.detection.label
+    : '';
+  const door = studio ? 'leave' : stage === 'idle' && awayTarget ? 'back' : null;
 
   // Controls (VS-T23): buttons, sticks and thumb gestures → turn, step, analyse, back, help.
   const tc = useTranslations('features.visionInsert.vrControls');
@@ -416,8 +474,9 @@ export const VillageXRStudio = memo(function VillageXRStudio({
           if (snapTurn(gl.xr, headRef.current, action.direction * SNAP_TURN)) playSnapSound();
           return;
         case 'step':
-          if (!tourMode) return;
-          tour.ground.step += action.direction * STEP_DISTANCE;
+          if (studio) studioWalk.current.step += action.direction * STEP_DISTANCE;
+          else if (tourMode) tour.ground.step += action.direction * STEP_DISTANCE;
+          else return;
           playSnapSound();
           return;
         case 'analyse':
@@ -427,6 +486,7 @@ export const VillageXRStudio = memo(function VillageXRStudio({
           // Back closes what is open, innermost first; with nothing open it toggles the menu.
           if (stage === 'lab') leaveLab();
           else if (modal) extract?.cancel();
+          else if (isScanning && onCancelScan) onCancelScan();
           else menu.toggle();
           return;
         case 'help':
@@ -437,10 +497,13 @@ export const VillageXRStudio = memo(function VillageXRStudio({
     [
       camera,
       gl,
+      studio,
+      studioWalk,
       tourMode,
       tour.ground,
       modal,
       isScanning,
+      onCancelScan,
       handleTriggerScan,
       stage,
       leaveLab,
@@ -457,6 +520,8 @@ export const VillageXRStudio = memo(function VillageXRStudio({
     w.__VR_CONTROLS__ = {
       help,
       sources: () => snapshotSources(gl.xr.getSession?.()?.inputSources ?? []),
+      /** Real hand model vs joint spheres on each hand (VS-T26). */
+      hands: () => describeXrHands(gl),
       yaw: () => {
         const d = camera.getWorldDirection(new THREE.Vector3());
         return Math.atan2(d.x, -d.z);
@@ -541,6 +606,9 @@ export const VillageXRStudio = memo(function VillageXRStudio({
           slides: extract.slides.map((s) => `${s.id}:${s.status}${s.validated ? ':ok' : ''}`),
           canBuild: extract.canBuild,
           ready: extract.ready,
+          chats: Object.fromEntries(
+            extract.slides.map((s) => [s.id, extract.chatOf(s.id).map((m) => m.kind)])
+          ),
           anchor,
         }
       : null;
@@ -634,6 +702,44 @@ export const VillageXRStudio = memo(function VillageXRStudio({
         </WristMenuPanel>
       )}
 
+      {/* 5. Studio door (VS-T26): leave the studio, or go back to the step left */}
+      {extract && door && (
+        <FollowGroup offset={STUDIO_DOOR_OFFSET} name="xr-studio-door">
+          <HoloButton
+            registry={panels}
+            id={STUDIO_DOOR_ID}
+            label={
+              door === 'leave'
+                ? t('vrExtract.leaveStudio')
+                : t('vrExtract.backToStudio', { name: awayName })
+            }
+            width={0.34}
+            height={0.08}
+            position={[0, 0, 0]}
+            on={door === 'back'}
+            hovered={hoveredTargetId === STUDIO_DOOR_ID}
+            onSelect={door === 'leave' ? leaveStudio : extract.back}
+          />
+        </FollowGroup>
+      )}
+
+      {/* 5b. Analysis control (VS-T26): cancel it while it runs, retry it once stopped */}
+      {!studio && !modal && ((isScanning && onCancelScan) || (scanStopped && onRetryScan)) && (
+        <FollowGroup offset={SCAN_CONTROL_OFFSET} name="xr-scan-control">
+          <HoloButton
+            registry={panels}
+            id={SCAN_CONTROL_ID}
+            label={isScanning ? t('cancelAnalysis') : t('retryAnalysis')}
+            width={0.34}
+            height={0.08}
+            position={[0, 0, 0]}
+            color={isScanning ? HOLO.amber : HOLO.cyan}
+            hovered={hoveredTargetId === SCAN_CONTROL_ID}
+            onSelect={() => (isScanning ? onCancelScan?.() : onRetryScan?.())}
+          />
+        </FollowGroup>
+      )}
+
       {/* 6. Holographic Detection Targets, on the photo (they follow it while walking) */}
       <PhotoAnchored photo={photoGround}>
         {!studio &&
@@ -655,7 +761,6 @@ export const VillageXRStudio = memo(function VillageXRStudio({
 
       {/* 6c. 3D extraction: question, then the studio room (VS-T24): 2D views carousel with the
           generation column on the right, build hologram, lab (VS-T19–T22) */}
-      {studio && <StudioRoom />}
       {extract && anchor && stage === 'confirm' && (
         <HoloExtractDialog
           anchor={anchor}
@@ -669,53 +774,63 @@ export const VillageXRStudio = memo(function VillageXRStudio({
           onCancel={extract.cancel}
         />
       )}
-      {extract && anchor && stage === 'views' && (
-        <HoloViewsCarousel
-          anchor={anchor}
-          registry={panels}
-          hoveredId={hoveredTargetId}
-          slides={extract.slides}
-          vehicle={extract.slides.some((s) => s.id === 'bottom')}
-          canBuild={extract.canBuild}
-          onRedraw={extract.redraw}
-          onToggleValidated={extract.toggleValidated}
-          onBuild={extract.build}
-          onCancel={extract.cancel}
-        />
-      )}
-      {extract && anchor && (stage === 'views' || stage === 'build') && (
-        <AnchoredPanel anchor={anchor} name="xr-studio-panels">
-          {stage === 'build' && (
-            <HoloBuildStage
-              name={extractName}
-              {...(extract.slides[0]?.imageUrl ? { imageUrl: extract.slides[0].imageUrl } : {})}
+      {studio && (
+        <StudioWalk walk={studioWalk}>
+          <StudioRoom />
+          {extract && anchor && stage === 'views' && (
+            <HoloViewsCarousel
+              anchor={anchor}
+              registry={panels}
+              hoveredId={hoveredTargetId}
+              slides={extract.slides}
+              vehicle={extract.slides.some((s) => s.id === 'bottom')}
+              canBuild={extract.canBuild}
+              onRedraw={extract.redraw}
+              onToggleValidated={extract.toggleValidated}
+              onBuild={extract.build}
+              onCancel={extract.cancel}
+              chatOf={extract.chatOf}
+              onSendChat={extract.sendChat}
+              aim={aimOut}
             />
           )}
-          <HoloGenerationColumn
-            stage={stage}
-            name={extractName}
-            slides={extract.slides}
-            vehicle={extract.slides.some((s) => s.id === 'bottom')}
-            {...(extract.shape.step ? { step: extract.shape.step } : {})}
-            seconds={buildSeconds}
-            registry={panels}
-            hoveredId={hoveredTargetId}
-            onCancel={extract.cancel}
-          />
-        </AnchoredPanel>
-      )}
-      {extract && stage === 'lab' && extract.shape.shape && extractTarget && imageUrl && (
-        <XrObjectLab
-          shape={extract.shape.shape}
-          detection={extractTarget.detection}
-          imageUrl={imageUrl}
-          label={extractName}
-          registry={panels}
-          hoveredId={hoveredTargetId}
-          onEditPieces={extract.editPieces}
-          onExit={leaveLab}
-          anchor={anchor}
-        />
+          {extract && anchor && (stage === 'views' || stage === 'build') && (
+            <AnchoredPanel anchor={anchor} name="xr-studio-panels">
+              {stage === 'build' && (
+                <HoloBuildStage
+                  name={extractName}
+                  {...(extract.slides[0]?.imageUrl ? { imageUrl: extract.slides[0].imageUrl } : {})}
+                />
+              )}
+              <HoloGenerationColumn
+                stage={stage}
+                name={extractName}
+                slides={extract.slides}
+                vehicle={extract.slides.some((s) => s.id === 'bottom')}
+                {...(extract.shape.step ? { step: extract.shape.step } : {})}
+                seconds={buildSeconds}
+                registry={panels}
+                hoveredId={hoveredTargetId}
+                onCancel={extract.cancel}
+              />
+            </AnchoredPanel>
+          )}
+          {extract && stage === 'lab' && extract.shape.shape && extractTarget && imageUrl && (
+            <XrObjectLab
+              shape={extract.shape.shape}
+              detection={extractTarget.detection}
+              imageUrl={imageUrl}
+              label={extractName}
+              registry={panels}
+              hoveredId={hoveredTargetId}
+              onEditPieces={extract.editPieces}
+              onExit={leaveLab}
+              anchor={anchor}
+              photo={photo}
+              aim={aimOut}
+            />
+          )}
+        </StudioWalk>
       )}
 
       {/* 7. 3D miniatures in reach: spin, hold to rotate, tap to connect */}

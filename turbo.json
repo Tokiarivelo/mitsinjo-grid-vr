@@ -24,7 +24,7 @@
     },
     "dev": {
       "cache": false,
-      "passThroughEnv": ["PORT"],
+      "passThroughEnv": ["PORT", "LLM_PROVIDER"],
       "persistent": true
     }
   }

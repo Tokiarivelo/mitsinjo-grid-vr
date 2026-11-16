@@ -160,11 +160,13 @@ export const HoloButton = memo(function HoloButton({
   onSelect,
   onDrag,
   onDragEnd,
+  axis,
 }: HoloButtonProps) {
   const ref = useHoloPanel(disabled ? undefined : registry, id, {
     ...(onSelect ? { onSelect } : {}),
     ...(onDrag ? { onDrag } : {}),
     ...(onDragEnd ? { onDragEnd } : {}),
+    ...(axis ? { axis } : {}),
   });
   const spec = useMemo<HoloCardSpec>(
     () => ({

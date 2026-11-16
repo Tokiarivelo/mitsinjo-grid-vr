@@ -112,7 +112,7 @@ Common: every interactive element has hover, active, disabled, focus-visible (2p
   under a big one stays clickable; a click picks the smallest box there, a 2nd click on the same spot the one under it.
   Edit handles (draw / adjust) sit outside the shape so a tiny box can still be dragged. Pointer: hover/tap on the
   photo; keyboard + screen readers: the « Appliances found (n) » list below (buttons ≥ 44 px, focus = same highlight).
-  States: loading (dimmed photo + status), refining (outlines coming), ready, empty, error + retry. Violet « AI perception ·
+  States: loading (dimmed photo + status + « Cancel the analysis »), refining (outlines coming, cancel keeps the boxes), ready, empty, error + retry, cancelled (« Analysis cancelled. » + retry). Violet « AI perception ·
   to verify » tag; demo note when the mock answered. Category shown only when it differs from the label.
   PV-T8 (`onSendShapes`, optional): « Draw missing objects » → `DrawOverlay` on the photo (role application, touch-none,
   pointer capture) + `DrawPanel` below. Tools: Rectangle · Free hand · Magnetic lasso (snaps to the strongest edge within

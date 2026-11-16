@@ -1,4 +1,4 @@
-import { act, render } from '@testing-library/react';
+import { act, fireEvent, render } from '@testing-library/react';
 import * as THREE from 'three';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '@/lib/i18n';
@@ -31,6 +31,10 @@ vi.mock('../tour/panorama-tour', () => ({
   },
 }));
 vi.mock('../spatial-air-button', () => ({ SpatialAirButton: () => null }));
+vi.mock('../studio-walk', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../studio-walk')>()),
+  StudioWalk: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}));
 const panelsMock = vi.hoisted(() => ({ dialog: null as Record<string, unknown> | null }));
 vi.mock('../xr-control-hints', () => ({
   XrAimHint: () => null,
@@ -81,6 +85,7 @@ vi.mock('../village-spatial-hud', () => ({ VillageSpatialHUD: () => null }));
 vi.mock('../spatial-interaction-guide', () => ({ SpatialInteractionGuide: () => null }));
 vi.mock('../xr-wrist-menu', () => ({
   WristMenuButton: () => null,
+  FollowGroup: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
   WristMenuPanel: ({ children }: { children?: React.ReactNode }) => (
     <div data-testid="wrist-menu-panel">{children}</div>
   ),
@@ -103,9 +108,15 @@ const fridge: ApplianceDetection = {
 function setup(tourMode = false, extract?: XrExtract) {
   const onTriggerScan = vi.fn();
   const onSelectAppliance = vi.fn();
-  const view = (detections: ApplianceDetection[], isScanning: boolean, ex = extract) => (
+  const view = (
+    detections: ApplianceDetection[],
+    isScanning: boolean,
+    ex = extract,
+    more: Partial<React.ComponentProps<typeof VillageXRStudio>> = {}
+  ) => (
     <I18nProvider>
       <VillageXRStudio
+        {...more}
         detections={detections}
         isScanning={isScanning}
         onTriggerScan={onTriggerScan}
@@ -236,10 +247,15 @@ describe('VillageXRStudio — 3D extraction (VS-T18–T22)', () => {
     build: vi.fn(),
     enterLab: vi.fn(),
     exitLab: vi.fn(),
+    leave: vi.fn(),
+    back: vi.fn(),
+    awayId: null,
     slides: [],
     canBuild: false,
     redraw: vi.fn(),
     toggleValidated: vi.fn(),
+    chatOf: () => [],
+    sendChat: vi.fn(),
     ready: false,
     shape: { status: 'idle' },
     editPieces: vi.fn(),
@@ -259,6 +275,20 @@ describe('VillageXRStudio — 3D extraction (VS-T18–T22)', () => {
     act(() => blaster.props!.onShootTarget('fridge'));
     expect(idle.ask).toHaveBeenCalledWith('fridge');
     expect(blaster.props!.miniatures).toEqual([]);
+  });
+
+  it('a shot that starts the analysis never opens « Extract to 3D? » by itself (regression)', () => {
+    const idle = extractAt('idle', null);
+    const { rerender, view, onTriggerScan, onSelectAppliance } = setup(false, idle);
+    act(() => blaster.props!.onShootScreen!(0.2, 0.5)); // on the fridge, nothing detected yet
+    expect(onTriggerScan).toHaveBeenCalledTimes(1);
+    rerender(view([], true, idle)); // scanning
+    rerender(view([fridge], false, idle)); // outlines arrived
+    expect(idle.ask).not.toHaveBeenCalled();
+    expect(onSelectAppliance).not.toHaveBeenCalled();
+    // The operator then shoots the outlined object: now it asks.
+    act(() => blaster.props!.onShootTarget('fridge'));
+    expect(idle.ask).toHaveBeenCalledWith('fridge');
   });
 
   it('opens the dialog, then nothing behind it takes a shot', () => {
@@ -284,6 +314,45 @@ describe('VillageXRStudio — 3D extraction (VS-T18–T22)', () => {
     rerender(view([], false, extractAt('idle', null)));
     act(() => controls.onAction!({ type: 'analyse' }));
     expect(onTriggerScan).toHaveBeenCalledOnce();
+  });
+
+  it('« Leave the studio » leaves from any studio step; the lab keeps its object (VS-T26)', () => {
+    const views = extractAt('views');
+    const { rerender, view, getByRole } = setup(false, views);
+    rerender(view([fridge], false));
+    fireEvent.click(getByRole('button', { name: 'Leave the studio' }));
+    expect(views.leave).toHaveBeenCalledOnce();
+
+    const inLab = extractAt('lab');
+    rerender(view([fridge], false, inLab));
+    fireEvent.click(getByRole('button', { name: 'Leave the studio' }));
+    expect(inLab.exitLab).toHaveBeenCalledOnce();
+  });
+
+  it('cancels a running analysis (button or B/Y), then offers a retry (VS-T26)', () => {
+    const onCancelScan = vi.fn();
+    const onRetryScan = vi.fn();
+    const { rerender, view, getByRole } = setup(false, extractAt('idle', null));
+    rerender(view([], true, extractAt('idle', null), { onCancelScan, onRetryScan }));
+    fireEvent.click(getByRole('button', { name: 'Cancel the analysis' }));
+    expect(onCancelScan).toHaveBeenCalledOnce();
+    act(() => controls.onAction!({ type: 'back' }));
+    expect(onCancelScan).toHaveBeenCalledTimes(2);
+    rerender(
+      view([], false, extractAt('idle', null), { onCancelScan, onRetryScan, scanStopped: true })
+    );
+    fireEvent.click(getByRole('button', { name: 'Retry the analysis' }));
+    expect(onRetryScan).toHaveBeenCalledOnce();
+  });
+
+  it('« Back to the studio » shows in the 360° view once the studio was left', () => {
+    const left = { ...extractAt('idle', null), awayId: 'fridge' };
+    const { rerender, view, getByRole, queryByRole } = setup(false, extractAt('idle', null));
+    rerender(view([fridge], false));
+    expect(queryByRole('button', { name: /Back to the studio/ })).toBeNull();
+    rerender(view([fridge], false, left));
+    fireEvent.click(getByRole('button', { name: 'Back to the studio · « Fridge »' }));
+    expect(left.back).toHaveBeenCalledOnce();
   });
 
   it('B / Y (back) in the lab leaves it, keeping the object as a miniature', () => {

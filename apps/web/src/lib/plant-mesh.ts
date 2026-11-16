@@ -18,11 +18,38 @@ import { mulberry32 } from './seeded-random';
  * deterministic (`plan.seed`). One slot per triangle: the viewer draws a material per slot.
  */
 
-export const PLANT_SLOTS = ['bark', 'leaf', 'leafDark', 'flower'] as const;
+export const PLANT_SLOTS = ['bark', 'leaf', 'leafDark', 'flower', 'pot', 'soil'] as const;
 /** Slots whose thin surfaces (cards, strands, whole leaves) the material draws on both sides. */
 export const PLANT_TWO_SIDED: ReadonlySet<string> = new Set(['leaf', 'leafDark', 'flower']);
 export type PlantSlot = (typeof PLANT_SLOTS)[number];
-const SLOT: Record<PlantSlot, number> = { bark: 0, leaf: 1, leafDark: 2, flower: 3 };
+const SLOT: Record<PlantSlot, number> = {
+  bark: 0,
+  leaf: 1,
+  leafDark: 2,
+  flower: 3,
+  pot: 4,
+  soil: 5,
+};
+/** Potting soil under the leaves: dark earth (VS-T25). */
+export const PLANT_SOIL = '#3f2e22';
+
+/** The colour of every slot: measured on the drawing (bark, leaves, flowers, pot), the soil fixed. */
+export function plantSlotColors(plan: Pick<PlantPlan, 'look' | 'pot'>): Record<PlantSlot, string> {
+  const { look } = plan;
+  return {
+    bark: look.bark,
+    leaf: look.leaf,
+    leafDark: look.leafDark,
+    flower: look.flower ?? look.leaf,
+    pot: plan.pot?.color ?? look.bark,
+    soil: PLANT_SOIL,
+  };
+}
+
+/** Sides round a pot; its wall's thickness (share of the rim radius); soil this far under the rim (share of its height). */
+export const POT_SIDES = 32;
+export const POT_WALL = 0.07;
+export const POT_SOIL_DROP = 0.06;
 
 export interface PlantMesh {
   /** Non-indexed triangles: 9 floats each. */
@@ -645,6 +672,74 @@ export function plantMesh(plan: PlantPlan, dims: readonly [number, number, numbe
       if (dot(nIn, [0, -1, 0]) >= 0) tri(under, a, b, nIn, nIn, nIn, 'leafDark');
       else tri(under, b, a, mul(nIn, -1), mul(nIn, -1), mul(nIn, -1), 'leafDark');
     }
+  }
+
+  // ---------------------------------------------------------------- pot (VS-T25)
+  if (plan.pot) pot(plan.pot);
+
+  /**
+   * The pot turned round its axis: outer wall foot → rim, a flat lip, the inner wall down to the
+   * soil (a disc), and a closed foot. A closed solid facing out; `depth` squeezes it into an oval.
+   */
+  function pot(p: NonNullable<PlantPlan['pot']>) {
+    const prof = p.profile.map(([y, r]) => [y * h - h / 2, r * big] as const);
+    const [cx, cz] = [(p.c[0] - 0.5) * w, (p.c[1] - 0.5) * d];
+    const k = p.depth ?? 1;
+    const at = (y: number, r: number, s: number): V3 => {
+      const a = (2 * Math.PI * s) / POT_SIDES;
+      return [cx + Math.cos(a) * r, y, cz + Math.sin(a) * r * k];
+    };
+    const around = (s: number, ny: number, out: number): V3 => {
+      const a = (2 * Math.PI * s) / POT_SIDES;
+      return unit([Math.cos(a) * out, ny, (Math.sin(a) * out) / k]);
+    };
+    /** A band between two rings (y, r) facing `out` (+1 outward, -1 inward). */
+    const band = (y0: number, r0: number, y1: number, r1: number, out: 1 | -1, slot: PlantSlot) => {
+      // Slope of the wall: its normal leans up when it narrows to the top.
+      const ny = ((r0 - r1) / Math.max(1e-9, Math.hypot(y1 - y0, r1 - r0))) * out;
+      for (let s = 0; s < POT_SIDES; s++) {
+        const [A, B, C, D] = [at(y0, r0, s), at(y0, r0, s + 1), at(y1, r1, s + 1), at(y1, r1, s)];
+        const [nA, nB] = [around(s, ny, out), around(s + 1, ny, out)];
+        if (out > 0) {
+          tri(A, C, B, nA, nB, nB, slot);
+          tri(A, D, C, nA, nA, nB, slot);
+        } else {
+          tri(A, B, C, nA, nB, nB, slot);
+          tri(A, C, D, nA, nB, nA, slot);
+        }
+      }
+    };
+    /** A flat disc at `y` of radius `r`, facing up (+1) or down (-1). */
+    const disc = (y: number, r: number, up: 1 | -1, slot: PlantSlot) => {
+      const c: V3 = [cx, y, cz];
+      const n: V3 = [0, up, 0];
+      for (let s = 0; s < POT_SIDES; s++) {
+        const [a, b] = [at(y, r, s), at(y, r, s + 1)];
+        if (up > 0) tri(c, b, a, n, n, n, slot);
+        else tri(c, a, b, n, n, n, slot);
+      }
+    };
+    for (let i = 0; i + 1 < prof.length; i++)
+      band(prof[i]![0], prof[i]![1], prof[i + 1]![0], prof[i + 1]![1], 1, 'pot');
+    const [footY, footR] = prof[0]!;
+    const [rimY, rimR] = prof[prof.length - 1]!;
+    const inner = rimR * (1 - POT_WALL);
+    const soilY = rimY - (rimY - footY) * POT_SOIL_DROP;
+    // Lip: a ring from the rim in to the inner wall.
+    for (let s = 0; s < POT_SIDES; s++) {
+      const [A, B, C, D] = [
+        at(rimY, rimR, s),
+        at(rimY, rimR, s + 1),
+        at(rimY, inner, s + 1),
+        at(rimY, inner, s),
+      ];
+      const n: V3 = [0, 1, 0];
+      tri(A, C, B, n, n, n, 'pot');
+      tri(A, D, C, n, n, n, 'pot');
+    }
+    band(soilY, inner, rimY, inner, -1, 'pot');
+    disc(soilY, inner, 1, 'soil');
+    disc(footY, footR, -1, 'pot');
   }
 
   return {

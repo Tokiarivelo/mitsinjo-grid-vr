@@ -14,6 +14,13 @@ export const MENU_GUIDE_OFFSET: Vec3 = [0, -0.25, 0];
 /** « Show the controls help » button, under the guide (Meta: let people recall the help). */
 export const MENU_HELP_OFFSET: Vec3 = [0, -0.37, 0];
 export const MENU_HUD_OFFSET: Vec3 = [-0.66, 0.06, 0.22];
+/**
+ * « Leave the studio » / « Back to the studio » (VS-T26): right of where the menu opens, clear of
+ * the scan panel, mirroring the floating « Menu » button on the left; lazy-follows the viewer.
+ */
+export const STUDIO_DOOR_OFFSET: Vec3 = [0.54, 0.06, 0];
+/** « Cancel / Retry the analysis » (VS-T26): centred under the view, where the menu opens. */
+export const SCAN_CONTROL_OFFSET: Vec3 = [0, 0.02, 0];
 export const MENU_HUD_ROTATION: Vec3 = [-0.1, 0.55, 0];
 /** Ray-pick radius around the scan button (its panel is 0.62 × 0.38 m). */
 export const AIR_BUTTON_RADIUS = 0.32;
@@ -87,10 +94,13 @@ export function anchorAhead(
   };
 }
 
-/** Views carousel: slides on an arc round the viewer, this far apart (rad, ~26°). */
-export const CAROUSEL_SPACING = 0.45;
+/**
+ * Views carousel: slides on an arc round the viewer, this far apart (rad, ~32°). 0.6 m slides at
+ * 1.25 m (~27° wide, VS-T25: they read from where the studio opens, without walking up).
+ */
+export const CAROUSEL_SPACING = 0.56;
 export const CAROUSEL_RADIUS = 1.25;
-export const SLIDE_SIZE = 0.46;
+export const SLIDE_SIZE = 0.6;
 
 /**
  * Position and turn of a slide `rel` steps from the focused one (rel 0 = straight ahead), on an
@@ -112,7 +122,29 @@ export function slidePose(rel: number): { position: Vec3; yaw: number; focus: nu
 
 /**
  * 3D studio (VS-T24): the generation column (progress card + miniature) on the right of the panel
- * anchor, past the carousel's right neighbour, turned toward the viewer (~45° to the right).
+ * anchor, past the carousel's right neighbour, turned toward the viewer (~65° to the right).
  */
-export const STUDIO_COLUMN_POSITION: Vec3 = [0.95, 0, 0.2];
-export const STUDIO_COLUMN_YAW = 0.8;
+export const STUDIO_COLUMN_POSITION: Vec3 = [1.25, 0, 0.55];
+export const STUDIO_COLUMN_YAW = 1.1;
+
+/**
+ * Chat of the 2D views (VS-T27): mirror of the generation column, on the left past the carousel's
+ * left neighbour, turned toward the viewer (~1.4 m away: ray range). Lifted 8 cm so its holo
+ * keyboard, tilted up below it, stays above ~30° under the line of sight (Meta: no neck strain).
+ */
+export const STUDIO_CHAT_POSITION: Vec3 = [-1.25, 0.08, 0.55];
+export const STUDIO_CHAT_YAW = 1.1;
+/** Chat panel width and history height (m); keys ≈ 6.8 cm wide (≥ 3° hit target at 1.4 m). */
+export const CHAT_PANEL = { width: 0.68, historyHeight: 0.4 } as const;
+
+/**
+ * Village hologram of the lab (VS-T28): a round table of the village core on the right, past the
+ * lab tools, turned toward the viewer (~1.3 m) and tilted 35° so its far edge rises toward the eyes.
+ */
+export const VILLAGE_TABLE = {
+  position: [1.18, -0.12, 0.62] as Vec3,
+  yaw: -1.05,
+  tilt: 0.6,
+  /** Table radius (m): the 30-unit village core, a building ≈ 4 cm. */
+  radius: 0.32,
+} as const;

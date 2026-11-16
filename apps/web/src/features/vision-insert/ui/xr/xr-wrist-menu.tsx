@@ -1,17 +1,20 @@
 'use client';
 
-import { memo, useEffect, useMemo, useRef, type ReactNode } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, type ReactNode } from 'react';
 import * as THREE from 'three';
 import { useFrame, useThree } from '@react-three/fiber';
 import { useTranslations } from '@/lib/i18n';
+import { isDevXREmulated } from '@/features/microgrid-3d/utils/dev-xr-emulator';
 import {
   createMenuPose,
+  fillHandedness,
   menuPointToWorld,
   menuSpawnScale,
   placeWristButton,
   updateLazyFollow,
   WRIST_BUTTON_RADIUS,
   yawOfDirection,
+  type MenuPose,
   type WristMenu,
   type WristXR,
 } from './wrist-menu';
@@ -46,6 +49,9 @@ export const WristMenuButton = memo(function WristMenuButton({
   const groupRef = useRef<THREE.Group>(null);
   const ringRef = useRef<THREE.Mesh>(null);
   const handednessRef = useRef<[string | null, string | null]>([null, null]);
+  /** Where the button floats when no wrist can wear it (lazy-follows, like the menu). */
+  const floatPose = useMemo(() => createMenuPose(), []);
+  const floatAgeRef = useRef(-1);
 
   // Which input is the left one: from the XR `connected` events (data = XRInputSource).
   useEffect(() => {
@@ -77,15 +83,32 @@ export const WristMenuButton = memo(function WristMenuButton({
     [open, t]
   );
 
-  useFrame((state) => {
+  useFrame((state, delta) => {
     const g = groupRef.current;
     if (!g) return;
-    const wearer = placeWristButton(
-      gl?.xr as unknown as WristXR | undefined,
-      handednessRef.current,
-      camera,
-      _v
-    );
+    const xr = gl?.xr as unknown as (WristXR & { getSession?: () => XRSession | null }) | undefined;
+    fillHandedness(handednessRef.current, xr?.getSession?.()?.inputSources);
+    if (xr?.isPresenting) {
+      camera.getWorldPosition(_eye);
+      camera.getWorldDirection(_dir);
+      const first = floatAgeRef.current < 0;
+      floatAgeRef.current = first ? 0 : floatAgeRef.current + delta;
+      updateLazyFollow(
+        floatPose,
+        _eye.x,
+        _eye.y,
+        _eye.z,
+        yawOfDirection(_dir.x, _dir.z),
+        delta,
+        first
+      );
+    } else floatAgeRef.current = -1;
+    // The emulator's hands and controllers turn with the head (Play mode): a button worn on them
+    // could never be aimed at nor touched.
+    const wearer = placeWristButton(xr, handednessRef.current, camera, _v, {
+      pose: floatPose,
+      worn: !isDevXREmulated(),
+    });
     menu.button.copy(_v);
     menu.buttonVisible = true;
     menu.wearer = wearer;
@@ -132,6 +155,58 @@ export const WristMenuButton = memo(function WristMenuButton({
   );
 });
 
+export interface FollowGroupProps {
+  /** Where the content sits in the follow frame (x right, y up, from the menu spot), m. */
+  offset?: [number, number, number];
+  /** Scales in from 60 % on mount (a menu opening). */
+  spawn?: boolean;
+  /** Called each frame with the pose and scale (e.g. to publish a button's world position). */
+  onPose?: (pose: MenuPose, scale: number) => void;
+  name?: string;
+  children: ReactNode;
+}
+
+/**
+ * Content world-locked in front of the viewer, below eye level, lazy-following: it stays still
+ * and re-centres only when the viewer turns or walks away (Meta: no head-locked UI).
+ */
+export const FollowGroup = memo(function FollowGroup({
+  offset = [0, 0, 0],
+  spawn = false,
+  onPose,
+  name = 'xr-follow-group',
+  children,
+}: FollowGroupProps) {
+  const { camera } = useThree();
+  const groupRef = useRef<THREE.Group>(null);
+  const pose = useMemo(() => createMenuPose(), []);
+  const ageRef = useRef(-1);
+
+  useFrame((_, delta) => {
+    const g = groupRef.current;
+    if (!g) return;
+    camera.getWorldPosition(_eye);
+    camera.getWorldDirection(_dir);
+    const yaw = yawOfDirection(_dir.x, _dir.z);
+    const first = ageRef.current < 0;
+    ageRef.current = first ? 0 : ageRef.current + delta;
+    updateLazyFollow(pose, _eye.x, _eye.y, _eye.z, yaw, delta, first);
+    const scale = spawn ? menuSpawnScale(ageRef.current) : 1;
+    onPose?.(pose, scale);
+    menuPointToWorld(pose, scale, offset, _v);
+    if (g.parent) g.parent.worldToLocal(_v);
+    g.position.copy(_v);
+    g.rotation.set(0, -pose.yaw, 0);
+    g.scale.setScalar(scale);
+  });
+
+  return (
+    <group ref={groupRef} name={name}>
+      {children}
+    </group>
+  );
+});
+
 export interface WristMenuPanelProps {
   menu: WristMenu;
   /** Local position of the scan button inside the panel (its world position goes to `menu.scan`). */
@@ -148,34 +223,13 @@ export const WristMenuPanel = memo(function WristMenuPanel({
   scanOffset = [0, 0, 0],
   children,
 }: WristMenuPanelProps) {
-  const { camera } = useThree();
-  const groupRef = useRef<THREE.Group>(null);
-  const pose = useMemo(() => createMenuPose(), []);
-  const ageRef = useRef(-1);
-
-  useFrame((_, delta) => {
-    const g = groupRef.current;
-    if (!g) return;
-    camera.getWorldPosition(_eye);
-    camera.getWorldDirection(_dir);
-    const yaw = yawOfDirection(_dir.x, _dir.z);
-    const first = ageRef.current < 0;
-    ageRef.current = first ? 0 : ageRef.current + delta;
-    updateLazyFollow(pose, _eye.x, _eye.y, _eye.z, yaw, delta, first);
-
-    const scale = menuSpawnScale(ageRef.current);
-    menuPointToWorld(pose, scale, scanOffset, menu.scan);
-
-    _v.set(pose.x, pose.y, pose.z);
-    if (g.parent) g.parent.worldToLocal(_v);
-    g.position.copy(_v);
-    g.rotation.set(0, -pose.yaw, 0);
-    g.scale.setScalar(scale);
-  });
-
+  const onPose = useCallback(
+    (pose: MenuPose, scale: number) => menuPointToWorld(pose, scale, scanOffset, menu.scan),
+    [menu, scanOffset]
+  );
   return (
-    <group ref={groupRef} name="wrist-menu-panel">
+    <FollowGroup spawn onPose={onPose} name="wrist-menu-panel">
       {children}
-    </group>
+    </FollowGroup>
   );
 });

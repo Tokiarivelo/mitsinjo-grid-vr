@@ -1501,7 +1501,9 @@
           "leaf": "Ravina",
           "leafDark": "Ravina an-aloka",
           "flower": "Voninkazo sy voankazo",
-          "painted": "Voaloko"
+          "painted": "Voaloko",
+          "pot": "Vilany",
+          "soil": "Tany"
         }
       },
       "vrExtractHint": "Tifiro hamoahana azy amin’ny 3D",
@@ -1517,7 +1519,9 @@
         "readySub": "Ovay mivantana ao amin’ny laboratoara 3D.",
         "outlineOnly": "Tsy misy ny endrika IA: endrika sisiny, azo ovaina ao amin’ny labo.",
         "enterLab": "Midira ao amin’ny labo 3D",
-        "later": "Avy eo"
+        "later": "Avy eo",
+        "leaveStudio": "Hiala amin’ny studio",
+        "backToStudio": "Miverena any amin’ny studio · « {name} »"
       },
       "vrViews": {
         "title": "Sary 2D hamarinina",
@@ -1531,6 +1535,35 @@
         "mainValidated": "Sary fototra: ampiasaina amin’ny 3D",
         "build": "Hamafiso ary atsangano ny 3D",
         "imageError": "Vita ny sary, saingy tsy azo aseho amin’ny VR"
+      },
+      "vrChat": {
+        "title": "Resaka AI · {view}",
+        "aiLabel": "FANOVANA AI · averina hosoratana ity sary ity, hamarino alohan'ny hankatoavina",
+        "empty": "Angataho amin'ny AI ny fanovana ny {view} : soraty amin'ny « Fitendry » na lazao amin'ny « Feo », avy eo « Alefa ».",
+        "placeholder": "Lazao ny fanovana…",
+        "listening": "Mihaino… mitenena",
+        "working": "Averiko hosoratana ny {view} araka ny fangatahanao…",
+        "done": "Vita : eo amin'ny sary ny sary vaovao. Ankatoavy na mangataha fanovana hafa.",
+        "failed": "Tsy nahomby ny sary. Alefaso indray ny fangatahana.",
+        "keyboard": "Fitendry",
+        "voice": "Feo",
+        "stop": "Ajanony",
+        "send": "Alefa",
+        "wait": "Andraso ho vita ny sary",
+        "voiceUnavailable": "Tsy misy feo amin'ity navigateur ity : ampiasao ny « Fitendry »",
+        "voiceError": "Tsy re ny feo (nahazo alalana ny mikrô ?) : andramo indray na ampiasao ny « Fitendry »",
+        "keyShift": "⇧ Lehibe",
+        "keySpace": "elanelana",
+        "keyBack": "⌫ Fafao",
+        "keyClear": "Fafao daholo"
+      },
+      "vrVillage": {
+        "title": "Apetraho ao an-tanàna ny « {name} »",
+        "hint": "Tondroy ny tanàna ary tsindrio hametrahana azy · tariby mankany amin'ny fizarana",
+        "placed": "Napetraka ao amin'ny {x}, {z} · fizarana : {sector}",
+        "notPlaced": "Mbola tsy napetraka : tondroy ny latabatry ny tanàna ary tsindrio",
+        "inSimulation": "Ao anaty simulation : naverina nokajiana ny paikady",
+        "goSimulation": "Mankany amin'ny simulation"
       },
       "vrLab": {
         "title": "Labo 3D · {name}",
@@ -1585,7 +1618,10 @@
       "vrStudio": {
         "viewsTitle": "Manao ny sary 2D an’i « {name} »",
         "buildSub": "Misokatra ho azy ny labo 3D raha vao vonona ny modely"
-      }
+      },
+      "cancelAnalysis": "Ajanony ny famakafakana",
+      "analysisCancelled": "Najanona ny famakafakana.",
+      "retryAnalysis": "Avereno ny famakafakana"
     },
     "dispatch": {
       "modeLabel": "Fomba fandefasana",

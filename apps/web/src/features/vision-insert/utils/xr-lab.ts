@@ -6,7 +6,7 @@ import type { PieceEdit } from '@/lib/piece-edits';
  */
 type Vec3 = [number, number, number];
 
-/** Pieces listed per page of the lab's list (each row ≥ 6 cm, Meta hit target). */
+/** Rows shown at once in the lab's pieces list (each row ≥ 6 cm, Meta hit target). */
 export const LAB_PAGE = 7;
 const SCALE_MIN = 0.05;
 const SCALE_MAX = 5;
@@ -34,9 +34,21 @@ export function nextOpacity(current: number | undefined): number {
   return LAB_OPACITY_STEPS[(i + 1) % LAB_OPACITY_STEPS.length]!;
 }
 
-/** One page of the pieces list, and how many pages there are (at least 1). */
-export function pagePieces(names: readonly string[], page: number) {
-  const pages = Math.max(1, Math.ceil(names.length / LAB_PAGE));
-  const p = Math.max(0, Math.min(pages - 1, page));
-  return { items: names.slice(p * LAB_PAGE, (p + 1) * LAB_PAGE), pages, page: p };
+/** Height of one row of the lab's pieces list (m). */
+export const LAB_ROW = 0.068;
+/** Rows scrolled per radian of pointer pitch: the list follows the ray at about 1 m. */
+export const LAB_SCROLL_GAIN = 1 / LAB_ROW;
+
+/**
+ * Scroll of the pieces list (VS-T26), in rows from the top: kept between the first row and the
+ * last full window (`LAB_PAGE` rows). Pinch-and-drag up / down moves it, like the views carousel.
+ */
+export function clampScroll(scroll: number, count: number): number {
+  return Math.max(0, Math.min(Math.max(0, count - LAB_PAGE), scroll));
+}
+
+/** Row `i` is inside the list's window at `scroll` (a row half out is hidden). */
+export function rowShown(i: number, scroll: number): boolean {
+  const at = i - scroll;
+  return at > -0.5 && at < LAB_PAGE - 0.5;
 }

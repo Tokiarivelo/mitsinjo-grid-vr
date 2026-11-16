@@ -11,7 +11,7 @@ import { getPerceptionClient } from '../client';
 import { CAR_SLOTS, carMesh, type CarSlot } from '@/lib/car-mesh';
 import { rasterCar } from '../car/car-raster';
 import { rasterMesh } from '../recon/mesh-raster';
-import { PLANT_SLOTS, PLANT_TWO_SIDED, plantMesh } from '@/lib/plant-mesh';
+import { PLANT_SLOTS, PLANT_TWO_SIDED, plantMesh, plantSlotColors } from '@/lib/plant-mesh';
 import { carToolAsk, liveReadCar } from '../car/car-specialist';
 import { liveReadPlant, plantToolAsk } from '../tree/plant-specialist';
 import { PlantReadingSchema } from '../tree/plant-tools';
@@ -405,13 +405,7 @@ describe.runIf(
       await writeFile(join(out, 'plant.json'), JSON.stringify(recipe.plant, null, 2));
       const { w, h, d } = recipe.proportions;
       const mesh = plantMesh(recipe.plant, [w, h, d]);
-      const look = recipe.plant.look;
-      const colors = {
-        bark: look.bark,
-        leaf: look.leaf,
-        leafDark: look.leafDark,
-        flower: look.flower ?? look.leaf,
-      };
+      const colors = plantSlotColors(recipe.plant);
       // The plant's skin (its front drawing) worn like the viewer wears it.
       const skinUrl = recipe.plant.skin;
       const skin = skinUrl

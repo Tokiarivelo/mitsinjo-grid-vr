@@ -96,6 +96,37 @@ describe('DetectionCanvas (PV-T7)', () => {
     expect(container.querySelector('svg path[data-detection]')).toBeNull();
   });
 
+  it('cancels a running analysis, then offers a retry (VS-T26)', () => {
+    const onCancel = vi.fn();
+    const { rerender, onRetry } = setup({ status: 'loading', detections: [], onCancel });
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel the analysis' }));
+    expect(onCancel).toHaveBeenCalledOnce();
+    rerender(
+      <I18nProvider>
+        <DetectionCanvas
+          imageUrl="data:image/jpeg;base64,AA"
+          status="cancelled"
+          detections={[]}
+          selectedId={null}
+          onSelect={vi.fn()}
+          onRetry={onRetry}
+          onCancel={onCancel}
+        />
+      </I18nProvider>
+    );
+    expect(screen.getByText('Analysis cancelled.')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Cancel the analysis' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(onRetry).toHaveBeenCalled();
+  });
+
+  it('can cancel while outlines refine; boxes stay', () => {
+    const onCancel = vi.fn();
+    setup({ status: 'refining', onCancel });
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel the analysis' }));
+    expect(onCancel).toHaveBeenCalledOnce();
+  });
+
   it('error state: alert with retry', () => {
     const { onRetry } = setup({ status: 'error', detections: [] });
     expect(screen.getByRole('alert').textContent).toContain('Appliance detection failed.');

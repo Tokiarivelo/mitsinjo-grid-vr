@@ -2,8 +2,9 @@
 // `window.__IWER_DEVICE__.remote.dispatch`, with the sample room fed as a fake webcam.
 // The emulator shows the walkable 360° tour (VS-T14), not the webcam. Checks: session starts;
 // wrist menu; loft with 2 floor arrows; a controller shot at the fridge (no scan yet) starts ONE
-// scan, outlines it and asks « Extract to 3D? »; then the 3D studio: 2D views carousel + generation
-// column → build → the lab opens by itself (a piece hidden); mouse clicks through the DevUI overlay
+// scan and outlines it, asking nothing; a second shot at it asks « Extract to 3D? »; then the 3D
+// studio: 2D views carousel + generation column, the views AI chat (keys, send, bot answer) → build → the lab opens by itself (a piece hidden, the object placed
+// on the village hologram and added to the simulation); mouse clicks through the DevUI overlay
 // (wrist menu, Help, « Cancel ») → leave = miniature; a tap on it connects it; a hand pinch at the lamp; shooting a floor
 // arrow walks to the hall; ↑ walks on. Screenshots show the photo orientation ("MARRY" letters).
 // Screenshots in <outDir>/vr-*.png.
@@ -119,7 +120,8 @@ try {
   await sleep(2000);
   await shot('1-entered');
 
-  // Wrist menu: hidden on entry, opened by aiming at the button on the left wrist.
+  // Menu: hidden on entry. In the emulator the button floats in front (controllers turn with the head
+  // there, a worn button could never be aimed at): wearer stays null by design (eefd12e).
   await rc('set_input_mode', { mode: 'controller' });
   await rc('set_transform', { device: 'controller-left', position: { x: -0.2, y: 1.1, z: -0.35 } });
   await sleep(800);
@@ -130,14 +132,15 @@ try {
         m && {
           open: m.open,
           wearer: m.wearer,
+          visible: m.buttonVisible,
           button: { x: m.button.x, y: m.button.y, z: m.button.z },
         }
       );
     });
   const m0 = await menu();
   check(
-    'wrist menu closed on entry, button worn on the left controller',
-    !!m0 && !m0.open && m0.wearer !== null
+    'menu closed on entry, Menu button floating in view (emulator)',
+    !!m0 && !m0.open && m0.visible && m0.wearer === null
   );
   await shot('0-menu-closed');
   if (m0) await fire('controller-right', m0.button, { x: 0.2, y: 1.3, z: -0.1 });
@@ -236,6 +239,9 @@ try {
     }
     return false;
   };
+  // The shot only started the analysis: nothing is asked until the fridge itself is shot.
+  check('the analysis alone asks nothing (no auto-selection)', (await extract())?.stage === 'idle');
+  await fire('controller-right', fridge, { x: 0.15, y: 1.45, z: -0.15 });
   check('the shot fridge asks « Extract to 3D? »', (await extract())?.stage === 'confirm');
   await shot('3b-extract-dialog');
   await press('holo:extract-yes');
@@ -260,6 +266,41 @@ try {
   await press('holo:views-next');
   await sleep(800);
   await shot('3d-views-next-face');
+
+  // Per-view AI chat (VS-T27): look left at it, open the holo keys, type, send, the bot answers.
+  const chatAt = await panelAt('holo:chat-keyboard');
+  check('the views chat sits beside the carousel', !!chatAt);
+  if (chatAt) {
+    await rc('look_at', { device: 'headset', target: chatAt });
+    await sleep(800);
+    await shot('3e-chat');
+    // Aimed from the left hand side: the floating « Leave the studio » sits right of the gaze.
+    const pressLeft = async (id) => {
+      const at = await panelAt(id);
+      if (!at) return false;
+      await fire('controller-right', at, { x: -0.25, y: 1.4, z: -0.05 });
+      return true;
+    };
+    await pressLeft('holo:chat-keyboard');
+    await sleep(600);
+    check('« Keys » opens the holo keyboard', !!(await panelAt('holo:chat-keys')));
+    await pressLeft('holo:chat-keys');
+    await pressLeft('holo:chat-keys');
+    await shot('3f-chat-typed');
+    check('typing enables « Send »', await pressLeft('holo:chat-send'));
+    check(
+      '« Send » logs the request and redraws that face; the bot answers once drawn',
+      await waitFor(async () => {
+        const c = (await extract())?.chats?.side ?? [];
+        return c[0] === 'prompt' && c.at(-1) === 'done';
+      }, 240000)
+    );
+    await sleep(800);
+    await shot('3g-chat-answered');
+    const build = await panelAt('holo:views-build');
+    if (build) await rc('look_at', { device: 'headset', target: build });
+    await sleep(600);
+  }
   await press('holo:views-build');
   await sleep(1500);
   await shot('3d2-studio-building');
@@ -278,6 +319,29 @@ try {
   );
   await shot('3g-lab-piece-hidden');
   await press('holo:lab-show-all');
+
+  // Village hologram (VS-T28): place the edited model on the table, add it to the simulation.
+  const village = () => page.evaluate(() => window.__VR_VILLAGE__ ?? null);
+  const tableAt = await panelAt('holo:village-map');
+  check('the lab shows the village hologram table', !!tableAt);
+  if (tableAt) {
+    await rc('look_at', { device: 'headset', target: tableAt });
+    await sleep(800);
+    const fromLeft = { x: -0.1, y: 1.4, z: -0.05 };
+    const at = (id) => panelAt(id).then((p) => p && fire('controller-right', p, fromLeft));
+    await at('holo:village-map');
+    check('a shot on the table places the object', !!(await village())?.position);
+    await shot('3g2-village-placed');
+    await at('holo:village-insert');
+    check(
+      '« Add to the simulation » puts it in the village; « Go to the simulation » is offered',
+      !!(await village())?.inSimulation && !!(await panelAt('holo:village-simulation'))
+    );
+    await shot('3g3-village-added');
+    const exitAt = await panelAt('holo:lab-exit');
+    if (exitAt) await rc('look_at', { device: 'headset', target: exitAt });
+    await sleep(600);
+  }
   await press('holo:lab-exit');
   check('leaving the lab ends the extraction', (await extract())?.stage === 'idle');
   await sleep(1500);
@@ -291,6 +355,12 @@ try {
   await fire('hand-right', panoPoint(...LAMP_UV, uF, 3), { x: 0.2, y: 1.35, z: -0.1 });
   await shot('5-hand-lamp');
   check('a hand pinch at the lamp asks to extract it', (await extract())?.stage === 'confirm');
+  // VS-T26: after scans and a mode switch, hands are the real model, never the joint spheres.
+  const hands = await page.evaluate(() => window.__VR_CONTROLS__?.hands?.());
+  check(
+    'hands show the real hand model, not the joint spheres',
+    !!hands?.length && hands.every((h) => h.joints === 0 || (h.real && !h.spheres))
+  );
   await rc('set_input_mode', { mode: 'controller' });
   await sleep(600);
   // A mouse click on « Cancel », through the DevUI overlay (VS-T24 regression).

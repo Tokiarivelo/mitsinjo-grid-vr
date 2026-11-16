@@ -9,6 +9,7 @@ import { renderView, uFrontFacing, yawPitchOf, type CaptureView, type Vec3 } fro
 import { entryU, TOUR_ROOMS, type TourRoomId } from './tour-data';
 import {
   arrowAt,
+  glideStep,
   isWalkKey,
   keyWalkAxes,
   stepWalk,
@@ -64,8 +65,6 @@ const FLOOR = TOUR_EYE[1];
 const BOB_AMPLITUDE = 0.022;
 const STEPS_PER_SECOND = 1.8;
 const CAPTURE_W = 2048;
-/** A snap step glides at this speed (m/s): short, but never a jump cut. */
-const STEP_SPEED = 3.2;
 const CAPTURE_H = Math.round(CAPTURE_W / TOUR_CAPTURE_ASPECT);
 
 const VERTEX = /* glsl */ `
@@ -408,17 +407,9 @@ export const PanoramaTour = memo(function PanoramaTour({
       ground = stepWalk(ground, axes, headYaw, delta, scale.walk);
       // A step asked for (right stick ↑/↓, thumb swipe): glide it off along the gaze.
       if (photo && photo.step !== 0) {
-        const move = Math.sign(photo.step) * Math.min(Math.abs(photo.step), STEP_SPEED * delta);
-        photo.step -= move;
-        if (Math.abs(photo.step) < 1e-3) photo.step = 0;
-        let x = ground[0] + Math.sin(headYaw) * move;
-        let z = ground[1] - Math.cos(headYaw) * move;
-        const r = Math.hypot(x, z);
-        if (r > scale.walk) {
-          x *= scale.walk / r;
-          z *= scale.walk / r;
-        }
-        ground = [x, z];
+        const glided = glideStep(ground, photo.step, headYaw, delta, scale.walk);
+        photo.step = glided.pending;
+        ground = glided.ground;
       }
       const onArrow = arrowAt(arrows, [ground[0] + head[0], ground[1] + head[1]]);
       if (onArrow) onWalk(onArrow.to);

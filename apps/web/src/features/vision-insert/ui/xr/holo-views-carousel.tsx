@@ -5,6 +5,9 @@ import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
 import { useTranslations } from '@/lib/i18n';
 import { snapIndex, type ViewSlide } from '../../utils/xr-extract';
+import type { ChatMessage } from '../../utils/face-chat';
+import { HoloFaceChat } from './holo-face-chat';
+import type { AimReadout } from './xr-blaster-controller';
 import { useHoloPanel, type PanelRegistry } from './holo-panel';
 import { HoloButton, HoloFrame, HoloText, useHoloImage, useHoloImageMaterial } from './holo-ui';
 import { HOLO } from './holo-style';
@@ -144,6 +147,11 @@ export interface HoloViewsCarouselProps {
   onToggleValidated: (id: ViewSlide['id']) => void;
   onBuild: () => void;
   onCancel: () => void;
+  /** Chat of the view in focus (VS-T27); no chat panel without it. */
+  chatOf?: (id: ViewSlide['id']) => ChatMessage[];
+  onSendChat?: (id: ViewSlide['id'], text: string) => void;
+  /** Live pointer aim (the chat bot looks at the cursor). */
+  aim?: AimReadout;
 }
 
 /** Name and status line of a views slide (carousel and the studio's generation column). */
@@ -189,6 +197,9 @@ export const HoloViewsCarousel = memo(function HoloViewsCarousel({
   onToggleValidated,
   onBuild,
   onCancel,
+  chatOf,
+  onSendChat,
+  aim,
 }: HoloViewsCarouselProps) {
   const t = useTranslations('features.visionInsert');
   const [focus, setFocus] = useState(0);
@@ -245,6 +256,12 @@ export const HoloViewsCarousel = memo(function HoloViewsCarousel({
   const y2 = y1 - 0.11;
   const isMain = current?.id === 'main';
   const ready = current?.status === 'ready';
+  const anyDrawing = slides.some((s) => s.status === 'generating');
+  const currentId = current?.id;
+  const sendChat = useMemo(
+    () => (text: string) => currentId && onSendChat?.(currentId, text),
+    [currentId, onSendChat]
+  );
   return (
     <AnchoredPanel anchor={anchor} name="holo-views-carousel">
       <HoloText spec={header} width={0.9} height={0.13} position={[0, SLIDE_SIZE / 2 + 0.2, 0]} />
@@ -338,6 +355,18 @@ export const HoloViewsCarousel = memo(function HoloViewsCarousel({
         hovered={hoveredId === VIEWS_IDS.cancel}
         onSelect={onCancel}
       />
+      {current && chatOf && onSendChat && (
+        <HoloFaceChat
+          registry={registry}
+          hoveredId={hoveredId}
+          viewName={nameOf(current)}
+          messages={chatOf(current.id)}
+          busy={anyDrawing}
+          canEdit={current.status === 'ready' || current.status === 'error'}
+          onSend={sendChat}
+          {...(aim ? { aim } : {})}
+        />
+      )}
     </AnchoredPanel>
   );
 });

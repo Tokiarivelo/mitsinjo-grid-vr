@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { attachInputModels } from './xr-input-models';
+import { createRayVisual, type RayVisual } from './xr-ray-visual';
 
 export const HAND_JOINTS = [
   'wrist',
@@ -44,10 +46,12 @@ export function createControllerGripModel(): THREE.Group {
   const group = new THREE.Group();
   group.name = 'controller-grip-visual';
 
+  // Light grey, like the Quest 3 Touch Plus the real model shows (a dark stand-in read as a
+  // different controller while the real one loads).
   const gripMat = new THREE.MeshStandardMaterial({
-    color: '#222831',
-    roughness: 0.52,
-    metalness: 0.18,
+    color: '#d9dde3',
+    roughness: 0.6,
+    metalness: 0,
   });
 
   // Handle (ergonomic rounded cylinder angled forward in the palm)
@@ -66,7 +70,7 @@ export function createControllerGripModel(): THREE.Group {
   const stickGeo = new THREE.CylinderGeometry(0.008, 0.006, 0.012, 12);
   stickGeo.rotateX(THREE.MathUtils.degToRad(32));
   stickGeo.translate(0, 0.048, -0.012);
-  const stickMat = new THREE.MeshStandardMaterial({ color: '#374151', roughness: 0.8 });
+  const stickMat = new THREE.MeshStandardMaterial({ color: '#4b5563', roughness: 0.8 });
   group.add(new THREE.Mesh(stickGeo, stickMat));
 
   // Buttons A & B (or X & Y)
@@ -92,34 +96,6 @@ export function createControllerGripModel(): THREE.Group {
   ringGeo.rotateX(THREE.MathUtils.degToRad(42));
   ringGeo.translate(0, 0.03, -0.015);
   group.add(new THREE.Mesh(ringGeo, gripMat));
-
-  return group;
-}
-
-/**
- * Creates visual representation for Touch/Quest VR directional laser pointer.
- * Extends forward along -Z in target ray space.
- */
-export function createLaserRayModel(): THREE.Group {
-  const group = new THREE.Group();
-  group.name = 'controller-laser-ray';
-
-  // Laser beam extending 2.5m forward along -Z
-  const rayGeo = new THREE.CylinderGeometry(0.0015, 0.0015, 2.5, 6);
-  rayGeo.rotateX(-Math.PI / 2);
-  rayGeo.translate(0, 0, -1.25);
-  const rayMat = new THREE.MeshBasicMaterial({
-    color: '#38bdf8',
-    transparent: true,
-    opacity: 0.65,
-  });
-  group.add(new THREE.Mesh(rayGeo, rayMat));
-
-  // Glowing reticle dot at 2.5m
-  const pipGeo = new THREE.SphereGeometry(0.008, 10, 10);
-  pipGeo.translate(0, 0, -2.5);
-  const pipMat = new THREE.MeshBasicMaterial({ color: '#7dd3fc' });
-  group.add(new THREE.Mesh(pipGeo, pipMat));
 
   return group;
 }
@@ -183,7 +159,41 @@ interface HandData {
     joints?: Record<string, THREE.Group & { jointRadius?: number }>;
   };
   mesh: THREE.InstancedMesh;
+  /** The real hand model has loaded: the joint spheres hide. */
+  real: () => boolean;
 }
+
+interface RayData {
+  space: THREE.XRTargetRaySpace;
+  visual: RayVisual;
+  pressed: boolean;
+}
+
+/** Things a pointer can use: panels (`userData.xrUi`) and anything with a select handler. */
+function usableObjects(scene: THREE.Scene): THREE.Object3D[] {
+  const out: THREE.Object3D[] = [];
+  scene.traverse((o) => {
+    const h = o as THREE.Object3D & { __r3f?: { handlers?: { onClick?: unknown } } };
+    if (
+      o.userData?.xrUi ||
+      o.userData?.onSelect ||
+      o.userData?.onClick ||
+      h.__r3f?.handlers?.onClick
+    )
+      out.push(o);
+  });
+  return out;
+}
+
+/** Frames between two refreshes of the usable objects list (they rarely change). */
+const USABLE_REFRESH_FRAMES = 30;
+const _rayCaster = new THREE.Raycaster();
+const _rayHits: THREE.Intersection[] = [];
+const _rayO = new THREE.Vector3();
+const _rayD = new THREE.Vector3();
+const _rayLocalO = new THREE.Vector3(0, 0, 0);
+const _rayLocalD = new THREE.Vector3(0, 0, -1);
+const _rayEnd = new THREE.Vector3();
 
 interface ModelRef {
   parent: THREE.Object3D;
@@ -225,8 +235,14 @@ export function setupXRHandsAndControllers(
   }
 
   const hands: HandData[] = [];
+  const rays: RayData[] = [];
+  const models: Array<{ gripLoaded: () => boolean; dispose: () => void }> = [];
   const modelRefs: ModelRef[] = [];
-  const selectListeners: Array<{ controller: THREE.XRTargetRaySpace; listener: () => void }> = [];
+  const selectListeners: Array<{
+    controller: THREE.XRTargetRaySpace;
+    listener: () => void;
+    type: 'select' | 'selectstart' | 'selectend';
+  }> = [];
 
   for (let i = 0; i < 2; i++) {
     // 1. Hands (Joint tracking)
@@ -236,14 +252,19 @@ export function setupXRHandsAndControllers(
     const handMesh = createHandMesh();
     handGroup.add(handMesh);
     rig.add(handGroup);
-    hands.push({ group: handGroup, mesh: handMesh });
 
-    // 2. Controller Target Ray (Laser Pointer)
+    // 2. Controller Target Ray: a short beam + cursor ring (Meta ray spec, VS-T26).
     const controllerRay = gl.xr.getController(i);
-    const laserRay = createLaserRayModel();
-    controllerRay.add(laserRay);
+    const ray: RayData = { space: controllerRay, visual: createRayVisual(), pressed: false };
+    controllerRay.add(ray.visual.group);
     rig.add(controllerRay);
-    modelRefs.push({ parent: controllerRay, child: laserRay });
+    rays.push(ray);
+    const onPress = () => (ray.pressed = true);
+    const onLift = () => (ray.pressed = false);
+    controllerRay.addEventListener?.('selectstart', onPress);
+    controllerRay.addEventListener?.('selectend', onLift);
+    selectListeners.push({ controller: controllerRay, listener: onPress, type: 'selectstart' });
+    selectListeners.push({ controller: controllerRay, listener: onLift, type: 'selectend' });
 
     // WebXR Trigger / Select event handler: raycast along laser pointer to trigger interactive objects
     const onSelect = () => {
@@ -295,15 +316,17 @@ export function setupXRHandsAndControllers(
 
     if (typeof controllerRay.addEventListener === 'function') {
       controllerRay.addEventListener('select', onSelect);
-      selectListeners.push({ controller: controllerRay, listener: onSelect });
+      selectListeners.push({ controller: controllerRay, listener: onSelect, type: 'select' });
     }
 
     // 3. Controller Grip (Physical 3D Controller Body)
     const getGrip = (gl.xr as unknown as { getControllerGrip?: (idx: number) => THREE.Group })
       .getControllerGrip;
+    let controllerGrip: THREE.Group | null = null;
+    let gripModel: THREE.Group | null = null;
     if (typeof getGrip === 'function') {
-      const controllerGrip = getGrip.call(gl.xr, i);
-      const gripModel = createControllerGripModel();
+      controllerGrip = getGrip.call(gl.xr, i);
+      gripModel = createControllerGripModel();
       controllerGrip.add(gripModel);
       rig.add(controllerGrip);
       modelRefs.push({ parent: controllerGrip, child: gripModel });
@@ -313,17 +336,73 @@ export function setupXRHandsAndControllers(
       controllerRay.add(gripModel);
       modelRefs.push({ parent: controllerRay, child: gripModel });
     }
+
+    // 4. Real hand and controller models; the simple ones stay until they load (offline: always).
+    const real = attachInputModels(gl, i, {
+      hand: handGroup,
+      ...(controllerGrip ? { grip: controllerGrip } : {}),
+      ...(gripModel ? { gripFallback: gripModel } : {}),
+    });
+    models.push(real);
+    hands.push({ group: handGroup, mesh: handMesh, real: real.handLoaded });
   }
 
+  let usable: THREE.Object3D[] = [];
+  let frame = 0;
+  let last = performance.now();
   const update = () => {
-    for (const h of hands) updateHandMesh(h.group, h.mesh);
+    const now = performance.now();
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    for (const h of hands) {
+      updateHandMesh(h.group, h.mesh);
+      if (h.real()) h.mesh.visible = false;
+    }
+    for (const m of models) m.gripLoaded(); // shows the simple controller only until the real one
+    if (scene && frame++ % USABLE_REFRESH_FRAMES === 0) usable = usableObjects(scene);
+    for (const r of rays) {
+      if (!r.space.visible) {
+        r.visual.hide();
+        continue;
+      }
+      r.space.updateMatrixWorld(true);
+      r.space.getWorldPosition(_rayO);
+      _rayD.set(0, 0, -1).transformDirection(r.space.matrixWorld);
+      _rayCaster.set(_rayO, _rayD);
+      _rayCaster.camera = (gl.xr.isPresenting ? gl.xr.getCamera() : camera) ?? _rayCaster.camera;
+      _rayHits.length = 0;
+      try {
+        _rayCaster.intersectObjects(usable, true, _rayHits);
+      } catch {
+        _rayHits.length = 0;
+      }
+      const hit = _rayHits[0];
+      // The visual lives in the controller's space: the hit is put back in it.
+      _rayEnd.set(0, 0, -(hit ? hit.distance : 2.5));
+      r.visual.update({
+        origin: _rayLocalO,
+        direction: _rayLocalD,
+        end: _rayEnd,
+        usable: !!hit,
+        input: 'controller',
+        pressed: r.pressed,
+        tint: '#7dd3fc',
+        dt,
+      });
+    }
   };
 
   const dispose = () => {
     for (const item of selectListeners) {
       if (typeof item.controller.removeEventListener === 'function') {
-        item.controller.removeEventListener('select', item.listener);
+        item.controller.removeEventListener(item.type, item.listener);
       }
+    }
+    for (const m of models) m.dispose();
+    for (const r of rays) {
+      r.space.remove(r.visual.group);
+      r.visual.dispose();
+      rig.remove(r.space);
     }
     for (const h of hands) {
       rig.remove(h.group);

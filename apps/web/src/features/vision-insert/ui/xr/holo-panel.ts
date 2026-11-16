@@ -11,8 +11,13 @@ import type * as THREE from 'three';
 export interface HoloPanelHandlers {
   /** Shot / tap on the panel; `hit` names the mesh under the ray (the lab model's piece). */
   onSelect?: (hit: THREE.Intersection) => void;
-  /** Held select moved sideways: `dx` in radians of pointer yaw (right = positive). */
-  onDrag?: (dx: number) => void;
+  /**
+   * Held select moved along the panel's `axis`: radians of pointer yaw (`x`, right = positive)
+   * or of pointer pitch (`y`, up = positive).
+   */
+  onDrag?: (d: number) => void;
+  /** Drag direction: sideways (carousel, model; default) or up / down (a scrolled list, VS-T26). */
+  axis?: 'x' | 'y';
   /** The drag ended (snap the carousel). */
   onDragEnd?: () => void;
 }
@@ -73,7 +78,7 @@ export const PANEL_TAP_SLOP = 0.07;
 export interface PanelDrag {
   panel: HoloPanelData;
   hit: THREE.Intersection;
-  /** Last pointer yaw (rad). */
+  /** Last pointer angle along the panel's axis (rad): yaw, or pitch for a `y` panel. */
   yaw: number;
   /** Largest net turn from the press so far (rad); past the slop it is a drag for good. */
   moved: number;
@@ -83,7 +88,11 @@ export interface PanelDrag {
 
 const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
 
-/** Feeds one pointer yaw sample to a drag; returns the yaw step (rad) it passed to `onDrag`. */
+/** The pointer angle a panel drags along: yaw, or pitch for a `y` (vertical) panel. */
+export const dragAngle = (panel: HoloPanelHandlers, yaw: number, pitch: number) =>
+  panel.axis === 'y' ? pitch : yaw;
+
+/** Feeds one pointer angle sample to a drag; returns the step (rad) it passed to `onDrag`. */
 export function dragTo(drag: PanelDrag, yaw: number): number {
   drag.start ??= drag.yaw;
   const step = wrap(yaw - drag.yaw);
@@ -139,6 +148,7 @@ export function useHoloPanel(
         onDragEnd: () => handlersRef.current.onDragEnd?.(),
       };
       if (!handlersRef.current.onDrag) delete data.onDrag;
+      if (handlersRef.current.axis) data.axis = handlersRef.current.axis;
       object.userData[HOLO_PANEL_KEY] = data;
       registry?.add(object);
     },

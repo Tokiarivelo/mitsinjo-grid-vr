@@ -36,6 +36,8 @@ const PIECE_KEYS = new Set([
   'leaf',
   'leafDark',
   'flower',
+  'pot',
+  'soil',
   'painted',
 ]);
 const MATERIALS = new Set<string>(RECIPE_MATERIALS);

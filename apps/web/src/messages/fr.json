@@ -1501,7 +1501,9 @@
           "leaf": "Feuilles",
           "leafDark": "Feuilles à l’ombre",
           "flower": "Fleurs et fruits",
-          "painted": "Peint"
+          "painted": "Peint",
+          "pot": "Pot",
+          "soil": "Terre"
         }
       },
       "vrExtractHint": "Tirez pour l’extraire en 3D",
@@ -1517,7 +1519,9 @@
         "readySub": "Modifiez-le en direct dans le laboratoire 3D.",
         "outlineOnly": "Forme IA indisponible : forme contour, modifiable dans le labo.",
         "enterLab": "Entrer dans le labo 3D",
-        "later": "Plus tard"
+        "later": "Plus tard",
+        "leaveStudio": "Quitter le studio",
+        "backToStudio": "Revenir au studio · « {name} »"
       },
       "vrViews": {
         "title": "Vues 2D à valider",
@@ -1531,6 +1535,35 @@
         "mainValidated": "Vue principale : sert à la 3D",
         "build": "Valider et construire la 3D",
         "imageError": "Dessinée, mais non affichable en VR"
+      },
+      "vrChat": {
+        "title": "Chat IA · {view}",
+        "aiLabel": "MODIF. IA · redessine cette vue, vérifiez-la avant de valider",
+        "empty": "Demandez à l'IA de modifier la vue {view} : tapez avec « Clavier » ou parlez avec « Voix », puis « Envoyer ».",
+        "placeholder": "Décrivez la modification…",
+        "listening": "J'écoute… parlez",
+        "working": "Je redessine la vue {view} avec votre demande…",
+        "done": "C'est fait : le nouveau dessin est sur la diapositive. Validez-le ou demandez une autre modification.",
+        "failed": "Le dessin a échoué. Renvoyez la demande.",
+        "keyboard": "Clavier",
+        "voice": "Voix",
+        "stop": "Stop",
+        "send": "Envoyer",
+        "wait": "Attendez la fin du dessin",
+        "voiceUnavailable": "Voix indisponible dans ce navigateur : utilisez « Clavier »",
+        "voiceError": "Voix non entendue (micro autorisé ?) : réessayez ou utilisez « Clavier »",
+        "keyShift": "⇧ Maj",
+        "keySpace": "espace",
+        "keyBack": "⌫ Effacer",
+        "keyClear": "Vider"
+      },
+      "vrVillage": {
+        "title": "Placer « {name} » dans le village",
+        "hint": "Visez le village et appuyez pour le poser · câble vers son départ",
+        "placed": "Posé en {x}, {z} · départ : {sector}",
+        "notPlaced": "Pas encore posé : visez la table du village et appuyez",
+        "inSimulation": "Dans la simulation : stratégies recalculées",
+        "goSimulation": "Aller à la simulation"
       },
       "vrLab": {
         "title": "Labo 3D · {name}",
@@ -1585,7 +1618,10 @@
       "vrStudio": {
         "viewsTitle": "Dessin des vues 2D de « {name} »",
         "buildSub": "Le labo 3D s’ouvre tout seul dès que le modèle est prêt"
-      }
+      },
+      "cancelAnalysis": "Annuler l'analyse",
+      "analysisCancelled": "Analyse annulée.",
+      "retryAnalysis": "Réessayer l'analyse"
     },
     "dispatch": {
       "modeLabel": "Mode de dispatch",

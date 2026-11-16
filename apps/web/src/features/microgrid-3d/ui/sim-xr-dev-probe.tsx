@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { useFrame, useThree } from '@react-three/fiber';
 import { useSimulationStore } from '@/stores';
 import { bodyBlocked, type WalkGrid } from '../utils/walk-grid';
+import { describeXrHands } from '../utils/xr-input-models';
 
 export interface SimXrProbeState {
   panel: string | null;
@@ -31,6 +32,7 @@ export function SimXrDevProbe({
 }) {
   const camera = useThree((s) => s.camera);
   const scene = useThree((s) => s.scene);
+  const gl = useThree((s) => s.gl);
   const live = useRef(state);
   const frames = useRef(0);
   useFrame(() => {
@@ -47,6 +49,8 @@ export function SimXrDevProbe({
       state: () => live.current,
       /** Frames rendered so far: the probe waits in frames (software GL can take seconds per frame). */
       frames: () => frames.current,
+      /** Real hand model vs joint spheres on each hand (VS-T26). */
+      hands: () => describeXrHands(gl),
       head: () => camera.getWorldPosition(_v).toArray(),
       yaw: () => _e.setFromQuaternion(camera.getWorldQuaternion(_q), 'YXZ').y,
       shown: (name: string) => {
@@ -118,6 +122,6 @@ export function SimXrDevProbe({
     return () => {
       delete w.__VR_SIM__;
     };
-  }, [camera, scene, walkGridRef]);
+  }, [camera, scene, gl, walkGridRef]);
   return null;
 }

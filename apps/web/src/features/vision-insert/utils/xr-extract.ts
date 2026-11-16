@@ -8,6 +8,10 @@ import type { FaceName } from '@/lib/object-shape';
  * → (model ready: opened by itself, VS-T24) lab → (« Leave the lab ») idle. From views on, the
  * viewer is in the 3D studio room. Cancel goes back to idle
  * from every step but the lab. An object whose model is already built skips the views.
+ *
+ * Leaving the studio (« Leave the studio », or leaving the lab) keeps where the viewer was
+ * (`away`, VS-T26): « Back to the studio » returns there, and extracting the same object again
+ * resumes it (its lab, its model) instead of starting over. Confirming another object forgets it.
  */
 export type XrExtractStage = 'idle' | 'confirm' | 'views' | 'build' | 'lab';
 
@@ -15,7 +19,14 @@ export interface XrExtractState {
   stage: XrExtractStage;
   /** Detection being extracted (null when idle). */
   id: string | null;
+  /** The studio step left, to come back to (absent when nothing was left). */
+  away?: { id: string; stage: StudioStage };
 }
+
+/** Steps spent in the 3D studio room. */
+export type StudioStage = 'views' | 'build' | 'lab';
+export const isStudioStage = (stage: XrExtractStage): stage is StudioStage =>
+  stage === 'views' || stage === 'build' || stage === 'lab';
 
 export type XrExtractEvent =
   | { type: 'ask'; id: string }
@@ -23,29 +34,46 @@ export type XrExtractEvent =
   | { type: 'cancel' }
   | { type: 'build' }
   | { type: 'enterLab' }
-  | { type: 'exitLab' };
+  | { type: 'exitLab' }
+  | { type: 'leave' }
+  | { type: 'return' };
 
 export const XR_EXTRACT_IDLE: XrExtractState = { stage: 'idle', id: null };
+
+const keepAway = (away: XrExtractState['away']) => (away ? { away } : {});
 
 export function xrExtractReducer(state: XrExtractState, event: XrExtractEvent): XrExtractState {
   switch (event.type) {
     case 'ask':
       // Another object can be picked while the question is up; never in the middle of a build.
       return state.stage === 'idle' || state.stage === 'confirm'
-        ? { stage: 'confirm', id: event.id }
+        ? { stage: 'confirm', id: event.id, ...keepAway(state.away) }
         : state;
     case 'confirm':
-      return state.stage === 'confirm'
-        ? { ...state, stage: event.built ? 'build' : 'views' }
-        : state;
+      if (state.stage !== 'confirm' || !state.id) return state;
+      // The object left in the studio: back where it was (its lab keeps its model).
+      if (state.away?.id === state.id) return { stage: state.away.stage, id: state.id };
+      return { stage: event.built ? 'build' : 'views', id: state.id };
     case 'cancel':
-      return state.stage === 'lab' ? state : XR_EXTRACT_IDLE;
+      if (state.stage === 'lab') return state;
+      // Cancelling the question keeps what was left; cancelling a studio step drops it.
+      return state.stage === 'confirm'
+        ? { ...XR_EXTRACT_IDLE, ...keepAway(state.away) }
+        : XR_EXTRACT_IDLE;
     case 'build':
       return state.stage === 'views' ? { ...state, stage: 'build' } : state;
     case 'enterLab':
       return state.stage === 'build' ? { ...state, stage: 'lab' } : state;
     case 'exitLab':
-      return state.stage === 'lab' ? XR_EXTRACT_IDLE : state;
+    case 'leave':
+      if (event.type === 'exitLab' && state.stage !== 'lab') return state;
+      return isStudioStage(state.stage) && state.id
+        ? { ...XR_EXTRACT_IDLE, away: { id: state.id, stage: state.stage } }
+        : state;
+    case 'return':
+      return state.stage === 'idle' && state.away
+        ? { stage: state.away.stage, id: state.away.id }
+        : state;
   }
 }
 

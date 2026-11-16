@@ -16,6 +16,8 @@ export interface DrawnTree {
   bark?: [number, number, number];
   /** Leaves painted in bark colour instead (a leafless drawing). */
   bare?: boolean;
+  /** A pot under the plant (VS-T25): from row `top` to the foot, `rim` → `foot` half-widths (shares of the width). */
+  pot?: { top: number; rim: number; foot: number; color?: [number, number, number] };
 }
 
 export const ROWS = 128;
@@ -50,6 +52,15 @@ export function drawTree(t: DrawnTree = {}): GridView {
       if (t.roots && fromFoot < t.roots.rows) half = t.roots.half;
       for (let x = Math.round(cx - half); x < Math.round(cx + half); x++) set(x, y, bark);
     }
+  if (t.pot) {
+    const { top, rim, foot } = t.pot;
+    for (let y = top; y < ROWS; y++) {
+      const k = (y - top) / Math.max(1, ROWS - 1 - top);
+      const half = (rim + (foot - rim) * k) * cols;
+      for (let x = Math.round(cx - half); x < Math.round(cx + half); x++)
+        set(x, y, t.pot.color ?? [232, 232, 230]);
+    }
+  }
   return { cols, rows: ROWS, rgb, mask };
 }
 

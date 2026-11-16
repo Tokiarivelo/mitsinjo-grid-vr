@@ -1,5 +1,11 @@
 import * as THREE from 'three';
-import { PLANT_SLOTS, PLANT_TWO_SIDED, plantMesh, type PlantSlot } from '@/lib/plant-mesh';
+import {
+  PLANT_SLOTS,
+  PLANT_TWO_SIDED,
+  plantMesh,
+  plantSlotColors,
+  type PlantSlot,
+} from '@/lib/plant-mesh';
 import type { PlantPlan } from '@/lib/plant-plan';
 import type { ObjectRecipe } from '@/lib/object-shape';
 import { atlasTexture, groupedGeometry, SELECTED_GLOW } from './face-projection';
@@ -41,16 +47,25 @@ export interface PlantSlotLook {
   twoSided: boolean;
 }
 
+/** Surface of each slot: a glazed or terracotta pot and its earth (VS-T25) are solids, not leaves. */
+const SLOT_SURFACE: Record<PlantSlot, Surface> = {
+  bark: 'wood',
+  leaf: 'foliage',
+  leafDark: 'foliage',
+  flower: 'foliage',
+  pot: 'tile',
+  soil: 'stone',
+};
+
 /** The look of every slot, in `PLANT_SLOTS` order: shared by the viewer and the Blender export. */
 export function plantSlotLooks(recipe: PlantRecipe): PlantSlotLook[] {
-  const { look } = recipe.plant;
-  const own: Record<PlantSlot, { surface: Surface; color: string }> = {
-    bark: { surface: 'wood', color: look.bark },
-    leaf: { surface: 'foliage', color: look.leaf },
-    leafDark: { surface: 'foliage', color: look.leafDark },
-    flower: { surface: 'foliage', color: look.flower ?? look.leaf },
-  };
-  return PLANT_SLOTS.map((slot) => ({ slot, ...own[slot], twoSided: PLANT_TWO_SIDED.has(slot) }));
+  const colors = plantSlotColors(recipe.plant);
+  return PLANT_SLOTS.map((slot) => ({
+    slot,
+    surface: SLOT_SURFACE[slot],
+    color: colors[slot],
+    twoSided: PLANT_TWO_SIDED.has(slot),
+  }));
 }
 
 export interface PlantMaterialOptions {

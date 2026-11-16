@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { PLANT_SLOTS } from '@/lib/plant-mesh';
+import { PLANT_SLOTS, PLANT_SOIL } from '@/lib/plant-mesh';
 import type { PlantPlan } from '@/lib/plant-plan';
 import { modelKind, pieceNames } from '../utils/model-pieces';
 import { plantGeometry, plantMaterials, plantSlotLooks } from '../utils/plant-projection';
@@ -37,8 +37,19 @@ describe('plant projection', () => {
 
   it('wears bark on the wood, foliage on both sides of the leaves, the measured colours', () => {
     const looks = plantSlotLooks(recipe);
-    expect(looks.map((l) => l.surface)).toEqual(['wood', 'foliage', 'foliage', 'foliage']);
+    expect(looks.map((l) => l.surface)).toEqual([
+      'wood',
+      'foliage',
+      'foliage',
+      'foliage',
+      'tile',
+      'stone',
+    ]);
     expect(looks[3]!.color).toBe('#cc3344');
+    // No pot: its slot falls back to the bark; the soil is dark earth (VS-T25).
+    expect(looks[4]!.color).toBe(recipe.plant.look.bark);
+    expect(looks[5]!.color).toBe(PLANT_SOIL);
+    expect(looks[4]!.twoSided).toBe(false);
     const mats = plantMaterials(recipe);
     expect(mats[0]!.side).toBe(THREE.FrontSide);
     expect(mats[1]!.side).toBe(THREE.DoubleSide);

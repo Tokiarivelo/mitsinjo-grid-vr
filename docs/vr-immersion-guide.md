@@ -212,6 +212,7 @@ laisser rappeler l'aide depuis un menu, VS-T24).
 | :-------------------------------------------------- | :--------------------------------------- |
 | **Pincer** (pouce + index) en visant                | Valider (bouton, objet, flèche, panneau) |
 | **Pincer et tenir** puis tourner                    | Faire défiler le carrousel des vues      |
+| **Pincer et tenir** puis monter / descendre         | Faire défiler les calques du labo        |
 | **Pouce glissé ← / →** sur l'index                  | Pivoter de 30°                           |
 | **Pouce glissé avant / arrière**                    | Un pas de 0,8 m en avant / en arrière    |
 | **Tap du pouce** sur l'index                        | Analyser la vue                          |
@@ -222,14 +223,21 @@ sinon le pincement suffit pour tout (bouton « Analyser », flèches au sol, men
 
 ### 6.3 Navigateur PC (souris, clavier, émulateur IWER)
 
-| Action                          | Comment                                                                                 |
-| :------------------------------ | :-------------------------------------------------------------------------------------- |
-| Viser / valider                 | Survol + **clic gauche**, aussi pendant la session émulée (bouton du poignet, panneaux) |
-| Marcher dans la visite 360°     | **↑ ↓ ← →**, **W A S D** ou **Z Q S D** (souris au-dessus de la scène)                  |
-| Changer de lieu                 | Marcher sur la flèche au sol, ou la viser et valider                                    |
-| Manettes / mains de l'émulateur | Barre DevUI : bascule ✋ / 🎮 ; panneaux `Controller [L/R]` (A, B, X, Y, Trig, Stick)   |
-| Bouger une manette              | Cliquer dessus → gizmo (flèches = déplacer, anneaux = tourner) ou champs Pos / Rot      |
+| Action                          | Comment                                                                                    |
+| :------------------------------ | :----------------------------------------------------------------------------------------- |
+| Viser / valider                 | Survol + **clic gauche**, aussi pendant la session émulée (bouton du poignet, panneaux)    |
+| Marcher dans la visite 360°     | **↑ ↓ ← →**, **W A S D** ou **Z Q S D** (souris au-dessus de la scène)                     |
+| Changer de lieu                 | Marcher sur la flèche au sol, ou la viser et valider                                       |
+| Manettes / mains de l'émulateur | Barre DevUI : bascule ✋ / 🎮 ; panneaux `Controller [L/R]` (A, B, X, Y, Trig, Stick)      |
+| Bouger une manette              | Cliquer dessus → gizmo (flèches = déplacer, anneaux = tourner) ou champs Pos / Rot         |
+| Menu (bouton « Menu »)          | Flotte à gauche de la vue (il ne suit plus la tête) : le viser au laser ou au clic, ou B/Y |
 
+Dans l'émulateur, mains et manettes tournent avec la tête (mode Play) et ne peuvent pas se toucher : le bouton
+« Menu » n'est donc pas porté au poignet mais flotte dans la pièce, à gauche de l'endroit où le menu s'ouvre, et
+ne se recentre que si l'on regarde à plus de 35° ailleurs (VS-T26). Les lasers de l'émulateur restent parallèles à la vue et
+ne peuvent pas l'atteindre : **le regarder** (il s'éclaire, à ~7° près) **et appuyer sur la gâchette** l'ouvre. Le menu
+contient le bouton « Analyser la vue », le guide des commandes, « Afficher / Masquer l'aide » et le journal d'événements. Sur un casque, il reste au poignet gauche
+(main) ou sur la manette gauche ; sans entrée gauche suivie, il flotte de la même façon.
 Sous Linux, `Alt + clic` est souvent pris par le bureau : utilisez le gizmo ou la souris directe.
 La DevUI d'IWER dessine son propre canvas plein écran par-dessus la scène : la souris est donc écoutée sur la
 page (un clic sur ce canvas vise la scène avec la caméra de l'œil XR) ; un clic sur un panneau HTML ou un glisser
@@ -243,6 +251,8 @@ Pilotage scripté (MCP IWER ou `remote.dispatch`) : voir [`vr-iwer-tools.md`](vr
 
 1. **Analyser** (bouton en l'air, A/X ou tap du pouce) : barre de progression, puis contour complet + description
    au-dessus de chaque objet de la partie visible (bande de 180° × 112°).
+   Pendant l'analyse, un bouton « Annuler l'analyse » flotte sous la vue (B/Y aussi) ; une analyse annulée ou en
+   échec propose « Réessayer l'analyse » (même vue). Les contours déjà reçus restent.
 2. Marcher : les contours restent **collés aux objets** (ils sont posés sur la photo, pas devant les yeux).
 3. **Viser un objet et valider** → « Extraire en 3D ? » → _Extraire_ / _Annuler_ (ou B/Y pour annuler).
 4. **Studio 3D** (VS-T24) : dès « Extraire en 3D », la vue 360° laisse place au studio (dôme, grille, socle).
@@ -251,6 +261,33 @@ Pilotage scripté (MCP IWER ou `remote.dispatch`) : voir [`vr-iwer-tools.md`](vr
    **miniature** tournante sur un petit socle. « Valider et construire la 3D » → l'hologramme passe sur le socle
    central ; le **labo 3D s'ouvre tout seul** au même endroit quand le modèle est prêt : grip pour attraper /
    tourner, B/Y pour en sortir.
+5. **Marcher dans le studio** (VS-T25) : stick gauche (glisse, relatif à la tête), stick droit ↑/↓ ou swipe du
+   pouce (un pas de 80 cm), molette de la souris dans l'émulateur (25 cm par cran) ; la marche réelle marche aussi.
+   Le studio glisse à l'inverse (dôme, carrousel, colonne, labo ensemble, rayon 2,4 m) et reprend sa place à la
+   sortie : l'espace de référence XR, la visite et le mur webcam ne bougent pas. Vues 2D de 0,6 m (~27°).
+6. **Émulateur, mode Play** (pointeur verrouillé) : la DevUI tourne le casque — manettes comprises — à chaque
+   mouvement de souris. Pendant qu'une manette tient le carrousel ou un modèle, ce mouvement est intercepté
+   (`window`, phase de capture) et tourne l'objet tenu, pas la vue (comme sur un casque, Meta « one-point
+   manipulation »). Hors mode Play, clic gauche = gâchette du regard, clic droit glissé = tourner la tête.
+7. **Calques du labo** (VS-T26) : la liste des pièces à gauche du modèle montre 7 lignes ; viser une ligne,
+   pincer / gâchette tenue et monter ou descendre la fait défiler (souris : clic gauche tenu et glisser vers le
+   haut / bas), elle se cale sur une ligne au relâchement ; un tap sélectionne toujours la pièce. ▲ / ▼ défilent
+   d'une page.
+8. **Quitter / revenir au studio** (VS-T26) : un bouton « Quitter le studio » flotte à droite (miroir du bouton
+   « Menu ») à chaque étape du studio ; on retrouve la visite 360° et le bouton devient « Revenir au studio ·
+   « objet » », qui ramène à l'étape quittée (vues 2D, construction ou labo). Ré-extraire **le même objet** reprend
+   aussi là où on était (le labo garde son modèle) ; confirmer un autre objet oublie le précédent.
+9. **Mains, manettes, laser** (VS-T26, `/village` et `/simulation`) : la main est le modèle articulé
+   `generic-hand` des WebXR input profiles (celui que dessine le Quest), peau mate + liseré clair (fresnel) ; la
+   manette est celle que le navigateur annonce (Touch / Touch Plus). Chargés depuis le CDN des input profiles :
+   hors ligne, les sphères / une manette simple gris clair restent. Les modèles sont attachés une seule fois par
+   rendu (pas à chaque analyse) et les chargeurs sont partagés : le modèle ne se recharge pas. Si un espace de main reçoit
+   l'autre main (gauche ↔ droite), un nouveau modèle de la bonne main est chargé. `make vr-probe` vérifie que les mains
+   sont le vrai modèle (jamais les sphères) après analyses et changement de mode. Laser selon Meta « Ray casting » : rayon de visée long et
+   invisible ; on voit un faisceau fin de 25 cm (main) / 35 cm (manette) qui part à 10 cm et s'efface vers son
+   bout, et un **curseur anneau** à l'impact, de taille angulaire constante, blanc au survol, bleu nuit
+   (`#001E78`) et à 83 % quand on appuie ; le point central garde la couleur de ce qui est visé. Rien d'utilisable
+   sous le rayon → faisceau et curseur s'effacent (0,25 s).
 
 ## 7. Confort visuel et prévention du vertige : Écran panoramique à focus plat (`/village`)
 

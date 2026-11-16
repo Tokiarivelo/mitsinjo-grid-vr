@@ -25,6 +25,7 @@ import type { ValidatedFacade } from '../hooks/use-facade-2d';
 import { useDetectionLabel } from '../hooks/use-object-name';
 import { shapeKey, useObjectShape } from '../hooks/use-object-shape';
 import { useKeptRef, useKeptState, VILLAGE_SCOPE } from '../hooks/use-kept-state';
+import { analysisStopped, isAnalysing } from '../hooks/use-vision-detection';
 import { useVisionSession } from '../hooks/use-vision-session';
 import { useXrExtract } from '../hooks/use-xr-extract';
 import { applianceIdFor, photoKey } from '../utils/appliance-draft';
@@ -319,7 +320,10 @@ export function VillageEditorPage() {
       {xrActive || vrViewOpen ? (
         <VillageXRViewport
           detections={vision.detections}
-          isScanning={vision.status === 'loading' || vision.status === 'refining'}
+          isScanning={isAnalysing(vision.status)}
+          scanStopped={analysisStopped(vision.status)}
+          onCancelScan={vision.cancel}
+          onRetryScan={() => void vision.retry()}
           onTriggerScan={(capturedUrl) => {
             if (capturedUrl) {
               setImageUrl(capturedUrl);
@@ -454,6 +458,7 @@ export function VillageEditorPage() {
                 selectedId={vision.selectedId}
                 onSelect={onSelectObject}
                 onRetry={vision.retry}
+                onCancel={vision.cancel}
                 isDemo={vision.source === 'mock'}
                 onSendShapes={vision.sendShapes}
                 onRemoveManual={vision.removeManual}

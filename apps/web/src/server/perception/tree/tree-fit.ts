@@ -111,9 +111,9 @@ export function isPetal(r: number, g: number, b: number): boolean {
 }
 
 /** Crown matter: leaves, or the flowers that hide them (a tree in full bloom has a crown too). */
-const isFoliage = (r: number, g: number, b: number) => isLeaf(r, g, b) || isPetal(r, g, b);
+export const isFoliage = (r: number, g: number, b: number) => isLeaf(r, g, b) || isPetal(r, g, b);
 
-const hex = ([r, g, b]: Rgb) =>
+export const hex = ([r, g, b]: Rgb) =>
   `#${[r, g, b]
     .map((v) =>
       Math.max(0, Math.min(255, Math.round(v)))

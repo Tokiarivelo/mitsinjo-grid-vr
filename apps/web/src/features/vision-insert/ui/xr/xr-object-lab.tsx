@@ -9,7 +9,16 @@ import type { ObjectShape } from '@/lib/object-shape';
 import type { ApplianceDetection } from '@/lib/vision';
 import { usePieceHistory } from '../../hooks/use-piece-history';
 import { VIEW_MODES, type StudioControls, type ViewMode } from '../../utils/studio';
-import { labRotate, labScale, nextOpacity, pagePieces } from '../../utils/xr-lab';
+import {
+  clampScroll,
+  LAB_PAGE,
+  LAB_ROW,
+  LAB_SCROLL_GAIN,
+  labRotate,
+  labScale,
+  nextOpacity,
+  rowShown,
+} from '../../utils/xr-lab';
 import { ObjectModel } from '../object-editor-3d';
 import { usePieceLabel } from '../piece-layers-panel';
 import { useHoloPanel, type PanelRegistry } from './holo-panel';
@@ -18,6 +27,8 @@ import { HOLO } from './holo-style';
 import { AnchoredPanel, usePanelAnchor } from './holo-extract-panels';
 import { PEDESTAL_DROP, StudioPedestal } from './xr-extract-studio';
 import type { PanelAnchor } from './xr-layout';
+import { HoloVillageTable } from './holo-village-table';
+import type { AimReadout } from './xr-blaster-controller';
 
 export const LAB_IDS = {
   model: 'holo:lab-model',
@@ -55,6 +66,10 @@ export interface XrObjectLabProps {
   onExit: () => void;
   /** Where the studio opened (the model lands where its hologram stood); else ahead of the gaze. */
   anchor?: PanelAnchor | null;
+  /** `photoKey` of the scanned photo: with it, the village hologram places the object (VS-T28). */
+  photo?: string;
+  /** Live pointer aim (the village table's cursor). */
+  aim?: AimReadout;
 }
 
 /**
@@ -74,6 +89,8 @@ export const XrObjectLab = memo(function XrObjectLab({
   onEditPieces,
   onExit,
   anchor: studioAnchor,
+  photo,
+  aim,
 }: XrObjectLabProps) {
   const t = useTranslations('features.visionInsert');
   const pieceLabel = usePieceLabel();
@@ -84,7 +101,11 @@ export const XrObjectLab = memo(function XrObjectLab({
   const [selected, setSelected] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('textured');
   const [names, setNames] = useState<string[]>([]);
-  const [page, setPage] = useState(0);
+  /** List scroll (rows): live in a ref while dragged, settled in state (arrows) on release. */
+  const [scroll, setScroll] = useState(0);
+  const scrollRef = useRef(0);
+  const listRef = useRef<THREE.Group>(null);
+  const rowRefs = useRef<Array<THREE.Group | null>>([]);
   const turn = useRef<THREE.Group>(null);
   const yaw = useRef(0);
 
@@ -146,7 +167,23 @@ export const XrObjectLab = memo(function XrObjectLab({
   });
   useFrame(() => {
     if (turn.current) turn.current.rotation.y = yaw.current;
+    // The list slides with the drag; rows outside its window hide (and take no ray).
+    if (listRef.current) listRef.current.position.y = scrollRef.current * LAB_ROW;
+    rowRefs.current.forEach((row, i) => {
+      if (row) row.visible = rowShown(i, scrollRef.current);
+    });
   });
+  const scrollTo = (rows: number) => {
+    scrollRef.current = clampScroll(rows, names.length);
+    setScroll(scrollRef.current);
+  };
+  const listDrag = {
+    axis: 'y' as const,
+    onDrag: (dy: number) => {
+      scrollRef.current = clampScroll(scrollRef.current + dy * LAB_SCROLL_GAIN, names.length);
+    },
+    onDragEnd: () => scrollTo(Math.round(scrollRef.current)),
+  };
 
   const edit = selected ? edits[selected] : undefined;
   const apply = (patch: Parameters<typeof editPiece>[2]) => {
@@ -157,7 +194,6 @@ export const XrObjectLab = memo(function XrObjectLab({
     for (const n of names) next = editPiece(next, n, { hidden: false });
     commit(next);
   };
-  const { items, pages } = pagePieces(names, page);
 
   const header = useMemo(
     () => ({
@@ -221,28 +257,39 @@ export const XrObjectLab = memo(function XrObjectLab({
             height={0.06}
             position={[0, 0.29, 0.003]}
           />
-          {items.map((name, i) => (
-            <HoloButton
-              key={name}
-              {...btn(LAB_IDS.piece(name))}
-              label={pieceLabel(name)}
-              sub={edits[name]?.hidden ? t('vrLab.hidden') : undefined}
-              width={0.3}
-              height={0.062}
-              position={[0, 0.215 - i * 0.068, 0.004]}
-              on={selected === name}
-              color={edits[name]?.hidden ? HOLO.red : HOLO.cyan}
-              onSelect={() => setSelected(name)}
-            />
-          ))}
+          {/* Every piece; pinch-and-drag up / down scrolls (a tap still selects) */}
+          <group ref={listRef}>
+            {names.map((name, i) => (
+              <group
+                key={name}
+                ref={(g) => {
+                  rowRefs.current[i] = g;
+                }}
+                visible={rowShown(i, scroll)}
+              >
+                <HoloButton
+                  {...btn(LAB_IDS.piece(name))}
+                  {...listDrag}
+                  label={pieceLabel(name)}
+                  sub={edits[name]?.hidden ? t('vrLab.hidden') : undefined}
+                  width={0.3}
+                  height={0.062}
+                  position={[0, 0.215 - i * LAB_ROW, 0.004]}
+                  on={selected === name}
+                  color={edits[name]?.hidden ? HOLO.red : HOLO.cyan}
+                  onSelect={() => setSelected(name)}
+                />
+              </group>
+            ))}
+          </group>
           <HoloButton
             {...btn(LAB_IDS.pageUp)}
             label="▲"
             width={0.14}
             height={0.06}
             position={[-0.075, -0.29, 0.004]}
-            disabled={page === 0}
-            onSelect={() => setPage((p) => Math.max(0, p - 1))}
+            disabled={scroll <= 0}
+            onSelect={() => scrollTo(scroll - (LAB_PAGE - 1))}
           />
           <HoloButton
             {...btn(LAB_IDS.pageDown)}
@@ -250,8 +297,8 @@ export const XrObjectLab = memo(function XrObjectLab({
             width={0.14}
             height={0.06}
             position={[0.075, -0.29, 0.004]}
-            disabled={page >= pages - 1}
-            onSelect={() => setPage((p) => Math.min(pages - 1, p + 1))}
+            disabled={scroll >= clampScroll(Infinity, names.length)}
+            onSelect={() => scrollTo(scroll + (LAB_PAGE - 1))}
           />
         </group>
 
@@ -366,6 +413,19 @@ export const XrObjectLab = memo(function XrObjectLab({
             onSelect={onExit}
           />
         </group>
+
+        {/* Village hologram (VS-T28): place the edited model, add it, go to the simulation */}
+        {photo && (
+          <HoloVillageTable
+            registry={registry}
+            hoveredId={hoveredId}
+            detection={detection}
+            name={label}
+            photo={photo}
+            recipe={shown.mode === 'recipe' ? (shown.recipe ?? null) : null}
+            {...(aim ? { aim } : {})}
+          />
+        )}
       </AnchoredPanel>
     </group>
   );

@@ -1501,7 +1501,9 @@
           "leaf": "Leaves",
           "leafDark": "Shaded leaves",
           "flower": "Flowers and fruit",
-          "painted": "Painted"
+          "painted": "Painted",
+          "pot": "Pot",
+          "soil": "Soil"
         }
       },
       "vrExtractHint": "Shoot to extract it in 3D",
@@ -1517,7 +1519,9 @@
         "readySub": "Edit it live in the 3D lab.",
         "outlineOnly": "AI shape unavailable: outline shape, editable in the lab.",
         "enterLab": "Enter the 3D lab",
-        "later": "Later"
+        "later": "Later",
+        "leaveStudio": "Leave the studio",
+        "backToStudio": "Back to the studio · « {name} »"
       },
       "vrViews": {
         "title": "2D views to validate",
@@ -1531,6 +1535,35 @@
         "mainValidated": "Main view: used for the 3D",
         "build": "Validate & build the 3D",
         "imageError": "Drawn, but it cannot be shown in VR"
+      },
+      "vrChat": {
+        "title": "AI chat · {view}",
+        "aiLabel": "AI EDIT · redraws this view, check it before validating",
+        "empty": "Ask the AI to change the {view}: type with « Keys » or speak with « Voice », then « Send ».",
+        "placeholder": "Describe the change…",
+        "listening": "Listening… speak now",
+        "working": "Redrawing the {view} with your request…",
+        "done": "Done: the new drawing is on the slide. Validate it or ask for another change.",
+        "failed": "The drawing failed. Send the request again.",
+        "keyboard": "Keys",
+        "voice": "Voice",
+        "stop": "Stop",
+        "send": "Send",
+        "wait": "Wait for the drawing to finish",
+        "voiceUnavailable": "Voice unavailable in this browser: use « Keys »",
+        "voiceError": "Voice not heard (microphone allowed?): try again or use « Keys »",
+        "keyShift": "⇧ Caps",
+        "keySpace": "space",
+        "keyBack": "⌫ Erase",
+        "keyClear": "Clear"
+      },
+      "vrVillage": {
+        "title": "Place « {name} » in the village",
+        "hint": "Aim at the village and press to place it · cable to its feeder",
+        "placed": "Placed at {x}, {z} · feeder: {sector}",
+        "notPlaced": "Not placed yet: aim at the village table and press",
+        "inSimulation": "In the simulation: strategies recomputed",
+        "goSimulation": "Go to the simulation"
       },
       "vrLab": {
         "title": "3D lab · {name}",
@@ -1585,7 +1618,10 @@
       "vrStudio": {
         "viewsTitle": "Drawing the 2D views of « {name} »",
         "buildSub": "The 3D lab opens by itself as soon as the model is ready"
-      }
+      },
+      "cancelAnalysis": "Cancel the analysis",
+      "analysisCancelled": "Analysis cancelled.",
+      "retryAnalysis": "Retry the analysis"
     },
     "dispatch": {
       "modeLabel": "Dispatch mode",
