@@ -158,10 +158,27 @@ try {
     afterPin.panel === 'market' && !afterPin.map
   );
   await shot('sim-0c-map-to-panel');
+  // « Close ✕ » on each modal, aimed with the right laser (VS-T38 regression: it did nothing).
+  await pressNamed('sim-xr-button-close');
+  check('« Close ✕ » closes the power panel', (await state()).panel === null);
+  await pressNamed('sim-xr-minimap-open');
+  await pressNamed('sim-xr-button-map-close');
+  check('« Close ✕ » closes the big map', (await state()).map === false);
+  // The health centre's panel (user report: its « Close ✕ » did nothing), and a second click on
+  // the label closes the panel too (VS-T38).
+  await aimSelect(HEALTH_LABEL);
+  check('the health label opens its panel', (await state()).panel === 'health');
+  await shot('sim-0d-health-panel');
+  await pressNamed('sim-xr-button-close');
+  check('« Close ✕ » closes the health panel', (await state()).panel === null);
+  await aimSelect(HEALTH_LABEL);
+  await aimSelect(HEALTH_LABEL);
+  check('a second click on the label closes its panel', (await state()).panel === null);
   await pressNamed('sim-xr-minimap-open');
   await pressNamed('sim-xr-map-pin-dispatcher');
   check('the dispatcher pin opens the mixing desk', (await state()).mixer === true);
-  await tapButton('controller-right', 4);
+  await pressNamed('sim-xr-button-mixer-close');
+  check('« Close ✕ » closes the mixing desk', (await state()).mixer === false);
   if (process.env.VR_SIM_ONLY_MAP) {
     if (errors.length) console.log(errors.slice(0, 10).join('\n'));
     await browser.close();
@@ -292,11 +309,7 @@ try {
   await page.keyboard.up('KeyW');
   await frames(2);
   const k1 = await sim((s) => s.yaw());
-  check(
-    'keyboard ← turns the rig while walking (VS-T36 sign)',
-    wrap(k1 - k0) < -0.05,
-    `${deg(wrap(k1 - k0))}°`
-  );
+  check('keyboard ← turns the head while walking', wrap(k1 - k0) > 0.05, `${deg(wrap(k1 - k0))}°`);
   const labels0 = (await state()).labels;
   await tapButton('controller-right', 3);
   const labels1 = (await state()).labels;

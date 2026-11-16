@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 import type { WebGLRenderer } from 'three';
 import { isImmersiveVRSupported, startImmersiveVRSession } from '../utils/xr-session';
 import {
+  guardEmulatorPointerCapture,
   installDevXREmulator,
   installDevXRPanels,
   markEmulatedImmersion,
@@ -32,6 +33,8 @@ export function useWebXR(rendererRef: RefObject<WebGLRenderer | null>): UseWebXR
 
   useEffect(() => {
     let cancelled = false;
+    // Dev: the emulator extension's forwarded pointers must not throw on capture (VS-T38).
+    if (process.env.NODE_ENV === 'development') guardEmulatorPointerCapture();
     (async () => {
       if (!(await isImmersiveVRSupported()) && process.env.NODE_ENV === 'development') {
         await installDevXREmulator().catch(() => false);

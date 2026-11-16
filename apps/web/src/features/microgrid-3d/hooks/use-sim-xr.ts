@@ -104,20 +104,24 @@ export function useSimXr({
     setPlace({ spot, interior, key: placeKey.current });
   }, []);
 
-  /** Label or building clicked: the power panel in VR, the usual selection on screen. */
+  /**
+   * Label or building clicked: the power panel in VR, the usual selection on screen. Clicked again
+   * while its panel is open: the panel closes (like « Close ✕ », VS-T38).
+   */
   const selectSector = useCallback(
     (sector: SectorId | null) => {
       if (!xrActive) return onSelectSector(sector);
-      setPanel(sector);
+      setPanel(sector !== null && sector === panel ? null : sector);
     },
-    [xrActive, onSelectSector, setPanel]
+    [xrActive, onSelectSector, setPanel, panel]
   );
 
   /** Dispatcher label or unit clicked in VR: its mixing desk (VS-T34). */
+  /** The dispatcher clicked again while its desk is open closes it (VS-T38). */
   const openMixer = useCallback(() => {
     setPanelState(null);
     setMap(false);
-    setMixer(true);
+    setMixer((open) => !open);
   }, []);
   const closeMixer = useCallback(() => setMixer(false), []);
 

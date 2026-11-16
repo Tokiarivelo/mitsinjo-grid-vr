@@ -363,7 +363,7 @@ Style : hologramme futuriste (cyan / ambre, lignes de balayage, coins lumineux, 
 - [x] Hors du menu ouvert (carte de scan, guide, boutons) ; test `xr-layout.test.ts` « follow dock ».
 - [x] Régression VS-T33 corrigée : « Aller à la simulation » restait sur /village (la fin de session réécrivait l'URL `/village` par `replaceState`, ce qui annulait le `router.push`). `leaveImmersionFor(href)` gèle l'URL de la page quittée jusqu'à l'arrivée (10 s max) ; test `use-immersion-query.test.tsx`, `make vr-handoff-probe`.
 - [x] /simulation VR : le clic d'un laser raycastait toute la scène en un appel ; un objet qui lève une erreur (câble `Line2`…) vidait le résultat → « Fermer ✕ » et le laser gauche sans effet. `pickUsable` (`xr-hands.ts`) teste chaque objet utilisable à part, pour le survol, le clic et le glisser.
-- [x] Flèches ← / → du clavier inversées (ressenti dans l'émulateur) : sens échangé dans `readXrKeys`.
+- [x] ~~Flèches ← / → échangées~~ : annulé en VS-T38 (va-et-vient avec la rotation de tête de l'émulateur).
 - [ ] **Done when :** vu au casque (V463–V466, S151–S153).
 
 ### VS-T37 : Carte du village dans la VR de /simulation (mini-carte style GTA + carte hologramme)
@@ -372,3 +372,14 @@ Style : hologramme futuriste (cyan / ambre, lignes de balayage, coins lumineux, 
 - [x] Gâchette dessus → grande carte holographique devant soi (nord en haut, « Vous » + direction) ; un bâtiment ouvre son panneau de puissance, le dispatcher sa table de mixage ; « Fermer ✕ » / B/Y.
 - [x] `utils/sim-xr-minimap.ts` (testé), `useSimXr` (`map`, `openMap`, `closeMap`, testé), textes `features.simulation.vrMap` (EN/FR/MG), `make vr-sim-map-probe` (4 étapes passent).
 - [ ] **Done when :** vu au casque (S154–S157).
+
+### VS-T38 : Carte qui suit, routes et eau, laser toujours visible (/simulation VR)
+
+- [x] Carte dessinée sur texture (`utils/sim-xr-map-draw.ts`, testé) : routes et chemins, mare, lac, rizière, bâtiments, noms nets et droits.
+- [x] Grande carte plus grande (rayon 0,55 m), presque droite, qui suit le marcheur et reste centrée sur lui ; flèche selon le regard.
+- [x] Mini-carte tout à droite (~38°).
+- [x] Laser : faisceau léger + pointe au repos, faisceau jusqu'à la cible, objets nouveaux visables en ~0,1 s (`xr-ray-visual.ts` `idle` / `reach`, `xr-hands.ts`).
+- [x] Flèches ← / → remises dans leur sens d'origine.
+- [x] Second clic sur l'étiquette / le bâtiment / le dispatcher d'origine : son menu se ferme (`useSimXr`).
+- [x] Dev : l'extension Immersive Web Emulator ne lève plus `setPointerCapture` InvalidStateError ni « reading 'position' » (`guardEmulatorPointerCapture`).
+- [ ] **Done when :** vu au casque (S158–S161).

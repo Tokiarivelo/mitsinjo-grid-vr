@@ -224,8 +224,13 @@ export function pickUsable(
   return out;
 }
 
-/** Frames between two refreshes of the usable objects list (they rarely change). */
-const USABLE_REFRESH_FRAMES = 30;
+/** Beam and tip opacity over nothing usable (/simulation, VS-T38). */
+export const RAY_IDLE_OPACITY = 0.45;
+/**
+ * Frames between two refreshes of the usable objects list: a panel or map just opened is aimable
+ * within ~0.1 s (it was 0.5 s: the tip vanished on a fresh button, VS-T38).
+ */
+const USABLE_REFRESH_FRAMES = 8;
 const _rayCaster = new THREE.Raycaster();
 const _rayHits: THREE.Intersection[] = [];
 const _rayO = new THREE.Vector3();
@@ -449,6 +454,9 @@ export function setupXRHandsAndControllers(
         input: 'controller',
         pressed: r.pressed,
         tint: '#7dd3fc',
+        // Always show where you point: faint beam and tip over nothing, beam to the hit (VS-T38).
+        idle: RAY_IDLE_OPACITY,
+        reach: true,
         surrounding: scene
           ? probe(rays.indexOf(r) as 0 | 1, scene, _rayO, _rayD, _rayCaster.camera)
           : 0,

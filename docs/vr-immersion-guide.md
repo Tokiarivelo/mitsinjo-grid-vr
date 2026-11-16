@@ -208,16 +208,19 @@ au-dessus de chaque manette 25 s à l'entrée, puis d'un clic de stick.
 3. Règles dures inchangées : la clinique n'est jamais coupée (« Refusé »), tout est annulable, tous les nombres
    viennent du moteur (DONNÉES SIMULÉES). B/Y ferme la table.
 
-### Carte du village (VS-T37)
+### Carte du village (VS-T37, VS-T38)
 
-1. **Mini-carte** (style GTA) en bas à droite de la vue (`ui/sim-xr-minimap.tsx`) : disque « cap en haut »
-   centré sur vous (flèche), points des six secteurs (couleur du statut moteur) et du dispatcher (violet) ; un
-   point hors de portée reste sur le bord. Elle suit le marcheur sans être collée à la tête (même suivi paresseux
-   que les menus /village) et reste à droite, hors des panneaux.
-2. **Gâchette sur la mini-carte** : la **grande carte holographique** s'ouvre devant vous (nord en haut, centrée
-   sur le cœur du village, « Vous » = votre position et direction). **Gâchette sur un bâtiment** : son panneau
-   de puissance s'ouvre ; **sur le dispatcher** : sa table de mixage. La carte se ferme alors ; « Fermer ✕ » ou
-   B/Y la ferment aussi. Projection pure dans `utils/sim-xr-minimap.ts`. Vérif : `make vr-sim-map-probe`.
+1. **Mini-carte** (style GTA) tout à droite de la vue, en bas (`ui/sim-xr-minimap.tsx`) : disque « cap en haut »
+   centré sur vous (flèche), dessiné sur une texture (`utils/sim-xr-map-draw.ts`) : routes et chemins en
+   latérite, mare, lac, rizière, secteurs (couleur du statut moteur) et dispatcher (carré violet). Un point hors de
+   portée reste sur le bord. Elle suit le marcheur sans être collée à la tête (suivi paresseux des menus /village).
+2. **Gâchette sur la mini-carte** : la **grande carte holographique**, presque droite (texte lisible), qui vous
+   **suit** en marchant et reste **centrée sur vous** (nord en haut, flèche « Vous » tournée selon votre regard,
+   noms des bâtiments). **Gâchette sur un bâtiment** : son panneau de puissance ; **sur le dispatcher** : sa table
+   de mixage. La carte se ferme alors ; « Fermer ✕ » ou B/Y aussi. Redessin seulement quand on bouge (≥ 2 cm ou
+   ~0,6°). Projection pure dans `utils/sim-xr-minimap.ts`. Vérif : `make vr-sim-map-probe`.
+3. **Laser** (/simulation) : au repos un faisceau léger et sa pointe restent visibles, le faisceau va jusqu'à la
+   cible (4 m max, deux fois plus épais) ; un panneau ou une carte qui vient d'apparaître est visable en ~0,1 s.
 
 ---
 

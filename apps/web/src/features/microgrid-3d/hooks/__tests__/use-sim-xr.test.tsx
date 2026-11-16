@@ -163,4 +163,19 @@ describe('useSimXr (VSIM-T1–T4)', () => {
     expect(result.current.map).toBe(false);
     expect(result.current.mixer).toBe(true);
   });
+
+  it('a second click on the label or the dispatcher closes its menu (VS-T38)', () => {
+    const { result } = setup();
+    act(() => result.current.selectSector('health'));
+    expect(result.current.panel).toBe('health');
+    act(() => result.current.selectSector('health'));
+    expect(result.current.panel).toBeNull();
+    act(() => result.current.selectSector('health'));
+    act(() => result.current.selectSector('market'));
+    expect(result.current.panel).toBe('market');
+    act(() => result.current.openMixer());
+    expect(result.current.mixer).toBe(true);
+    act(() => result.current.openMixer());
+    expect(result.current.mixer).toBe(false);
+  });
 });

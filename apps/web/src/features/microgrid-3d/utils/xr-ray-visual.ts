@@ -34,6 +34,8 @@ export const RAY_VISUAL = {
   release: 0.1,
   /** Beam opacity when the ray points at nothing usable. */
   idleOpacity: 0,
+  /** Longest beam (m) when it reaches all the way to the hit (`reach`, /simulation, VS-T38). */
+  reachMax: 4,
 } as const;
 
 export type RayInput = 'hand' | 'controller' | 'mouse';
@@ -49,9 +51,17 @@ export function approach(current: number, target: number, dt: number, duration: 
  * Where the visible beam starts and how long it is (m), for a hit `distance` away: the spec length
  * after the gap, never past the hit. Zero length for the mouse (its ray starts at the eye).
  */
-export function beamSpan(distance: number, input: RayInput): { start: number; length: number } {
+export function beamSpan(
+  distance: number,
+  input: RayInput,
+  reach = false
+): { start: number; length: number } {
   if (input === 'mouse') return { start: 0, length: 0 };
-  const full = input === 'hand' ? RAY_VISUAL.handLength : RAY_VISUAL.controllerLength;
+  const full = reach
+    ? RAY_VISUAL.reachMax
+    : input === 'hand'
+      ? RAY_VISUAL.handLength
+      : RAY_VISUAL.controllerLength;
   const start = RAY_VISUAL.gap;
   return { start, length: Math.max(0, Math.min(full, distance - start)) };
 }
@@ -76,6 +86,13 @@ export interface RayVisualFrame {
   tint: THREE.ColorRepresentation;
   /** Linear luminance (0–1) of what surrounds the ray (`surroundingLuminance`); default: dark. */
   surrounding?: number;
+  /**
+   * Opacity kept when nothing usable is aimed at (default `RAY_VISUAL.idleOpacity`, hidden): /simulation
+   * keeps a faint beam and its tip so you always see where you point (VS-T38).
+   */
+  idle?: number;
+  /** The beam goes all the way to the hit (or `reachMax`), not the short Meta beam. */
+  reach?: boolean;
   dt: number;
 }
 
@@ -164,10 +181,10 @@ export function createRayVisual(): RayVisual {
 
   return {
     group,
-    update({ origin, direction, end, usable, input, pressed, tint, surrounding, dt }) {
+    update({ origin, direction, end, usable, input, pressed, tint, surrounding, idle, reach, dt }) {
       shown = approach(
         shown,
-        usable ? 1 : RAY_VISUAL.idleOpacity,
+        usable ? 1 : (idle ?? RAY_VISUAL.idleOpacity),
         dt,
         usable ? RAY_VISUAL.fadeIn : RAY_VISUAL.fadeOut
       );
@@ -177,10 +194,11 @@ export function createRayVisual(): RayVisual {
       dark = approach(dark, darkness(surrounding ?? 0), dt, RAY_CONTRAST.settle);
       rayColors(dark, _colors);
       const distance = origin.distanceTo(end);
-      const span = beamSpan(distance, input);
+      const span = beamSpan(distance, input, reach);
       beam.visible = span.length > 0.005;
       if (beam.visible) {
-        const r = RAY_VISUAL.radius;
+        // A long beam is drawn twice as thick: it reads from the hand to the target.
+        const r = RAY_VISUAL.radius * (reach ? 2 : 1);
         _q.setFromUnitVectors(_up, direction);
         beam.quaternion.copy(_q);
         beam.position.copy(origin).addScaledVector(direction, span.start);

@@ -11,6 +11,9 @@ describe('ray visual (Meta ray casting spec)', () => {
   it('never draws the beam past the hit, nor for the mouse', () => {
     expect(beamSpan(0.3, 'controller').length).toBeCloseTo(0.2);
     expect(beamSpan(0.05, 'hand').length).toBe(0);
+    // VS-T38: in /simulation the beam reaches the hit, capped.
+    expect(beamSpan(2, 'controller', true)).toEqual({ start: 0.1, length: 1.9 });
+    expect(beamSpan(50, 'controller', true).length).toBe(RAY_VISUAL.reachMax);
     expect(beamSpan(5, 'mouse').length).toBe(0);
   });
 

@@ -1,9 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  guardEmulatorPointerCapture,
   installDevXREmulator,
   installDevXRPanels,
   isDevXREmulated,
   markEmulatedImmersion,
+  resetPointerCaptureGuard,
 } from '../dev-xr-emulator';
 
 // The DevUI bundles its own Three.js: it must never load with the page, only on « enter ».
@@ -76,5 +78,41 @@ describe('installDevXRPanels (DevUI on « enter » only)', () => {
     } finally {
       w.__IWER_DEVICE__ = own;
     }
+  });
+});
+
+describe('guardEmulatorPointerCapture (VS-T38)', () => {
+  const domError = (name: string) => Object.assign(new Error(name), { name });
+
+  it('an unknown pointer no longer throws (emulator extension forwarded rays, regression)', () => {
+    resetPointerCaptureGuard();
+    const calls: number[] = [];
+    const proto = {
+      setPointerCapture(id: number) {
+        calls.push(id);
+        throw domError('InvalidStateError');
+      },
+      releasePointerCapture() {
+        throw domError('NotFoundError');
+      },
+    } as unknown as Element;
+    guardEmulatorPointerCapture(proto);
+    expect(() => proto.setPointerCapture(7)).not.toThrow();
+    expect(() => proto.releasePointerCapture(7)).not.toThrow();
+    expect(calls).toEqual([7]);
+  });
+
+  it('other errors still throw, and it installs once', () => {
+    resetPointerCaptureGuard();
+    const proto = {
+      setPointerCapture() {
+        throw new TypeError('boom');
+      },
+    } as unknown as Element;
+    guardEmulatorPointerCapture(proto);
+    const once = proto.setPointerCapture;
+    guardEmulatorPointerCapture(proto);
+    expect(proto.setPointerCapture).toBe(once);
+    expect(() => proto.setPointerCapture(1)).toThrow(TypeError);
   });
 });

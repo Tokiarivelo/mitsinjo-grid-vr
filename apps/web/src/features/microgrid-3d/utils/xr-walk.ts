@@ -21,7 +21,8 @@ export interface XrKeyAxes {
   moveX: number;
   /** −1 forward … +1 back. */
   moveZ: number;
-  /** Rig yaw step sign (three.js: + = left): ← gives −1, → gives +1, as felt in the emulator (VS-T36). */
+  /** +1 turns left, −1 right (three.js yaw). Swapping them (VS-T36) fought the emulator's own
+   * arrow-key head turn: the view went back and forth (reverted, VS-T38). */
   turn: number;
   run: boolean;
 }
@@ -36,7 +37,7 @@ export function readXrKeys(keys: ReadonlySet<string>): XrKeyAxes {
   return {
     moveX: (has('KeyD') ? 1 : 0) - (has('KeyA', 'KeyQ') ? 1 : 0),
     moveZ: (has('KeyS', 'ArrowDown') ? 1 : 0) - (has('KeyW', 'KeyZ', 'ArrowUp') ? 1 : 0),
-    turn: (has('ArrowRight') ? 1 : 0) - (has('ArrowLeft') ? 1 : 0),
+    turn: (has('ArrowLeft') ? 1 : 0) - (has('ArrowRight') ? 1 : 0),
     run: has('ShiftLeft', 'ShiftRight'),
   };
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, useMemo, useRef } from 'react';
+import { memo, useEffect, useMemo, useRef, type ReactNode } from 'react';
 import * as THREE from 'three';
 import { useFrame, useThree } from '@react-three/fiber';
 import type { SectorId } from '@mitsinjo/engine';
@@ -13,35 +13,45 @@ import {
   yawOfDirection,
 } from '@/features/vision-insert/ui/xr/wrist-menu';
 import type { BuildingSceneModel } from '../types';
+import { drawVillageMap } from '../utils/sim-xr-map-draw';
 import {
+  BIG_MAP_OFFSET,
+  BIG_MAP_PX,
   BIG_MAP_RADIUS,
-  bigMapPoint,
+  BIG_MAP_RANGE,
+  BIG_MAP_TILT,
   headingAngle,
   horizontalHeading,
   MAP_PIN_RADIUS,
   MAP_PINS,
   MAP_TILT,
+  mapTransform,
   MINI_MAP_OFFSET,
+  MINI_MAP_PX,
   MINI_MAP_RADIUS,
-  miniMapPoint,
+  MINI_MAP_RANGE,
   pinTone,
   type MapPinId,
 } from '../utils/sim-xr-minimap';
-import { HoloButton, useOpenInFront } from './sim-xr-holo';
+import { HoloButton } from './sim-xr-holo';
 
 /** Frame-loop scratch (no allocation per frame). */
 const _head = new THREE.Vector3();
 const _dir = new THREE.Vector3();
 const _local = new THREE.Vector3();
+const _pos = new THREE.Vector3();
 const _q = new THREE.Quaternion();
 const _qYaw = new THREE.Quaternion();
 const _qTilt = new THREE.Quaternion();
 const _qParent = new THREE.Quaternion();
 const _scale = new THREE.Vector3();
-const _uv: [number, number] = [0, 0];
 const _f: [number, number] = [0, -1];
+const _t: number[] = [0, 0, 0, 0, 0, 0];
 const UP = new THREE.Vector3(0, 1, 0);
 const RIGHT = new THREE.Vector3(1, 0, 0);
+/** Redraw the map once the walker moved this far (units) or turned this much (rad). */
+const REDRAW_MOVE = 0.02;
+const REDRAW_TURN = 0.01;
 
 const TONES = {
   green: HOLO.green,
@@ -51,74 +61,177 @@ const TONES = {
   violet: HOLO.violet,
 } as const;
 
-/** Shared geometries: one disc, one ring, one arrow for every map. */
-const discGeo = new THREE.CircleGeometry(1, 48);
-const ringGeo = new THREE.RingGeometry(0.94, 1, 64);
-const arrowGeo = (() => {
-  const s = new THREE.Shape();
-  s.moveTo(0, 1);
-  s.lineTo(0.7, -0.8);
-  s.lineTo(0, -0.4);
-  s.lineTo(-0.7, -0.8);
-  s.closePath();
-  return new THREE.ShapeGeometry(s);
-})();
+const discGeo = new THREE.CircleGeometry(1, 64);
 
 function toneOf(id: MapPinId, buildings: Record<SectorId, BuildingSceneModel>): string {
   return TONES[pinTone(id === 'dispatcher' ? 'dispatcher' : buildings[id].statusColor)];
 }
 
 /**
- * Map surface: a dark glass disc with a cyan rim (drawn over the scene). Everything on it is
- * `transparent` too: opaque meshes are drawn before transparent ones whatever their renderOrder,
- * so the glass would cover them.
+ * Lazy-follows the walker in the camera rig's space (felt metres: the rig carries the half-scale
+ * village, VS-T33): still while you look around, re-centred when you turn away or walk off. Never
+ * head-locked (Meta comfort). `tilt` leans it back toward the eyes.
  */
-function MapDisc({ radius }: { radius: number }) {
+function RigFollow({
+  offset,
+  tilt,
+  name,
+  children,
+}: {
+  offset: [number, number, number];
+  tilt: number;
+  name: string;
+  children: ReactNode;
+}) {
+  const camera = useThree((s) => s.camera);
+  const group = useRef<THREE.Group>(null);
+  const pose = useMemo(() => createMenuPose(), []);
+  const age = useRef(-1);
+  useFrame((_, delta) => {
+    const g = group.current;
+    const rig = camera.parent;
+    if (!g || !rig) return;
+    // Head heading in the rig's space (camera.quaternion is local to the rig).
+    _dir.set(0, 0, -1).applyQuaternion(camera.quaternion);
+    const first = age.current < 0;
+    age.current = first ? 0 : age.current + delta;
+    updateLazyFollow(
+      pose,
+      camera.position.x,
+      camera.position.y,
+      camera.position.z,
+      yawOfDirection(_dir.x, _dir.z),
+      delta,
+      first
+    );
+    menuPointToWorld(pose, 1, offset, _local);
+    rig.updateMatrixWorld();
+    _local.applyMatrix4(rig.matrixWorld);
+    rig.matrixWorld.decompose(_pos, _q, _scale);
+    _qYaw.setFromAxisAngle(UP, -pose.yaw);
+    _qTilt.setFromAxisAngle(RIGHT, tilt);
+    _q.multiply(_qYaw).multiply(_qTilt);
+    if (g.parent) {
+      g.parent.updateMatrixWorld();
+      g.parent.worldToLocal(_local);
+      g.parent.getWorldQuaternion(_qParent);
+      _q.premultiply(_qParent.invert());
+    }
+    g.position.copy(_local);
+    g.quaternion.copy(_q);
+    g.scale.setScalar(_scale.x);
+  });
   return (
-    <>
-      <mesh geometry={discGeo} scale={radius} renderOrder={40}>
-        <meshBasicMaterial
-          color={HOLO.dome}
-          transparent
-          opacity={0.78}
-          depthTest={false}
-          depthWrite={false}
-          toneMapped={false}
-        />
-      </mesh>
-      <mesh geometry={ringGeo} scale={radius} renderOrder={41}>
-        <meshBasicMaterial
-          color={HOLO.cyan}
-          transparent
-          opacity={0.9}
-          depthTest={false}
-          depthWrite={false}
-          toneMapped={false}
-        />
-      </mesh>
-    </>
+    <group ref={group} name={name}>
+      {children}
+    </group>
   );
 }
 
-function Dot({ radius, color, order = 42 }: { radius: number; color: string; order?: number }) {
-  return (
-    <mesh geometry={discGeo} scale={radius} renderOrder={order}>
-      <meshBasicMaterial
-        color={color}
-        transparent
-        depthTest={false}
-        depthWrite={false}
-        toneMapped={false}
-      />
-    </mesh>
-  );
+/** Draws the map into its canvas and flags the texture for upload (frame loop). */
+function paintMap(
+  texture: THREE.Texture,
+  ctx: CanvasRenderingContext2D,
+  options: Parameters<typeof drawVillageMap>[1]
+): void {
+  drawVillageMap(ctx, options);
+  texture.needsUpdate = true;
 }
 
-function Arrow({ size, order = 45 }: { size: number; order?: number }) {
+/**
+ * The map disc: a canvas (roads, water, buildings, names, walker arrow) redrawn when the walker
+ * moves or turns. Mini: heading-up. Big: north-up, its arrow turns with the head (VS-T38).
+ */
+function MapSurface({
+  size,
+  radius,
+  range,
+  headingUp,
+  buildings,
+  names,
+  you,
+  pinHits,
+}: {
+  size: number;
+  radius: number;
+  range: number;
+  headingUp: boolean;
+  buildings: Record<SectorId, BuildingSceneModel>;
+  names?: (id: MapPinId) => string;
+  you?: string;
+  /** Hit meshes to keep on their pins (big map), by MAP_PINS index. */
+  pinHits?: { current: Array<THREE.Object3D | null> };
+}) {
+  const camera = useThree((s) => s.camera);
+  const surface = useMemo(() => {
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.anisotropy = 4;
+    return { ctx: canvas.getContext('2d'), texture };
+  }, [size]);
+  useEffect(() => () => surface.texture.dispose(), [surface]);
+  // Anything that changes the drawing besides the walker (statuses, names) forces a redraw.
+  const tone = useMemo(() => (id: MapPinId) => toneOf(id, buildings), [buildings]);
+  const last = useRef<{
+    x: number;
+    z: number;
+    a: number;
+    tone: unknown;
+    names: unknown;
+  }>({ x: NaN, z: NaN, a: NaN, tone: null, names: null });
+
+  useFrame(() => {
+    const ctx = surface.ctx;
+    if (!ctx) return;
+    camera.getWorldPosition(_head);
+    camera.getWorldDirection(_dir);
+    horizontalHeading(_dir.x, _dir.z, _f);
+    const a = headingAngle(_f[0], _f[1]);
+    const l = last.current;
+    const moved =
+      !(Math.abs(_head.x - l.x) < REDRAW_MOVE && Math.abs(_head.z - l.z) < REDRAW_MOVE) ||
+      !(Math.abs(a - l.a) < REDRAW_TURN) ||
+      l.tone !== tone ||
+      l.names !== names;
+    if (!moved) return;
+    l.x = _head.x;
+    l.z = _head.z;
+    l.a = a;
+    l.tone = tone;
+    l.names = names;
+    if (headingUp) mapTransform(_head.x, _head.z, _f[0], _f[1], size, range, _t);
+    else mapTransform(_head.x, _head.z, 0, -1, size, range, _t);
+    paintMap(surface.texture, ctx, {
+      size,
+      transform: _t,
+      tone,
+      ...(names ? { names } : {}),
+      ...(you ? { you } : {}),
+      arrow: headingUp ? 0 : a,
+    });
+    // Pins' hit areas follow their drawing (canvas px → disc metres, on the rim past range).
+    const c = size / 2;
+    MAP_PINS.forEach((p, i) => {
+      const o = pinHits?.current[i];
+      if (!o) return;
+      let u = (_t[0]! * p.x + _t[2]! * p.z + _t[4]! - c) / c;
+      let v = -(_t[1]! * p.x + _t[3]! * p.z + _t[5]! - c) / c;
+      const r = Math.hypot(u, v);
+      if (r > 0.94) {
+        u *= 0.94 / r;
+        v *= 0.94 / r;
+      }
+      o.position.set(u * radius, v * radius, 0.003);
+    });
+  });
+
   return (
-    <mesh geometry={arrowGeo} scale={size} renderOrder={order}>
+    <mesh geometry={discGeo} scale={radius} renderOrder={40}>
       <meshBasicMaterial
-        color={HOLO.ink}
+        map={surface.texture}
         transparent
         depthTest={false}
         depthWrite={false}
@@ -139,9 +252,10 @@ export interface SimXrMinimapProps {
 }
 
 /**
- * GTA-like map of the /simulation VR village (VS-T37): a small heading-up disc low on the right
- * of the view (lazy-follows the walker, never head-locked) shows where you are; a trigger on it
- * opens the big hologram map in front, where a building or the dispatcher opens its controls.
+ * GTA-like map of the /simulation VR village (VS-T37, VS-T38): a small heading-up disc on the far
+ * right of the view shows where you are; a trigger on it opens the big hologram map in front,
+ * which walks with you, centred on you, roads, paths and water drawn; a building or the dispatcher
+ * on it opens its controls.
  */
 export const SimXrMinimap = memo(function SimXrMinimap(props: SimXrMinimapProps) {
   return props.open ? <BigMap {...props} /> : <MiniMap {...props} />;
@@ -149,11 +263,6 @@ export const SimXrMinimap = memo(function SimXrMinimap(props: SimXrMinimapProps)
 
 const MiniMap = memo(function MiniMap({ buildings, onOpen }: SimXrMinimapProps) {
   const t = useTranslations('features.simulation.vrMap');
-  const camera = useThree((s) => s.camera);
-  const group = useRef<THREE.Group>(null);
-  const pins = useRef<Array<THREE.Object3D | null>>([]);
-  const pose = useMemo(() => createMenuPose(), []);
-  const age = useRef(-1);
   const caption = useMemo(
     () =>
       holoCardTexture({
@@ -165,56 +274,8 @@ const MiniMap = memo(function MiniMap({ buildings, onOpen }: SimXrMinimapProps) 
       }),
     [t]
   );
-
-  useFrame((_, delta) => {
-    const g = group.current;
-    const rig = camera.parent;
-    if (!g || !rig) return;
-    // Lazy follow in the rig's space (felt metres: the rig carries the half-scale, VS-T33).
-    // Head heading in the rig's space (camera.quaternion is local to the rig).
-    _dir.set(0, 0, -1).applyQuaternion(camera.quaternion);
-    const first = age.current < 0;
-    age.current = first ? 0 : age.current + delta;
-    updateLazyFollow(
-      pose,
-      camera.position.x,
-      camera.position.y,
-      camera.position.z,
-      yawOfDirection(_dir.x, _dir.z),
-      delta,
-      first
-    );
-    menuPointToWorld(pose, 1, MINI_MAP_OFFSET, _local);
-    rig.updateMatrixWorld();
-    _local.applyMatrix4(rig.matrixWorld);
-    rig.matrixWorld.decompose(_head, _q, _scale);
-    _qYaw.setFromAxisAngle(UP, -pose.yaw);
-    _qTilt.setFromAxisAngle(RIGHT, MAP_TILT * 0.6);
-    _q.multiply(_qYaw).multiply(_qTilt);
-    if (g.parent) {
-      g.parent.updateMatrixWorld();
-      g.parent.worldToLocal(_local);
-      g.parent.getWorldQuaternion(_qParent);
-      _q.premultiply(_qParent.invert());
-    }
-    g.position.copy(_local);
-    g.quaternion.copy(_q);
-    g.scale.setScalar(_scale.x);
-
-    // Blips: heading-up around the walker (world position and horizontal heading).
-    camera.getWorldPosition(_head);
-    camera.getWorldDirection(_dir);
-    horizontalHeading(_dir.x, _dir.z, _f);
-    MAP_PINS.forEach((p, i) => {
-      const o = pins.current[i];
-      if (!o) return;
-      miniMapPoint(_head.x, _head.z, _f[0], _f[1], p.x, p.z, _uv);
-      o.position.set(_uv[0], _uv[1], 0.002);
-    });
-  });
-
   return (
-    <group ref={group} name="sim-xr-minimap">
+    <RigFollow offset={MINI_MAP_OFFSET} tilt={MAP_TILT} name="sim-xr-minimap">
       <mesh
         name="sim-xr-minimap-open"
         geometry={discGeo}
@@ -228,20 +289,13 @@ const MiniMap = memo(function MiniMap({ buildings, onOpen }: SimXrMinimapProps) 
       >
         <meshBasicMaterial transparent opacity={0} depthTest={false} depthWrite={false} />
       </mesh>
-      <MapDisc radius={MINI_MAP_RADIUS} />
-      {MAP_PINS.map((p, i) => (
-        <group
-          key={p.id}
-          ref={(o) => {
-            pins.current[i] = o;
-          }}
-        >
-          <Dot radius={p.id === 'dispatcher' ? 0.011 : 0.01} color={toneOf(p.id, buildings)} />
-        </group>
-      ))}
-      <group position={[0, 0, 0.003]}>
-        <Arrow size={0.016} />
-      </group>
+      <MapSurface
+        size={MINI_MAP_PX}
+        radius={MINI_MAP_RADIUS}
+        range={MINI_MAP_RANGE}
+        headingUp
+        buildings={buildings}
+      />
       <mesh position={[0, -MINI_MAP_RADIUS - 0.03, 0]} renderOrder={42}>
         <planeGeometry args={[0.16, 0.04]} />
         <meshBasicMaterial
@@ -252,7 +306,7 @@ const MiniMap = memo(function MiniMap({ buildings, onOpen }: SimXrMinimapProps) 
           toneMapped={false}
         />
       </mesh>
-    </group>
+    </RigFollow>
   );
 });
 
@@ -261,74 +315,31 @@ const BigMap = memo(function BigMap({ buildings, onClose, onSelect }: SimXrMinim
   const tPanel = useTranslations('features.simulation.vrSector');
   const tSectors = useTranslations('sectors');
   const tTags = useTranslations('features.simulation.villageTags');
-  const camera = useThree((s) => s.camera);
-  const group = useRef<THREE.Group>(null);
-  const you = useRef<THREE.Group>(null);
-  const youArrow = useRef<THREE.Group>(null);
-  // Opens once in front of the walker, sized with the rig (does not follow the head).
-  useOpenInFront(group, 'map');
-
+  const pinHits = useRef<Array<THREE.Object3D | null>>([]);
+  const names = useMemo(
+    () => (id: MapPinId) => (id === 'dispatcher' ? tTags('controllerTitle') : tSectors(id)),
+    [tSectors, tTags]
+  );
   const header = useMemo(
     () =>
       holoCardTexture({
         width: 1024,
-        height: 240,
+        height: 200,
         align: 'center',
         accent: HOLO.cyan,
         lines: [
           { text: t('title'), size: 64, weight: 700, color: HOLO.cyan },
-          { text: t('hint'), size: 30, weight: 400 },
+          { text: t('hint'), size: 32, weight: 600 },
         ],
       }),
     [t]
   );
-  const labels = useMemo(
-    () =>
-      MAP_PINS.map((p) =>
-        holoCardTexture({
-          width: 384,
-          height: 96,
-          align: 'center',
-          lines: [
-            {
-              text: p.id === 'dispatcher' ? tTags('controllerTitle') : tSectors(p.id),
-              size: 40,
-              weight: 700,
-              color: toneOf(p.id, buildings),
-            },
-          ],
-        })
-      ),
-    [tSectors, tTags, buildings]
-  );
-  const youLabel = useMemo(
-    () =>
-      holoCardTexture({
-        width: 192,
-        height: 64,
-        align: 'center',
-        glass: false,
-        lines: [{ text: t('you'), size: 36, weight: 700, color: HOLO.ink }],
-      }),
-    [t]
-  );
-
-  useFrame(() => {
-    const y = you.current;
-    const a = youArrow.current;
-    if (!y || !a) return;
-    camera.getWorldPosition(_head);
-    camera.getWorldDirection(_dir);
-    horizontalHeading(_dir.x, _dir.z, _f);
-    bigMapPoint(_head.x, _head.z, _uv);
-    y.position.set(_uv[0], _uv[1], 0.004);
-    a.rotation.set(0, 0, headingAngle(_f[0], _f[1]));
-  });
+  const top = BIG_MAP_RADIUS * Math.cos(BIG_MAP_TILT);
 
   return (
-    <group ref={group} name="sim-xr-bigmap">
-      <mesh position={[0, 0.2, 0]} renderOrder={40}>
-        <planeGeometry args={[0.9, 0.211]} />
+    <RigFollow offset={BIG_MAP_OFFSET} tilt={0} name="sim-xr-bigmap">
+      <mesh position={[0, top + 0.13, 0]} renderOrder={40}>
+        <planeGeometry args={[1.0, 0.195]} />
         <meshBasicMaterial
           map={header}
           transparent
@@ -339,64 +350,43 @@ const BigMap = memo(function BigMap({ buildings, onClose, onSelect }: SimXrMinim
       </mesh>
       <HoloButton
         button={{ id: 'map-close', label: tPanel('close'), onPress: onClose }}
-        position={[0.36, 0.36, 0.002]}
+        position={[0.42, top + 0.29, 0.002]}
         size={[0.2, 0.08]}
       />
-      <group position={[0, -0.12, 0]} rotation={[MAP_TILT, 0, 0]}>
-        <MapDisc radius={BIG_MAP_RADIUS} />
+      <group rotation={[BIG_MAP_TILT, 0, 0]}>
+        <MapSurface
+          size={BIG_MAP_PX}
+          radius={BIG_MAP_RADIUS}
+          range={BIG_MAP_RANGE}
+          headingUp={false}
+          buildings={buildings}
+          names={names}
+          you={t('you')}
+          pinHits={pinHits}
+        />
         {MAP_PINS.map((p, i) => {
-          const [u, v] = bigMapPoint(p.x, p.z, [0, 0]);
           const select = () => onSelect(p.id);
           return (
-            <group key={p.id} position={[u, v, 0.002]}>
-              <mesh
-                name={`sim-xr-map-pin-${p.id}`}
-                geometry={discGeo}
-                scale={MAP_PIN_RADIUS}
-                renderOrder={43}
-                userData={{ xrUi: true, onSelect: select }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  select();
-                }}
-              >
-                <meshBasicMaterial
-                  color={toneOf(p.id, buildings)}
-                  transparent
-                  depthTest={false}
-                  depthWrite={false}
-                  toneMapped={false}
-                />
-              </mesh>
-              <mesh position={[0, MAP_PIN_RADIUS + 0.035, 0.001]} renderOrder={44}>
-                <planeGeometry args={[0.24, 0.06]} />
-                <meshBasicMaterial
-                  map={labels[i]}
-                  transparent
-                  depthTest={false}
-                  depthWrite={false}
-                  toneMapped={false}
-                />
-              </mesh>
-            </group>
+            <mesh
+              key={p.id}
+              ref={(o) => {
+                pinHits.current[i] = o;
+              }}
+              name={`sim-xr-map-pin-${p.id}`}
+              geometry={discGeo}
+              scale={MAP_PIN_RADIUS}
+              renderOrder={43}
+              userData={{ xrUi: true, onSelect: select }}
+              onClick={(e) => {
+                e.stopPropagation();
+                select();
+              }}
+            >
+              <meshBasicMaterial transparent opacity={0} depthTest={false} depthWrite={false} />
+            </mesh>
           );
         })}
-        <group ref={you}>
-          <group ref={youArrow}>
-            <Arrow size={0.03} order={46} />
-          </group>
-          <mesh position={[0, -0.045, 0]} renderOrder={46}>
-            <planeGeometry args={[0.09, 0.03]} />
-            <meshBasicMaterial
-              map={youLabel}
-              transparent
-              depthTest={false}
-              depthWrite={false}
-              toneMapped={false}
-            />
-          </mesh>
-        </group>
       </group>
-    </group>
+    </RigFollow>
   );
 });

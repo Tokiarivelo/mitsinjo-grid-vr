@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
-  BIG_MAP_CENTER,
   BIG_MAP_RADIUS,
   bigMapPoint,
   headingAngle,
   horizontalHeading,
+  MAP_FEATURES,
+  mapTransform,
+  MINI_MAP_OFFSET,
   MAP_PINS,
   MINI_MAP_RADIUS,
   MINI_MAP_RANGE,
@@ -36,17 +38,42 @@ describe('sim VR map (VS-T37)', () => {
     expect(Math.hypot(...far)).toBeCloseTo(MINI_MAP_RADIUS);
   });
 
-  it('big map is north-up around the village core, every pin inside the disc', () => {
-    const c = bigMapPoint(BIG_MAP_CENTER[0], BIG_MAP_CENTER[1], out());
-    expect(c[0]).toBeCloseTo(0);
-    expect(c[1]).toBeCloseTo(0);
-    const north = bigMapPoint(BIG_MAP_CENTER[0], BIG_MAP_CENTER[1] - 5, out());
+  it('big map is north-up around the walker and follows them (VS-T38)', () => {
+    const here = bigMapPoint(5, 5, 5, 5, out());
+    expect(Math.hypot(...here)).toBe(0);
+    const north = bigMapPoint(5, 5, 5, 0, out());
+    expect(north[0]).toBeCloseTo(0);
     expect(north[1]).toBeGreaterThan(0);
+    const east = bigMapPoint(5, 5, 10, 5, out());
+    expect(east[0]).toBeGreaterThan(0);
+    // From the village core every pin is on the map, inside the rim.
     for (const p of MAP_PINS) {
-      expect(Math.hypot(...bigMapPoint(p.x, p.z, out()))).toBeLessThan(BIG_MAP_RADIUS * 0.95);
+      expect(Math.hypot(...bigMapPoint(2.5, -0.5, p.x, p.z, out()))).toBeLessThan(BIG_MAP_RADIUS);
     }
     expect(MAP_PINS.map((p) => p.id)).toContain('dispatcher');
     expect(MAP_PINS).toHaveLength(7);
+  });
+
+  it('canvas transform: walker in the centre, heading up or north up', () => {
+    const t = mapTransform(3, 4, 0, -1, 200, 10, []);
+    const at = (x: number, z: number) => [
+      t[0]! * x + t[2]! * z + t[4]!,
+      t[1]! * x + t[3]! * z + t[5]!,
+    ];
+    expect(at(3, 4)).toEqual([100, 100]);
+    expect(at(3, -6)).toEqual([100, 0]); // 10 north = the top rim
+    expect(at(13, 4)).toEqual([200, 100]); // 10 east = the right rim
+    // Looking east (+X): east is up.
+    const e = mapTransform(0, 0, 1, 0, 200, 10, []);
+    const up = [e[0]! * 10 + e[4]!, e[1]! * 10 + e[5]!];
+    expect(up[0]).toBeCloseTo(100);
+    expect(up[1]).toBeCloseTo(0);
+  });
+
+  it('draws roads, the lake, the pond and the paddy; mini map on the far right', () => {
+    expect(MAP_FEATURES.paths.length).toBeGreaterThan(5);
+    expect(MAP_FEATURES.water).toHaveLength(2);
+    expect(MINI_MAP_OFFSET[0]).toBeGreaterThan(0.6);
   });
 
   it('walker arrow: up when looking north (−Z), counter-clockwise when looking west', () => {
