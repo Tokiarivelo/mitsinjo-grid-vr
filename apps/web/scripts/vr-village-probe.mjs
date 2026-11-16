@@ -291,6 +291,12 @@ try {
   await fire('hand-right', panoPoint(...LAMP_UV, uF, 3), { x: 0.2, y: 1.35, z: -0.1 });
   await shot('5-hand-lamp');
   check('a hand pinch at the lamp asks to extract it', (await extract())?.stage === 'confirm');
+  // VS-T26: after scans and a mode switch, hands are the real model, never the joint spheres.
+  const hands = await page.evaluate(() => window.__VR_CONTROLS__?.hands?.());
+  check(
+    'hands show the real hand model, not the joint spheres',
+    !!hands?.length && hands.every((h) => h.joints === 0 || (h.real && !h.spheres))
+  );
   await rc('set_input_mode', { mode: 'controller' });
   await sleep(600);
   // A mouse click on « Cancel », through the DevUI overlay (VS-T24 regression).

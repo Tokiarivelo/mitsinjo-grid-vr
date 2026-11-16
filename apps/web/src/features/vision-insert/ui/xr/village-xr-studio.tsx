@@ -15,6 +15,7 @@ import {
   usePanelAnchor,
 } from './holo-extract-panels';
 import { HoloBuildStage, HoloGenerationColumn, StudioRoom } from './xr-extract-studio';
+import { describeXrHands } from '@/features/microgrid-3d/utils/xr-input-models';
 import { HoloButton } from './holo-ui';
 import { HOLO } from './holo-style';
 import { HoloViewsCarousel } from './holo-views-carousel';
@@ -516,6 +517,8 @@ export const VillageXRStudio = memo(function VillageXRStudio({
     w.__VR_CONTROLS__ = {
       help,
       sources: () => snapshotSources(gl.xr.getSession?.()?.inputSources ?? []),
+      /** Real hand model vs joint spheres on each hand (VS-T26). */
+      hands: () => describeXrHands(gl),
       yaw: () => {
         const d = camera.getWorldDirection(new THREE.Vector3());
         return Math.atan2(d.x, -d.z);

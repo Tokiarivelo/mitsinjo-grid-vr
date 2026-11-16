@@ -119,6 +119,7 @@ export function attachInputModels(
   slots: InputModelSlots
 ): { handLoaded: () => boolean; gripLoaded: () => boolean; dispose: () => void } {
   const added: Array<{ parent: THREE.Object3D; child: THREE.Object3D }> = [];
+  const listeners: Array<() => void> = [];
   let handModel: THREE.Object3D | null = null;
   let gripModel: THREE.Object3D | null = null;
   let skinned = false;
@@ -128,11 +129,27 @@ export function attachInputModels(
     skin ??= createHandSkinMaterial();
     const { hands, controllers } = factories();
     const source = gl.xr?.getSession?.()?.inputSources?.[index];
-    if (slots.hand) {
-      handModel = hands.createHandModel(slots.hand, 'mesh');
-      slots.hand.add(handModel);
-      added.push({ parent: slots.hand, child: handModel });
-      replayConnected(slots.hand, source, 'hand');
+    const space = slots.hand;
+    if (space) {
+      const make = () => {
+        handModel = hands.createHandModel(space, 'mesh');
+        space.add(handModel);
+        added.push({ parent: space, child: handModel });
+        skinned = false;
+      };
+      make();
+      replayConnected(space, source, 'hand');
+      // The factory picks the hand's mesh (left / right) on its first connection: when this
+      // space later gets the other hand (inputs reordered), a fresh model loads the right one.
+      const onConnected = (e: { data?: XRInputSource }) => {
+        const was = (handModel as { xrInputSource?: XRInputSource } | null)?.xrInputSource;
+        if (!e.data?.hand || !was || was.handedness === e.data.handedness) return;
+        if (handModel) space.remove(handModel);
+        make();
+        replayConnected(space, e.data, 'hand');
+      };
+      space.addEventListener('connected' as never, onConnected as never);
+      listeners.push(() => space.removeEventListener('connected' as never, onConnected as never));
     }
     if (slots.grip) {
       gripModel = controllers.createControllerModel(slots.grip);
@@ -156,7 +173,24 @@ export function attachInputModels(
       return ready;
     },
     dispose: () => {
+      for (const off of listeners) off();
       for (const { parent, child } of added) parent.remove(child);
     },
   };
+}
+
+/**
+ * Dev probes (`make vr-probe`, `make vr-sim-probe`): per hand space, its tracked joints, whether
+ * the real hand model has its mesh, and whether the joint spheres show.
+ */
+export function describeXrHands(gl: THREE.WebGLRenderer) {
+  return ([0, 1] as const).map((i) => {
+    const h = gl.xr.getHand(i) as THREE.Object3D & { joints?: Record<string, unknown> };
+    const model = h.children.find((c) => 'motionController' in c);
+    return {
+      joints: Object.keys(h.joints ?? {}).length,
+      real: modelLoaded(model ?? null),
+      spheres: h.children.some((c) => c.name === 'hand-joints-mesh' && c.visible),
+    };
+  });
 }
