@@ -6,7 +6,7 @@ import { useFrame } from '@react-three/fiber';
 import { Billboard } from '@react-three/drei';
 import { useTranslations } from '@/lib/i18n';
 import { getSpatialAirButtonTexture } from './spatial-air-button-texture';
-import { MENU_SCAN_OFFSET } from './xr-layout';
+import { AIR_BOB, AIR_CARD, AIR_CRYSTAL_Y, AIR_RINGS_RADIUS, MENU_SCAN_OFFSET } from './xr-layout';
 
 export interface SpatialAirButtonProps {
   status: 'idle' | 'scanning' | 'detected';
@@ -66,7 +66,7 @@ export const SpatialAirButton = memo(function SpatialAirButton({
 
     // 1. Gentle floating bob in the air
     if (groupRef.current) {
-      groupRef.current.position.y = position[1] + Math.sin(time * 2.0) * 0.04;
+      groupRef.current.position.y = position[1] + Math.sin(time * 2.0) * AIR_BOB;
     }
 
     // 2. Spinning central holographic crystal
@@ -98,8 +98,8 @@ export const SpatialAirButton = memo(function SpatialAirButton({
 
   return (
     <group ref={groupRef} position={position} name="spatial-air-button-group">
-      {/* Floating Holographic Crystal Header */}
-      <group position={[0, 0.16, 0]}>
+      {/* Floating Holographic Crystal Header, above the card (it used to cover its title) */}
+      <group position={[0, AIR_CRYSTAL_Y, 0]}>
         <mesh ref={crystalRef}>
           <octahedronGeometry args={[0.045, 0]} />
           <meshStandardMaterial
@@ -122,7 +122,7 @@ export const SpatialAirButton = memo(function SpatialAirButton({
           />
         </mesh>
         <mesh ref={ring2Ref}>
-          <ringGeometry args={[0.088, 0.094, 32]} />
+          <ringGeometry args={[AIR_RINGS_RADIUS - 0.006, AIR_RINGS_RADIUS, 32]} />
           <meshBasicMaterial color="#38bdf8" transparent opacity={0.35} side={THREE.DoubleSide} />
         </mesh>
       </group>
@@ -130,7 +130,7 @@ export const SpatialAirButton = memo(function SpatialAirButton({
       {/* Diegetic Billboard Holo Card */}
       <Billboard follow lockX={false} lockY={false} lockZ={false}>
         <mesh position={[0, 0, 0]}>
-          <planeGeometry args={[0.62, 0.38]} />
+          <planeGeometry args={[AIR_CARD.width, AIR_CARD.height]} />
           <meshBasicMaterial
             map={texture}
             transparent
@@ -142,7 +142,7 @@ export const SpatialAirButton = memo(function SpatialAirButton({
 
         {/* Outer glowing halo border */}
         <mesh position={[0, 0, -0.005]}>
-          <planeGeometry args={[0.64, 0.4]} />
+          <planeGeometry args={[AIR_CARD.width + 0.02, AIR_CARD.height + 0.02]} />
           <meshBasicMaterial
             color={accentColor}
             transparent

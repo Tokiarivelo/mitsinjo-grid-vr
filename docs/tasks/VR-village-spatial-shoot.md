@@ -108,6 +108,8 @@
 
 ### VS-T8 : Tableau de bord HUD Holo dans les Airs (Diegetic Microgrid HUD)
 
+> Retiré en VS-T32 (panneau jugé encombrant) : les événements passent par la notice `XrEventToast`.
+
 - [x] Créer le composant `<VillageSpatialHUD />` positionné en flottement diégétique (`[-0.95, 1.55, -1.2]`, orienté vers le joueur).
 - [x] Créer `spatial-hud-texture.ts` : canvas 2D haute définition avec :
   - Jauge Batterie SoC (%) et indicateur état
@@ -321,3 +323,12 @@ Style : hologramme futuriste (cyan / ambre, lignes de balayage, coins lumineux, 
 - [x] Labo 3D : bouton « Labo 2D » tout à gauche → retour aux vues 2D (rotation inverse), le modèle reste (`toViews`).
 - [x] Labo 2D : bouton « Labo 3D » sous la carte de génération dès que le modèle existe (`toLab`).
 - [ ] **Done when :** `make vr-probe` vert (aller-retour 2D ↔ 3D) ; joué au casque (confort de la rotation).
+
+### VS-T32 : Menu et miniatures plus clairs
+
+- [x] HUD « Télémétrie Microgrid » retiré du menu ; les événements (raccordé, masqué…) s'affichent 4,5 s dans une notice (`xr-event-toast.tsx`).
+- [x] Bouton de scan : cristal et anneaux au-dessus de la carte (`AIR_CRYSTAL_Y`), ils ne cachent plus « Cibles acquises » ni le titre.
+- [x] Guide des commandes : texte sur deux lignes dans la carte holo partagée (ne déborde plus).
+- [x] Menu : bouton « Fermer » en haut à droite de la carte de scan (`MENU_CLOSE_OFFSET`).
+- [x] Miniature : notice « gâchette raccorde, grip tourne, « Ranger » l'enlève » + carte au-dessus (nom, état, aide) avec « Ranger » (`miniature-label.tsx`).
+- [ ] **Done when :** `make vr-probe` vert ; joué au casque.

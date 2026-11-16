@@ -5,7 +5,7 @@
 // scan and outlines it, asking nothing; a second shot at it asks « Extract to 3D? »; then the 3D
 // studio: 2D views carousel + generation column, the views AI chat (keys, send, bot answer) → build (the desks turn, VS-T31) → the lab opens by itself (a piece hidden; « 2D lab » / « 3D lab » turn back and forth, the object placed
 // on the village hologram and added to the simulation); mouse clicks through the DevUI overlay
-// (wrist menu, Help, « Cancel ») → leave = miniature; a tap on it connects it; a hand pinch at the lamp; shooting a floor
+// (wrist menu, Help, « Cancel », menu « Close ») → leave = miniature with its card; a tap on it connects it, « Put away » removes it; a hand pinch at the lamp; shooting a floor
 // arrow walks to the hall; ↑ walks on. Screenshots show the photo orientation ("MARRY" letters).
 // Screenshots in <outDir>/vr-*.png.
 // Usage: node scripts/vr-village-probe.mjs <baseUrl> <outDir>   (dev server must run; needs ffmpeg)
@@ -153,6 +153,23 @@ try {
   const m1 = await menu();
   if (m1) await fire('controller-right', m1.button, { x: 0.2, y: 1.3, z: -0.1 });
   check('a second press closes it', (await menu())?.open === false);
+  // VS-T32: the menu has its own « Close » button, and no telemetry HUD any more.
+  const m1b = await menu();
+  if (m1b) await fire('controller-right', m1b.button, { x: 0.2, y: 1.3, z: -0.1 });
+  await sleep(600);
+  const shownN = (name) => page.evaluate((n) => window.__VR_CONTROLS__?.shown(n) ?? -1, name);
+  check('no telemetry HUD in the open menu', (await shownN('village-spatial-hud')) === 0);
+  const closeAt = await page.evaluate(() => {
+    const o = window.__VR_PANELS__?.objects.find(
+      (x) => x.userData.holoPanel?.id === 'holo:menu-close'
+    );
+    if (!o) return null;
+    const p = o.getWorldPosition(new o.position.constructor());
+    return { x: p.x, y: p.y, z: p.z };
+  });
+  await shot('0d-menu-close-button');
+  if (closeAt) await fire('controller-right', closeAt, { x: 0.2, y: 1.3, z: -0.1 });
+  check('« Close » in the menu closes it', !!closeAt && (await menu())?.open === false);
 
   // Mouse (VS-T24): the IWER DevUI canvas lies over the scene; clicks must still reach it.
   const click = async (world) => {
@@ -376,9 +393,20 @@ try {
   await sleep(1500);
   await shot('3h-fridge-miniature');
 
+  const dismissAt = await panelAt('holo:mini-dismiss-*');
+  check('the new miniature has its card with « Put away »', !!dismissAt);
   await fire('controller-right', MINI_0, { x: 0.25, y: 1.3, z: 0 });
+  // The notice lasts 4.5 s: read it right after the event (the screenshots take seconds).
+  check('connecting it shows a notice (no telemetry HUD)', (await shownN('xr-event-toast')) > 0);
   await shot('4-fridge-connected');
   check('one scan only (no double fire)', scans === 1);
+  const pressedAway = await press('holo:mini-dismiss-*');
+  await sleep(500);
+  await shot('4b-fridge-put-away');
+  check(
+    '« Put away » removes the miniature',
+    pressedAway && !(await panelAt('holo:mini-dismiss-*'))
+  );
 
   await rc('set_input_mode', { mode: 'hand' });
   await fire('hand-right', panoPoint(...LAMP_UV, uF, 3), { x: 0.2, y: 1.35, z: -0.1 });

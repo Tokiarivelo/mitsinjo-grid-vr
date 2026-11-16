@@ -38,7 +38,8 @@ import {
 } from './xr-blaster-controller';
 import { createTurntable, type Turntable } from './turntable';
 import { playGridConnectSound, playGridDisconnectSound, playSnapSound } from './xr-audio-fx';
-import { VillageSpatialHUD } from './village-spatial-hud';
+import { XrEventToast } from './xr-event-toast';
+import { MiniatureLabel } from './miniature-label';
 import { LiveWebcamBackdrop } from './live-webcam-backdrop';
 import { SpatialInteractionGuide } from './spatial-interaction-guide';
 import { pickTargetAtUv, screenHitFromRay, WEBCAM_SCREEN } from './webcam-screen';
@@ -49,6 +50,8 @@ import { PhotoAnchored } from './tour/photo-anchored';
 import { TOUR_EYE } from './tour/tour-nav';
 import { yawPitchOf } from './tour/equirect';
 import {
+  MENU_CLOSE_OFFSET,
+  MENU_CLOSE_SIZE,
   MENU_GUIDE_OFFSET,
   MENU_HELP_OFFSET,
   MENU_INPUTS_OFFSET,
@@ -114,6 +117,7 @@ const NO_HOTSPOTS: [] = [];
 const HELP_ON_ENTRY_MS = 12000;
 export const MENU_HELP_ID = 'holo:menu-help';
 export const MENU_INPUTS_ID = 'holo:menu-inputs';
+export const MENU_CLOSE_ID = 'holo:menu-close';
 /** « Leave the studio » / « Back to the studio » (VS-T26). */
 export const STUDIO_DOOR_ID = 'holo:studio-door';
 /** « Cancel the analysis » / « Retry the analysis » (VS-T26). */
@@ -416,6 +420,18 @@ export const VillageXRStudio = memo(function VillageXRStudio({
     return out;
   }, [materialized, targets]);
 
+  /** « Put away » a miniature (VS-T32): gone from reach, the simulation is left as it is. */
+  const dismissMiniature = useCallback(
+    (id: string) => {
+      const target = findTarget(id);
+      setMaterialized((prev) => prev.filter((x) => x !== id));
+      turntablesRef.current.delete(id);
+      const name = target ? localLabel(target.detection, locale) || target.detection.label : '';
+      notifyEvent(t('vrMini.dismissed', { name }));
+    },
+    [findTarget, locale, notifyEvent, t]
+  );
+
   const status = isScanning ? 'scanning' : targets.length > 0 ? 'detected' : 'idle';
 
   // 3D extraction (VS-T19–T22): the object being extracted and where its panels open.
@@ -692,12 +708,7 @@ export const VillageXRStudio = memo(function VillageXRStudio({
       </group>
 
       {/* 4. Wrist button → menu (scan button, guide, HUD VS-T8), following the viewer */}
-      <WristMenuButton
-        menu={menu}
-        open={menuOpen}
-        hovered={hoveredTargetId === WRIST_BUTTON_ID}
-        alert={!menuOpen && recentEvent !== null}
-      />
+      <WristMenuButton menu={menu} open={menuOpen} hovered={hoveredTargetId === WRIST_BUTTON_ID} />
       {menuOpen && (
         <WristMenuPanel menu={menu} scanOffset={MENU_SCAN_OFFSET}>
           <SpatialAirButton
@@ -729,9 +740,22 @@ export const VillageXRStudio = memo(function VillageXRStudio({
             hovered={hoveredTargetId === MENU_INPUTS_ID}
             onSelect={toggleInputs}
           />
-          <VillageSpatialHUD recentEvent={recentEvent} />
+          <HoloButton
+            registry={panels}
+            id={MENU_CLOSE_ID}
+            label={t('vrWristMenuClose')}
+            icon="close"
+            width={MENU_CLOSE_SIZE.width}
+            height={MENU_CLOSE_SIZE.height}
+            position={MENU_CLOSE_OFFSET}
+            hovered={hoveredTargetId === MENU_CLOSE_ID}
+            onSelect={menu.toggle}
+          />
         </WristMenuPanel>
       )}
+
+      {/* 4b. What just happened (connected, hidden…), a few seconds (VS-T32) */}
+      <XrEventToast message={recentEvent} menuOpen={menuOpen} />
 
       {/* 5. Studio door (VS-T26): leave the studio, or go back to the step left */}
       {extract && door && (
@@ -893,17 +917,28 @@ export const VillageXRStudio = memo(function VillageXRStudio({
         </StudioWalk>
       )}
 
-      {/* 7. 3D miniatures in reach: spin, hold to rotate, tap to connect */}
+      {/* 7. 3D miniatures in reach: spin, hold to rotate, tap to connect; a card over each says
+          so and « Put away » removes it (VS-T32) */}
       {!studio &&
         miniatures.map((m) => (
-          <SpawnedObject3D
-            key={`spawned-${m.id}`}
-            target={m.target}
-            slot={m.position}
-            turntable={m.turntable}
-            hovered={hoveredTargetId === m.id}
-            isConnected={connectedIds.has(m.id)}
-          />
+          <group key={`spawned-${m.id}`}>
+            <SpawnedObject3D
+              target={m.target}
+              slot={m.position}
+              turntable={m.turntable}
+              hovered={hoveredTargetId === m.id}
+              isConnected={connectedIds.has(m.id)}
+            />
+            <MiniatureLabel
+              id={m.id}
+              name={localLabel(m.target.detection, locale) || m.target.detection.label}
+              slot={m.position}
+              connected={connectedIds.has(m.id)}
+              registry={panels}
+              hoveredId={hoveredTargetId}
+              onDismiss={dismissMiniature}
+            />
+          </group>
         ))}
 
       {/* Controls (VS-T23): what each select will do, button legends, buttons / sticks / thumbs */}

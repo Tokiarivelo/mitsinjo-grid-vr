@@ -1,85 +1,47 @@
 'use client';
 
-import { memo, useEffect, useState } from 'react';
-import * as THREE from 'three';
+import { memo, useMemo } from 'react';
 import { useThree } from '@react-three/fiber';
 import { useTranslations } from '@/lib/i18n';
+import { HoloFrame, HoloText } from './holo-ui';
+import { HOLO } from './holo-style';
 
 export interface SpatialInteractionGuideProps {
   position?: [number, number, number];
 }
 
+/** Guide card size (m): two rows of text read at the menu's 0.9 m. */
+const GUIDE_W = 0.56;
+const GUIDE_H = 0.11;
+
 /**
- * Diegetic In-Air Interaction Guide for WebXR & Desktop 3D.
- * Floats comfortably below the Air Button, providing clear, real-time command guidance:
- * - Quest VR: 🎮 Pull Trigger · ✋ Pinch Fingers
- * - Desktop Screen: 🖱️ Aim & Click directly with Mouse
+ * Command guide under the scan button (wrist menu): « A/X analyse · B/Y back · Trigger select… »
+ * in VR, « Aim & click with the mouse » on a screen. Laid out by the shared holo card (VS-T32):
+ * the text wraps on two rows and shrinks to fit, so a long translation never runs off the card.
  */
 export const SpatialInteractionGuide = memo(function SpatialInteractionGuide({
   position = [0, 1.08, -1.2],
 }: SpatialInteractionGuideProps) {
   const t = useTranslations('features.visionInsert');
-  const { gl } = useThree();
-  const isPresenting = Boolean(gl?.xr?.isPresenting);
-
-  const guideText = isPresenting ? t('vrInteractionGuideVR') : t('vrInteractionGuideDesktop');
-
-  const [texture, setTexture] = useState<THREE.CanvasTexture | null>(null);
-
-  useEffect(() => {
-    const canvas = document.createElement('canvas');
-    canvas.width = 512;
-    canvas.height = 90;
-    const ctx = canvas.getContext('2d');
-    if (ctx) {
-      // Background pill
-      ctx.fillStyle = 'rgba(8, 16, 32, 0.92)';
-      ctx.beginPath();
-      ctx.roundRect ? ctx.roundRect(4, 4, 504, 82, 18) : ctx.rect(4, 4, 504, 82);
-      ctx.fill();
-
-      // Border glow
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = isPresenting ? '#38bdf8' : '#7dd3fc';
-      ctx.stroke();
-
-      // Text
-      ctx.font = 'bold 22px "Inter", -apple-system, sans-serif';
-      ctx.fillStyle = isPresenting ? '#e0f2fe' : '#f0f9ff';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(guideText, 256, 45);
-    }
-
-    const tex = new THREE.CanvasTexture(canvas);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    tex.minFilter = THREE.LinearFilter;
-    tex.magFilter = THREE.LinearFilter;
-
-    setTexture((prev) => {
-      prev?.dispose();
-      return tex;
-    });
-
-    return () => {
-      tex.dispose();
-    };
-  }, [guideText, isPresenting]);
-
+  const isPresenting = useThree((s) => Boolean(s.gl?.xr?.isPresenting));
+  const text = isPresenting ? t('vrInteractionGuideVR') : t('vrInteractionGuideDesktop');
+  const spec = useMemo(
+    () => ({
+      glass: false,
+      align: 'center' as const,
+      lines: [{ text, size: 40, weight: 700 as const }],
+    }),
+    [text]
+  );
   return (
     <group position={position} name="spatial-interaction-guide">
-      {texture && (
-        <mesh position={[0, 0, 0]}>
-          <planeGeometry args={[0.54, 0.1]} />
-          <meshBasicMaterial
-            map={texture}
-            transparent
-            opacity={0.96}
-            side={THREE.DoubleSide}
-            toneMapped={false}
-          />
-        </mesh>
-      )}
+      <HoloFrame width={GUIDE_W} height={GUIDE_H} color={HOLO.cyan} />
+      <HoloText
+        spec={spec}
+        width={GUIDE_W - 0.03}
+        height={GUIDE_H - 0.02}
+        position={[0, 0, 0.003]}
+      />
     </group>
   );
 });

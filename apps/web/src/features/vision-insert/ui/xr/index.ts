@@ -5,9 +5,7 @@ export { HoloDetectionTarget, type HoloDetectionTargetProps } from './holo-detec
 export { SpawnedObject3D, type SpawnedObject3DProps } from './spawned-object-3d';
 export { XRBlasterController, type XRBlasterControllerProps } from './xr-blaster-controller';
 export { PowerConnectionBeam, type PowerConnectionBeamProps } from './power-connection-beam';
-export { VillageSpatialHUD, type VillageSpatialHUDProps } from './village-spatial-hud';
 export { LiveWebcamBackdrop, type LiveWebcamBackdropProps } from './live-webcam-backdrop';
-export { getSpatialHUDTexture, type SpatialHUDTextureSpec } from './spatial-hud-texture';
 export {
   playLaserShootSound,
   playTargetHitSound,

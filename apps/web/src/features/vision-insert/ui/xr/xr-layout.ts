@@ -7,7 +7,7 @@ export type Vec3 = [number, number, number];
 
 /**
  * Inside the wrist menu (`wrist-menu.ts`), relative to its centre (0.9 m ahead, below the eyes,
- * facing the viewer): scan button in the middle, guide under it, HUD angled on the left.
+ * facing the viewer): scan button in the middle, guide under it, « Close » at its top right.
  */
 export const MENU_SCAN_OFFSET: Vec3 = [0, 0.06, 0];
 export const MENU_GUIDE_OFFSET: Vec3 = [0, -0.25, 0];
@@ -15,7 +15,6 @@ export const MENU_GUIDE_OFFSET: Vec3 = [0, -0.25, 0];
 export const MENU_HELP_OFFSET: Vec3 = [0, -0.37, 0];
 /** « Hide the hands & controllers » button, under the help one (VS-T30). */
 export const MENU_INPUTS_OFFSET: Vec3 = [0, -0.47, 0];
-export const MENU_HUD_OFFSET: Vec3 = [-0.66, 0.06, 0.22];
 /**
  * « Leave the studio » / « Back to the studio » (VS-T26): right of where the menu opens, clear of
  * the scan panel, mirroring the floating « Menu » button on the left; lazy-follows the viewer.
@@ -23,7 +22,29 @@ export const MENU_HUD_OFFSET: Vec3 = [-0.66, 0.06, 0.22];
 export const STUDIO_DOOR_OFFSET: Vec3 = [0.54, 0.06, 0];
 /** « Cancel / Retry the analysis » (VS-T26): centred under the view, where the menu opens. */
 export const SCAN_CONTROL_OFFSET: Vec3 = [0, 0.02, 0];
-export const MENU_HUD_ROTATION: Vec3 = [-0.1, 0.55, 0];
+/** Scan card size (m), centred on `MENU_SCAN_OFFSET`. */
+export const AIR_CARD = { width: 0.62, height: 0.38 } as const;
+/** Outer radius of the scan button's orbit rings (m), and their floating bob (± m). */
+export const AIR_RINGS_RADIUS = 0.094;
+export const AIR_BOB = 0.04;
+/**
+ * Crystal and rings above the scan card (local to the button): clear of the card's top edge
+ * even at the low end of the bob, so they never cover the « Targets acquired » pill or the title.
+ */
+export const AIR_CRYSTAL_Y = Number((AIR_CARD.height / 2 + AIR_RINGS_RADIUS + 0.03).toFixed(3));
+/** « Close » the menu (VS-T32): above the scan card's top right (clear of its bob), right of the crystal. */
+export const MENU_CLOSE_SIZE = { width: 0.14, height: 0.07 } as const;
+export const MENU_CLOSE_OFFSET: Vec3 = [
+  0.24,
+  Number((MENU_SCAN_OFFSET[1] + AIR_CARD.height / 2 + AIR_BOB + 0.055).toFixed(3)),
+  0.02,
+];
+/**
+ * Event notice (VS-T32, replaces the telemetry HUD's event line): just under the line of sight
+ * in the follow frame; above the scan button's crystal while the menu is open.
+ */
+export const EVENT_TOAST_OFFSET: Vec3 = [0, 0.2, 0];
+export const EVENT_TOAST_OFFSET_MENU: Vec3 = [0, 0.62, 0];
 /** Ray-pick radius around the scan button (its panel is 0.62 × 0.38 m). */
 export const AIR_BUTTON_RADIUS = 0.32;
 /** Fingertip distance that counts as pressing the button. */
@@ -57,6 +78,13 @@ export function miniatureSlot(index: number): Vec3 {
 }
 
 /** Scales a model's size so its largest side is `MINIATURE_SIZE`, keeping proportions. */
+/**
+ * Label card and « Put away » button of a miniature (VS-T32), above its model, turned toward the
+ * viewer at the origin (Y-rotation of a plane whose front faces (0, y, 0) from `slot`).
+ */
+export const MINIATURE_LABEL_Y = 0.24;
+export const faceOrigin = (slot: Vec3) => Number(Math.atan2(-slot[0], -slot[2]).toFixed(3));
+
 export function miniatureDimensions(size: Vec3): Vec3 {
   const k = MINIATURE_SIZE / Math.max(size[0], size[1], size[2], 1e-6);
   return size.map((s) => Number((s * k).toFixed(3))) as Vec3;

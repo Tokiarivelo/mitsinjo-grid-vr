@@ -75,6 +75,10 @@ vi.mock('../xr-extract-studio', () => ({
   ),
 }));
 vi.mock('../holo-ui', () => ({
+  HoloFrame: () => null,
+  HoloText: ({ spec }: { spec: { lines: { text: string }[] } }) => (
+    <p>{spec.lines.map((l) => l.text).join(' · ')}</p>
+  ),
   HoloButton: ({ label, onSelect }: { label: string; onSelect?: () => void }) => (
     <button type="button" onClick={() => onSelect?.()}>
       {label}
@@ -105,7 +109,10 @@ vi.mock('../studio-desks', () => ({
 }));
 vi.mock('../holo-detection-target', () => ({ HoloDetectionTarget: () => null }));
 vi.mock('../spawned-object-3d', () => ({ SpawnedObject3D: () => null }));
-vi.mock('../village-spatial-hud', () => ({ VillageSpatialHUD: () => null }));
+vi.mock('../xr-event-toast', () => ({
+  XrEventToast: ({ message }: { message: string | null }) =>
+    message ? <p data-testid="event-toast">{message}</p> : null,
+}));
 vi.mock('../spatial-interaction-guide', () => ({ SpatialInteractionGuide: () => null }));
 vi.mock('../xr-wrist-menu', () => ({
   WristMenuButton: () => null,
@@ -202,6 +209,27 @@ describe('VillageXRStudio — shoot an object in the webcam video', () => {
 
     act(() => blaster.props!.onTapMiniature!('fridge'));
     expect(onSelectAppliance).toHaveBeenCalledTimes(2); // materialize, then connect
+  });
+
+  it('says how to use a new miniature, and « Put away » removes it (VS-T32)', () => {
+    // Before: the miniature appeared with no word on how to use it nor how to remove it.
+    const { rerender, view, getByTestId, getByRole, queryByRole } = setup();
+    rerender(view([fridge], false));
+    act(() => blaster.props!.onShootTarget('fridge'));
+    expect(getByTestId('event-toast').textContent).toMatch(/Put away/);
+    expect(getByRole('button', { name: 'Put away' })).toBeTruthy();
+    fireEvent.click(getByRole('button', { name: 'Put away' }));
+    expect(blaster.props!.miniatures).toEqual([]);
+    expect(queryByRole('button', { name: 'Put away' })).toBeNull();
+    expect(getByTestId('event-toast').textContent).toMatch(/put away/);
+  });
+
+  it('closes the open menu from its « Close » button (VS-T32)', () => {
+    const { getByRole, queryByTestId } = setup();
+    act(() => blaster.props!.menu.toggle());
+    expect(queryByTestId('wrist-menu-panel')).toBeTruthy();
+    fireEvent.click(getByRole('button', { name: 'Close' }));
+    expect(queryByTestId('wrist-menu-panel')).toBeNull();
   });
 
   it('keeps the menu hidden on entry; the wrist button opens and closes it', () => {

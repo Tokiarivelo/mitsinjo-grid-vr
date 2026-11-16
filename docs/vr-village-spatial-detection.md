@@ -31,7 +31,7 @@ flowchart TD
     F2 --> D
     F --> G["7. Impact lumineux + Audio FX → Génération procédurale du modèle 3D"]
     G --> H["8. L'objet 3D final apparaît et s'anime à l'emplacement exact dans la pièce"]
-    H --> I["9. Deuxième tir : Raccordement au microgrid + Conduit d'énergie 3D + HUD Holo"]
+    H --> I["9. Deuxième tir : Raccordement au microgrid + Conduit d'énergie 3D + notice"]
 ```
 
 ---
@@ -90,11 +90,11 @@ flowchart TD
 - **Menu au poignet (VS-T13) :** à l'entrée, aucun panneau flottant. Un petit bouton (Ø 4,4 cm, étiquette « Menu » / « Fermer »)
   est porté sur le poignet gauche (joint `wrist` en suivi des mains, poignée gauche avec manettes ; sans entrée gauche
   suivie, en bas à gauche de la vue). Le doigt de l'autre main, le laser, le pincement ou la souris l'ouvre / le ferme.
-  Le menu (bouton de scan, guide, HUD) apparaît à 0,9 m devant, 32 cm sous les yeux, dans le monde (règle Meta : menu
+  Le menu (bouton de scan, guide, « Fermer ») apparaît à 0,9 m devant, 32 cm sous les yeux, dans le monde (règle Meta : menu
   lancé _depuis_ le poignet, jamais accroché au poignet ; ≥ 0,8 m pour le rayon) et **suit la personne en différé**
   (`wrist-menu.ts`, `updateLazyFollow`) : il reste immobile, puis se recentre en douceur si l'on tourne la tête
   de plus de ~35° ou si l'on s'éloigne de plus de 35 cm. Fermé, le bouton pulse en orange à chaque nouvel événement.
-- **Source d'entrée unique :** `XRBlasterController` gère manettes, mains, doigt et souris. Les composants (bouton, cibles, HUD) n'ont plus de `onClick` R3F propre (un clic tirait deux fois).
+- **Source d'entrée unique :** `XRBlasterController` gère manettes, mains, doigt et souris. Les composants (bouton, cibles, panneaux) n'ont plus de `onClick` R3F propre (un clic tirait deux fois).
 - **Visée sur la vidéo :** le rayon coupe l'écran webcam → point image $(u, v)$ → la plus petite boîte de détection qui le contient (une prise sur une table gagne sur la table). Hors de toute boîte : avant tout scan, le tir lance le scan puis transforme en 3D l'objet sous ce point ; après un scan, notification « Aucun objet détecté à cet endroit ».
 - **Action de tir :**
   - Un tir par appui : `selectstart` seulement (gâchette, ou pincement natif des mains). Le rayon des mains est celui du système (`getController(i)`), pas un rayon poignet → index ; plus de détection de pincement maison (elle doublait le tir).
@@ -128,6 +128,9 @@ flowchart TD
     (ou glisser la souris) la fait tourner (lacet + inclinaison ≤ 60°) ; relâcher → elle reprend sa rotation après 1,5 s.
   - **Tap** (relâché sans rotation, < 0,15 rad, en moins de 1,2 s) → raccorde / déconnecte l'appareil.
   - Un pincement la main posée sur la miniature (origine du rayon dedans) la saisit aussi.
+  - Carte au-dessus (VS-T32, `miniature-label.tsx`) : nom, état (raccordée ou non), aide « Gâchette : raccorder /
+    débrancher · Grip : tourner », et « Ranger » qui enlève la miniature (la simulation ne change pas). Une notice
+    le dit aussi quand elle apparaît (en sortant du labo).
 
 #### Checklist Phase 4 :
 
@@ -162,6 +165,8 @@ flowchart TD
 ---
 
 ### Phase 6 : Tableau de bord HUD Holo dans les Airs (Diegetic In-Air Telemetry HUD)
+
+> Retiré en VS-T32 : plus de HUD dans le menu ; une notice (`XrEventToast`) affiche les événements quelques secondes.
 
 - **Vision :** Afficher un tableau de bord holographique flottant dans le champ de vision périphérique (`[-1.25, 1.55, -1.4]` m), orienté vers le joueur, affichant en temps réel les données de la simulation du micro-réseau sans quitter la VR :
   - Niveau de batterie (%) avec barre de jauge lumineuse et indicateur de charge/décharge.

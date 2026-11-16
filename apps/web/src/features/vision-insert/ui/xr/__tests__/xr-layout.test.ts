@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
+  AIR_BOB,
+  AIR_CARD,
+  AIR_CRYSTAL_Y,
+  AIR_RINGS_RADIUS,
   anchorAhead,
+  faceOrigin,
+  MENU_CLOSE_OFFSET,
+  MENU_CLOSE_SIZE,
+  MENU_SCAN_OFFSET,
+  miniatureSlot,
   CAROUSEL_RADIUS,
   deskPivot,
   deskTurnAngle,
@@ -78,5 +87,32 @@ describe('studio desks turntable (VS-T31)', () => {
     // Facing the eye at (0, 0, EXTRACT_DISTANCE) in panel space.
     expect(Math.atan2(-x, EXTRACT_DISTANCE - z)).toBeCloseTo(LAB_TO_VIEWS.yaw, 2);
     expect(Math.hypot(x, EXTRACT_DISTANCE - z)).toBeCloseTo(LAB_TO_VIEWS.distance, 1);
+  });
+});
+
+describe('wrist menu layout (VS-T32)', () => {
+  it('keeps the crystal and its rings above the scan card (they hid its title)', () => {
+    // The whole button bobs together: the rings' lowest point stays above the card's top edge.
+    expect(AIR_CRYSTAL_Y - AIR_RINGS_RADIUS).toBeGreaterThan(AIR_CARD.height / 2);
+  });
+  it('puts « Close » above the card top right, clear of the bobbing card and the rings', () => {
+    const [x, y] = MENU_CLOSE_OFFSET;
+    const cardTop = MENU_SCAN_OFFSET[1] + AIR_CARD.height / 2 + AIR_BOB;
+    expect(y - MENU_CLOSE_SIZE.height / 2).toBeGreaterThan(cardTop);
+    expect(x - MENU_CLOSE_SIZE.width / 2).toBeGreaterThan(AIR_RINGS_RADIUS);
+    expect(x + MENU_CLOSE_SIZE.width / 2).toBeLessThanOrEqual(AIR_CARD.width / 2);
+  });
+});
+
+describe('faceOrigin (VS-T32)', () => {
+  it('turns a miniature card toward the viewer at the origin', () => {
+    for (const i of [0, 1, 2, 3]) {
+      const slot = miniatureSlot(i);
+      const yaw = faceOrigin(slot);
+      // Front normal (sin yaw, 0, cos yaw) points from the slot back to the origin.
+      const len = Math.hypot(slot[0], slot[2]);
+      expect(Math.sin(yaw)).toBeCloseTo(-slot[0] / len, 2);
+      expect(Math.cos(yaw)).toBeCloseTo(-slot[2] / len, 2);
+    }
   });
 });
