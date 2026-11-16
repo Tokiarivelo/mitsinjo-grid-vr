@@ -49,4 +49,17 @@ describe('drawVillageMap (VS-T38)', () => {
     expect(texts).toContain('You');
     expect(texts).toHaveLength(MAP_PINS.length + 1);
   });
+
+  it('/village lab table (VS-T39): no walker arrow, names at a larger size', () => {
+    const { ctx, calls } = recorder();
+    drawVillageMap(ctx, {
+      size: 1024,
+      transform,
+      tone: () => 'x',
+      names: (id) => `name-${id}`,
+      fontScale: 1.5,
+    });
+    expect(calls.rotate).toBeUndefined();
+    expect(calls.fillText).toHaveLength(MAP_PINS.length);
+  });
 });

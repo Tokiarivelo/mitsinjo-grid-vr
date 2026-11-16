@@ -14,8 +14,10 @@ export interface MapDrawOptions {
   tone: (id: MapPinId) => string;
   /** Pin names (big map); none on the mini map. */
   names?: (id: MapPinId) => string;
-  /** Walker arrow angle on the canvas (rad, counter-clockwise as seen; 0 = up). */
-  arrow: number;
+  /** Walker arrow angle on the canvas (rad, counter-clockwise as seen; 0 = up); none = no walker. */
+  arrow?: number;
+  /** Name size multiplier (the /village lab table is read from farther). Default 1. */
+  fontScale?: number;
   /** Walker label under the arrow (big map). */
   you?: string;
 }
@@ -71,7 +73,7 @@ export function drawVillageMap(ctx: CanvasRenderingContext2D, o: MapDrawOptions)
   // Pins and names in canvas px (text stays upright and sharp).
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   const pinR = Math.max(4, size * 0.022);
-  const fontPx = Math.round(size * 0.034);
+  const fontPx = Math.round(size * 0.034 * (o.fontScale ?? 1));
   for (const pin of MAP_PINS) {
     let [x, y] = at(pin.x, pin.z);
     // Out of range: on the rim.
@@ -106,10 +108,29 @@ export function drawVillageMap(ctx: CanvasRenderingContext2D, o: MapDrawOptions)
   }
 
   // Walker: arrow at its spot (the centre), pointing where the head looks.
+  if (o.arrow !== undefined) drawWalker(ctx, c, size, fontPx, o.arrow, o.you);
+  ctx.restore();
+
+  // Rim.
+  ctx.beginPath();
+  ctx.arc(c, c, c - Math.max(2, size * 0.008), 0, Math.PI * 2);
+  ctx.strokeStyle = HOLO.cyan;
+  ctx.lineWidth = Math.max(3, size * 0.014);
+  ctx.stroke();
+}
+
+function drawWalker(
+  ctx: CanvasRenderingContext2D,
+  c: number,
+  size: number,
+  fontPx: number,
+  arrow: number,
+  you: string | undefined
+): void {
   const [wx, wy] = [c, c];
   const a = size * 0.035;
   ctx.translate(wx, wy);
-  ctx.rotate(-o.arrow);
+  ctx.rotate(-arrow);
   ctx.beginPath();
   ctx.moveTo(0, -a);
   ctx.lineTo(a * 0.7, a * 0.8);
@@ -122,22 +143,14 @@ export function drawVillageMap(ctx: CanvasRenderingContext2D, o: MapDrawOptions)
   ctx.fill();
   ctx.stroke();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
-  if (o.you) {
+  if (you) {
     ctx.font = holoFont(fontPx, 700);
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
     ctx.lineWidth = fontPx * 0.28;
     ctx.strokeStyle = HOLO.dome;
-    ctx.strokeText(o.you, wx, wy + a + 4);
+    ctx.strokeText(you, wx, wy + a + 4);
     ctx.fillStyle = HOLO.ink;
-    ctx.fillText(o.you, wx, wy + a + 4);
+    ctx.fillText(you, wx, wy + a + 4);
   }
-  ctx.restore();
-
-  // Rim.
-  ctx.beginPath();
-  ctx.arc(c, c, c - Math.max(2, size * 0.008), 0, Math.PI * 2);
-  ctx.strokeStyle = HOLO.cyan;
-  ctx.lineWidth = Math.max(3, size * 0.014);
-  ctx.stroke();
 }

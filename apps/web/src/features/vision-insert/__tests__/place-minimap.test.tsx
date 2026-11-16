@@ -49,9 +49,16 @@ describe('PlaceMinimap (PP-T4, PI-T9)', () => {
     // Centre of a 230 px map = village centre.
     fireEvent.click(map, { clientX: 115, clientY: 115 });
     expect(onPlace).toHaveBeenCalledWith({ x: 0, z: 0 });
-    // Top-left corner clamps into the map square.
+    // Village view (VS-T39): the top-left corner clamps into ±40.
+    fireEvent.click(map, { clientX: 0, clientY: 0 });
+    expect(onPlace).toHaveBeenCalledWith({ x: -38, z: -38 });
+    // Whole terrain: the corner reaches ±115.
+    fireEvent.click(screen.getByRole('button', { name: 'Whole terrain' }));
     fireEvent.click(map, { clientX: 0, clientY: 0 });
     expect(onPlace).toHaveBeenCalledWith({ x: -113, z: -113 });
+    expect(screen.getByRole('button', { name: 'Village' }).getAttribute('aria-pressed')).toBe(
+      'true'
+    );
   });
 
   it('keyboard: arrows move the cursor (announced), Enter places', () => {
@@ -77,10 +84,27 @@ describe('PlaceMinimap (PP-T4, PI-T9)', () => {
         <PlaceMinimap value={null} sector="water" onPlace={vi.fn()} zones={zones} excludeId="me" />
       </I18nProvider>
     );
-    // Terrain disc + 6 buildings + 1 placed object (ring + center dot) + cursor ring = 10.
-    expect(container.querySelectorAll('svg circle').length).toBe(10);
+    expect(container.querySelectorAll('[data-testid^="minimap-object-"]')).toHaveLength(1);
     expect(screen.getByTestId('minimap-object-other')).toBeTruthy();
     // Cursor starts on the water building: blocked.
     expect(screen.getByText(/Spot taken/)).toBeTruthy();
+  });
+
+  it('is drawn like the /simulation map: roads, water, paddy, named buildings, north (VS-T39)', () => {
+    setup();
+    expect(screen.getAllByTestId('minimap-road').length).toBeGreaterThanOrEqual(6);
+    expect(screen.getAllByTestId('minimap-water')).toHaveLength(2); // lake + pond
+    expect(screen.getByTestId('minimap-paddy')).toBeTruthy();
+    for (const name of ['Primary School', 'Health Clinic', 'Local Market & Artisans']) {
+      expect(screen.getByText(name)).toBeTruthy();
+    }
+    expect(screen.getByText('N')).toBeTruthy();
+    // The feeder building is highlighted.
+    expect(screen.getByTestId('minimap-sector-water').innerHTML).toContain('energy-cyan');
+  });
+
+  it('opens on the whole terrain when the spot is out of the village view', () => {
+    setup({ x: 80, z: -60 });
+    expect(screen.getByRole('button', { name: 'Village' })).toBeTruthy();
   });
 });

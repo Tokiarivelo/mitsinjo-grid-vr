@@ -37,7 +37,9 @@ the engine catalog gives power (never the AI). Sidebar + MobileNav entry « Vill
   Free placement (PV-P, PI): position = « Ring around the building » by default or « Place on the map » (`PlaceMinimap`,
   components.md); feeder line = the sector select, preset to the nearest building (« Nearest: … », « Auto » to follow again).
   Grid connection (PI-T8): choice between « On feeder branch (recommended) » and « Direct to Dispatch EMS » with D1 load reminder.
-  The minimap displays the central Dispatch EMS shelter, placed object keep-out clearings, and catenary derivation lines.
+  The minimap is drawn like the /simulation map (VS-T39): roads, paths, pond, lake, paddy, named buildings, the central
+  Dispatch EMS shelter, a north arrow, placed object keep-out clearings and catenary derivation lines; « Village » /
+  « Whole terrain » zoom. The VR lab's village table uses the same canvas drawing (`drawVillageMap`, feeder in green).
 - Inserted 3D models & derivations (PI-T1..T10, live preview and /simulation):
   3D models merged into a single BufferGeometry (≤ +2 draw calls); each placed object rests in an automatic tree clearing (PI-T4)
   with a draped red laterite yard (`GROUND_HEX.laterite`, radius ≥ 2, irregular border via `fbm2d`, draped at `terrainHeight + 0.03`, faces up, PI-T5)

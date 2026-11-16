@@ -177,7 +177,8 @@ describe('ApplianceInsert (PV-T12)', () => {
       right: 230,
       bottom: 230,
     } as DOMRect);
-    // Top-left (−95, −95) clamps onto the disc near the school; the feeder follows.
+    // Whole terrain view; top-left (−95, −95) clamps onto the disc near the school; the feeder follows.
+    fireEvent.click(screen.getByRole('button', { name: 'Whole terrain' }));
     fireEvent.click(map, { clientX: 20, clientY: 20 });
     expect(screen.getByText('Placed: -75.0, -75.0')).toBeTruthy();
     expect(screen.getByLabelText('Feeder line')).toHaveValue('school');
