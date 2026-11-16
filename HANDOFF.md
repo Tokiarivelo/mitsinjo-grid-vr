@@ -25,16 +25,7 @@
   village (dark at night only: `duskDarkness`, `placedDim`, `drawnTint`), sized from proportions (`sceneScale`,
   `ARCHETYPE_HEIGHT_M`, stored scale dropped). Immersion tags all translated (`villageTags`). `make placed-shot`.
 
-- **VS-T34:** dispatcher label / shelter in /simulation VR → mixing desk (`sim-xr-dispatch-panel.tsx`): battery
-  master (reserve, « Start the battery & dispatch » = first run), sector faders (kW cap, Cut / On), one fader per
-  appliance wired to the dispatcher (`ems`, auto-listed); laser drag (`utils/xr-drag.ts` in `xr-hands.ts`);
-  patches in `utils/dispatch-mixer.ts`; shared `ui/sim-xr-holo.tsx`. Probe: mixer steps in `make vr-sim-probe`.
-- **VS-T33:** `?immersion=vr` on /simulation and /village, `&lab=2d|3d` at the studio desks
-  (`microgrid-3d/utils/immersion-query.ts`, `hooks/use-immersion-query.ts`; reload reopens); « Go to the
-  simulation » → `/simulation?immersion=vr`. Sim VR rig scaled 0.5 in the half-scale village (eyes ≈ 0.8 m), 1:1
-  in rooms (`utils/xr-walk.ts`); ← / → turn the head from the keyboard while walking (touchpad off while typing).
-- **VS-T29–T32:** readable panels and icons, voice meter, controllers / hands / lasers, desks turntable (2D ↔ 3D
-  lab), menu « Close », miniature card — details in `docs/tasks/VR-village-spatial-shoot.md`.
+- **VS-T29–T35:** see `docs/tasks/VR-village-spatial-shoot.md`.
 
 ## Decisions
 
