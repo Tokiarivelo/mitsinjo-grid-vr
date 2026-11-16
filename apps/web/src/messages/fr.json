@@ -387,6 +387,12 @@
         "running": "Dispatch en cours",
         "more": "+{count} autres sur le panneau 2D"
       },
+      "vrMap": {
+        "mini": "Carte",
+        "title": "Carte du village",
+        "hint": "Visez un bâtiment ou le dispatcher, gâchette : ses commandes s’ouvrent",
+        "you": "Vous"
+      },
       "villageTags": {
         "standby": "En veille",
         "solar": "{kw} · Énergie propre",

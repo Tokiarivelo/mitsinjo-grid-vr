@@ -137,6 +137,36 @@ try {
   }
   check('the immersive session starts on /simulation', active);
   await rc('set_input_mode', { mode: 'controller' });
+
+  // --- Map (VS-T37): mini map low right → big hologram map → a pin opens its controls ---------
+  const pressNamed = async (name) => {
+    const p = await sim((s, n) => s.worldPos(n), name);
+    if (!p) return false;
+    await aimSelect(p);
+    return true;
+  };
+  await frames(10);
+  check('the mini map shows in view', (await sim((s) => s.shown('sim-xr-minimap'))) > 0);
+  await shot('sim-0-minimap');
+  await pressNamed('sim-xr-minimap-open');
+  check('a trigger on the mini map opens the big map', (await state()).map === true);
+  await shot('sim-0b-bigmap');
+  await pressNamed('sim-xr-map-pin-market');
+  const afterPin = await state();
+  check(
+    'a building pin opens its power panel and closes the map',
+    afterPin.panel === 'market' && !afterPin.map
+  );
+  await shot('sim-0c-map-to-panel');
+  await pressNamed('sim-xr-minimap-open');
+  await pressNamed('sim-xr-map-pin-dispatcher');
+  check('the dispatcher pin opens the mixing desk', (await state()).mixer === true);
+  await tapButton('controller-right', 4);
+  if (process.env.VR_SIM_ONLY_MAP) {
+    if (errors.length) console.log(errors.slice(0, 10).join('\n'));
+    await browser.close();
+    process.exit(results.every((r) => r.ok) ? 0 : 1);
+  }
   check(
     'the walk grid is built from the scene',
     await waitFor(() => sim((s) => s.gridReady()), 30000)

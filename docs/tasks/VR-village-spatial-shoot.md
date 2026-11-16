@@ -365,3 +365,10 @@ Style : hologramme futuriste (cyan / ambre, lignes de balayage, coins lumineux, 
 - [x] /simulation VR : le clic d'un laser raycastait toute la scène en un appel ; un objet qui lève une erreur (câble `Line2`…) vidait le résultat → « Fermer ✕ » et le laser gauche sans effet. `pickUsable` (`xr-hands.ts`) teste chaque objet utilisable à part, pour le survol, le clic et le glisser.
 - [x] Flèches ← / → du clavier inversées (ressenti dans l'émulateur) : sens échangé dans `readXrKeys`.
 - [ ] **Done when :** vu au casque (V463–V466, S151–S153).
+
+### VS-T37 : Carte du village dans la VR de /simulation (mini-carte style GTA + carte hologramme)
+
+- [x] Mini-carte en bas à droite de la vue, cap en haut, centrée sur le marcheur ; secteurs (statut moteur) et dispatcher ; suivi paresseux, jamais collée à la tête.
+- [x] Gâchette dessus → grande carte holographique devant soi (nord en haut, « Vous » + direction) ; un bâtiment ouvre son panneau de puissance, le dispatcher sa table de mixage ; « Fermer ✕ » / B/Y.
+- [x] `utils/sim-xr-minimap.ts` (testé), `useSimXr` (`map`, `openMap`, `closeMap`, testé), textes `features.simulation.vrMap` (EN/FR/MG), `make vr-sim-map-probe` (4 étapes passent).
+- [ ] **Done when :** vu au casque (S154–S157).

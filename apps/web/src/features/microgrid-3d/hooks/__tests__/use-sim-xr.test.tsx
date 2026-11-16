@@ -143,4 +143,24 @@ describe('useSimXr (VSIM-T1–T4)', () => {
       expect(approveChange).toHaveBeenCalledTimes(1);
     });
   });
+
+  it('the map opens alone, B/Y closes it, a pin opens its controls and closes it (VS-T37)', () => {
+    const { result } = setup();
+    act(() => result.current.selectSector('market'));
+    act(() => result.current.openMap());
+    expect(result.current.map).toBe(true);
+    expect(result.current.panel).toBeNull();
+    act(() => result.current.onXrAction({ type: 'back' }));
+    expect(result.current.map).toBe(false);
+
+    act(() => result.current.openMap());
+    act(() => result.current.selectSector('school'));
+    expect(result.current.map).toBe(false);
+    expect(result.current.panel).toBe('school');
+
+    act(() => result.current.openMap());
+    act(() => result.current.openMixer());
+    expect(result.current.map).toBe(false);
+    expect(result.current.mixer).toBe(true);
+  });
 });

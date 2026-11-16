@@ -58,6 +58,8 @@ export function useSimXr({
   const [panel, setPanelState] = useState<SectorId | null>(null);
   /** The dispatcher's mixing desk is open (VS-T34); one panel at a time. */
   const [mixer, setMixer] = useState(false);
+  /** The big hologram map is open (VS-T37); the mini map stays in view otherwise. */
+  const [map, setMap] = useState(false);
   const [inside, setInside] = useState<SectorId | null>(null);
   const [place, setPlace] = useState<SimXrPlace | null>(null);
   const [labels, setLabels] = useState(true);
@@ -72,6 +74,7 @@ export function useSimXr({
     setWasXr(xrActive);
     setPanelState(null);
     setMixer(false);
+    setMap(false);
     setInside(null);
     setPlace(null);
     setRefused(null);
@@ -79,7 +82,10 @@ export function useSimXr({
   }
   const setPanel = useCallback((sector: SectorId | null) => {
     setPanelState(sector);
-    if (sector) setMixer(false);
+    if (sector) {
+      setMixer(false);
+      setMap(false);
+    }
   }, []);
   useEffect(() => {
     if (!xrActive) return;
@@ -110,9 +116,18 @@ export function useSimXr({
   /** Dispatcher label or unit clicked in VR: its mixing desk (VS-T34). */
   const openMixer = useCallback(() => {
     setPanelState(null);
+    setMap(false);
     setMixer(true);
   }, []);
   const closeMixer = useCallback(() => setMixer(false), []);
+
+  /** Mini map tapped: the big hologram map, alone in front (VS-T37). */
+  const openMap = useCallback(() => {
+    setPanelState(null);
+    setMixer(false);
+    setMap(true);
+  }, []);
+  const closeMap = useCallback(() => setMap(false), []);
 
   const goToDoor = useCallback(
     (sector: SectorId) => {
@@ -209,7 +224,7 @@ export function useSimXr({
   }, [undoLastChange]);
 
   /**
-   * A/X: labels · B/Y: close the panel, else leave the room · stick click: legends · stick held:
+   * A/X: labels · B/Y: close the map or the panel, else leave the room · stick click: legends · stick held:
    * hands & controllers (VS-T30).
    */
   const onXrAction = useCallback(
@@ -218,15 +233,19 @@ export function useSimXr({
       else if (a.type === 'help') setHelp((v) => !v);
       else if (a.type === 'inputs') useXrInputsShown.getState().toggle();
       else if (a.type === 'back') {
-        if (mixer) setMixer(false);
+        if (map) setMap(false);
+        else if (mixer) setMixer(false);
         else if (panel) setPanel(null);
         else if (inside) exit();
       }
     },
-    [mixer, panel, inside, exit, setPanel]
+    [map, mixer, panel, inside, exit, setPanel]
   );
 
   return {
+    map,
+    openMap,
+    closeMap,
     panel,
     setPanel,
     mixer,

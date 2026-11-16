@@ -118,6 +118,10 @@ vr-handoff-probe: ## /village VR lab → « Go to the simulation » lands on /si
 	$(need_ws)
 	@VR_PROBE_HANDOFF=1 $(PNPM) --filter $(WEB) exec node scripts/vr-village-probe.mjs $(URL) $(CURDIR)/test-results/vr-handoff
 
+vr-sim-map-probe: ## /simulation VR map only: mini map → big hologram map → a pin opens its controls (dev server must run)
+	$(need_ws)
+	@VR_SIM_ONLY_MAP=1 $(PNPM) --filter $(WEB) exec node scripts/vr-sim-probe.mjs $(URL) $(CURDIR)/test-results/vr-sim-map
+
 vr-sim-probe: ## /simulation VR check in the IWER emulator: /village controls, walls stop you, label → power panel (cut / restore), room inside, clinic never cut (dev server must run)
 	$(need_ws)
 	@$(PNPM) --filter $(WEB) exec node scripts/vr-sim-probe.mjs $(URL) $(CURDIR)/test-results/vr-sim-probe

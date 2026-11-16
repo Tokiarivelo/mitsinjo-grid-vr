@@ -17,6 +17,8 @@ export interface SimXrProbeState {
   refused: string | null;
   /** The dispatcher's mixing desk is open (VS-T34). */
   mixer: boolean;
+  /** The big hologram map is open (VS-T37). */
+  map: boolean;
 }
 
 const _v = new THREE.Vector3();

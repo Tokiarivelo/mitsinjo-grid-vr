@@ -387,6 +387,12 @@
         "running": "Dispatching",
         "more": "+{count} more on the 2D panel"
       },
+      "vrMap": {
+        "mini": "Map",
+        "title": "Village map",
+        "hint": "Aim at a building or the dispatcher, trigger: its controls open",
+        "you": "You"
+      },
       "villageTags": {
         "standby": "Standby",
         "solar": "{kw} · Clean energy",

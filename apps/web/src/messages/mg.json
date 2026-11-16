@@ -387,6 +387,12 @@
         "running": "Mizara ankehitriny",
         "more": "+{count} hafa ao amin'ny tabilao 2D"
       },
+      "vrMap": {
+        "mini": "Sarintany",
+        "title": "Sarintanin’ny tanàna",
+        "hint": "Kendreo ny trano na ny dispatcher, tsindrio : misokatra ny fanaraha-maso azy",
+        "you": "Ianao"
+      },
       "villageTags": {
         "standby": "Miandry",
         "solar": "{kw} · Angovo madio",

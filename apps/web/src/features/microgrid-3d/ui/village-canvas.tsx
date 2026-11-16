@@ -74,6 +74,7 @@ import { ImmersionLabels } from './immersion-labels';
 import { SimXrSectorPanel } from './sim-xr-sector-panel';
 import { SimXrInterior } from './sim-xr-interior';
 import { SimXrDispatchPanel } from './sim-xr-dispatch-panel';
+import { SimXrMinimap } from './sim-xr-minimap';
 import { dispatchMixerStrips } from '../utils/dispatch-mixer';
 import { SimXrDevProbe } from './sim-xr-dev-probe';
 import { useSimXr } from '../hooks/use-sim-xr';
@@ -783,6 +784,16 @@ export function VillageCanvas({
               onClose={simXr.closeMixer}
             />
           )}
+          {/* GTA-like map: mini low right, big hologram on a tap; a pin opens its controls (VS-T37) */}
+          {xrActive && (
+            <SimXrMinimap
+              buildings={model.buildings}
+              open={simXr.map}
+              onOpen={simXr.openMap}
+              onClose={simXr.closeMap}
+              onSelect={(id) => (id === 'dispatcher' ? simXr.openMixer() : simXr.selectSector(id))}
+            />
+          )}
           {xrActive && process.env.NODE_ENV !== 'production' && (
             <SimXrDevProbe
               state={{
@@ -792,6 +803,7 @@ export function VillageCanvas({
                 help: simXr.help,
                 refused: simXr.refused,
                 mixer: simXr.mixer,
+                map: simXr.map,
               }}
               walkGridRef={simXr.walkGridRef}
             />
