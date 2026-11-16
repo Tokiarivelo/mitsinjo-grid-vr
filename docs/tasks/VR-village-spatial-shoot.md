@@ -281,3 +281,20 @@ Style : hologramme futuriste (cyan / ambre, lignes de balayage, coins lumineux, 
 - [x] Bouton « Quitter le studio » / « Revenir au studio » ; l'objet du labo est gardé tant qu'on n'en extrait pas un autre. (`away` dans `utils/xr-extract.ts`, `FollowGroup`).
 - [x] Calques dans le labo immersif, liste défilable verticalement (comme le carrousel) : axe `y` des panneaux (`holo-panel.ts`), `clampScroll` / `rowShown` (`utils/xr-lab.ts`).
 - [x] Annuler / réessayer l'analyse : web (`DetectionCanvas`, statut `cancelled`) et immersion (bouton flottant, B/Y) ; bouton Menu ouvert au regard + gâchette dans l'émulateur.
+
+### VS-T27 : Chat IA par vue 2D dans le studio, clavier virtuel, voix, maki-bot
+
+- [x] Chat à gauche du carrousel des vues 2D : historique par vue (principale + faces) de l'objet, bulles opérateur / bot IA distinctes, libellé « MODIF. IA » (`holo-face-chat.tsx`, `holo-chat-texture.ts`).
+- [x] « Envoyer » redessine la vue en focus avec la demande (même appel que le panneau 2D web : détails + redessiner) ; le bot répond « en cours » puis « fait » / « échec » d'après l'état du dessin (`utils/face-chat.ts`).
+- [x] Clavier holo (« Clavier » ou tap sur le champ) : un plan, touche par UV, AZERTY en français, Maj / Effacer / Vider, touche survolée surlignée (`utils/xr-keyboard.ts`).
+- [x] Voix : Web Speech API (`use-voice-input.ts`) ; sans elle (Quest Browser), clavier système WebXR et sa dictée (`use-system-keyboard.ts`) ; sinon bouton désactivé avec message.
+- [x] Tête de maki robot en haut à droite : suit le curseur, cligne des yeux, antenne en queue annelée qui pulse pendant un dessin (`lemur-bot.tsx`, `utils/lemur-bot.ts`).
+- [ ] **Done when :** `make vr-probe` vert (chat : clavier, envoi, réponse du bot) ; joué au casque (dictée du clavier système).
+
+### VS-T28 : Hologramme du village dans le labo, placer l'objet, aller à la simulation
+
+- [x] Table hologramme du cœur du village à droite du labo (chemins, étang, bâtiments, objets déjà placés), inclinée vers l'utilisateur (`holo-village-table.tsx`, `utils/village-holo.ts`).
+- [x] Viser + gâchette pose l'objet (placement de la page : terrain, hors bâtiments et chemins, départ le plus proche) ; câble vers son départ ; curseur sur la table.
+- [x] « Insérer dans la simulation » : même appel que le panneau web, extrait dans `hooks/use-appliance-insert.ts` (ligne + modèle 3D édité dans le labo, moteur relancé) ; « Mettre à jour » ensuite.
+- [x] « Aller à la simulation » (une fois inséré) : termine la session XR, ouvre `/simulation`.
+- [ ] **Done when :** `make vr-probe` vert (table, pose, insertion) ; joué au casque.

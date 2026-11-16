@@ -22,6 +22,15 @@ export const HOLO = {
   pedestal: '#0b1a2b',
 } as const;
 
+/** Chat maki bot (VS-T27): brushed-grey shell, white muzzle, black mask, amber eyes. */
+export const HOLO_BOT = {
+  shell: '#b9c2cc',
+  muzzle: '#f2f4f6',
+  mask: '#14181d',
+  eye: HOLO.amber,
+  pupil: '#090a0c',
+} as const;
+
 const FRAME_VERTEX = /* glsl */ `
 varying vec2 vUv;
 void main() {

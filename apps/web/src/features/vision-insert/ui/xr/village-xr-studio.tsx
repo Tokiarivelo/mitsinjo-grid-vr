@@ -387,10 +387,13 @@ export const VillageXRStudio = memo(function VillageXRStudio({
     }
     if (!pending.sawScan) return;
     pendingShotRef.current = null;
+    // With the extraction studio, the shot only started the analysis: « Extract to 3D? » opens
+    // only when the operator then shoots an outlined object (never by itself after a scan).
+    if (extract) return;
     const hit = pickTargetAtUv(targets, pending.u, pending.v);
     if (hit) handleShootTarget(hit.id);
     else notifyEvent(t('vrHudEventNoObject'));
-  }, [isScanning, targets, handleShootTarget, notifyEvent, t]);
+  }, [isScanning, targets, handleShootTarget, notifyEvent, t, extract]);
 
   const miniatures = useMemo<Array<MiniatureHandle & { target: SpatialTarget }>>(() => {
     const byId = new Map(targets.map((tg) => [tg.id, tg]));
@@ -603,6 +606,9 @@ export const VillageXRStudio = memo(function VillageXRStudio({
           slides: extract.slides.map((s) => `${s.id}:${s.status}${s.validated ? ':ok' : ''}`),
           canBuild: extract.canBuild,
           ready: extract.ready,
+          chats: Object.fromEntries(
+            extract.slides.map((s) => [s.id, extract.chatOf(s.id).map((m) => m.kind)])
+          ),
           anchor,
         }
       : null;
@@ -783,6 +789,9 @@ export const VillageXRStudio = memo(function VillageXRStudio({
               onToggleValidated={extract.toggleValidated}
               onBuild={extract.build}
               onCancel={extract.cancel}
+              chatOf={extract.chatOf}
+              onSendChat={extract.sendChat}
+              aim={aimOut}
             />
           )}
           {extract && anchor && (stage === 'views' || stage === 'build') && (
@@ -817,6 +826,8 @@ export const VillageXRStudio = memo(function VillageXRStudio({
               onEditPieces={extract.editPieces}
               onExit={leaveLab}
               anchor={anchor}
+              photo={photo}
+              aim={aimOut}
             />
           )}
         </StudioWalk>

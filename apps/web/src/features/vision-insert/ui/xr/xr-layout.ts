@@ -126,3 +126,25 @@ export function slidePose(rel: number): { position: Vec3; yaw: number; focus: nu
  */
 export const STUDIO_COLUMN_POSITION: Vec3 = [1.25, 0, 0.55];
 export const STUDIO_COLUMN_YAW = 1.1;
+
+/**
+ * Chat of the 2D views (VS-T27): mirror of the generation column, on the left past the carousel's
+ * left neighbour, turned toward the viewer (~1.4 m away: ray range). Lifted 8 cm so its holo
+ * keyboard, tilted up below it, stays above ~30° under the line of sight (Meta: no neck strain).
+ */
+export const STUDIO_CHAT_POSITION: Vec3 = [-1.25, 0.08, 0.55];
+export const STUDIO_CHAT_YAW = 1.1;
+/** Chat panel width and history height (m); keys ≈ 6.8 cm wide (≥ 3° hit target at 1.4 m). */
+export const CHAT_PANEL = { width: 0.68, historyHeight: 0.4 } as const;
+
+/**
+ * Village hologram of the lab (VS-T28): a round table of the village core on the right, past the
+ * lab tools, turned toward the viewer (~1.3 m) and tilted 35° so its far edge rises toward the eyes.
+ */
+export const VILLAGE_TABLE = {
+  position: [1.18, -0.12, 0.62] as Vec3,
+  yaw: -1.05,
+  tilt: 0.6,
+  /** Table radius (m): the 30-unit village core, a building ≈ 4 cm. */
+  radius: 0.32,
+} as const;

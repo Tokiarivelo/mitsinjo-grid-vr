@@ -11,6 +11,7 @@ import {
   type ViewSlide,
   type XrExtractStage,
 } from '../utils/xr-extract';
+import { chatOf, FACE_CHAT_EMPTY, faceChatReducer, type ChatMessage } from '../utils/face-chat';
 import { useFacade2d, validatedFacade } from './use-facade-2d';
 import { useFacadeFaces, validatedFaces } from './use-facade-faces';
 import type { ObjectShapeState, ShapeRequest } from './use-object-shape';
@@ -50,6 +51,10 @@ export interface XrExtract {
   canBuild: boolean;
   redraw: (slide: ViewSlide['id']) => void;
   toggleValidated: (slide: ViewSlide['id']) => void;
+  /** Chat history of one view of this object (VS-T27). */
+  chatOf: (slide: ViewSlide['id'] | undefined) => ChatMessage[];
+  /** Asks the AI to change one view: redraws it with `text` as its details, logged in its chat. */
+  sendChat: (slide: ViewSlide['id'], text: string) => void;
   /** Model of the object being extracted is built. */
   ready: boolean;
   shape: UseXrExtractOptions['shape'];
@@ -155,11 +160,32 @@ export function useXrExtract({
 
   const { retry } = facade;
   const redraw = useCallback(
-    (slide: ViewSlide['id']) => {
-      if (slide === 'main') retry();
-      else void faces.generate(slide as FaceName);
+    (slide: ViewSlide['id'], details?: string) => {
+      const extra = details === undefined ? [] : ([details] as const);
+      if (slide === 'main') retry(...extra);
+      else void faces.generate(slide as FaceName, ...extra);
     },
     [retry, faces]
+  );
+
+  // Per-view chat (VS-T27): a request redraws that view with it, the bot line follows the drawing.
+  const [chat, chatDispatch] = useReducer(faceChatReducer, FACE_CHAT_EMPTY);
+  const chatId = state.id;
+  useEffect(() => {
+    if (chatId) chatDispatch({ type: 'settle', objectId: chatId, slides });
+  }, [chatId, slides]);
+  const busy = slides.some((s) => s.status === 'generating');
+  const sendChat = useCallback(
+    (slide: ViewSlide['id'], text: string) => {
+      if (!chatId || busy || !text.trim()) return;
+      chatDispatch({ type: 'send', objectId: chatId, slide, text });
+      redraw(slide, text.trim());
+    },
+    [chatId, busy, redraw]
+  );
+  const historyOf = useCallback(
+    (slide: ViewSlide['id'] | undefined) => chatOf(chat, chatId, slide),
+    [chat, chatId]
   );
   const toggleValidated = useCallback(
     (slide: ViewSlide['id']) => {
@@ -186,6 +212,8 @@ export function useXrExtract({
     canBuild: buildable,
     redraw,
     toggleValidated,
+    chatOf: historyOf,
+    sendChat,
     ready,
     shape,
     editPieces,

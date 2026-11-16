@@ -254,6 +254,8 @@ describe('VillageXRStudio — 3D extraction (VS-T18–T22)', () => {
     canBuild: false,
     redraw: vi.fn(),
     toggleValidated: vi.fn(),
+    chatOf: () => [],
+    sendChat: vi.fn(),
     ready: false,
     shape: { status: 'idle' },
     editPieces: vi.fn(),
@@ -273,6 +275,20 @@ describe('VillageXRStudio — 3D extraction (VS-T18–T22)', () => {
     act(() => blaster.props!.onShootTarget('fridge'));
     expect(idle.ask).toHaveBeenCalledWith('fridge');
     expect(blaster.props!.miniatures).toEqual([]);
+  });
+
+  it('a shot that starts the analysis never opens « Extract to 3D? » by itself (regression)', () => {
+    const idle = extractAt('idle', null);
+    const { rerender, view, onTriggerScan, onSelectAppliance } = setup(false, idle);
+    act(() => blaster.props!.onShootScreen!(0.2, 0.5)); // on the fridge, nothing detected yet
+    expect(onTriggerScan).toHaveBeenCalledTimes(1);
+    rerender(view([], true, idle)); // scanning
+    rerender(view([fridge], false, idle)); // outlines arrived
+    expect(idle.ask).not.toHaveBeenCalled();
+    expect(onSelectAppliance).not.toHaveBeenCalled();
+    // The operator then shoots the outlined object: now it asks.
+    act(() => blaster.props!.onShootTarget('fridge'));
+    expect(idle.ask).toHaveBeenCalledWith('fridge');
   });
 
   it('opens the dialog, then nothing behind it takes a shot', () => {

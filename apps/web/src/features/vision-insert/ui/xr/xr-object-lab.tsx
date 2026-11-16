@@ -27,6 +27,8 @@ import { HOLO } from './holo-style';
 import { AnchoredPanel, usePanelAnchor } from './holo-extract-panels';
 import { PEDESTAL_DROP, StudioPedestal } from './xr-extract-studio';
 import type { PanelAnchor } from './xr-layout';
+import { HoloVillageTable } from './holo-village-table';
+import type { AimReadout } from './xr-blaster-controller';
 
 export const LAB_IDS = {
   model: 'holo:lab-model',
@@ -64,6 +66,10 @@ export interface XrObjectLabProps {
   onExit: () => void;
   /** Where the studio opened (the model lands where its hologram stood); else ahead of the gaze. */
   anchor?: PanelAnchor | null;
+  /** `photoKey` of the scanned photo: with it, the village hologram places the object (VS-T28). */
+  photo?: string;
+  /** Live pointer aim (the village table's cursor). */
+  aim?: AimReadout;
 }
 
 /**
@@ -83,6 +89,8 @@ export const XrObjectLab = memo(function XrObjectLab({
   onEditPieces,
   onExit,
   anchor: studioAnchor,
+  photo,
+  aim,
 }: XrObjectLabProps) {
   const t = useTranslations('features.visionInsert');
   const pieceLabel = usePieceLabel();
@@ -405,6 +413,19 @@ export const XrObjectLab = memo(function XrObjectLab({
             onSelect={onExit}
           />
         </group>
+
+        {/* Village hologram (VS-T28): place the edited model, add it, go to the simulation */}
+        {photo && (
+          <HoloVillageTable
+            registry={registry}
+            hoveredId={hoveredId}
+            detection={detection}
+            name={label}
+            photo={photo}
+            recipe={shown.mode === 'recipe' ? (shown.recipe ?? null) : null}
+            {...(aim ? { aim } : {})}
+          />
+        )}
       </AnchoredPanel>
     </group>
   );

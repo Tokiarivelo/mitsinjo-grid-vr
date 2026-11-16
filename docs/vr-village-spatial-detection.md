@@ -250,6 +250,24 @@ l'émulateur : [`vr-iwer-tools.md`](vr-iwer-tools.md).
   un dialogue.
 - **Extraction** : tir sur un objet → « Extraire en 3D ? » → vues 2D en carrousel → construction → labo 3D
   (VS-T19 → T22, `docs/tasks/VR-village-spatial-shoot.md`).
+- **Chat IA des vues 2D** (VS-T27, `holo-face-chat.tsx`) : à gauche du carrousel (miroir de la colonne de
+  génération, ~1,4 m), l'historique de la vue en focus (opérateur cyan, bot IA violet, libellé « MODIF. IA »),
+  un champ écrit au clavier holo (`utils/xr-keyboard.ts` : un seul plan, touche lue sur l'UV du rayon, AZERTY
+  en français, touche survolée surlignée sans redessin) ou à la voix (`use-voice-input.ts`, Web Speech API ;
+  sans elle, Quest Browser : clavier système WebXR et sa dictée, `use-system-keyboard.ts`), puis « Envoyer ».
+  Envoyer = redessiner cette vue avec la demande comme détails (même appel que le panneau 2D web) ; le bot
+  répond par l'état du dessin (`utils/face-chat.ts`, réponse seulement après avoir vu la vue se redessiner),
+  jamais un texte inventé. Une seule demande à la fois (aucune pendant qu'une vue se dessine). Tête de maki
+  robot en haut à droite (`lemur-bot.tsx`, ~11 draw calls) : suit le curseur du laser (yeux puis tête,
+  bornés), cligne des yeux sur un rythme fixe (`utils/lemur-bot.ts`), antenne en queue annelée ambre qui
+  pulse pendant un dessin.
+- **Hologramme du village dans le labo** (VS-T28, `holo-village-table.tsx`) : à droite des outils, une table
+  ronde du cœur du village (30 unités, `utils/village-holo.ts`) inclinée vers l'utilisateur : chemins, étang,
+  bâtiments (un `InstancedMesh`), objets déjà placés (points ambre). Viser la table + gâchette pose l'objet
+  (point lu sur l'UV du disque, puis le placement de la page : sur le terrain, hors bâtiments / chemins,
+  départ le plus proche) avec son câble de dérivation (`tapPoint`) ; « Insérer dans la simulation » = le même
+  appel que le panneau web (`hooks/use-appliance-insert.ts` : ligne + modèle 3D édité, moteur relancé) ;
+  « Aller à la simulation » termine la session XR puis ouvre `/simulation`.
 
 ## 5. Architecture des fichiers & Modules
 
@@ -272,6 +290,9 @@ l'émulateur : [`vr-iwer-tools.md`](vr-iwer-tools.md).
 | `xr-rig.ts`                     | Pivot par paliers autour de la tête (espace de référence décalé).                                  | [x]  |
 | `xr-aim-hint.ts`                | Texte « Gâchette · Extraire … » selon ce qui est visé et l'entrée.                                 | [x]  |
 | `xr-control-hints.tsx`          | Bulle au bout du laser + cartes légende sur manettes / mains.                                      | [x]  |
+| `holo-face-chat.tsx`            | Chat IA de la vue 2D en focus : historique, clavier holo, voix, « Envoyer », tête de maki-bot.     | [x]  |
+| `holo-village-table.tsx`        | Table hologramme du village dans le labo : poser l'objet, l'insérer, aller à la simulation.        | [x]  |
+| `lemur-bot.tsx`                 | Tête de maki robot : suit le curseur, cligne des yeux, antenne qui pulse pendant un dessin.        | [x]  |
 | `holo-panel.ts`                 | Registre des panneaux holographiques : survol, tap, glisser (seuil 4°).                            | [x]  |
 | `xr-blaster-controller.tsx`     | Rayon laser continu, réticule d'impact, raycast d'intersections et décharges de tir à la gâchette. | [x]  |
 | `xr-audio-fx.ts`                | Synthétiseur procédural Web Audio API (tir, impact, radar, connexion/déconnexion réseau).          | [x]  |

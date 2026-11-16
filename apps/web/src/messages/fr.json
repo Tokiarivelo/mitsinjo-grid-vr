@@ -1536,6 +1536,35 @@
         "build": "Valider et construire la 3D",
         "imageError": "Dessinée, mais non affichable en VR"
       },
+      "vrChat": {
+        "title": "Chat IA · {view}",
+        "aiLabel": "MODIF. IA · redessine cette vue, vérifiez-la avant de valider",
+        "empty": "Demandez à l'IA de modifier la vue {view} : tapez avec « Clavier » ou parlez avec « Voix », puis « Envoyer ».",
+        "placeholder": "Décrivez la modification…",
+        "listening": "J'écoute… parlez",
+        "working": "Je redessine la vue {view} avec votre demande…",
+        "done": "C'est fait : le nouveau dessin est sur la diapositive. Validez-le ou demandez une autre modification.",
+        "failed": "Le dessin a échoué. Renvoyez la demande.",
+        "keyboard": "Clavier",
+        "voice": "Voix",
+        "stop": "Stop",
+        "send": "Envoyer",
+        "wait": "Attendez la fin du dessin",
+        "voiceUnavailable": "Voix indisponible dans ce navigateur : utilisez « Clavier »",
+        "voiceError": "Voix non entendue (micro autorisé ?) : réessayez ou utilisez « Clavier »",
+        "keyShift": "⇧ Maj",
+        "keySpace": "espace",
+        "keyBack": "⌫ Effacer",
+        "keyClear": "Vider"
+      },
+      "vrVillage": {
+        "title": "Placer « {name} » dans le village",
+        "hint": "Visez le village et appuyez pour le poser · câble vers son départ",
+        "placed": "Posé en {x}, {z} · départ : {sector}",
+        "notPlaced": "Pas encore posé : visez la table du village et appuyez",
+        "inSimulation": "Dans la simulation : stratégies recalculées",
+        "goSimulation": "Aller à la simulation"
+      },
       "vrLab": {
         "title": "Labo 3D · {name}",
         "hint": "Glissez le modèle pour le tourner · tirez sur une pièce pour la choisir",

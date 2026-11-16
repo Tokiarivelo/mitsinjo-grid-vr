@@ -1,0 +1,113 @@
+import { act, fireEvent, render, screen } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type * as THREE from 'three';
+import { I18nProvider } from '@/lib/i18n';
+import en from '@/messages/en.json';
+import type { ApplianceDetection } from '@/lib/vision';
+import type { ObjectRecipe } from '@/lib/object-shape';
+import { resetSimulationStore, usePlacedModelsStore, useSimulationStore } from '@/stores';
+import type { HoloPanelHandlers } from '../holo-panel';
+
+const nav = vi.hoisted(() => ({ push: vi.fn(), end: vi.fn(() => Promise.resolve()) }));
+const panels = vi.hoisted(() => new Map<string, HoloPanelHandlers>());
+
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: nav.push }) }));
+vi.mock('@react-three/fiber', () => ({
+  useThree: (sel: (s: unknown) => unknown) =>
+    sel({ gl: { xr: { getSession: () => ({ end: nav.end }) } } }),
+  useFrame: vi.fn(),
+}));
+vi.mock('../holo-panel', () => ({
+  useHoloPanel: (registry: unknown, id: string, handlers: HoloPanelHandlers) => {
+    if (registry) panels.set(id, handlers);
+    return () => {};
+  },
+}));
+vi.mock('../holo-ui', () => ({
+  HoloFrame: () => null,
+  HoloText: ({ spec }: { spec: { lines: { text: string }[] } }) => (
+    <p>{spec.lines.map((l) => l.text).join(' | ')}</p>
+  ),
+  HoloButton: (p: { label: string; disabled?: boolean; onSelect?: () => void }) => (
+    <button type="button" disabled={p.disabled} onClick={p.onSelect}>
+      {p.label}
+    </button>
+  ),
+}));
+
+import { HoloVillageTable } from '../holo-village-table';
+
+const v = en.features.visionInsert;
+const pump: ApplianceDetection = {
+  id: 'det-1',
+  label: 'Water pump',
+  category: 'water_pump',
+  box: { x: 0.1, y: 0.1, w: 0.2, h: 0.3 },
+};
+const recipe: ObjectRecipe = {
+  proportions: { w: 1, h: 0.6, d: 0.5 },
+  parts: [{ shape: 'box', at: [0, 0, 0], size: [1, 1, 1], color: '#336699' }],
+};
+
+const setup = () =>
+  render(
+    <I18nProvider>
+      <HoloVillageTable
+        registry={{ objects: [], add: vi.fn(), remove: vi.fn() }}
+        hoveredId={null}
+        detection={pump}
+        name="Water pump"
+        photo="p1"
+        recipe={recipe}
+      />
+    </I18nProvider>
+  );
+const tapTable = (u: number, w: number) =>
+  act(() =>
+    panels.get('holo:village-map')!.onSelect!({ uv: { x: u, y: w } } as THREE.Intersection)
+  );
+
+describe('HoloVillageTable (VS-T28)', () => {
+  beforeEach(() => {
+    panels.clear();
+    nav.push.mockClear();
+    nav.end.mockClear();
+    resetSimulationStore();
+    usePlacedModelsStore.setState({ models: {} });
+  });
+
+  it('asks to place first: « Add » and « Go to the simulation » wait', () => {
+    setup();
+    expect(screen.getByText(/Place « Water pump » in the village/)).toBeTruthy();
+    expect(screen.getByText(new RegExp(v.vrVillage.notPlaced))).toBeTruthy();
+    expect(screen.getByRole('button', { name: v.insertButton })).toHaveProperty('disabled', true);
+    expect(screen.getByRole('button', { name: v.vrVillage.goSimulation })).toHaveProperty(
+      'disabled',
+      true
+    );
+  });
+
+  it('a tap on the table places it; « Add » puts the line and the edited model in the village', () => {
+    setup();
+    tapTable(0.75, 0.3); // east, south of the centre
+    expect(screen.getByText(/Placed at .* · feeder:/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: v.insertButton }));
+    const line = useSimulationStore
+      .getState()
+      .input.appliances?.find((a) => a.id.includes('det-1'));
+    expect(line?.position?.x).toBeGreaterThan(0);
+    expect(line?.position?.z).toBeGreaterThan(0);
+    expect(Object.values(usePlacedModelsStore.getState().models)[0]?.recipe).toEqual(recipe);
+    expect(screen.getByText(new RegExp(v.vrVillage.inSimulation))).toBeTruthy();
+    expect(screen.getByRole('button', { name: v.insertUpdate })).toBeTruthy();
+  });
+
+  it('« Go to the simulation » ends the headset session and opens /simulation', () => {
+    setup();
+    tapTable(0.6, 0.6);
+    fireEvent.click(screen.getByRole('button', { name: v.insertButton }));
+    fireEvent.click(screen.getByRole('button', { name: v.vrVillage.goSimulation }));
+    expect(nav.end).toHaveBeenCalled();
+    expect(nav.push).toHaveBeenCalledWith('/simulation');
+  });
+});
