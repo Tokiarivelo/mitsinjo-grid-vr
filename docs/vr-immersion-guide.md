@@ -234,7 +234,9 @@ sinon le pincement suffit pour tout (bouton « Analyser », flèches au sol, men
 
 Dans l'émulateur, mains et manettes tournent avec la tête (mode Play) et ne peuvent pas se toucher : le bouton
 « Menu » n'est donc pas porté au poignet mais flotte dans la pièce, à gauche de l'endroit où le menu s'ouvre, et
-ne se recentre que si l'on regarde à plus de 35° ailleurs (VS-T26). Sur un casque, il reste au poignet gauche
+ne se recentre que si l'on regarde à plus de 35° ailleurs (VS-T26). Les lasers de l'émulateur restent parallèles à la vue et
+ne peuvent pas l'atteindre : **le regarder** (il s'éclaire, à ~7° près) **et appuyer sur la gâchette** l'ouvre. Le menu
+contient le bouton « Analyser la vue », le guide des commandes, « Afficher / Masquer l'aide » et le journal d'événements. Sur un casque, il reste au poignet gauche
 (main) ou sur la manette gauche ; sans entrée gauche suivie, il flotte de la même façon.
 Sous Linux, `Alt + clic` est souvent pris par le bureau : utilisez le gizmo ou la souris directe.
 La DevUI d'IWER dessine son propre canvas plein écran par-dessus la scène : la souris est donc écoutée sur la

@@ -8,6 +8,7 @@ import {
   WRIST_OFFSET_CAMERA,
   WRIST_OFFSET_FLOAT,
   fillHandedness,
+  gazeHits,
   WRIST_OFFSET_GRIP,
   WRIST_OFFSET_HAND,
   createWristMenu,
@@ -160,5 +161,16 @@ describe('menuPointToWorld / menuSpawnScale', () => {
   it('scales in from 60 % to 100 %', () => {
     expect(menuSpawnScale(0)).toBeCloseTo(0.6);
     expect(menuSpawnScale(1)).toBe(1);
+  });
+});
+
+describe('gazeHits (VS-T26)', () => {
+  it('opens the floating button when looked at within ~7°, not beside it', () => {
+    const eye = new THREE.Vector3(0, 1.6, 0);
+    const ahead = new THREE.Vector3(0, 0, -1);
+    expect(gazeHits(eye, ahead, new THREE.Vector3(0.05, 1.6, -0.9))).toBe(true);
+    expect(gazeHits(eye, ahead, new THREE.Vector3(-0.42, 1.34, -0.9))).toBe(false);
+    expect(gazeHits(eye, ahead, new THREE.Vector3(0, 1.6, 0.9))).toBe(false); // behind
+    expect(gazeHits(eye, ahead, eye.clone())).toBe(false);
   });
 });

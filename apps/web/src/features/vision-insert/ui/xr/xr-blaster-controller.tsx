@@ -20,6 +20,7 @@ import {
 } from './webcam-screen';
 import { AIR_BUTTON_RADIUS, AIR_BUTTON_TOUCH_RADIUS, MINIATURE_GRAB_RADIUS } from './xr-layout';
 import {
+  gazeHits,
   WRIST_BUTTON_ID,
   WRIST_RAY_RADIUS,
   WRIST_TOUCH_RADIUS,
@@ -294,6 +295,8 @@ interface AimScene {
 }
 
 const _panelHits: THREE.Intersection[] = [];
+const _vGazeO = new THREE.Vector3();
+const _vGazeD = new THREE.Vector3();
 
 /** Nearest shown panel the ray hits (the raycaster ray is already set). */
 function panelOnRay(panels: PanelRegistry | undefined) {
@@ -576,6 +579,22 @@ export const XRBlasterController = memo(function XRBlasterController({
         toggleMenu();
         return;
       }
+      // The floating Menu button looked at (head / mouse in Play mode) while the laser points at
+      // nothing it can use: select opens it, like Meta's gaze-and-pinch.
+      if (
+        (aim.kind === 'none' || aim.kind === 'screen') &&
+        gl.xr?.isPresenting &&
+        camera &&
+        menu.buttonVisible &&
+        menu.wearer === null
+      ) {
+        camera.getWorldPosition(_vGazeO);
+        camera.getWorldDirection(_vGazeD);
+        if (gazeHits(_vGazeO, _vGazeD, menu.button)) {
+          toggleMenu();
+          return;
+        }
+      }
       if (aim.kind === 'hotspot' && aim.id) {
         playTargetHitSound();
         onHotspot?.(aim.id);
@@ -632,6 +651,7 @@ export const XRBlasterController = memo(function XRBlasterController({
       onShootScreen?.(aim.u, aim.v);
     },
     [
+      gl,
       camera,
       scene,
       targets,
@@ -1056,6 +1076,12 @@ export const XRBlasterController = memo(function XRBlasterController({
           grab.y = _vOrigin.y;
         }
         hovered = drawBeam(i, _vOrigin, _vDirection, delta) ?? hovered;
+      }
+      // The floating Menu button lights up when looked at: a select then opens it.
+      if (!hovered && menu.buttonVisible && menu.wearer === null && camera) {
+        camera.getWorldPosition(_vGazeO);
+        camera.getWorldDirection(_vGazeD);
+        if (gazeHits(_vGazeO, _vGazeD, menu.button)) hovered = WRIST_BUTTON_ID;
       }
       // Emulator mouse: hover what it points at (no beam), so buttons light up before a click.
       // The lasers keep priority: a mouse left still never hides what a controller aims at.

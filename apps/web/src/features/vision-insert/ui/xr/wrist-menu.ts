@@ -14,6 +14,27 @@ export const WRIST_BUTTON_RADIUS = 0.022;
 export const WRIST_TOUCH_RADIUS = 0.04;
 /** Ray distance from the wrist button centre that hits it. */
 export const WRIST_RAY_RADIUS = 0.06;
+/**
+ * Looking at the floating button within this angle (rad, ≈ 7°) and pressing select toggles the
+ * menu (VS-T26): in the emulator the lasers stay parallel to the view and can't reach it.
+ */
+export const WRIST_GAZE_ANGLE = 0.12;
+
+/** True when the gaze from `eye` along unit `dir` passes within `maxAngle` of `point`. */
+export function gazeHits(
+  eye: THREE.Vector3,
+  dir: THREE.Vector3,
+  point: THREE.Vector3,
+  maxAngle = WRIST_GAZE_ANGLE
+): boolean {
+  const dx = point.x - eye.x;
+  const dy = point.y - eye.y;
+  const dz = point.z - eye.z;
+  const len = Math.hypot(dx, dy, dz);
+  if (len < 1e-6) return false;
+  const cos = (dx * dir.x + dy * dir.y + dz * dir.z) / len;
+  return cos >= Math.cos(maxAngle);
+}
 
 /** Wrist button offset in the WebXR `wrist` joint space (+Y = back of the hand, +Z = forearm). */
 export const WRIST_OFFSET_HAND: [number, number, number] = [0, 0.03, 0.035];
