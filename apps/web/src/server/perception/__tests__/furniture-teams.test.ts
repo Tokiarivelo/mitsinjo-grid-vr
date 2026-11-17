@@ -20,7 +20,44 @@ import tourMock from '../tour-mock/tour-mock.json';
 
 const TOUR = tourMock as unknown as Record<string, { recipe: ObjectRecipe }>;
 const ATLAS = 'data:image/jpeg;base64,AAAA';
-const FURNITURE_FIXTURES = [...RECORDED, ...SEAT_TOUR_FIXTURES, ...TABLE_STORAGE_TOUR_FIXTURES];
+import {
+  APPLIANCE_FIXTURES,
+  FIXTURE_FIXTURES,
+  LIGHT_FIXTURES,
+  STRUCTURE_FIXTURES,
+  TERRAIN_FIXTURES,
+  TEXTILE_FIXTURES,
+} from '../__fixtures__/teams/parts';
+import { TOUR_OUTLINES } from '@/features/vision-insert/ui/xr/tour/tour-outlines';
+import { outlineFrame } from '../tour-mock/skin';
+import type { PartsOutline } from '../team/teams';
+import { parseDrape, textileParts, type TextileReading } from '../team/teams/textile';
+import { fixtureParts, type FixtureReading } from '../team/teams/fixture';
+import { parseLattice, structureParts, type StructureReading } from '../team/teams/structure';
+import { terrainParts, type TerrainReading } from '../team/teams/terrain';
+import { applianceParts, type ApplianceReading } from '../team/teams/appliance';
+import { lightParts, parseLamp, type LightReading } from '../team/teams/light';
+
+const FURNITURE_FIXTURES = [
+  ...RECORDED,
+  ...SEAT_TOUR_FIXTURES,
+  ...TABLE_STORAGE_TOUR_FIXTURES,
+  ...TEXTILE_FIXTURES,
+  ...FIXTURE_FIXTURES,
+  ...STRUCTURE_FIXTURES,
+  ...TERRAIN_FIXTURES,
+  ...APPLIANCE_FIXTURES,
+  ...LIGHT_FIXTURES,
+];
+
+/** The tour outline of an object as the real path hands it: box fractions, box pixel aspect (pano 2:1). */
+function tourOutline(id: string): PartsOutline {
+  const { box, rings } = outlineFrame(TOUR_OUTLINES[id]!);
+  return {
+    rings: rings.map((r) => r.map(([x, y]) => [(x - box.x) / box.w, (y - box.y) / box.h] as const)),
+    aspect: (box.w * 2) / box.h,
+  };
+}
 
 /** The recorded answer of each tool, as the model would send it. */
 const replay =
@@ -43,11 +80,17 @@ async function build(id: string) {
     { label: fx.label, views: ['front', 'side'], images: ['front.png', 'side.png'] }
   );
   const target = TOUR[fx.id]!.recipe;
-  const model = furnitureModel(fx.team, reading as never, target.proportions, ATLAS);
+  const model = furnitureModel(
+    fx.team,
+    reading as never,
+    target.proportions,
+    ATLAS,
+    fx.outline ? tourOutline(fx.id) : undefined
+  );
   return { fx, reading, target, model };
 }
 
-describe('furniture teams (PQ-T89)', () => {
+describe('part-plan teams (PQ-T89, PQ-T90)', () => {
   it('are registered by their class', () => {
     for (const id of ['seat', 'table', 'storage', 'bed']) expect(isFurnitureTeam(id)).toBe(true);
     expect(isFurnitureTeam('car')).toBe(false);
@@ -142,6 +185,143 @@ describe('furniture teams (PQ-T89)', () => {
     expect(d / h).toBeCloseTo(p.d / p.h, 2);
   });
 
+  it('reads a drape, every field defaulted', () => {
+    expect(parseDrape(null)).toEqual({
+      hang: 'rod',
+      rods: 0,
+      folds: 'soft',
+      pool: false,
+      tied: false,
+    });
+    expect(parseDrape('{"drape":{"hang":"x","rods":9,"pool":true}}')).toMatchObject({
+      hang: 'rod',
+      rods: 4,
+      pool: true,
+    });
+  });
+
+  it('builds a curtain under its rolls, a sweep on the floor, a flat rug', () => {
+    const r = (kind: string, drape: object, finishes: object[] = []) =>
+      ({
+        ...read(parseDrape(JSON.stringify({ drape })), { kind, finishes } as never),
+      }) as never as TextileReading;
+    const p = { w: 1, h: 0.8, d: 0.05 };
+    const hung = textileParts(
+      r('backdrop', { hang: 'stand', rods: 2 }, [{ finish: 'roll', color: '#AA0000' }]),
+      p
+    );
+    expect(hung.map((x) => x.concept)).toEqual(['curtain', 'rail', 'rail']);
+    expect(hung[0]!.silhouette?.band?.[0]).toBeCloseTo(0.07);
+    expect(hung.slice(1).map((x) => x.color)).toEqual(['#aa0000', '#aa0000']);
+    const sweep = textileParts(r('backdrop', { hang: 'stand', rods: 0, pool: true }), p);
+    expect(sweep).toHaveLength(1);
+    expect(sweep[0]!.silhouette?.section).toHaveLength(6);
+    const flat = textileParts(r('rug', { hang: 'floor', rods: 0 }), { w: 1, h: 0.02, d: 0.7 });
+    expect(flat[0]!.size[1]).toBeCloseTo(0.04);
+    expect(flat[0]!.size[0] / flat[0]!.size[2]).toBeCloseTo(1 / 0.7);
+  });
+
+  it('builds a door per leaf read, a frame as deep as measured', () => {
+    const fx = (kind: string, own: object[]) =>
+      read(own, { kind } as never) as unknown as FixtureReading;
+    const leaf = (x0: number, x1: number, kind = 'leaf') => ({
+      view: 'front',
+      kind,
+      box: [x0, 0, x1, 1] as [number, number, number, number],
+    });
+    const two = fixtureParts(fx('door', [leaf(0, 0.5), leaf(0.5, 1)]), { w: 0.6, h: 1, d: 0.05 });
+    expect(two.filter((x) => x.concept === 'door')).toHaveLength(2);
+    for (const d of [0.03, 0.06]) {
+      const [, h, z] = partsBounds(fixtureParts(fx('window', []), { w: 0.6, h: 1, d })).dims;
+      expect(z / h).toBeCloseTo(d, 2);
+    }
+  });
+
+  it('reads a lattice, scales a fence by its boards, fixes open colours', () => {
+    expect(parseLattice(null).posts).toEqual([0, 1]);
+    expect(
+      parseLattice(
+        '{"lattice":{"pattern":"x","bars":200,"posts":[-1,0.5,"a"],"arms":[[0.2,2],[1]]}}'
+      )
+    ).toMatchObject({ pattern: 'bars', bars: 80, posts: [0, 0.5], arms: [[0.2, 1]] });
+    const st = (kind: string, lattice: object) =>
+      read(parseLattice(JSON.stringify({ lattice })), {
+        kind,
+      } as never) as unknown as StructureReading;
+    const [w] = partsBounds(
+      structureParts(st('fence', { pattern: 'boards', bars: 10 }), { w: 1, h: 0.3, d: 0.01 })
+    ).dims;
+    expect(w).toBeCloseTo(4, 1);
+    const rail = structureParts(st('railing', { pattern: 'scroll', bars: 8 }), {
+      w: 1,
+      h: 0.2,
+      d: 0.01,
+    });
+    expect(rail.every((x) => x.fixed)).toBe(true);
+  });
+
+  it('builds a rock on its outline, a tyre and a stump by kind', () => {
+    const t = (kind: string) => read({}, { kind } as never) as unknown as TerrainReading;
+    const p = { w: 1, h: 0.4, d: 0.9 };
+    expect(terrainParts(t('rock'), p)[0]!.silhouette?.section).toHaveLength(7);
+    expect(terrainParts(t('log'), p)[0]!.silhouette).toEqual({});
+    expect(terrainParts(t('tyre'), p).map((x) => x.concept)).toEqual(['wheel', undefined]);
+    const [w, h] = partsBounds(terrainParts(t('stump'), p)).dims;
+    expect(w / h).toBeCloseTo(1 / 0.4, 1);
+  });
+
+  it('builds an air unit from its slots, a hood on its canopy, a body with its details', () => {
+    const ap = (kind: string, own: object[], extra: object = {}) =>
+      read(own, { kind, ...extra } as never) as unknown as ApplianceReading;
+    const slots = { view: 'front', kind: 'slots', box: [0, 0, 1, 0.5], panes: [6, 2] };
+    const unit = applianceParts(ap('air_conditioner', [slots]), { w: 1, h: 0.25, d: 0.13 });
+    expect(unit.filter((x) => x.kind === 'grille')).toHaveLength(1 + 6 + 5);
+    const lines = { profile: [{ view: 'front', body: [0, 0, 1, 1], lines: { canopy: 0.4 } }] };
+    const h = applianceParts(ap('hood', [], lines), { w: 0.7, h: 1, d: 0.7 })[0]!;
+    expect(h.shape).toBe('lathe');
+    const handle = { view: 'front', kind: 'handle', box: [0.1, 0.1, 0.15, 0.3] };
+    const legs = [{ kind: 'plinth', view: 'front', box: [0, 0.9, 1, 1], count: 1 }];
+    const fridge = applianceParts(ap('fridge', [handle], { legs }), { w: 0.4, h: 1, d: 0.4 });
+    expect(fridge.map((x) => x.concept)).toEqual(['door', 'base', 'handle']);
+  });
+
+  it('reads a lamp and builds a street lamp to its arm side, a disc from its thickness', () => {
+    expect(parseLamp('{"lamp":{"shade":"x","bulbs":99,"arm":"left","taper":3}}')).toEqual({
+      shade: 'disc',
+      bulbs: 24,
+      arm: 'left',
+      taper: 1,
+    });
+    const lt = (kind: string, lamp: object) =>
+      read(parseLamp(JSON.stringify({ lamp })), { kind } as never) as unknown as LightReading;
+    const left = lightParts(lt('street_lamp', { shade: 'box', bulbs: 0, arm: 'left' }), {
+      w: 0.2,
+      h: 1,
+      d: 0.03,
+    });
+    expect(left.find((x) => x.concept === 'lamp')!.at[0]).toBeLessThan(0);
+    const disc = lightParts(lt('ceiling', { shade: 'disc', bulbs: 0, arm: 'none' }), {
+      w: 1,
+      h: 0.15,
+      d: 1,
+    });
+    expect(disc[0]!.size[0]).toBeCloseTo(0.5);
+  });
+
+  it('cuts silhouette parts from the outline, boxes without one', async () => {
+    const { reading, target } = await build('loft-curtain');
+    const cut = furnitureModel(
+      'textile',
+      reading as never,
+      target.proportions,
+      undefined,
+      tourOutline('loft-curtain')
+    )!;
+    expect(cut.parts[0]!.shape).toBe('hull');
+    const plain = furnitureModel('textile', reading as never, target.proportions)!;
+    expect(plain.parts[0]!.shape).toBe('box');
+  });
+
   describe.each(FURNITURE_FIXTURES.map((f) => f.id))('%s', (id) => {
     it('builds a valid model of named parts wearing the drawings', async () => {
       const { fx, reading, model } = await build(id);
@@ -157,7 +337,7 @@ describe('furniture teams (PQ-T89)', () => {
       const { fx, model, target } = await build(id);
       const f = iou(front(model!), front(target));
       const s = iou(side(model!), side(target));
-      console.info(`[PQ-T89] ${id}: front ${f.toFixed(2)}, side ${s.toFixed(2)}`);
+      console.info(`[IOU] ${id}: front ${f.toFixed(2)}, side ${s.toFixed(2)}`);
       expect(Math.min(f, s)).toBeGreaterThanOrEqual(fx.minIou);
       if (fx.minIou < 0.85) expect(fx.limit).toBeTruthy();
     });

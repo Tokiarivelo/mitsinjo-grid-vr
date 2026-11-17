@@ -14,7 +14,7 @@ import { planContrast, silhouetteHull, type RoofVolume } from '@/lib/face-hull';
 import { archetypeOf } from '@/lib/object-kit';
 import { teamIdOf } from '../team/registry';
 import { furnitureModel, isFurnitureTeam, type ReadFurniture } from '../team/teams';
-import type { ObjectRecipe, ShapeTarget } from '@/lib/object-shape';
+import { silhouetteRings, type ObjectRecipe, type ShapeTarget } from '@/lib/object-shape';
 import type { ClassMaterialsResult } from '../schemas';
 import { FACE_ORDER, buildFacePrompt, buildTopPrompt } from '../facade-faces';
 import { buildFacadePrompt } from '../facade-specialist';
@@ -652,7 +652,18 @@ export async function reconstructObject(
             })
         : null;
       const model = read
-        ? furnitureModel(team, read, recipe.proportions, recipe.faces?.atlas)
+        ? furnitureModel(
+            team,
+            read,
+            recipe.proportions,
+            recipe.faces?.atlas,
+            target.outline
+              ? {
+                  rings: silhouetteRings(target),
+                  aspect: recipe.proportions.w / Math.max(1e-6, recipe.proportions.h),
+                }
+              : undefined
+          )
         : null;
       if (model) {
         recipe.parts = model.parts;

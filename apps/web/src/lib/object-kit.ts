@@ -355,6 +355,55 @@ const words = (list: ReadonlyArray<string>, notAfter: ReadonlyArray<string> = []
     'iu'
   );
 
+/**
+ * Appliance labels (PQ-T90), en / fr / mg, checked before the furniture: they all go to the
+ * appliance team through their archetype (a fridge is a `cabinet`, a hood or a fireplace a `machine`).
+ */
+export const APPLIANCE_LABELS: ReadonlyArray<readonly [KitArchetype, RegExp]> = [
+  [
+    'cabinet',
+    words([
+      'fridge',
+      'refrigerator',
+      'freezer',
+      'réfrigérateur',
+      'refrigerateur',
+      'frigo',
+      'congélateur',
+      'congelateur',
+      'vata fampangatsiahana',
+    ]),
+  ],
+  [
+    'machine',
+    words([
+      'air conditioner',
+      'air conditioning',
+      'climatiseur',
+      'clim',
+      'range hood',
+      'cooker hood',
+      'hood',
+      'hotte',
+      'radiator',
+      'radiateur',
+      'fireplace',
+      'cheminée',
+      'cheminee',
+      'pump',
+      'pompe',
+      'generator',
+      'washing machine',
+      'lave-linge',
+      'fampangatsiahana rivotra',
+      'fanalana setroka',
+    ]),
+  ],
+  ['screen', words(['tv', 'television', 'télévision', 'monitor', 'moniteur', 'fahitalavitra'])],
+  ['fan', words(['fan', 'ventilateur', 'ventilator'])],
+  ['tank', words(['tank', 'cistern', 'citerne', 'cuve', 'réservoir', 'reservoir', 'sinibe'])],
+];
+
 /** Labels of the classes with their own team (PQ-T87), en / fr / mg, checked in this order. */
 export const FURNITURE_LABELS: ReadonlyArray<readonly [KitArchetype, RegExp]> = [
   // « flower bed », « river bed » are not beds.
@@ -413,6 +462,8 @@ export const FURNITURE_LABELS: ReadonlyArray<readonly [KitArchetype, RegExp]> = 
     'storage',
     words([
       'wardrobe',
+      'cabinet',
+      'kitchen unit',
       'cupboard',
       'closet',
       'sideboard',
@@ -560,6 +611,8 @@ export function defaultArchetype(
       return 'lamp_post';
     }
     // PQ-T87: furniture, textiles and fixtures before the house words (« wall mirror », « shop shelf »).
+    const appliance = APPLIANCE_LABELS.find(([, re]) => re.test(norm));
+    if (appliance) return appliance[0];
     const furniture = FURNITURE_LABELS.find(([, re]) => re.test(norm));
     if (furniture) return furniture[0];
     if (

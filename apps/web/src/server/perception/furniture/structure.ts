@@ -189,7 +189,7 @@ export function fence(
   pillars: number,
   base?: string
 ): PartSpec[] {
-  const boards = Math.min(36, Math.round(w / 0.4));
+  const boards = Math.min(36, Math.round(w / FENCE_BOARD));
   const y0 = base ? 0.35 : 0;
   const out: PartSpec[] = [
     box([0, y0 + h * 0.75, -0.04], [w, 0.08, 0.04], color, {
@@ -223,4 +223,22 @@ export function fence(
       )
     );
   return out;
+}
+
+/** Board width of `fence` (metres): its board count is its width over this. */
+export const FENCE_BOARD = 0.4;
+
+/** A gate between two stone pillars: a board leaf meeting the pillars, the pillars a little taller. */
+export function gate(w: number, h: number, color: string, pillar = '#9c8670'): PartSpec[] {
+  const pw = Math.min(0.4, w * 0.18);
+  return [
+    ...fence(Math.max(0.3, w - 2 * pw + 0.1), h, color, 0),
+    ...[-1, 1].map((s) =>
+      box([s * (w / 2 - pw / 2), (h + 0.1) / 2, 0], [pw, h + 0.1, pw], pillar, {
+        material: 'stone',
+        kind: 'frame',
+        concept: 'stone_foundation',
+      })
+    ),
+  ];
 }

@@ -5,7 +5,8 @@ import { parseProfile, profileAnswered, profileSpec, type ReadProfile } from '..
 import type { SpecialistTeam, TeamSchema, TeamToolSpec } from '../team';
 
 /**
- * The furniture teams (PQ-T89: seat, table, storage, bed) share one shape: a pilot names the kind
+ * The part-plan teams (PQ-T89 furniture: seat, table, storage, bed; PQ-T90: textile, fixture,
+ * structure, terrain, appliance, light) share one shape: a pilot names the kind
  * and the parts present, then the shared profile, legs and finishes specialists (PQ-T86) and the
  * class's own specialists read the validated front and side drawings cut to the object (never the
  * photo), each with its deadline and one retry. This factory builds such a team from the class's
@@ -47,6 +48,8 @@ export interface OwnSpec {
 export interface FurnitureTeamConfig<Own extends string, OwnReading> {
   id: string;
   promptVersion: number;
+  /** What the drawings are cropped to, in the shared frame line (default « piece of furniture »). */
+  noun?: string;
   /** "ONE seat (a sofa, an armchair, a chair, a stool, a bench or a pouf)". */
   subject: string;
   kinds: ReadonlyArray<string>;
@@ -61,6 +64,50 @@ export interface FurnitureTeamConfig<Own extends string, OwnReading> {
   parseOwn: (answers: Partial<Record<Own, string | null>>) => OwnReading;
   /** One line for the log. */
   ownSummary: (own: OwnReading) => string;
+}
+
+/**
+ * A class's own specialist from its vocabulary (PQ-T90): its role line, the shared frame on the
+ * object, the fields' meaning, a closed JSON schema with one object under `key`, and its task.
+ */
+export function ownSpec(o: {
+  key: string;
+  /** « drape specialist ». */
+  role: string;
+  /** « ONE curtain, rug or backdrop ». */
+  subject: string;
+  /** What it reads (« how the cloth hangs »). */
+  reads: string;
+  noun: string;
+  /** One line: what each field means. */
+  fields: string;
+  properties: Record<string, object>;
+  required: ReadonlyArray<string>;
+  task: string;
+}): OwnSpec {
+  const name = o.key[0]!.toUpperCase() + o.key.slice(1);
+  return {
+    spec: {
+      key: o.key,
+      task: o.task,
+      system: [
+        `You are the ${o.role} of a 3D modelling team. On the orthographic drawings of ${o.subject}, you read ${o.reads}.`,
+        objectFrame(o.noun),
+        `${o.key}: ${o.fields}`,
+      ].join('\n'),
+      schema: {
+        name,
+        schema: {
+          type: 'object',
+          properties: {
+            [o.key]: { type: 'object', properties: o.properties, required: [...o.required] },
+          },
+          required: [o.key],
+        },
+      },
+    },
+    answered: (c) => ownObject(c, o.key) !== null,
+  };
 }
 
 /** The pilot of a furniture team. */
@@ -104,7 +151,11 @@ export function furnitureTeam<Own extends string, OwnReading>(
   cfg: FurnitureTeamConfig<Own, OwnReading>
 ): SpecialistTeam<FurnitureTool<Own>, FurnitureBrief, FurnitureReading<OwnReading>, FurnitureView> {
   const views = FURNITURE_VIEWS;
-  const shared = { subject: cfg.subject, frame: FURNITURE_FRAME, views };
+  const shared = {
+    subject: cfg.subject,
+    frame: cfg.noun ? objectFrame(cfg.noun) : FURNITURE_FRAME,
+    views,
+  };
   const ownTools = Object.keys(cfg.own) as Own[];
   const tools = ['profile', 'legs', ...ownTools, 'finishes'] as Array<FurnitureTool<Own>>;
   const finishesCfg = {

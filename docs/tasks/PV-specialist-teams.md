@@ -154,13 +154,13 @@ En gras : spécialistes propres à une équipe. Les autres viennent de `team/sha
 - [x] `familyOf` → `parametric` pour les nouveaux ; libellés i18n en / fr / mg (`make check-i18n`).
 - [x] `docs/contracts.md` : liste des archétypes et types de lecture.
 
-### PQ-T88 — Builders de mobilier (réutilisés par la visite)
+### [x] PQ-T88 — Builders de mobilier (réutilisés par la visite)
 
 - [x] `server/perception/furniture/` : `sofa`, `chair`, `stool`, `bed`, `table`, `cabinet` (lecture → recette).
 - [x] Même dossier : `glazing`, `door`, `curtain`, `railing`, `fence`.
 - [x] Un test par builder (recette valide `ObjectRecipeSchema`, pièces nommées attendues).
 - [x] `tour-mock/specs-extra.ts` réimporte ces builders (aucune copie) ; `make tour-mock` sans régression de score. — vérifié par empreinte : les 157 objets de la visite compilent en recettes identiques avant / après (même entrée → mêmes scores) ; `make tour-mock` complet non relancé.
-- [ ] Pièce `silhouette` disponible au chemin réel (contour SAM, jamais les pixels) pour `textile` et `terrain`. — reste : `curtain` porte déjà `silhouette` (bande + section) dans le modèle de pièces partagé, mais le chemin réel ne passe pas encore le contour SAM au builder ; à brancher avec `TEXTILE_TEAM` / `TERRAIN_TEAM` (PQ-T90).
+- [x] Pièce `silhouette` disponible au chemin réel (contour SAM, jamais les pixels) pour `textile` et `terrain`. — `furniture/silhouette.ts` (partagé avec la visite) ; `recon/route.ts` passe `silhouetteRings(target)` à `furnitureModel` (PQ-T90).
 
 ### [x] PQ-T89 — Équipes assise, table, rangement, lit
 
@@ -171,15 +171,15 @@ En gras : spécialistes propres à une équipe. Les autres viennent de `team/sha
 - [x] Branchées dans `registry.ts` ; objets de la visite de ces classes à IoU ≥ 0,85 (ou limite écrite). — 28 objets rejoués (toutes les assises, tables, rangements et lits de la visite) : 25 ≥ 0,85 face et côté ; limites écrites : `bath-side-table` (le modèle de la visite compte le vase posé dessus), `loft-shelf` et `bedroom-shelf` (étagères ajourées, planches d'une cellule, piège § 8). Passe de recalage des proportions (`furnitureParts`) pour les builders qui débordent (accoudoirs, montants).
 - [x] Scénarios manuels `test-scenarios/06-village.md` (canapé, chaise, armoire, lit). — V529–V532.
 
-### PQ-T90 — Équipes textile, menuiserie, structure, terrain, appareil, luminaire
+### [x] PQ-T90 — Équipes textile, menuiserie, structure, terrain, appareil, luminaire
 
-- [ ] `TEXTILE_TEAM` (drape, finishes) + fixtures + test.
-- [ ] `FIXTURE_TEAM` (openings, finishes) + fixtures + test.
-- [ ] `STRUCTURE_TEAM` (lattice, finishes) + fixtures + test. — builders prêts (VS-T46) : `ironRailing` (barreaux en S, volutes, poteaux) et `latticeTower` (montants, croisillons, bras) dans `furniture/structure.ts`, testés ; reste l'équipe et la lecture.
-- [ ] `TERRAIN_TEAM` (profile, finishes) + fixtures + test.
-- [ ] `APPLIANCE_TEAM` (profile, controls, legs, finishes) pour cabinet / screen / fan / machine / tank + test.
-- [ ] `LIGHT_TEAM` (profile, lamp, finishes) pour lamp_post et luminaires intérieurs + test.
-- [ ] Branchées dans `registry.ts` ; scénarios manuels (rideau, porte, clôture, rocher, frigo, applique).
+- [x] `TEXTILE_TEAM` (drape, finishes) + fixtures + test. — 10 textiles de la visite rejoués sur leur contour : 9 ≥ 0,85 ; `loft-rug` vue de côté sous une cellule (limite écrite).
+- [x] `FIXTURE_TEAM` (openings, finishes) + fixtures + test. — 14 portes, fenêtres, miroirs, tableau et miroir lumineux de la visite rejoués : tous ≥ 0,85.
+- [x] `STRUCTURE_TEAM` (lattice, finishes) + fixtures + test. — garde-corps, pylône, clôtures, portail de la visite rejoués : 6/6 à IoU 1,00 ; `gate` promu en builder (la visite le réutilise). Reste hors équipe : `pole` (poteau bois) et `panel` (panneaux solaires) gardent leur chemin.
+- [x] `TERRAIN_TEAM` (profile, finishes) + fixtures + test. — 9 rochers, troncs, pneus de la visite rejoués sur leur contour : 8 à 1,00 ; `forest-rock` 0,72 (modèle de visite en blobs SDF, limite écrite) ; `rock`, `log`, `tyre`, `stump` promus en builders.
+- [x] `APPLIANCE_TEAM` (profile, controls, legs, finishes) pour cabinet / screen / fan / machine / tank + test. — frigo, clims, hotte, cache-radiateur, cheminées de la visite rejoués : 5/7 ≥ 0,85, cheminées 0,84 de côté (limite écrite) ; libellés d'appareils en / fr / mg (`APPLIANCE_LABELS`) ; `airUnit` promu en builder.
+- [x] `LIGHT_TEAM` (profile, lamp, finishes) pour lamp_post et luminaires intérieurs + test. — 13 luminaires de la visite rejoués : 10 ≥ 0,85 ; limites écrites : lanterne évasée (0,79), boîtes à lumière studio et lettres lumineuses (enseigne).
+- [x] Branchées dans `registry.ts` ; scénarios manuels (rideau, porte, clôture, rocher, frigo, applique). — `teamFor` : textile, fixture, structure, terrain, cabinet / screen / fan / machine / tank, lamp_post ; V533–V538.
 
 ### PQ-T91 — Banc, dataset et doc
 
