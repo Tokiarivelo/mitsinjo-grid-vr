@@ -1,13 +1,12 @@
 import 'server-only';
 
-import sharp from 'sharp';
 import { archetypeOf, type KitArchetype } from '@/lib/object-kit';
 import type { FaceName, ShapeTarget } from '@/lib/object-shape';
 import { isR2Configured, uploadBufferToR2 } from '@/server/storage/r2';
 import { buildCarFacePrompt, CAR_FACES, type CarFace } from './car/car-views';
 import {
-  createSyntheticFacadeSvg,
   DRAWING_BACKGROUND,
+  mockFaceDrawing,
   museImage,
   museImageReady,
 } from './facade-specialist';
@@ -134,14 +133,10 @@ export async function generateFaceImage(options: GenerateFaceOptions): Promise<F
         '[facade-faces] Muse Image failed, placeholder:',
         err instanceof Error ? err.message : err
       );
-      png = await sharp(Buffer.from(createSyntheticFacadeSvg(archetype, target.label)))
-        .png()
-        .toBuffer();
+      png = await mockFaceDrawing(target, archetype, face);
     }
   } else {
-    png = await sharp(Buffer.from(createSyntheticFacadeSvg(archetype, target.label)))
-      .png()
-      .toBuffer();
+    png = await mockFaceDrawing(target, archetype, face);
   }
   const fileKey = `vision/facades/${target.id}_${face}_${Date.now()}.png`;
   const uploaded = await uploadBufferToR2(fileKey, png, 'image/png');

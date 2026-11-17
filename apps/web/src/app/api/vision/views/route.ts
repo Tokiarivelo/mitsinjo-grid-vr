@@ -5,6 +5,7 @@ import { defaultArchetype, kitToRecipe } from '@/lib/object-kit';
 import { fitRecipe, ShapeTargetSchema } from '@/lib/object-shape';
 import { measureKitColors } from '@/server/perception/color-measure';
 import { sampleObjectPixels } from '@/server/perception/shape-colors';
+import { tourMockEntry } from '@/server/perception/tour-mock';
 import { generateImaginedViews } from '@/server/perception/views-generation';
 import {
   jsonField,
@@ -30,6 +31,13 @@ export async function POST(req: NextRequest) {
 
   const photo = await photoSize(read.photo.buffer);
   const photoAspect = photo && photo.height > 0 ? photo.width / photo.height : 1;
+
+  // A 360° tour object (VS-T41): its hand-built model, from every angle.
+  const tour = tourMockEntry(target.id);
+  if (tour) {
+    const views = await generateImaginedViews(tour.recipe, target, 1, 256);
+    return jsonResponse({ ok: true, views, detectionId: target.id });
+  }
 
   // What the detection implies (archetype), how the pixels look (colours), how big it is (box).
   const archetype = defaultArchetype(target.category, target.scenery, target.label);

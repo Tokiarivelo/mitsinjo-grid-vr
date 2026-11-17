@@ -66,6 +66,7 @@ mitsinjo-grid/
             ├── stores/simulation.store.ts   # single source of UI state
             ├── server/copilot/         # server-only: provider, tools, prompts, loop, adaptive model router
             ├── server/perception/      # server-only: voice / vision / SAM clients (Meta + deterministic mock)
+            │   ├── tour-mock/          # mock answers of the 360° tour objects (VS-T41/T42): hand specs + outline `silhouette` parts, `make tour-mock` → tour-mock.json
             │   └── recon/              # views → 3D (PQ-T69/T70/T71): pure math (views, palette, carve, recipe, score, texture) + route.ts (drawing, naming, face atlas)
             ├── server/media/           # server-only: engine result → image prompts + overlays (M5-T1, pure)
             ├── server/spend/           # server-only: estimated Meta spend per session, cap → mock

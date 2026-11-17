@@ -1,39 +1,31 @@
 # HANDOFF — read first, overwrite at end of session (≤40 lines)
 
-**Updated:** 2026-11-16 · **By:** Claude Code · **Branch:** `feat/vs-t39-village-map` (from `main`, VS-T39–T40). Tasks in `docs/tasks/VR-village-spatial-shoot.md`.
-`feat/vs-t31-desk-turn` ← `feat/vs-t29-chat-readable-voice-level` (PR #20, open). Tasks VS-T29–T38 in `docs/tasks/VR-village-spatial-shoot.md`.
+**Updated:** 2026-11-17 · **By:** Claude Code · **Branch:** `feat/vs-t41-tour-mock-3d` (VS-T41 + VS-T42, from `main` d3485390). Tasks in `docs/tasks/VR-village-spatial-shoot.md`.
 
 ## NEXT
 
-0. Vercel services: root `vercel.json` (one public `web` service, `ignoreCommand` moved in) is **uncommitted**, waiting for the owner's OK; it needs Vercel → Root Directory = `.` and `apps/web/vercel.json` deleted. Screen V467–V476, headset V471–V472, V477.
-1. Headset: S158–S161 (VS-T38 map follows, roads, laser), S154–S157 (VS-T37 map), S151–S152 (close ✕, left laser; ← / → swap reverted), V463–V466 (VS-T36 follow dock, « Go to the simulation » fixed; `make vr-handoff-probe` not run yet), S146–S150 (VS-T35 tags, size, night), V450–V458 (desk turn comfort 1.1 s, menu « Close », miniature card), then V442, V444–V449, S133–S135.
-   Check Quest Browser opens /simulation's VR session without a new gesture after « Go to the simulation ».
-2. Quest Browser voice = system keyboard dictation (no Web Speech API): the level meter needs the mic there too.
-3. PR #15 (`feat/pq-q4`, Q4 surfaces & light) stays open: main rewrote the perception pipeline, needs a port.
+1. User request (2026-11-17): generalise the specialist agents (facade, plant team, views…) to every kind of object and make some reusable; else add 3D specialists per object class and fill the gaps in the general generation agents. Survey `server/perception/` specialists first, then write a task (VS-T43 or a P-task).
+2. VS-T42 weak objects (IoU < 0.6): open furniture (bedroom-shelf .19, stools .26–.47, director chair .38, side tables .38, woods-bridge .28, arches .30, railings .38). Filled outline counts the background seen through: score with a part-aware mask or model the openings.
+3. Hull renders show thin white stripes at section vertices in `renderFlat` (rocks, silhouette crowns): check hull triangulation.
+4. Ceiling lights ΔE (flat shading from below), see VS-T41 note; screen check V478–V488; headset later.
 
-## Done this session
+## Done this session (VS-T42)
 
-- **VS-T40:** non-electric objects: « Electric · pole and cable » / « Non-electric · no pole » (web insert panel, VR lab table); zero-duty line (`non-electric.ts`), no tap/pole/cable/diagram branch.
-- **VS-T39:** /village placement map like /simulation's: web `PlaceMinimap` (roads, water, paddy, names, N, zoom), VR lab table drawn with `drawVillageMap`.
-- **VS-T37:** /simulation VR map: GTA-like mini map low right (`sim-xr-minimap.tsx`), tap → big hologram map, a pin
-  opens the sector panel / mixing desk. `make vr-sim-map-probe` passes.
-- **VS-T36:** floating « Menu » and « Leave / Back to the studio » moved to a low follow dock
-  (`FOLLOW_DOCK_Y`/`_X` in `wrist-menu.ts`, ~34° down, ±0.48 m): no longer over the lab panels / table, no stolen clicks. « Go to the simulation » stayed on /village
-  (VS-T33 replaceState cancelled the push): `leaveImmersionFor` freezes the left page's URL.
-- **VS-T35:** inserted objects labelled like the village: on screen past 6 markers (`taggedMarkers`), badges at
-  the buildings' size; in immersion a 3D tag each (`ImmersionTag`, same switch, shown at start). Lit like the
-  village (dark at night only: `duskDarkness`, `placedDim`, `drawnTint`), sized from proportions (`sceneScale`,
-  `ARCHETYPE_HEIGHT_M`, stored scale dropped). Immersion tags all translated (`villageTags`). `make placed-shot`.
-
-- **VS-T29–T35:** see `docs/tasks/VR-village-spatial-shoot.md`.
+- 113 more tour objects (159): `tour-data.ts`, outlines in `scripts/tour-mock/outlines-src-2.mjs` (pano format) → `tour-outlines.ts`.
+- Name card only under the laser (`holo-detection-target.tsx` + test).
+- `tour-mock/specs-extra.ts` (furniture helpers: sofa, chair, stool, bed, table, glazing, door, curtain, cabinet, railing, fence, planter, tyre, rock).
+- Generator: `tour-mock/silhouette.ts` (outline as hull front, band clip, spike drop, plant fallback) + `generate.ts` (`partsEntry`/`finishEntry`, plant fallback under IoU 0.45) + test `tour-mock-silhouette.test.ts`.
+- 10 new `model3dPart` concepts (seat, backrest, cushion, mattress, curtain, pot, shelf, rail, mirror, flower), en/fr/mg.
+- Scores 159: mean IoU 0.76, 55 IoU ≥ 0.85, 75 ΔE ≤ 8.
 
 ## Decisions
 
-- Scale the viewer, not the village: the scene stays as is; speed, steps, laser, sector panel follow the rig scale.
-- Hand-off lives in memory (zustand): a reload drops it (the URL param now re-asks for VR, at the usual viewpoint). No Neon migration, no HF dataset change.
+- Silhouette parts use the traced outline shape only, never photo pixels (rule: no photo on models).
+- Outline crowns read as cushions: the plant fallback only replaces clearly broken readings.
+- Cylinder `size` is the world box: a lying rod is `[len, d, d]` with `axis: 'x'`.
+- No Neon migration, no HF dataset change (mock answers, not bench).
 
 ## Open
 
-- `make vr-sim-probe` (software GL) is flaky: last run failed mixer / turn / Enter steps (frames too slow), passes vary run to run.
 - `make check`: `recon` / chart time-budget tests flake under full-suite load (pass alone).
 - Commits need the GPG key unlocked (signing on).

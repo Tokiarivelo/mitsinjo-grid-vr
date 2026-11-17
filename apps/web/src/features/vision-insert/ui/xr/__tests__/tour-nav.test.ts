@@ -12,7 +12,8 @@ import {
   tourScale,
   TOUR_WALK_SPEED,
 } from '../tour/tour-nav';
-import { equirectUv, dirFromYawPitch } from '../tour/equirect';
+import { equirectUv, dirFromYawPitch, panoRingsBounds, projectPanoRings } from '../tour/equirect';
+import { pathToRings } from '@/lib/vision';
 
 describe('tour data (six real rooms)', () => {
   it('links every room both ways, and every image path is under /tour/', () => {
@@ -140,5 +141,59 @@ describe('outdoor walk (houses, trees, forest)', () => {
     const solar = terrace.find((d) => d.id === 'terrace-solar');
     expect(solar?.labels?.fr).toBe('Panneaux solaires');
     expect(solar?.kind).toBeUndefined();
+  });
+});
+
+describe('tour outlines (VS-T41)', () => {
+  it('bounds rings across the image seam', () => {
+    expect(
+      panoRingsBounds([
+        [
+          [0.98, 0.2],
+          [0.02, 0.2],
+          [0.02, 0.4],
+        ],
+      ])
+    ).toEqual({
+      u0: 0.98,
+      v0: 0.2,
+      u1: 0.02,
+      v1: 0.4,
+    });
+    expect(panoRingsBounds([])).toBeNull();
+  });
+
+  it('gives each outlined object its outline bounds as box (before: hand boxes missed the sconce)', () => {
+    const sconce = TOUR_ROOMS.lounge.objects.find((o) => o.id === 'lounge-sconce-2')!;
+    expect(sconce.outline).toBeDefined();
+    expect(sconce.box.u0).toBeGreaterThan(0.333);
+  });
+
+  it('sends the outline projected in the scan photo, inside the detection box', () => {
+    const loft = TOUR_ROOMS.loft;
+    const view = captureViewAt(0, 0);
+    const fridge = tourExpectedDetections(loft, 0.84, view).find((d) => d.id === 'loft-fridge')!;
+    const rings = pathToRings(fridge.outline!);
+    expect(rings).toHaveLength(1);
+    const { x, y, w, h } = fridge.box;
+    for (const [px, py] of rings[0]!) {
+      expect(px).toBeGreaterThanOrEqual(x - 0.002);
+      expect(px).toBeLessThanOrEqual(x + w + 0.002);
+      expect(py).toBeGreaterThanOrEqual(y - 0.002);
+      expect(py).toBeLessThanOrEqual(y + h + 0.002);
+    }
+    expect(
+      projectPanoRings(
+        [
+          [
+            [0.84, 0.5],
+            [0.85, 0.5],
+            [0.85, 0.6],
+          ],
+        ],
+        0.84,
+        view
+      )
+    ).toMatch(/^M0\.5 /);
   });
 });

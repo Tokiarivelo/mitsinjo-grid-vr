@@ -219,6 +219,18 @@ shape-report: ## 3D shape report: scores + contact sheet → test-results/shape-
 	$(need_ws)
 	SHAPE_REPORT=1 SHAPE_REPORT_DIR=$(CURDIR)/test-results/shape-report $(PNPM) --filter $(WEB) exec vitest run src/server/perception/__tests__/shape-report.test.ts -t "make shape-report"
 
+tour-trace: ## Tour mock (VS-T41): every 360° tour object cropped with a panorama-coordinate grid, to trace its outline by hand → test-results/tour-trace/ [ONLY=regex]
+	$(need_ws)
+	cd apps/web && node scripts/tour-mock/trace-crops.mjs $(CURDIR)/test-results/tour-trace $(ONLY)
+
+tour-outlines: ## Tour mock (VS-T41): hand outlines (scripts/tour-mock/outlines-src.mjs) → tour-outlines.ts + check sheets in test-results/tour-trace/ (run make tour-trace first)
+	$(need_ws)
+	cd apps/web && node scripts/tour-mock/outlines.mjs $(CURDIR)/test-results/tour-trace && npx prettier --write src/features/vision-insert/ui/xr/tour/tour-outlines.ts >/dev/null
+
+tour-mock: ## Tour mock (VS-T41): build every 360° tour object's mock 3D answer on its photo (colours measured, scored) → tour-mock.json + sheets in test-results/tour-mock/ [ONLY=regex]
+	$(need_ws)
+	TOUR_MOCK=1 $(if $(ONLY),TOUR_MOCK_ONLY="$(ONLY)") TOUR_MOCK_DIR=$(CURDIR)/test-results/tour-mock $(PNPM) --filter $(WEB) exec vitest run src/server/perception/__tests__/tour-mock-report.test.ts
+
 test-watch: ## Run engine tests in watch mode
 	$(need_ws)
 	$(PNPM) --filter $(ENGINE) exec vitest
