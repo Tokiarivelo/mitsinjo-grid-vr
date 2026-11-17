@@ -460,8 +460,9 @@ Style : hologramme futuriste (cyan / ambre, lignes de balayage, coins lumineux, 
 
 - [x] Une carte par miniature : la carte de l'objet sur la photo ne s'affiche plus qu'au survol (avant : toujours
       une fois la miniature posée, par-dessus la carte de la miniature).
-- [x] Survol : la souris bougée prend le survol aux lasers au repos (menu, boutons, « Ranger »), avec son
-      propre curseur dans la vue casque ; immobile 2,5 s, le laser le reprend.
+- [x] Survol : la dernière chose bougée l'emporte. La souris amenée sur le menu, un bouton ou « Ranger » prend
+      le survol aux lasers immobiles et le garde tant qu'elle y reste (son propre curseur dans la vue casque) ;
+      tourner une manette le rend au laser.
 - [x] Laser plus visible : faisceau ~4 mm, curseur ~1° avec halo lumineux, s'illumine en mouvement, faisceau
       à 35 % quand il ne vise rien (`xr-ray-visual.ts`).
 - [x] `make vr-probe` : une carte par miniature ; la souris sur « Ranger » le survole malgré le laser posé sur

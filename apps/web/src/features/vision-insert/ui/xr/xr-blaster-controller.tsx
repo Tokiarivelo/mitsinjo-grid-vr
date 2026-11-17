@@ -157,8 +157,11 @@ const BEAM_IDLE_OPACITY = 0.35;
 const TOUCH_COOLDOWN_MS = 750;
 /** Mouse travel (px) under which a press + release is a click, not a drag. */
 const CLICK_SLOP_PX = 6;
-/** In the headset view, the mouse keeps hovering this long after its last move (ms). */
-const MOUSE_HOVER_MS = 2500;
+/**
+ * Pointer turn (rad) between two frames from which a laser counts as moved (≈ 0.2°): in the
+ * headset view the hover goes to whatever moved last, the mouse or a laser.
+ */
+const LASER_MOVED_RAD = 0.004;
 
 const BEAM_IDLE = '#38bdf8';
 const BEAM_WRIST = '#e9d5ff';
@@ -444,6 +447,9 @@ export const XRBlasterController = memo(function XRBlasterController({
   const mouseNdcRef = useRef<{ x: number; y: number } | null>(null);
   /** Last mouse move over the scene (ms): in the headset view the mouse hovers for a while. */
   const mouseAtRef = useRef(-Infinity);
+  /** Last time a laser turned (ms), and each laser's last direction. */
+  const laserAtRef = useRef(-Infinity);
+  const laserDirsRef = useRef([new THREE.Vector3(), new THREE.Vector3()] as const);
   const handsRef = useRef<
     Array<{
       group: Parameters<typeof updateHandMesh>[0];
@@ -1072,6 +1078,11 @@ export const XRBlasterController = memo(function XRBlasterController({
           continue;
         }
         rayFrom(space, _vOrigin, _vDirection);
+        const lastDir = laserDirsRef.current[i];
+        if (lastDir.lengthSq() === 0 || lastDir.angleTo(_vDirection) > LASER_MOVED_RAD) {
+          if (lastDir.lengthSq() > 0) laserAtRef.current = now;
+          lastDir.copy(_vDirection);
+        }
         const drag = dragsRef.current.get(i);
         if (drag)
           dragTo(
@@ -1100,12 +1111,12 @@ export const XRBlasterController = memo(function XRBlasterController({
         camera.getWorldDirection(_vGazeD);
         if (gazeHits(_vGazeO, _vGazeD, menu.button)) hovered = WRIST_BUTTON_ID;
       }
-      // Emulator mouse: a cursor where it points, and the hover while it moves: the last thing
-      // moved wins, so a mouse brought onto the menu or a button lights that up, never the object
-      // the (still) controller laser rests on behind it.
+      // Emulator mouse: a cursor where it points, and the hover: the last thing moved wins, so a
+      // mouse brought onto the menu or a button lights it up (and keeps it while it rests there),
+      // never the object the still controller laser rests on; turning a laser takes it back.
       const ndc = mouseNdcRef.current;
       const eye =
-        ndc && now - mouseAtRef.current < MOUSE_HOVER_MS
+        ndc && mouseAtRef.current > laserAtRef.current
           ? xrEyeAt(
               (gl.xr as unknown as { getCamera?: () => THREE.ArrayCamera }).getCamera?.(),
               ndc.x

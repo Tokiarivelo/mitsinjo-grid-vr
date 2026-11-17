@@ -457,10 +457,14 @@ try {
     await page.mouse.move(awayPx.x, awayPx.y, { steps: 6 });
     await sleep(500);
   }
+  // Read before the screenshot (seconds in software GL); the mouse at rest keeps the hover anyway.
+  const awayHover = String((await tour())?.hovered ?? '');
   await shot('4a-mouse-on-put-away');
   check(
     'the mouse on « Put away » takes the hover from the laser resting on the miniature',
-    String((await tour())?.hovered ?? '').startsWith('holo:mini-dismiss-')
+    awayHover.startsWith('holo:mini-dismiss-') &&
+      String((await tour())?.hovered ?? '').startsWith('holo:mini-dismiss-'),
+    awayHover
   );
   if (awayPx) {
     await page.mouse.down();

@@ -272,7 +272,7 @@ describe('XRBlasterController (VS-T4)', () => {
     expect(onHoverTarget).toHaveBeenLastCalledWith('fridge');
   });
 
-  it('in the headset view a moving mouse takes the hover from a resting laser, with its cursor', () => {
+  it('in the headset view the last thing moved has the hover: mouse or laser', () => {
     // Owner report 2026-11-17: in the emulator the controller laser rests on an object, so the
     // mouse brought onto the menu never lit it up: the object under the laser kept the focus.
     gl.xr.isPresenting = true;
@@ -290,12 +290,14 @@ describe('XRBlasterController (VS-T4)', () => {
     act(() => frame?.({}, 0.016));
     expect(onHoverTarget).toHaveBeenLastCalledWith('spatial-air-button');
 
-    // Mouse left still: the laser has the hover back.
-    const now = performance.now();
-    const spy = vi.spyOn(performance, 'now').mockReturnValue(now + 10_000);
+    // The mouse resting there keeps it (no timer).
+    for (let k = 0; k < 5; k++) act(() => frame?.({}, 0.016));
+    expect(onHoverTarget).toHaveBeenLastCalledWith('spatial-air-button');
+
+    // Turning the controller takes the hover back: the last thing moved wins.
+    aim(controller0, fridgeOnVideo, EYE.clone().add(new THREE.Vector3(0.05, 0, 0)));
     act(() => frame?.({}, 0.016));
     expect(onHoverTarget).toHaveBeenLastCalledWith('fridge');
-    spy.mockRestore();
   });
 
   it('dragging a held model keeps its events: the view behind never turns (VS-T24)', () => {

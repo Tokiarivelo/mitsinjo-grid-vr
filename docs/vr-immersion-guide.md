@@ -344,7 +344,8 @@ Pilotage scripté (MCP IWER ou `remote.dispatch`) : voir [`vr-iwer-tools.md`](vr
    plus vifs, curseur grossi de 35 %) puis se calme à l'arrêt. Rien d'utilisable sous le rayon → faisceau et
    curseur restent à 35 % (on voit toujours où l'on vise ; `/simulation` garde son propre réglage). Dans
    l'émulateur, la souris a son curseur dans la vue casque, et **la dernière chose bougée a le survol** : la
-   souris amenée sur le menu ou un bouton l'allume, plus l'objet sur lequel repose le laser de la manette.
+   souris amenée sur le menu ou un bouton l'allume et le garde tant qu'elle y reste, plus l'objet sur
+   lequel repose le laser de la manette ; tourner la manette le lui rend.
 
 ## 7. Confort visuel et prévention du vertige : Écran panoramique à focus plat (`/village`)
 
