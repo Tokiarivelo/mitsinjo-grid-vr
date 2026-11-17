@@ -53,3 +53,31 @@ export function cabinet(
   }
   return out;
 }
+
+/** Open shelving: two sides, a top, a bottom and `shelves` boards between them (none = a frame). */
+export function shelving(
+  w: number,
+  h: number,
+  d: number,
+  color: string,
+  shelves: number,
+  o: { material?: PartSpec['material']; t?: number } = {}
+): PartSpec[] {
+  const t = o.t ?? 0.025;
+  const material = o.material ?? 'wood';
+  const board = (y: number): PartSpec =>
+    box([0, y, 0], [w - 2 * t, t, d], color, { material, kind: 'body', concept: 'shelf' });
+  const n = Math.max(0, Math.round(shelves));
+  return [
+    ...[-1, 1].map((sx) =>
+      box([sx * (w / 2 - t / 2), h / 2, 0], [t, h, d], color, {
+        material,
+        kind: 'frame',
+        concept: 'frame',
+      })
+    ),
+    board(t / 2),
+    board(h - t / 2),
+    ...Array.from({ length: n }, (_, i) => board(((i + 1) * h) / (n + 1))),
+  ];
+}

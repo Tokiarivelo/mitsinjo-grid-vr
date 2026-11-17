@@ -16,6 +16,7 @@ import { renderFlat, type FlatPaint, type FlatView } from '../flat-render';
 import { cropRectForShape } from '../shape-crop';
 import { ringsMask, type Mask } from '../silhouette-fit';
 import { generateImaginedViews } from '../views-generation';
+import { skinOf } from '../recipe-box';
 import { renderAtPhoto, type TourMockEntry } from './render';
 import {
   outlineFrame,
@@ -147,14 +148,6 @@ export function skinWrap(entry: Pick<TourMockEntry, 'recipe' | 'concepts'>): Ski
     : 'fold';
 }
 
-/**
- * Piece (layer) name of each part of a skinned model: its part concept (`model3dPart` key: seat,
- * leg, cushion…), else its material: all legs are one piece, every glass pane another.
- */
-export function skinPieces(entry: Pick<TourMockEntry, 'recipe' | 'concepts'>): string[] {
-  return entry.recipe.parts.map((p, k) => entry.concepts[k] || p.material || 'painted');
-}
-
 /** The recipe a tour object is answered with: its parts wearing their faces (a plant its front). */
 export function skinnedRecipe(entry: TourMockEntry, skin: TourSkin | null): ObjectRecipe {
   if (!skin) return entry.recipe;
@@ -162,12 +155,7 @@ export function skinnedRecipe(entry: TourMockEntry, skin: TourSkin | null): Obje
     return { ...skin.recipe, plant: { ...skin.recipe.plant, skin: skin.frontUrl } };
   return {
     ...skin.recipe,
-    skin: {
-      atlas: skin.atlasUrl,
-      view: { ...skin.view },
-      box: [...skin.box],
-      pieces: skinPieces(entry),
-    },
+    skin: skinOf(skin.recipe, entry.concepts, skin.atlasUrl, skin.view),
   };
 }
 

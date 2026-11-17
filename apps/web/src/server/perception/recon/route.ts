@@ -13,6 +13,7 @@ import {
 import { planContrast, silhouetteHull, type RoofVolume } from '@/lib/face-hull';
 import { archetypeOf } from '@/lib/object-kit';
 import { teamIdOf } from '../team/registry';
+import { furnitureModel, isFurnitureTeam, type ReadFurniture } from '../team/teams';
 import type { ObjectRecipe, ShapeTarget } from '@/lib/object-shape';
 import type { ClassMaterialsResult } from '../schemas';
 import { FACE_ORDER, buildFacePrompt, buildTopPrompt } from '../facade-faces';
@@ -93,6 +94,8 @@ export interface ReconDeps {
   readCar?: ReadCar;
   /** The plant team (PQ-T82), live or a saved reading; absent = label and outline decide. */
   readPlant?: ReadPlant;
+  /** The furniture teams (PQ-T89); absent = a seat, a table, a cupboard or a bed keeps its hull. */
+  readFurniture?: ReadFurniture;
 }
 
 export interface ReconOptions {
@@ -626,6 +629,41 @@ export async function reconstructObject(
       if (car?.body) recipe.proportions = profileProportions(recon.aligned.aspects);
       console.info(
         `${tag}: car ${car ? `${car.kind ?? 'kind ?'}, body ${car.body ? car.body.top.length : 0} stations, ${car.windows?.length ?? 0} windows, ${car.wheels.length} axles (${car.wheels.map((w) => `z ${w.z} r ${w.r}`).join(', ')}), clearance ${car.clearance ?? '?'}, track ${car.track ? `${car.track.x0}–${car.track.x1}` : '?'}` : 'not measured'}`
+      );
+    }
+    // A piece of furniture (PQ-T89): its team reads the front and side drawings cut to it; the
+    // builder makes its named parts (seat, backrest, legs…), wearing the drawings instead of the hull.
+    if (isFurnitureTeam(team) && deps.readFurniture && !signal?.aborted) {
+      const cut = async (v: 'front' | 'right') => {
+        const png = pngs[v];
+        const frame = recon.aligned.frames[v];
+        return png && frame ? cropToObject(png, frame) : null;
+      };
+      const [front, side] = await Promise.all([cut('front'), cut('right')]);
+      const read = front
+        ? await deps
+            .readFurniture(team, target.label, side ? [front, side] : [front], signal)
+            .catch((err) => {
+              console.warn(
+                `${tag}: ${team} team failed:`,
+                err instanceof Error ? err.message : err
+              );
+              return null;
+            })
+        : null;
+      const model = read
+        ? furnitureModel(team, read, recipe.proportions, recipe.faces?.atlas)
+        : null;
+      if (model) {
+        recipe.parts = model.parts;
+        recipe.proportions = model.proportions;
+        if (model.skin) {
+          recipe.skin = model.skin;
+          delete recipe.faces;
+        }
+      }
+      console.info(
+        `${tag}: ${team} ${model ? `${read!.kind}, ${model.parts.length} named parts${model.skin ? ' wearing the drawings' : ''}` : 'not read, hull kept'}`
       );
     }
     // A house or a building: its specialist reads it room by room (volumes, roofs, openings).
