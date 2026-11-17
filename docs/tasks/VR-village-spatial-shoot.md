@@ -522,7 +522,8 @@ pivot 30°, pas de 80 cm, pas de glisse continue.
       (`xr-nav-pad-3d.tsx`) et `/simulation` (`sim-xr-nav-pad.tsx`), centré ≈ 20° sous la vue (champ étroit).
 - [x] `HoloButton` (studio) `iconOnly` + `HoloButton` (simulation) `icon` ; icônes `up`, `down`, `turnLeft`,
       `turnRight`, `help` ; légende mains « Flèches sous la vue ».
-- [x] `make vr-hands-probe` : /simulation en mode mains seul (pivot, pas, aide, étiquette → panneau → couper /
-      rétablir / fermer).
-- [ ] Studio /village vérifié en mode mains dans l'émulateur (V521) ; casque plus tard.
+- [x] `make vr-hands-probe` : /simulation et /village en mode mains seul (pivot, pas, aide, étiquette → panneau →
+      couper / rétablir / fermer).
+- [x] Bandeau affiché seulement quand les mains sont suivies (`handsOnly`, `use-hands-only.ts`) ; masqué avec une manette.
+- [x] Studio /village vérifié en mode mains dans l'émulateur (`make vr-hands-probe` : 20/20, ids `holo:` du studio) ; casque plus tard.
 - [ ] Suivant : transition labo ↔ village dans la même session (plus de coupure de l'immersion).

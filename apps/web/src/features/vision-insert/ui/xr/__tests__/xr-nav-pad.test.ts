@@ -7,6 +7,7 @@ import {
   NAV_PAD_BUTTONS,
   NAV_PAD_OFFSET,
   drainNavActions,
+  navPadPanelId,
   navPadWidth,
   navPadX,
   pushNavAction,
@@ -26,6 +27,10 @@ describe('xr-nav-pad (hands-first navigation)', () => {
     );
     expect(new Set(NAV_PAD_BUTTONS.map((b) => b.id)).size).toBe(NAV_PAD_BUTTONS.length);
     for (const b of NAV_PAD_BUTTONS) expect(HOLO_ICONS).toContain(b.icon);
+  });
+
+  it('registers studio buttons with the holo: prefix of every studio panel', () => {
+    for (const b of NAV_PAD_BUTTONS) expect(navPadPanelId(b.id)).toBe(`holo:${b.id}`);
   });
 
   it('queues presses in order and empties on drain', () => {

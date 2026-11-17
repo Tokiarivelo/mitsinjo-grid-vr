@@ -31,6 +31,8 @@ vi.mock('../tour/panorama-tour', () => ({
   },
 }));
 vi.mock('../spatial-air-button', () => ({ SpatialAirButton: () => null }));
+// The hands-first pad has its own tests (xr-nav-pad, use-hands-only): here only where it shows.
+vi.mock('../xr-nav-pad-3d', () => ({ XrNavPad: () => <div data-testid="nav-pad" /> }));
 vi.mock('../studio-walk', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../studio-walk')>()),
   StudioWalk: ({ children }: { children: React.ReactNode }) => <>{children}</>,

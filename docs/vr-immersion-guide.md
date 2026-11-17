@@ -271,18 +271,20 @@ champ de vision étroit), cinq boutons à pincer suivent la vue sans y être col
 arrière** · **un pas en avant** · **pivoter →** · **aide**. Ils envoient les mêmes actions que les sticks
 (`xr-nav-pad.ts` → file lue par `XrControlsDriver`) : tout le parcours se fait assis, sans manette ni marche.
 Présent dans le studio, la visite 360° (hors dialogue, menu et labo) et `/simulation` (masqué pendant un
-panneau ou la grande carte). Survolé, un bouton affiche son nom. Vérification : `make vr-hands-probe`.
+panneau ou la grande carte), **seulement quand les mains sont suivies** : une manette prise le masque (ses sticks
+font déjà tout ; `handsOnly` / `useHandsOnly`). L'émulateur IWER et les sondes `__VR_*__` ne se chargent jamais
+sur un vrai casque (VR native, build de production). Survolé, un bouton affiche son nom. Vérification : `make vr-hands-probe`.
 
 ### 6.3 Navigateur PC (souris, clavier, émulateur IWER)
 
-| Action                          | Comment                                                                                    |
-| :------------------------------ | :----------------------------------------------------------------------------------------- |
-| Viser / valider                 | Survol + **clic gauche**, aussi pendant la session émulée (bouton du poignet, panneaux)    |
-| Marcher dans la visite 360°     | **↑ ↓ ← →**, **W A S D** ou **Z Q S D** (souris au-dessus de la scène)                     |
-| Changer de lieu                 | Marcher sur la flèche au sol, ou la viser et valider                                       |
-| Manettes / mains de l'émulateur | Barre DevUI : bascule ✋ / 🎮 ; panneaux `Controller [L/R]` (A, B, X, Y, Trig, Stick)      |
-| Bouger une manette              | Cliquer dessus → gizmo (flèches = déplacer, anneaux = tourner) ou champs Pos / Rot         |
-| Menu (bouton « Menu »)          | Flotte à gauche de la vue (il ne suit plus la tête) : le viser au laser ou au clic, ou B/Y |
+| Action                          | Comment                                                                                                                                                                                                                                              |
+| :------------------------------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Viser / valider                 | Survol + **clic gauche** ; pendant la session émulée, la souris ne vise que l'interface (bouton du poignet, panneaux, bandeau) : un clic ailleurs ne tire pas, les objets et la photo restent aux lasers (un clic de l'émulateur tire déjà le laser) |
+| Marcher dans la visite 360°     | **↑ ↓ ← →**, **W A S D** ou **Z Q S D** (souris au-dessus de la scène)                                                                                                                                                                               |
+| Changer de lieu                 | Marcher sur la flèche au sol, ou la viser et valider                                                                                                                                                                                                 |
+| Manettes / mains de l'émulateur | Barre DevUI : bascule ✋ / 🎮 ; panneaux `Controller [L/R]` (A, B, X, Y, Trig, Stick)                                                                                                                                                                |
+| Bouger une manette              | Cliquer dessus → gizmo (flèches = déplacer, anneaux = tourner) ou champs Pos / Rot                                                                                                                                                                   |
+| Menu (bouton « Menu »)          | Flotte à gauche de la vue (il ne suit plus la tête) : le viser au laser ou au clic, ou B/Y                                                                                                                                                           |
 
 Dans l'émulateur, mains et manettes tournent avec la tête (mode Play) et ne peuvent pas se toucher : le bouton
 « Menu » n'est donc pas porté au poignet mais flotte dans la pièce, à gauche de l'endroit où le menu s'ouvre, et

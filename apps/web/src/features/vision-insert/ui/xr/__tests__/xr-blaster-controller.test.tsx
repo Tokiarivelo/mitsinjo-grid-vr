@@ -8,6 +8,7 @@ import { miniatureSlot } from '../xr-layout';
 import { createWristMenu, type WristMenu } from '../wrist-menu';
 import {
   mouseCursorShown,
+  mouseClickShoots,
   mouseTarget,
   XRBlasterController,
   xrEyeAt,
@@ -463,6 +464,14 @@ describe('mouse helpers (VS-T24)', () => {
     }
     for (const kind of ['target', 'miniature', 'hotspot', 'screen', 'none'] as const)
       expect(mouseCursorShown(kind)).toBe(false);
+  });
+
+  it('mouseClickShoots: in the headset view a click shoots only on the interface (VS-T48)', () => {
+    // Owner report 2026-11-17: one emulator click opened « Extract « Car » to 3D? » (laser on
+    // the car) and showed « No object detected here » (the mouse ray beside it) at once.
+    expect(mouseClickShoots(false, false)).toBe(true);
+    expect(mouseClickShoots(true, true)).toBe(true);
+    expect(mouseClickShoots(true, false)).toBe(false);
   });
 
   it('mouseTarget: our canvas always, a canvas over it only in the headset view', () => {
