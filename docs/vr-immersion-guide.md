@@ -356,6 +356,27 @@ Pilotage scripté (MCP IWER ou `remote.dispatch`) : voir [`vr-iwer-tools.md`](vr
    souris amenée sur le menu ou un bouton l'allume et le garde tant qu'elle y reste, plus l'objet sur
    lequel repose le laser de la manette ; tourner la manette le lui rend.
 
+### 6.5 Labo ↔ village de la simulation, sans quitter le casque (VS-T49)
+
+Une session WebXR vit sur un seul canvas et Meta ne documente pas de navigation immersive entre pages :
+dans le casque, « Aller à la simulation » (table du village du labo) ne termine plus la session et n'ouvre
+plus `/simulation`. Le canvas de `/village` change de monde sur place (`xr-world-switch.ts`, store `useXrWorld`).
+
+- **Passage** : une coque holographique (dôme, grille, bord lumineux bruité comme le passage 2D → 3D du labo)
+  monte du sol autour de la tête (1,1 s), le monde change derrière elle, puis elle s'effrite par le bas
+  (1,3 s). Le spectateur ne bouge jamais (confort Meta) ; on arrive à côté de l'objet ajouté (`useXrHandoff`).
+- **Village** : le même monde que `/simulation` (`VillageWorld`, extrait de `village-canvas.tsx`, modèle
+  `useStoreSceneModel`) : étiquettes, panneaux d'énergie, table de mixage, carte, bandeau mains.
+- **« Retour au labo »** : en bas à gauche (hauteur de la mini-carte, ≈ 25° du centre), jamais devant les
+  étiquettes ; une pastille ✕ le masque ou le réaffiche. Il reste dans la zone morte du suivi paresseux
+  (< 34°) : tourner la tête vers lui ne le fait pas fuir. Manettes et mains, gauche comme droite. Il rejoue
+  le même passage dans l'autre sens.
+- **État du labo gardé** : le studio reste monté mais suspendu (masqué, sans tir, sans menu ni bandeau, ses
+  boucles de marche arrêtées, ignoré par les pointeurs du village via `userData.xrSuspended`). Au retour,
+  cibles, miniatures, objet du labo et place dans la visite sont là.
+- Hors casque (aperçu PC), le bouton ouvre toujours `/simulation`.
+- Vérifié dans l'émulateur : `make vr-world-probe`.
+
 ## 7. Confort visuel et prévention du vertige : Écran panoramique à focus plat (`/village`)
 
 ### Pourquoi la vue sphérique provoquait-elle des vertiges ?

@@ -1,4 +1,4 @@
-import { Children, isValidElement, type ReactNode } from 'react';
+import { Children, isValidElement, type ReactElement, type ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { act, render } from '@testing-library/react';
 import { scenarios, simulate } from '@mitsinjo/engine';
@@ -48,19 +48,24 @@ vi.mock('@react-three/drei', () => {
 // VillageCanvas's conditional, so the stub is faithful for this purpose.
 vi.mock('../ui/post-effects', () => ({ PostEffects: () => null }));
 
-import { VillageCanvas } from '../ui/village-canvas';
-import { PostEffects } from '../ui/post-effects';
+import {
+  isImmersionView,
+  usesPostEffects,
+  VillageCanvas,
+  VillageWorld,
+} from '../ui/village-canvas';
 import { toSceneModel } from '../utils/to-scene-model';
 import { resetSceneQualityForTests } from '../hooks/use-scene-quality';
 
-function containsType(node: ReactNode, type: unknown): boolean {
+function findType(node: ReactNode, type: unknown): ReactElement | null {
   for (const child of Children.toArray(node)) {
     if (!isValidElement(child)) continue;
-    if (child.type === type) return true;
+    if (child.type === type) return child;
     const children = (child.props as { children?: ReactNode } | undefined)?.children;
-    if (containsType(children, type)) return true;
+    const found = findType(children, type);
+    if (found) return found;
   }
-  return false;
+  return null;
 }
 
 function renderCanvas(xrActive = false) {
@@ -117,12 +122,24 @@ describe('VillageCanvas XR (VR-T2)', () => {
   });
 
   it('drops post-processing while XR presents (it breaks stereo rendering)', () => {
-    const { unmount } = renderCanvas(false);
-    expect(containsType(captured.props?.children, PostEffects)).toBe(true);
-    unmount();
+    expect(usesPostEffects(false, 'high')).toBe(true);
+    expect(usesPostEffects(true, 'high')).toBe(false);
+    expect(usesPostEffects(false, 'low')).toBe(false);
+  });
 
-    const rerendered = renderCanvas(true);
-    expect(containsType(captured.props?.children, PostEffects)).toBe(false);
-    rerendered.unmount();
+  it('hands the village world to the canvas, with the XR flag (VS-T49)', () => {
+    const { unmount } = renderCanvas(true);
+    const world = findType(captured.props?.children, VillageWorld);
+    expect(world?.props).toMatchObject({ xrActive: true, quality: 'high' });
+    // /simulation has no lab to go back to.
+    expect((world?.props as { onBackToLab?: unknown }).onBackToLab).toBeUndefined();
+    unmount();
+  });
+
+  it('an immersion view comes from VR, full immersion or its preset', () => {
+    expect(isImmersionView(false, false, 'village')).toBe(false);
+    expect(isImmersionView(true, false, 'village')).toBe(true);
+    expect(isImmersionView(false, true, 'village')).toBe(true);
+    expect(isImmersionView(false, false, 'immersion')).toBe(true);
   });
 });

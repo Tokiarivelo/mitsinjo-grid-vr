@@ -526,4 +526,18 @@ pivot 30°, pas de 80 cm, pas de glisse continue.
       couper / rétablir / fermer).
 - [x] Bandeau affiché seulement quand les mains sont suivies (`handsOnly`, `use-hands-only.ts`) ; masqué avec une manette.
 - [x] Studio /village vérifié en mode mains dans l'émulateur (`make vr-hands-probe` : 20/20, ids `holo:` du studio) ; casque plus tard.
-- [ ] Suivant : transition labo ↔ village dans la même session (plus de coupure de l'immersion).
+- [x] Suivant : transition labo ↔ village dans la même session → VS-T49.
+
+## VS-T49 — Labo ↔ village de la simulation dans la même session XR
+
+Demande : plus de coupure de l'immersion entre le labo et la simulation ; passage façon labo 2D → 3D, dans
+les deux sens, et un bouton de retour au labo. Doc Meta (MCP) : pas de navigation immersive entre pages.
+
+- [x] `VillageWorld` extrait de `village-canvas.tsx` (scène, panneaux VR, caméra) ; `VillageCanvas` l'enveloppe ;
+      `useSceneModelFor` / `useStoreSceneModel` partagés avec `/simulation`.
+- [x] `/village` : « Aller à la simulation » dans le casque → `useXrWorld.go('village')`, sans fin de session ;
+      coque de passage `xr-world-transition.tsx` (couvre puis s'effrite, spectateur immobile).
+- [x] « Retour au labo » (`sim-xr-back-to-lab.tsx`) en bas à gauche, pastille masquer / afficher.
+- [x] Labo suspendu, pas démonté : son état (cibles, miniatures, objet, place dans la visite) survit à l'aller-retour.
+- [x] `CameraController` rend la caméra en cas de démontage en pleine session.
+- [x] `make vr-world-probe` (IWER, mains) ; casque plus tard.

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useMediaQuery } from '@/lib/use-media-query';
 import { useElementHeight } from '@/lib/use-element-height';
 import { GlassPanel } from '@/components/ui/glass-panel';
@@ -34,9 +34,8 @@ import { SectorIcon } from '@/components/ui/sector-icon';
 import { ViewModeToggle } from '@/components/ui/view-mode-toggle';
 import { useTranslations } from '@/lib/i18n';
 import { usePlacedModelsStore, useSimulationStore } from '@/stores';
-import { dayEvents } from '@/lib/day-events';
 import {
-  toSceneModel,
+  useSceneModelFor,
   useWebGLAvailable,
   LazyVillageCanvas,
   GridDiagram,
@@ -218,28 +217,7 @@ export function VillageViewport({
 
   // Scene model for 3D visualization (pure mapping)
   const fires = useActiveFires();
-  const placedModels = usePlacedModelsStore((s) => s.models);
-  // Fires of the day shown: a multi-day run keeps reported fires on its days.
-  const workflow = useSimulationStore((s) => s.workflow);
-  const dayIndex = useSimulationStore((s) => s.dayIndex);
-  const events = useMemo(
-    () => dayEvents(input.events, workflow, dayIndex),
-    [input.events, workflow, dayIndex]
-  );
-  const sceneModel = useMemo(
-    () =>
-      toSceneModel({
-        input,
-        events,
-        result,
-        timeIndex,
-        isModified,
-        strategy: result?.strategy ?? 'proportional',
-        weather,
-        placedModels,
-      }),
-    [input, result, timeIndex, isModified, weather, placedModels, events]
-  );
+  const sceneModel = useSceneModelFor({ input, result, timeIndex, isModified, weather });
 
   const sectorIds = input.sectors.map((sec) => sec.id);
 

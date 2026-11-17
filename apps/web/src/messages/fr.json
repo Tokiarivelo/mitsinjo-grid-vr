@@ -368,7 +368,10 @@
         "legendThumbTurn": "Pouce glissé ←/→ : pivoter · ↑/↓ : un pas",
         "legendThumbTap": "Tap du pouce : afficher / masquer les étiquettes",
         "legendStickHold": "Stick maintenu 1 s : afficher / masquer mains et manettes",
-        "legendPad": "Flèches sous la vue : pivoter · un pas"
+        "legendPad": "Flèches sous la vue : pivoter · un pas",
+        "backToLab": "Retour au labo",
+        "backToLabHide": "Masquer « Retour au labo »",
+        "backToLabShow": "Afficher « Retour au labo »"
       },
       "vrMixer": {
         "title": "Dispatcher · table de mixage",

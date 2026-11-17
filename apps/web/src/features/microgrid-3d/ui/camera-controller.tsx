@@ -310,6 +310,23 @@ export function CameraController({
     invalidate();
   }, [xrActive, focusKey, moveTo, moveToFocusTarget, camera, scene, gl, invalidate]);
 
+  // Unmounted mid-session (the /village VR world swaps back to the lab, VS-T49): hand the camera
+  // back to its parent and drop this rig's hands and pointers, as on exit.
+  useEffect(
+    () => () => {
+      xrHandsHandle.current?.dispose();
+      xrHandsHandle.current = null;
+      const rig = xrRig.current;
+      xrRig.current = null;
+      wasXrActive.current = false;
+      if (!rig) return;
+      (xrPrevParent.current ?? scene).attach(camera);
+      camera.scale.set(1, 1, 1);
+      scene.remove(rig);
+    },
+    [camera, scene]
+  );
+
   // Walk grid (VSIM-T2): built from the scene on entry, once more after late meshes load.
   useEffect(() => {
     if (!xrActive) {

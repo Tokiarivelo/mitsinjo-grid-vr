@@ -37,7 +37,12 @@ import { useContextLoss } from '../hooks/use-context-loss';
 import { useFeederLabels } from '../hooks/use-feeder-labels';
 import { useSceneQuality, type SceneQuality } from '../hooks/use-scene-quality';
 import { isSoftwareRenderer } from '../utils/webgl';
-import { createSceneStats, sampleSceneStats, type SceneStatsSample } from '../utils/scene-stats';
+import {
+  createSceneStats,
+  sampleSceneStats,
+  type SceneStatsCounters,
+  type SceneStatsSample,
+} from '../utils/scene-stats';
 import { applyOvercast, skyPalette, type SkyPalette } from '../utils/sky-palette';
 import { WEATHER_ATMOSPHERE } from '../utils/weather-atmosphere';
 import {
@@ -76,6 +81,7 @@ import { SimXrInterior } from './sim-xr-interior';
 import { SimXrDispatchPanel } from './sim-xr-dispatch-panel';
 import { SimXrMinimap } from './sim-xr-minimap';
 import { SimXrNavPad } from './sim-xr-nav-pad';
+import { SimXrBackToLab } from './sim-xr-back-to-lab';
 import { dispatchMixerStrips } from '../utils/dispatch-mixer';
 import { SimXrDevProbe } from './sim-xr-dev-probe';
 import { useSimXr } from '../hooks/use-sim-xr';
@@ -403,7 +409,55 @@ export interface VillageCanvasProps {
   className?: string;
 }
 
-export function VillageCanvas({
+/** Post-processing runs on screen at the high tier only: EffectComposer breaks stereo XR. */
+export function usesPostEffects(xrActive: boolean, quality: SceneQuality): boolean {
+  return !xrActive && quality === 'high';
+}
+
+/** Immersion view (VR, full-immersion, or its camera preset): 3D labels instead of HTML ones. */
+export function isImmersionView(
+  xrActive: boolean,
+  immersionActive: boolean,
+  preset: CameraPreset
+): boolean {
+  return Boolean(xrActive || immersionActive || preset === 'immersion');
+}
+
+/**
+ * Art-directed light for the selected hour (golden hour by day, moonlit night), greyed by the
+ * day's weather (overcast sky, dim sun, thicker haze).
+ */
+function useScenePalette(model: SceneModel): SkyPalette {
+  return useMemo(
+    () =>
+      applyOvercast(
+        skyPalette(model.sunElevation, model.isDaytime),
+        WEATHER_ATMOSPHERE[model.weather].overcast,
+        model.isDaytime
+      ),
+    [model.sunElevation, model.isDaytime, model.weather]
+  );
+}
+
+/** The village world's props: scene, VR panels and camera, inside any R3F Canvas (VS-T49). */
+export interface VillageWorldProps extends Omit<
+  VillageCanvasProps,
+  'rendererRef' | 'className' | 'quality'
+> {
+  quality: SceneQuality;
+  /** Auto-downgrade callback (screen only): runs the quality probe while in view. */
+  onSlowDevice?: () => void;
+  /** Fixed parent of the in-scene HTML labels (screen); none in VR. */
+  htmlPortal?: RefObject<HTMLDivElement | null> | null;
+  /** The canvas is on screen (the quality probe needs a running loop). */
+  inView?: boolean;
+  /** ?perf=1 counters, filled by the in-canvas probe. */
+  stats?: SceneStatsCounters | null;
+  /** /village VR (VS-T49): « Back to the lab » in the same XR session. */
+  onBackToLab?: () => void;
+}
+
+export function VillageWorld({
   model,
   selectedSector,
   onSelectSector,
@@ -412,17 +466,15 @@ export function VillageCanvas({
   cameraResetKey = 0,
   focusApplianceId = null,
   panMode = false,
-  quality: qualityOverride,
-  rendererRef,
+  quality,
+  onSlowDevice,
   xrActive = false,
   immersionActive = false,
-  className,
-}: VillageCanvasProps) {
-  const sceneQuality = useSceneQuality();
-  const quality = qualityOverride ?? sceneQuality.quality;
-  // Auto-downgrade only applies when the tier comes from the shared store and the user didn't pick it.
-  const onSlowDevice =
-    qualityOverride || sceneQuality.userChosen ? undefined : sceneQuality.autoDowngrade;
+  htmlPortal = null,
+  inView = true,
+  stats = null,
+  onBackToLab,
+}: VillageWorldProps) {
   const tSectors = useTranslations('sectors');
   const tPriorities = useTranslations('priorities');
   const tSim = useTranslations('features.simulation');
@@ -453,11 +505,8 @@ export function VillageCanvas({
   // frame costs ~0.5 s and would freeze the page); dots stay visible, frozen.
   const softwareGl = isSoftwareRenderer();
   const animate = !reducedMotion && !model.isModified && !softwareGl;
-  // Shader warm-up (PT-7): the canvas fades in once its materials are compiled (≤ 1 s).
-  const [warmTarget, setWarmTarget] = useState<WarmupTarget | null>(null);
-  const warm = useShaderWarmup(warmTarget);
   const high = quality === 'high';
-  const isImmersion = Boolean(xrActive || immersionActive || cameraPreset === 'immersion');
+  const isImmersion = isImmersionView(xrActive, immersionActive, cameraPreset);
 
   const sectorStatuses = useMemo(() => {
     const map: Partial<Record<SectorId, SectorStateOverride>> = {};
@@ -505,10 +554,306 @@ export function VillageCanvas({
   };
   const socLabel = (pct: string) => tSim('socValue', { pct });
 
-  // Fixed parent for in-scene HTML labels, so drei's <Html> never re-targets after mount.
-  const htmlPortal = useRef<HTMLDivElement>(null);
   // In immersion mode (VR or full-immersion view), suppress 2D DOM HTML overlays in favor of 3D spatial labels.
   const activeHtmlPortal = isImmersion ? null : htmlPortal;
+
+  // Art-directed light for the selected hour (golden hour by day, moonlit night),
+  // greyed by the day's weather (overcast sky, dim sun, thicker haze).
+  const palette = useScenePalette(model);
+  // Clouds drift and rain falls whenever motion is allowed (even on a modified run).
+  const weatherMotion = !reducedMotion && !softwareGl;
+
+  // Celestial trajectory: Sun arcs 0° to 180° by day, Moon arcs 0° to 180° by night.
+  const sun = useMemo(() => sunCoordinates(model.timeIndex), [model.timeIndex]);
+  const moon = useMemo(() => moonCoordinates(model.timeIndex), [model.timeIndex]);
+  const nightProgress = useMemo(() => nightFactor(model.timeIndex), [model.timeIndex]);
+
+  // Active key light: sun by day, moon by night (matches shadow casting to visible orb).
+  const activeKeyDirection = model.isDaytime ? sun.keyDirection : moon.keyDirection;
+  const keyLightPos = useMemo<[number, number, number]>(
+    () => [
+      activeKeyDirection[0] * KEY_LIGHT_DISTANCE,
+      activeKeyDirection[1] * KEY_LIGHT_DISTANCE,
+      activeKeyDirection[2] * KEY_LIGHT_DISTANCE,
+    ],
+    [activeKeyDirection]
+  );
+  // Shadow casters are static: re-bake the sun shadow map only when light or data change.
+  const shadowBakeKey = useMemo(() => [keyLightPos, model] as const, [keyLightPos, model]);
+  return (
+    <>
+      {/* Another page's canvas (the /village VR world) is transparent: paint this sky's horizon. */}
+      {onBackToLab && <color attach="background" args={[palette.horizon]} />}
+      <fog
+        attach="fog"
+        args={[palette.fog, 48 * palette.fogScale, (high ? 210 : 170) * palette.fogScale]}
+      />
+
+      <hemisphereLight args={[palette.hemiSky, palette.hemiGround, palette.hemiIntensity]} />
+      <CelestialLighting
+        timeIndex={model.timeIndex}
+        isDaytime={model.isDaytime}
+        weather={model.weather}
+        palette={palette}
+        quality={quality}
+        weatherMotion={weatherMotion}
+        nightProgress={nightProgress}
+      />
+      <FireEffects buildings={model.buildings} quality={quality} animate={weatherMotion} />
+
+      <Suspense fallback={null}>
+        <Environment files={SUNSET_HDRI_URL} environmentIntensity={palette.envIntensity} />
+      </Suspense>
+
+      <VillageTerrain quality={quality} />
+      <PlacedYards clearings={yards} paths={tracks} />
+      <Suspense fallback={null}>
+        <Vegetation quality={quality} clearings={treeClearings} />
+        <WindTurbines lampGlow={palette.lampGlow} />
+        <LakeGrille
+          lampGlow={palette.lampGlow}
+          hasPower={
+            model.battery.socPct > 5 ||
+            model.solar.currentKw > 0.1 ||
+            Object.values(model.buildings).some((b) => b.servedKw > 0.05)
+          }
+        />
+        <Vehicles />
+        {/* Inside the casters' Suspense so the first bake includes the loaded trees. */}
+        {high && <ShadowBake bakeKey={shadowBakeKey} />}
+      </Suspense>
+      <ResumeOnVisible />
+
+      <SolarArray
+        model={model.solar}
+        nameLabel={tSim('solarArray')}
+        outputLabel={`${tSim('liveOutput')} : ${fmtKw(model.solar.currentKw)}`}
+        htmlPortal={activeHtmlPortal}
+      />
+      <BatteryUnit
+        model={model.battery}
+        statusLabels={batteryStatusLabels}
+        socLabel={socLabel}
+        nameLabel={tSim('bessBattery')}
+        htmlPortal={activeHtmlPortal}
+      />
+      <DispatchControllerUnit
+        model={model.controller}
+        tones={feeders.tones}
+        totalServedKw={model.lines.batteryToBus.flowKw}
+        modeLabel={tDiagram(`controller.mode.${model.controller.mode}`)}
+        feederTitles={feeders.titles}
+        hasResult={model.hasResult}
+        // VR: the dispatcher opens its mixing desk (VS-T34); on screen, its camera preset.
+        onFocus={() => (xrActive ? simXr.openMixer() : onSelectPreset?.('controller'))}
+        nameLabel={tDiagram('controller.shortTitle')}
+        htmlPortal={activeHtmlPortal}
+      />
+      {model.hasResult && (
+        <FeederTags
+          lines={model.lines.busToSectors}
+          buildings={model.buildings}
+          tones={feeders.tones}
+          titles={feeders.titles}
+          htmlPortal={activeHtmlPortal}
+        />
+      )}
+      {stats && <SceneStatsProbe stats={stats} />}
+      <DistributionLines
+        lines={model.lines}
+        feeders={model.controller.feeders}
+        animate={animate}
+        lampGlow={palette.lampGlow}
+        halo={high}
+      />
+      <DraggableApplianceMarkers
+        markers={model.appliances}
+        selectedSector={selectedSector}
+        tagOf={(m) => tSim('applianceBadgeTitle', { name: m.name, quantity: m.quantity })}
+        priorityLabels={priorityLabels}
+        aiBadgeLabel={aiInControl ? tDispatch('aiBadge') : undefined}
+        htmlPortal={activeHtmlPortal}
+        tier={quality}
+        sectorStatuses={sectorStatuses}
+        lampGlow={palette.lampGlow}
+        immersionTags={
+          isImmersion
+            ? {
+                active: tagsShown,
+                category: tSim('villageTypes.appliance'),
+                describe: (m) =>
+                  tSim('villageTags.appliance', {
+                    priority: m.tag ? priorityLabels[m.tag.priority] : '—',
+                    kw: fmtKw(m.kwNow, 2),
+                  }),
+              }
+            : null
+        }
+      />
+      <VillageBuildings
+        buildings={model.buildings}
+        selectedSector={selectedSector}
+        onSelectSector={simXr.selectSector}
+        sectorNames={sectorNames}
+        priorityLabels={priorityLabels}
+        disconnectedLabel={tDiagram('status.disconnected')}
+        aiBadgeLabel={aiInControl ? tDispatch('aiBadge') : undefined}
+        htmlPortal={activeHtmlPortal}
+        lampGlow={palette.lampGlow}
+      />
+
+      {/* Immersion mode interactive in-air option & 3D tagged village type labels */}
+      {isImmersion && (
+        <ImmersionLabels
+          model={model}
+          selectedSector={selectedSector}
+          onSelectSector={simXr.selectSector}
+          sectorNames={sectorNames}
+          priorityLabels={priorityLabels}
+          xrActive={xrActive}
+          showLabels={tagsShown}
+          onToggleLabels={toggleTags}
+          {...(xrActive ? { onSelectDispatcher: simXr.openMixer } : {})}
+        />
+      )}
+
+      {xrActive && simXr.inside && (
+        <SimXrInterior
+          sector={simXr.inside}
+          servedKw={model.buildings[simXr.inside].servedKw}
+          coveragePct={model.buildings[simXr.inside].coveragePct}
+          onExit={simXr.exit}
+        />
+      )}
+      {xrActive && xrSector && (
+        <SimXrSectorPanel
+          sector={xrSector}
+          building={model.buildings[xrSector]}
+          cap={sectorCapOf(simXr.caps, xrSector)}
+          inside={simXr.inside === xrSector}
+          refused={simXr.refused === xrSector}
+          canUndo={simXr.canUndo}
+          pose={simXr.inside ? INTERIOR_PANEL_POSE : undefined}
+          onPower={(action) => simXr.power(xrSector, action)}
+          onEnter={() => simXr.enter(xrSector)}
+          onDoor={() => simXr.goToDoor(xrSector)}
+          onExit={simXr.exit}
+          onUndo={simXr.undo}
+          onClose={() => simXr.setPanel(null)}
+        />
+      )}
+      {xrActive && simXr.mixer && (
+        <SimXrDispatchPanel
+          battery={mixerBattery}
+          hasResult={model.hasResult}
+          sectors={mixerSectors}
+          appliances={mixerAppliances}
+          refused={simXr.refused !== null}
+          canUndo={simXr.canUndo}
+          onStart={simXr.startDispatch}
+          onReserve={simXr.mixReserve}
+          onSector={simXr.mixSector}
+          onSectorCut={simXr.cutSector}
+          onAppliance={simXr.mixAppliance}
+          onUndo={simXr.undo}
+          onClose={simXr.closeMixer}
+        />
+      )}
+      {/* Hands-first pad: turn / step / help without a stick, seated (Meta VR Start) */}
+      {xrActive && !simXr.map && !simXr.panel && !simXr.mixer && <SimXrNavPad />}
+      {/* /village VR world (VS-T49): back to the lab in the same session */}
+      {xrActive && onBackToLab && !simXr.map && <SimXrBackToLab onBack={onBackToLab} />}
+      {/* GTA-like map: mini low right, big hologram on a tap; a pin opens its controls (VS-T37) */}
+      {xrActive && (
+        <SimXrMinimap
+          buildings={model.buildings}
+          open={simXr.map}
+          onOpen={simXr.openMap}
+          onClose={simXr.closeMap}
+          onSelect={(id) => (id === 'dispatcher' ? simXr.openMixer() : simXr.selectSector(id))}
+        />
+      )}
+      {xrActive && process.env.NODE_ENV !== 'production' && (
+        <SimXrDevProbe
+          state={{
+            panel: simXr.panel,
+            inside: simXr.inside,
+            labels: simXr.labels,
+            help: simXr.help,
+            refused: simXr.refused,
+            mixer: simXr.mixer,
+            map: simXr.map,
+          }}
+          walkGridRef={simXr.walkGridRef}
+        />
+      )}
+      {xrActive && (
+        <XrControlLegend
+          visible={simXr.help}
+          namespace="features.simulation.vrControls"
+          keysFor={simLegendKeys}
+        />
+      )}
+
+      {/* No post-processing in XR: EffectComposer breaks stereo rendering. */}
+      {!xrActive &&
+        (usesPostEffects(xrActive, quality) ? (
+          <>
+            <PostEffects />
+            {/* Probe only on screen: a paused loop would starve it and force a downgrade. */}
+            {onSlowDevice && inView && <QualityProbe onSlow={onSlowDevice} />}
+          </>
+        ) : (
+          // Low tier: one baked contact shadow instead of real-time shadow maps.
+          <BakedContactShadows />
+        ))}
+
+      <CameraController
+        preset={cameraPreset}
+        resetKey={cameraResetKey}
+        xrActive={xrActive}
+        xrPlace={simXr.place}
+        onXrAction={simXr.onXrAction}
+        walkGridRef={simXr.walkGridRef}
+        focusSector={selectedSector}
+        focusPoint={model.appliances.find((a) => a.id === focusApplianceId)?.position ?? null}
+        panMode={panMode}
+        autoRotate={!softwareGl}
+        reducedMotion={reducedMotion}
+        damping={high && !reducedMotion}
+      />
+    </>
+  );
+}
+
+export function VillageCanvas({
+  model,
+  selectedSector,
+  onSelectSector,
+  cameraPreset = 'village',
+  onSelectPreset,
+  cameraResetKey = 0,
+  focusApplianceId = null,
+  panMode = false,
+  quality: qualityOverride,
+  rendererRef,
+  xrActive = false,
+  immersionActive = false,
+  className,
+}: VillageCanvasProps) {
+  const sceneQuality = useSceneQuality();
+  const quality = qualityOverride ?? sceneQuality.quality;
+  // Auto-downgrade only applies when the tier comes from the shared store and the user didn't pick it.
+  const onSlowDevice =
+    qualityOverride || sceneQuality.userChosen ? undefined : sceneQuality.autoDowngrade;
+  const tSim = useTranslations('features.simulation');
+  // Shader warm-up (PT-7): the canvas fades in once its materials are compiled (≤ 1 s).
+  const [warmTarget, setWarmTarget] = useState<WarmupTarget | null>(null);
+  const warm = useShaderWarmup(warmTarget);
+  const high = quality === 'high';
+  const isImmersion = isImmersionView(xrActive, immersionActive, cameraPreset);
+  // Fixed parent for in-scene HTML labels, so drei's <Html> never re-targets after mount.
+  const htmlPortal = useRef<HTMLDivElement>(null);
   // Off-screen canvas: stop the frame loop (no hidden 60 fps render while reading the page).
   const inView = useInView(htmlPortal);
   // Lost WebGL context → placeholder, then a fresh canvas (never a white box).
@@ -531,37 +876,7 @@ export function VillageCanvas({
     return () => window.clearInterval(id);
   }, [perfEnabled, stats]);
 
-  // Art-directed light for the selected hour (golden hour by day, moonlit night),
-  // greyed by the day's weather (overcast sky, dim sun, thicker haze).
-  const palette = useMemo(
-    () =>
-      applyOvercast(
-        skyPalette(model.sunElevation, model.isDaytime),
-        WEATHER_ATMOSPHERE[model.weather].overcast,
-        model.isDaytime
-      ),
-    [model.sunElevation, model.isDaytime, model.weather]
-  );
-  // Clouds drift and rain falls whenever motion is allowed (even on a modified run).
-  const weatherMotion = !reducedMotion && !softwareGl;
-
-  // Celestial trajectory: Sun arcs 0° to 180° by day, Moon arcs 0° to 180° by night.
-  const sun = useMemo(() => sunCoordinates(model.timeIndex), [model.timeIndex]);
-  const moon = useMemo(() => moonCoordinates(model.timeIndex), [model.timeIndex]);
-  const nightProgress = useMemo(() => nightFactor(model.timeIndex), [model.timeIndex]);
-
-  // Active key light: sun by day, moon by night (matches shadow casting to visible orb).
-  const activeKeyDirection = model.isDaytime ? sun.keyDirection : moon.keyDirection;
-  const keyLightPos = useMemo<[number, number, number]>(
-    () => [
-      activeKeyDirection[0] * KEY_LIGHT_DISTANCE,
-      activeKeyDirection[1] * KEY_LIGHT_DISTANCE,
-      activeKeyDirection[2] * KEY_LIGHT_DISTANCE,
-    ],
-    [activeKeyDirection]
-  );
-  // Shadow casters are static: re-bake the sun shadow map only when light or data change.
-  const shadowBakeKey = useMemo(() => [keyLightPos, model] as const, [keyLightPos, model]);
+  const palette = useScenePalette(model);
   // XR renders the headset pose every frame; otherwise render on demand (never off-screen).
   const frameloop = xrActive ? 'always' : inView ? 'demand' : 'never';
 
@@ -609,242 +924,23 @@ export function VillageCanvas({
           }}
           style={{ width: '100%', height: '100%', background: palette.horizon }}
         >
-          <fog
-            attach="fog"
-            args={[palette.fog, 48 * palette.fogScale, (high ? 210 : 170) * palette.fogScale]}
-          />
-
           <XrInputsLayer />
-          <hemisphereLight args={[palette.hemiSky, palette.hemiGround, palette.hemiIntensity]} />
-          <CelestialLighting
-            timeIndex={model.timeIndex}
-            isDaytime={model.isDaytime}
-            weather={model.weather}
-            palette={palette}
-            quality={quality}
-            weatherMotion={weatherMotion}
-            nightProgress={nightProgress}
-          />
-          <FireEffects buildings={model.buildings} quality={quality} animate={weatherMotion} />
-
-          <Suspense fallback={null}>
-            <Environment files={SUNSET_HDRI_URL} environmentIntensity={palette.envIntensity} />
-          </Suspense>
-
-          <VillageTerrain quality={quality} />
-          <PlacedYards clearings={yards} paths={tracks} />
-          <Suspense fallback={null}>
-            <Vegetation quality={quality} clearings={treeClearings} />
-            <WindTurbines lampGlow={palette.lampGlow} />
-            <LakeGrille
-              lampGlow={palette.lampGlow}
-              hasPower={
-                model.battery.socPct > 5 ||
-                model.solar.currentKw > 0.1 ||
-                Object.values(model.buildings).some((b) => b.servedKw > 0.05)
-              }
-            />
-            <Vehicles />
-            {/* Inside the casters' Suspense so the first bake includes the loaded trees. */}
-            {high && <ShadowBake bakeKey={shadowBakeKey} />}
-          </Suspense>
-          <ResumeOnVisible />
-
-          <SolarArray
-            model={model.solar}
-            nameLabel={tSim('solarArray')}
-            outputLabel={`${tSim('liveOutput')} : ${fmtKw(model.solar.currentKw)}`}
-            htmlPortal={activeHtmlPortal}
-          />
-          <BatteryUnit
-            model={model.battery}
-            statusLabels={batteryStatusLabels}
-            socLabel={socLabel}
-            nameLabel={tSim('bessBattery')}
-            htmlPortal={activeHtmlPortal}
-          />
-          <DispatchControllerUnit
-            model={model.controller}
-            tones={feeders.tones}
-            totalServedKw={model.lines.batteryToBus.flowKw}
-            modeLabel={tDiagram(`controller.mode.${model.controller.mode}`)}
-            feederTitles={feeders.titles}
-            hasResult={model.hasResult}
-            // VR: the dispatcher opens its mixing desk (VS-T34); on screen, its camera preset.
-            onFocus={() => (xrActive ? simXr.openMixer() : onSelectPreset?.('controller'))}
-            nameLabel={tDiagram('controller.shortTitle')}
-            htmlPortal={activeHtmlPortal}
-          />
-          {model.hasResult && (
-            <FeederTags
-              lines={model.lines.busToSectors}
-              buildings={model.buildings}
-              tones={feeders.tones}
-              titles={feeders.titles}
-              htmlPortal={activeHtmlPortal}
-            />
-          )}
-          {perfEnabled && <SceneStatsProbe stats={stats} />}
-          <DistributionLines
-            lines={model.lines}
-            feeders={model.controller.feeders}
-            animate={animate}
-            lampGlow={palette.lampGlow}
-            halo={high}
-          />
-          <DraggableApplianceMarkers
-            markers={model.appliances}
+          <VillageWorld
+            model={model}
             selectedSector={selectedSector}
-            tagOf={(m) => tSim('applianceBadgeTitle', { name: m.name, quantity: m.quantity })}
-            priorityLabels={priorityLabels}
-            aiBadgeLabel={aiInControl ? tDispatch('aiBadge') : undefined}
-            htmlPortal={activeHtmlPortal}
-            tier={quality}
-            sectorStatuses={sectorStatuses}
-            lampGlow={palette.lampGlow}
-            immersionTags={
-              isImmersion
-                ? {
-                    active: tagsShown,
-                    category: tSim('villageTypes.appliance'),
-                    describe: (m) =>
-                      tSim('villageTags.appliance', {
-                        priority: m.tag ? priorityLabels[m.tag.priority] : '—',
-                        kw: fmtKw(m.kwNow, 2),
-                      }),
-                  }
-                : null
-            }
-          />
-          <VillageBuildings
-            buildings={model.buildings}
-            selectedSector={selectedSector}
-            onSelectSector={simXr.selectSector}
-            sectorNames={sectorNames}
-            priorityLabels={priorityLabels}
-            disconnectedLabel={tDiagram('status.disconnected')}
-            aiBadgeLabel={aiInControl ? tDispatch('aiBadge') : undefined}
-            htmlPortal={activeHtmlPortal}
-            lampGlow={palette.lampGlow}
-          />
-
-          {/* Immersion mode interactive in-air option & 3D tagged village type labels */}
-          {isImmersion && (
-            <ImmersionLabels
-              model={model}
-              selectedSector={selectedSector}
-              onSelectSector={simXr.selectSector}
-              sectorNames={sectorNames}
-              priorityLabels={priorityLabels}
-              xrActive={xrActive}
-              showLabels={tagsShown}
-              onToggleLabels={toggleTags}
-              {...(xrActive ? { onSelectDispatcher: simXr.openMixer } : {})}
-            />
-          )}
-
-          {xrActive && simXr.inside && (
-            <SimXrInterior
-              sector={simXr.inside}
-              servedKw={model.buildings[simXr.inside].servedKw}
-              coveragePct={model.buildings[simXr.inside].coveragePct}
-              onExit={simXr.exit}
-            />
-          )}
-          {xrActive && xrSector && (
-            <SimXrSectorPanel
-              sector={xrSector}
-              building={model.buildings[xrSector]}
-              cap={sectorCapOf(simXr.caps, xrSector)}
-              inside={simXr.inside === xrSector}
-              refused={simXr.refused === xrSector}
-              canUndo={simXr.canUndo}
-              pose={simXr.inside ? INTERIOR_PANEL_POSE : undefined}
-              onPower={(action) => simXr.power(xrSector, action)}
-              onEnter={() => simXr.enter(xrSector)}
-              onDoor={() => simXr.goToDoor(xrSector)}
-              onExit={simXr.exit}
-              onUndo={simXr.undo}
-              onClose={() => simXr.setPanel(null)}
-            />
-          )}
-          {xrActive && simXr.mixer && (
-            <SimXrDispatchPanel
-              battery={mixerBattery}
-              hasResult={model.hasResult}
-              sectors={mixerSectors}
-              appliances={mixerAppliances}
-              refused={simXr.refused !== null}
-              canUndo={simXr.canUndo}
-              onStart={simXr.startDispatch}
-              onReserve={simXr.mixReserve}
-              onSector={simXr.mixSector}
-              onSectorCut={simXr.cutSector}
-              onAppliance={simXr.mixAppliance}
-              onUndo={simXr.undo}
-              onClose={simXr.closeMixer}
-            />
-          )}
-          {/* Hands-first pad: turn / step / help without a stick, seated (Meta VR Start) */}
-          {xrActive && !simXr.map && !simXr.panel && !simXr.mixer && <SimXrNavPad />}
-          {/* GTA-like map: mini low right, big hologram on a tap; a pin opens its controls (VS-T37) */}
-          {xrActive && (
-            <SimXrMinimap
-              buildings={model.buildings}
-              open={simXr.map}
-              onOpen={simXr.openMap}
-              onClose={simXr.closeMap}
-              onSelect={(id) => (id === 'dispatcher' ? simXr.openMixer() : simXr.selectSector(id))}
-            />
-          )}
-          {xrActive && process.env.NODE_ENV !== 'production' && (
-            <SimXrDevProbe
-              state={{
-                panel: simXr.panel,
-                inside: simXr.inside,
-                labels: simXr.labels,
-                help: simXr.help,
-                refused: simXr.refused,
-                mixer: simXr.mixer,
-                map: simXr.map,
-              }}
-              walkGridRef={simXr.walkGridRef}
-            />
-          )}
-          {xrActive && (
-            <XrControlLegend
-              visible={simXr.help}
-              namespace="features.simulation.vrControls"
-              keysFor={simLegendKeys}
-            />
-          )}
-
-          {/* No post-processing in XR: EffectComposer breaks stereo rendering. */}
-          {!xrActive &&
-            (high ? (
-              <>
-                <PostEffects />
-                {/* Probe only on screen: a paused loop would starve it and force a downgrade. */}
-                {onSlowDevice && inView && <QualityProbe onSlow={onSlowDevice} />}
-              </>
-            ) : (
-              // Low tier: one baked contact shadow instead of real-time shadow maps.
-              <BakedContactShadows />
-            ))}
-
-          <CameraController
-            preset={cameraPreset}
-            resetKey={cameraResetKey}
-            xrActive={xrActive}
-            xrPlace={simXr.place}
-            onXrAction={simXr.onXrAction}
-            walkGridRef={simXr.walkGridRef}
-            focusSector={selectedSector}
-            focusPoint={model.appliances.find((a) => a.id === focusApplianceId)?.position ?? null}
+            onSelectSector={onSelectSector}
+            cameraPreset={cameraPreset}
+            {...(onSelectPreset ? { onSelectPreset } : {})}
+            cameraResetKey={cameraResetKey}
+            focusApplianceId={focusApplianceId}
             panMode={panMode}
-            autoRotate={!softwareGl}
-            reducedMotion={reducedMotion}
-            damping={high && !reducedMotion}
+            quality={quality}
+            {...(onSlowDevice ? { onSlowDevice } : {})}
+            xrActive={xrActive}
+            immersionActive={immersionActive}
+            htmlPortal={htmlPortal}
+            inView={inView}
+            stats={perfEnabled ? stats : null}
           />
         </Canvas>
       </CanvasCreationBoundary>

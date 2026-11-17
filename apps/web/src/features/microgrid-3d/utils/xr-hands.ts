@@ -176,9 +176,19 @@ interface RayData {
 }
 
 /** Things a pointer can use: panels (`userData.xrUi`) and anything with a select handler. */
+/**
+ * Walks the scene but skips a suspended branch (`userData.xrSuspended`: the /village lab, hidden
+ * while the simulation's village is shown in the same XR session, VS-T49).
+ */
+export function traverseLive(root: THREE.Object3D, visit: (o: THREE.Object3D) => void): void {
+  if (root.userData?.xrSuspended) return;
+  visit(root);
+  for (const child of root.children) traverseLive(child, visit);
+}
+
 function usableObjects(scene: THREE.Scene): THREE.Object3D[] {
   const out: THREE.Object3D[] = [];
-  scene.traverse((o) => {
+  traverseLive(scene, (o) => {
     const h = o as THREE.Object3D & { __r3f?: { handlers?: { onClick?: unknown } } };
     if (
       o.userData?.xrUi ||
