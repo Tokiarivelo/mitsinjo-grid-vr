@@ -8,6 +8,7 @@ import {
   snapshotSources,
   type XrControlAction,
 } from './xr-controls';
+import { drainNavActions } from './xr-nav-pad';
 
 /**
  * Reads the buttons, sticks and thumb microgestures of every XR input each frame and hands the
@@ -27,10 +28,13 @@ export const XrControlsDriver = memo(function XrControlsDriver({
 
   useFrame((state) => {
     const session = gl.xr?.isPresenting ? gl.xr.getSession?.() : null;
+    // Pinched on the hands-first pad (xr-nav-pad): same handler as the sticks.
+    const pressed = drainNavActions();
     if (!session) {
       memory.clear();
       return;
     }
+    for (const a of pressed) handler.current(a);
     const actions = readControls(
       snapshotSources(session.inputSources),
       memory,

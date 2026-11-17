@@ -4,6 +4,7 @@ import { memo, useLayoutEffect, useMemo, useState, type RefObject } from 'react'
 import * as THREE from 'three';
 import { useThree } from '@react-three/fiber';
 import { holoCardTexture, HOLO } from '@/features/vision-insert/ui/xr/holo-style';
+import { holoIconTexture, type HoloIcon } from '@/features/vision-insert/ui/xr/holo-icons';
 
 /**
  * Shared pieces of the /simulation VR panels (VSIM-T3 sector panel, VS-T34 dispatcher desk):
@@ -26,6 +27,8 @@ export interface PanelButton {
   onPress: () => void;
   tone?: string;
   disabled?: boolean;
+  /** Icon-only button: the line icon centred, the label kept as the mesh's accessible name. */
+  icon?: HoloIcon;
 }
 
 /** One holographic button: tap with the trigger, a pinch or the mouse (xr-hands raycast). */
@@ -49,17 +52,24 @@ export const HoloButton = memo(function HoloButton({
         height: Math.round((512 * h) / w),
         align: 'center',
         accent: tone,
-        lines: [
-          {
-            text: button.label,
-            size: Math.min(54, Math.round((512 * h) / w) * 0.33),
-            weight: 700,
-            color: tone,
-          },
-        ],
+        lines: button.icon
+          ? []
+          : [
+              {
+                text: button.label,
+                size: Math.min(54, Math.round((512 * h) / w) * 0.33),
+                weight: 700,
+                color: tone,
+              },
+            ],
       }),
-    [button.label, tone, w, h]
+    [button.label, button.icon, tone, w, h]
   );
+  const iconMap = useMemo(
+    () => (button.icon ? holoIconTexture(button.icon, tone) : null),
+    [button.icon, tone]
+  );
+  const iconSize = Math.min(w, h) * 0.62;
   const press = () => {
     if (!button.disabled) button.onPress();
   };
@@ -89,6 +99,19 @@ export const HoloButton = memo(function HoloButton({
         depthWrite={false}
         toneMapped={false}
       />
+      {iconMap && (
+        <mesh position={[0, 0, 0.002]} renderOrder={32} raycast={() => null}>
+          <planeGeometry args={[iconSize, iconSize]} />
+          <meshBasicMaterial
+            map={iconMap}
+            transparent
+            opacity={button.disabled ? 0.45 : 1}
+            depthTest={false}
+            depthWrite={false}
+            toneMapped={false}
+          />
+        </mesh>
+      )}
     </mesh>
   );
 });

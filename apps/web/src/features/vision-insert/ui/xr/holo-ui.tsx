@@ -144,6 +144,8 @@ export interface HoloButtonProps extends HoloPanelHandlers {
   on?: boolean;
   /** Line icon left of the label. */
   icon?: HoloIcon;
+  /** Only the icon, centred; the label shows in the hover popover (small square buttons). */
+  iconOnly?: boolean;
   /** What a press does, shown in the hover popover under the label. */
   tip?: string;
   /** Distance (m) the button is read from: sets the label size in dmm. */
@@ -182,6 +184,7 @@ export const HoloButton = memo(function HoloButton({
   disabled = false,
   on = false,
   icon,
+  iconOnly = false,
   tip,
   distance = HOLO_VIEW_DISTANCE,
   onSelect,
@@ -195,7 +198,12 @@ export const HoloButton = memo(function HoloButton({
     ...(onDragEnd ? { onDragEnd } : {}),
     ...(axis ? { axis } : {}),
   });
-  const iconSize = icon ? Math.min(height * 0.6, width * 0.3) : 0;
+  const bare = Boolean(icon && iconOnly);
+  const iconSize = !icon
+    ? 0
+    : bare
+      ? Math.min(width, height) * 0.62
+      : Math.min(height * 0.6, width * 0.3);
   const textW = width * 0.94 - (icon ? iconSize + 0.012 : 0);
   const ink = on ? color : HOLO.ink;
   const spec = useMemo<HoloCardSpec>(
@@ -264,7 +272,7 @@ export const HoloButton = memo(function HoloButton({
         panelRef={ref}
       />
       {iconTex && (
-        <mesh position={[-width * 0.47 + iconSize / 2 + 0.01, 0, 0.002]} renderOrder={3}>
+        <mesh position={[bare ? 0 : -width * 0.47 + iconSize / 2 + 0.01, 0, 0.002]} renderOrder={3}>
           <planeGeometry args={[iconSize, iconSize]} />
           <meshBasicMaterial
             map={iconTex}
@@ -276,13 +284,15 @@ export const HoloButton = memo(function HoloButton({
           />
         </mesh>
       )}
-      <HoloText
-        spec={spec}
-        width={textW}
-        height={height * 0.9}
-        position={[icon ? (width * 0.94 - textW) / 2 : 0, 0, 0.002]}
-        opacity={disabled ? 0.4 : 1}
-      />
+      {!bare && (
+        <HoloText
+          spec={spec}
+          width={textW}
+          height={height * 0.9}
+          position={[icon ? (width * 0.94 - textW) / 2 : 0, 0, 0.002]}
+          opacity={disabled ? 0.4 : 1}
+        />
+      )}
       {popover && (
         <HoloText
           spec={popover}

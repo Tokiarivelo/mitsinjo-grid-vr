@@ -75,6 +75,7 @@ import { SimXrSectorPanel } from './sim-xr-sector-panel';
 import { SimXrInterior } from './sim-xr-interior';
 import { SimXrDispatchPanel } from './sim-xr-dispatch-panel';
 import { SimXrMinimap } from './sim-xr-minimap';
+import { SimXrNavPad } from './sim-xr-nav-pad';
 import { dispatchMixerStrips } from '../utils/dispatch-mixer';
 import { SimXrDevProbe } from './sim-xr-dev-probe';
 import { useSimXr } from '../hooks/use-sim-xr';
@@ -784,6 +785,8 @@ export function VillageCanvas({
               onClose={simXr.closeMixer}
             />
           )}
+          {/* Hands-first pad: turn / step / help without a stick, seated (Meta VR Start) */}
+          {xrActive && !simXr.map && !simXr.panel && !simXr.mixer && <SimXrNavPad />}
           {/* GTA-like map: mini low right, big hologram on a tap; a pin opens its controls (VS-T37) */}
           {xrActive && (
             <SimXrMinimap

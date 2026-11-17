@@ -367,7 +367,8 @@
         "legendPinch": "Pincer : sélectionner une étiquette, un bâtiment, un bouton",
         "legendThumbTurn": "Pouce glissé ←/→ : pivoter · ↑/↓ : un pas",
         "legendThumbTap": "Tap du pouce : afficher / masquer les étiquettes",
-        "legendStickHold": "Stick maintenu 1 s : afficher / masquer mains et manettes"
+        "legendStickHold": "Stick maintenu 1 s : afficher / masquer mains et manettes",
+        "legendPad": "Flèches sous la vue : pivoter · un pas"
       },
       "vrMixer": {
         "title": "Dispatcher · table de mixage",
@@ -1703,7 +1704,14 @@
         "inputsHide": "Masquer mains et manettes",
         "inputsShownEvent": "Mains et manettes affichées",
         "inputsHiddenEvent": "Mains et manettes masquées (les lasers restent)",
-        "legendStickHold": "Stick maintenu 1 s : afficher / masquer mains et manettes"
+        "legendStickHold": "Stick maintenu 1 s : afficher / masquer mains et manettes",
+        "navTurnLeft": "Pivoter à gauche de 30°",
+        "navTurnRight": "Pivoter à droite de 30°",
+        "navStepForward": "Un pas en avant",
+        "navStepBack": "Un pas en arrière",
+        "navHelp": "Afficher / masquer l'aide des commandes",
+        "navTip": "Pincez : ni manette ni marche nécessaires",
+        "legendPad": "Flèches sous la vue : pivoter · un pas"
       },
       "vrStudio": {
         "viewsTitle": "Dessin des vues 2D de « {name} »",

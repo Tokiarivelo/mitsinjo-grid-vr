@@ -65,6 +65,7 @@ import { createWristMenu, WRIST_BUTTON_ID } from './wrist-menu';
 import { createAimReadout } from './xr-blaster-controller';
 import { XrAimHint, XrControlLegend } from './xr-control-hints';
 import { XrControlsDriver } from './xr-controls-driver';
+import { XrNavPad } from './xr-nav-pad-3d';
 import { SNAP_TURN, snapshotSources, STEP_DISTANCE, type XrControlAction } from './xr-controls';
 import { snapTurn } from './xr-rig';
 import { newStudioWalk, StudioWalk, wheelStep } from './studio-walk';
@@ -766,6 +767,11 @@ export const VillageXRStudio = memo(function VillageXRStudio({
 
       {/* 4b. What just happened (connected, hidden…), a few seconds (VS-T32) */}
       <XrEventToast message={recentEvent} menuOpen={menuOpen} />
+
+      {/* 4c. Hands-first pad: turn / step / help without a stick, seated (Meta VR Start) */}
+      {((studio && stage !== 'lab') || (tourMode && !modal)) && !menuOpen && (
+        <XrNavPad registry={panels} hoveredId={hoveredTargetId} />
+      )}
 
       {/* 5. Studio door (VS-T26): leave the studio, or go back to the step left */}
       {extract && door && (
