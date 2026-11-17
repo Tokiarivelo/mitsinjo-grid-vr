@@ -4,6 +4,7 @@ const nextConfig: NextConfig = {
   transpilePackages: ['@mitsinjo/engine'],
   experimental: {
     optimizePackageImports: ['lucide-react', 'recharts', '@react-three/drei'],
+    agentUpgrade: 'security',
   },
   // PQ-T45 §8bis: the QuickJS WASM the sandbox reads at runtime (`readFileSync`, invisible to
   // tracing) must ship with the shape route on Vercel.
