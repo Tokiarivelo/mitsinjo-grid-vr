@@ -343,3 +343,15 @@ describe('part-plan teams (PQ-T89, PQ-T90)', () => {
     });
   });
 });
+
+describe('eval cases per class (PQ-T91)', () => {
+  it('every part-plan team replays at least 3 tour objects, each with an IoU floor or a written limit', () => {
+    // The tour has only two beds (bedroom-bed, loft-bed): both are replayed.
+    const tourOnly: Record<string, number> = { bed: 2 };
+    for (const team of Object.keys(FURNITURE_TEAMS)) {
+      const cases = FURNITURE_FIXTURES.filter((f) => f.team === team);
+      expect(cases.length, team).toBeGreaterThanOrEqual(tourOnly[team] ?? 3);
+      for (const f of cases) if ((f.minIou ?? 0.85) < 0.85) expect(f.limit, f.id).toMatch(/\S{3,}/);
+    }
+  });
+});

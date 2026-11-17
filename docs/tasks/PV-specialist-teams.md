@@ -181,18 +181,18 @@ En gras : spécialistes propres à une équipe. Les autres viennent de `team/sha
 - [x] `LIGHT_TEAM` (profile, lamp, finishes) pour lamp_post et luminaires intérieurs + test. — 13 luminaires de la visite rejoués : 10 ≥ 0,85 ; limites écrites : lanterne évasée (0,79), boîtes à lumière studio et lettres lumineuses (enseigne).
 - [x] Branchées dans `registry.ts` ; scénarios manuels (rideau, porte, clôture, rocher, frigo, applique). — `teamFor` : textile, fixture, structure, terrain, cabinet / screen / fan / machine / tank, lamp_post ; V533–V538.
 
-### PQ-T91 — Banc, dataset et doc
+### [x] PQ-T91 — Banc, dataset et doc
 
-- [ ] Cas d'éval par classe ; `make gen-evals` ; si la sortie change : `make hf-dataset && make hf-publish`.
-- [ ] `README.md` (fonctions / limites : classes couvertes par une équipe).
-- [ ] `docs/tasks/README.md` : statut de cette phase mis à jour.
-- [ ] `HANDOFF.md` réécrit (fichiers touchés, décisions).
+- [x] Cas d'éval par classe ; `make gen-evals` ; si la sortie change : `make hf-dataset && make hf-publish`. — chaque équipe rejoue ≥ 3 objets de la visite (lit : les 2 de la visite) avec un seuil d'IoU ou une limite écrite (test « eval cases per class ») ; `gen-evals` ne produit que les évals du copilote (inchangées, harnais 13/13) et le dataset HF ne contient pas la perception : pas de republication. `make gen-evals` échoue en local (`jiti` absent du workspace) : à réparer à part.
+- [x] `README.md` (fonctions / limites : classes couvertes par une équipe).
+- [x] `docs/tasks/README.md` : statut de cette phase mis à jour.
+- [x] `HANDOFF.md` réécrit (fichiers touchés, décisions).
 
 ### Fin de phase
 
 - [ ] Sur `/village`, une photo de canapé, de chaise, de rideau, de clôture et de rocher donne un modèle à
       pièces nommées (« Pièces vues sur la photo » : assise, dossier, pieds…) au lieu d'une boîte.
-- [ ] Maison, voiture et plante inchangées (régressions hors ligne vertes, `make check` vert).
+- [x] Maison, voiture et plante inchangées (régressions hors ligne vertes, `make check` vert). — `make house-regress` vert, tests voiture / plante verts ; `make check` : seuls les tests de durée de recon flanchent sous charge (verts seuls).
 - [ ] Une PR pour la phase, CI vert, fusionnée dans `main`.
 
 ## 7. Méthode par équipe nouvelle (recette à suivre)

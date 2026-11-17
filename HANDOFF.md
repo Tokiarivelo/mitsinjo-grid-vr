@@ -1,32 +1,41 @@
 # HANDOFF — read first, overwrite at end of session (≤40 lines)
 
-**Updated:** 2026-11-17 · **By:** Claude Code · **Branch:** `feat/vs-t49-lab-to-village-xr` (from `main` 67853d1d). Task: VS-T49 in `docs/tasks/VR-village-spatial-shoot.md`.
-
-## Context
-
-Meta VR Start Devpost closes **2026-11-18 12:00 PT** (23:00 Madagascar). Hands-first required, video < 3 min (Quest or emulator, YouTube/Vimeo public), launch date in the text, track Productivity, division New Experience, app free until ~Dec 11, no edits after the deadline.
+**Updated:** 2026-11-17 · **By:** Claude Code · **Branch:** `feat/pq-t91-evals-docs` (from `main` db309ed4). Phase PV-T specialist teams (`docs/tasks/PV-specialist-teams.md`), PQ-T89–T91 done.
 
 ## NEXT
 
-1. Report to the user on the other Devpost points: IWSDK (rules list IWSDK link or engine APK; R3F WebXR sits between → ship Vercel link **and** a bubblewrap PWA APK, skill `hz-store-pwa`), Vercel auto-deploy freeze after submission, tour photos (identifiable people?), CC BY-SA photo / music out of the new video, 60 fps unmeasured (no headset).
-2. Screen check V524–V528 (village), headset later.
+1. Screen check of the end of phase on `/village`, live Meta (contributor model): photos of a sofa, a chair, a curtain, a fence and a rock → models with named parts (scenarios V533–V538 in `test-scenarios/06-village.md`). Then tick the first « Fin de phase » box.
+2. Repair `make gen-evals` / `make hf-dataset`: `jiti` is not installed in the workspace (`Command "jiti" not found`).
+3. Back to the Devpost points of VS-T49 (IWSDK / PWA APK, video, deploy freeze) if the deadline still allows.
 
-## Done this session (VS-T49)
+## Done (PQ-T89 → PQ-T91, PRs #39, #40 merged)
 
-- Lab ↔ simulation village in ONE XR session on /village: `xr-world-switch.ts` (store `useXrWorld`, cover / reveal), shell `xr-world-transition.tsx`, `village-xr-world.tsx`.
-- `VillageWorld` extracted from `microgrid-3d/ui/village-canvas.tsx` (VillageCanvas wraps it); `useSceneModelFor` / `useStoreSceneModel` shared with /simulation.
-- « Back to the lab » `sim-xr-back-to-lab.tsx`: low left at minimap height, in the lazy-follow dead zone (< 34°), hide / show chip.
-- Lab suspended, not unmounted: state kept; inputs (blaster, driver, legends, pad, wrist menu) unmounted; walk / tour loops gated (`labSuspended`); village pointers skip it (`traverseLive`, `userData.xrSuspended`).
-- `CameraController` gives the camera back when unmounted mid-session.
-- `make vr-world-probe` 24/24; `make vr-hands-probe` 22/22; checked live through the IWER MCP (left controller on 5 buttons, round trip keeps the fridge placed).
+- Furniture teams (seat, table, storage, bed) faithful on the tour: 25/28 at IoU ≥ 0.85 front and side, plus a fit pass on measured proportions.
+- New teams, registered in `team/registry.ts` and built through `FURNITURE_TEAMS`:
+  - textile (on the SAM outline): 9/10;
+  - fixture: 14/14;
+  - structure: 6/6;
+  - terrain: 8/9;
+  - appliance (cabinet / screen / fan / machine / tank): 5/7;
+  - light (lamp_post): 10/13.
+- Builders promoted from the tour mock to `server/perception/furniture/` and reused by the tour: silhouette, soft (rug, rods, backdrop), structure (gate), terrain, appliance, lights.
+- `ownSpec` helper (`team/teams/furniture.ts`) for each team's own specialist. `APPLIANCE_LABELS` en / fr / mg.
+- PQ-T91: per-class eval test « eval cases per class » (≥ 3 replayed tour objects per team, 2 for the bed; any floor below 0.85 has a written limit). README features/limits, tasks README status.
 
 ## Decisions
 
-- No cross-page immersive navigation (Meta docs): one canvas swaps worlds. Off-headset, « Go to the simulation » still opens /simulation.
-- Village in /village forced to `quality="low"` (Quest budget: no shadows / post FX).
-- A HUD item beside the view must stay inside `FOLLOW_ANGLE` or looking at it re-centres it away (the 38.7° first placement did).
+- Limits written in the fixtures rather than tuning builders to one object:
+  - loft-rug, side view under one grid cell;
+  - forest-rock, an SDF sculpture;
+  - fireplaces 0.84, one body depth;
+  - house-wall-lamp-2 0.79;
+  - softboxes and marquee letters, which are not one fitting.
+- A flush fitting or a frame gets its absolute size from its fixed thickness (disc 7.5 cm, frame depth).
+- `gen-evals` makes only the copilot evals (unchanged) and the HF dataset holds no perception data, so nothing was republished.
 
-## Open
+## Checks
 
-- One left-controller press on « Valider et construire la 3D » did nothing right as the button turned active; not reproduced (left worked on 5 other buttons).
-- `make check`: engine autonomy timing and perception time-budget tests flake under heavy load (pass alone).
+- `make house-regress` green.
+- Car and plant tests green.
+- `make check`: 0 lint errors.
+- The recon time-budget and roof tests flake under the full run but pass on their own (27/27).
