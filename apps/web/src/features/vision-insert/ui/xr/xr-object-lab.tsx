@@ -28,6 +28,9 @@ import { AnchoredPanel, usePanelAnchor } from './holo-extract-panels';
 import { PEDESTAL_DROP, StudioPedestal } from './xr-extract-studio';
 import { LAB_TO_VIEWS, type PanelAnchor } from './xr-layout';
 import { HoloVillageTable } from './holo-village-table';
+import { LabDissolve } from './lab-dissolve-3d';
+import { labMotionProbe } from './lab-dissolve';
+import { SPIN_RESUME_MS, SPIN_SPEED } from './turntable';
 import type { AimReadout } from './xr-blaster-controller';
 
 export const LAB_IDS = {
@@ -51,6 +54,9 @@ export const LAB_IDS = {
 
 /** Largest side of the model on the lab pedestal (m): a table-top object, held at arm's length. */
 const LAB_MODEL_SCALE = 0.55;
+/** The build hologram's card on the pedestal (`HoloBuildStage`): side and centre height (m). */
+const CARD_SIZE = 0.42;
+const CARD_Y = CARD_SIZE / 2 + 0.01;
 /** Model turn per radian of pointer drag. */
 const TURN_GAIN = 3;
 const NOOP = () => {};
@@ -73,6 +79,8 @@ export interface XrObjectLabProps {
   photo?: string;
   /** Live pointer aim (the village table's cursor). */
   aim?: AimReadout;
+  /** The drawn main view (build hologram): it crumbles into the plate as the model rises. */
+  cardUrl?: string;
 }
 
 /**
@@ -95,6 +103,7 @@ export const XrObjectLab = memo(function XrObjectLab({
   anchor: studioAnchor,
   photo,
   aim,
+  cardUrl,
 }: XrObjectLabProps) {
   const t = useTranslations('features.visionInsert');
   const pieceLabel = usePieceLabel();
@@ -112,6 +121,9 @@ export const XrObjectLab = memo(function XrObjectLab({
   const rowRefs = useRef<Array<THREE.Group | null>>([]);
   const turn = useRef<THREE.Group>(null);
   const yaw = useRef(0);
+  /** Last drag (ms): the model spins on its own again `SPIN_RESUME_MS` after it. */
+  const draggedAt = useRef(-Infinity);
+  const modelRoot = useRef<THREE.Group>(null);
 
   // Every change goes to the recipe (the first render is the recipe's own edits).
   const first = useRef(true);
@@ -167,10 +179,16 @@ export const XrObjectLab = memo(function XrObjectLab({
     },
     onDrag: (dx) => {
       yaw.current += dx * TURN_GAIN;
+      draggedAt.current = performance.now();
     },
   });
-  useFrame(() => {
+  useFrame((_, delta) => {
+    // Turns slowly on the plate; a drag takes over, the spin comes back after it.
+    if (performance.now() - draggedAt.current > SPIN_RESUME_MS)
+      yaw.current = (yaw.current + SPIN_SPEED * Math.min(delta, 0.1)) % (Math.PI * 2);
     if (turn.current) turn.current.rotation.y = yaw.current;
+    const motion = labMotionProbe();
+    if (motion) motion.yaw = yaw.current;
     // The list slides with the drag; rows outside its window hide (and take no ray).
     if (listRef.current) listRef.current.position.y = scrollRef.current * LAB_ROW;
     rowRefs.current.forEach((row, i) => {
@@ -238,17 +256,26 @@ export const XrObjectLab = memo(function XrObjectLab({
           <StudioPedestal />
           <group ref={turn}>
             <group ref={modelRef} position={[0, LAB_MODEL_SCALE * 0.5, 0]}>
-              <Suspense fallback={null}>
-                <ObjectModel
-                  shape={shown}
-                  detection={detection}
-                  imageUrl={imageUrl}
-                  scale={LAB_MODEL_SCALE}
-                  studio={studio}
-                  xr
-                />
-              </Suspense>
+              <group ref={modelRoot}>
+                <Suspense fallback={null}>
+                  <ObjectModel
+                    shape={shown}
+                    detection={detection}
+                    imageUrl={imageUrl}
+                    scale={LAB_MODEL_SCALE}
+                    studio={studio}
+                    xr
+                  />
+                </Suspense>
+              </group>
             </group>
+            {/* 2D → 3D: the card crumbles into the plate as the model rises (once per opening) */}
+            <LabDissolve
+              {...(cardUrl ? { cardUrl } : {})}
+              cardSize={CARD_SIZE}
+              cardY={CARD_Y}
+              model={modelRoot}
+            />
           </group>
         </group>
 
