@@ -255,6 +255,12 @@ l'émulateur : [`vr-iwer-tools.md`](vr-iwer-tools.md).
   un dialogue.
 - **Extraction** : tir sur un objet → « Extraire en 3D ? » → vues 2D en carrousel → construction → labo 3D
   (VS-T19 → T22, `docs/tasks/VR-village-spatial-shoot.md`).
+- **Passage 2D → 3D du labo** (`lab-dissolve.ts` + `lab-dissolve-3d.tsx`) : à l'ouverture du labo, la carte
+  dessinée (vue principale validée, jamais la photo) s'effrite de bas en haut dans le plateau (bord bruité en
+  `discard`, sans fondu alpha), ses grains y tombent (un nuage de points, graines fixes), et le modèle monte
+  sous la même ligne (plan de découpe ajouté aux matériaux puis retiré) derrière un anneau lumineux ; ~2,6 s,
+  puis l'effet disparaît. Le modèle tourne ensuite seul sur le plateau (`SPIN_SPEED`) ; un glisser le reprend,
+  la rotation revient `SPIN_RESUME_MS` après. Dev : `window.__VR_LAB_MOTION__` (`make vr-probe`).
 - **Chat IA des vues 2D** (VS-T27, `holo-face-chat.tsx`) : à gauche du carrousel (miroir de la colonne de
   génération, ~1,4 m), l'historique de la vue en focus (opérateur cyan, bot IA violet, libellé « MODIF. IA »),
   un champ écrit au clavier holo (`utils/xr-keyboard.ts` : un seul plan, touche lue sur l'UV du rayon, AZERTY
@@ -328,6 +334,7 @@ l'émulateur : [`vr-iwer-tools.md`](vr-iwer-tools.md).
 | `xr-audio-fx.ts`                | Synthétiseur procédural Web Audio API (tir, impact, radar, connexion/déconnexion réseau).          | [x]  |
 | `spawned-object-3d.tsx`         | Miniature 3D : vol depuis la vidéo vers son socle, rotation auto, agrandie au survol / en main.    | [x]  |
 | `turntable.ts`                  | État de rotation d'une miniature : rotation auto, prise, rotation, tap ou glissé au relâcher.      | [x]  |
+| `lab-dissolve-3d.tsx`           | Labo 3D : la carte 2D s'effrite dans le plateau pendant que le modèle monte de bas en haut.        | [x]  |
 | `power-connection-beam.tsx`     | Conduit d'énergie 3D courbe en tube Catmull-Rom reliant l'appareil au microgrid du village.        | [x]  |
 | `village-spatial-hud.tsx`       | Tableau de bord télémétrique holographique flottant (Batterie, Solaire, Demande, Alertes).         | [x]  |
 | `spatial-hud-texture.ts`        | Générateur de texture canvas pour le tableau de bord holographique dans les airs.                  | [x]  |

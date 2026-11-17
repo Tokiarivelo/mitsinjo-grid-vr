@@ -909,6 +909,9 @@ export const VillageXRStudio = memo(function VillageXRStudio({
                       anchor={anchor}
                       photo={photo}
                       aim={aimOut}
+                      {...(extract.slides[0]?.imageUrl
+                        ? { cardUrl: extract.slides[0].imageUrl }
+                        : {})}
                     />
                   )
                 )

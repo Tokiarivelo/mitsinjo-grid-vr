@@ -327,6 +327,20 @@ try {
     '« Validate & build » builds the model, then the lab opens by itself',
     await waitFor(async () => (await extract())?.stage === 'lab', 240000)
   );
+  // The 2D card crumbles into the plate while the model rises, then the model spins on the plate.
+  const motion = () => page.evaluate(() => ({ ...(window.__VR_LAB_MOTION__ ?? {}) }));
+  // The lab counts its own mid-way frames (the window's rAF sleeps in an XR session). The shots
+  // above stall the frame loop while this first hand-over runs: logged only, checked on re-entry.
+  console.log(`  first hand-over: ${(await motion()).frames ?? 0} mid-way frames`);
+  check(
+    'the hand-over ends (card gone, model whole)',
+    await waitFor(async () => (await motion()).dissolve >= 1, 15000)
+  );
+  const yaw0 = (await motion()).yaw;
+  await page
+    .waitForFunction((y) => window.__VR_LAB_MOTION__?.yaw !== y, yaw0, { timeout: 5000 })
+    .catch(() => {});
+  check('the model spins on its own on the plate', (await motion()).yaw !== yaw0);
   await waitFor(async () => ((await lab())?.names.length ?? 0) > 0, 15000);
   await shot('3f-lab');
   await press('holo:lab-piece-*');
@@ -356,6 +370,12 @@ try {
   await shot('3g0c-views-to-lab-button');
   await press('holo:studio-to-lab');
   check('« 3D lab » turns back to the lab', (await extract())?.stage === 'lab');
+  await waitFor(async () => (await motion()).dissolve >= 1, 15000);
+  const again = (await motion()).frames ?? 0;
+  check(
+    `the 2D card crumbles into the plate as the model rises bottom-up (${again} frames, not a swap)`,
+    again >= 4
+  );
   await sleep(1500);
   await waitFor(async () => ((await lab())?.names.length ?? 0) > 0, 15000);
 
