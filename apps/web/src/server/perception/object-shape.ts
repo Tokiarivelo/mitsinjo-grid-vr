@@ -49,6 +49,7 @@ import {
 import { liveReadCar } from './car/car-specialist';
 import { CAR_TEAM } from './car/car-tools';
 import { liveReadPlant } from './tree/plant-specialist';
+import { liveReadFurniture } from './team/teams';
 import { PLANT_TEAM } from './tree/plant-tools';
 import { HOUSE_TEAM } from './house/house-tools';
 import { teamAsk, type TeamRef } from './team/team';
@@ -435,6 +436,7 @@ export async function runObjectShape(
                     askHouseTool: readWith(HOUSE_TEAM),
                     readCar: liveReadCar(readWith(CAR_TEAM)),
                     readPlant: liveReadPlant(readWith(PLANT_TEAM)),
+                    readFurniture: liveReadFurniture(readWith),
                   }
                 : {}),
             }
