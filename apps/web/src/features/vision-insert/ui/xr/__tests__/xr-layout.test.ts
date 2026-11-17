@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  AIR_BOB,
+  AIR_BUTTON_RADIUS,
   AIR_CARD,
   AIR_CRYSTAL_Y,
   AIR_RINGS_RADIUS,
@@ -100,12 +100,15 @@ describe('wrist menu layout (VS-T32)', () => {
     // The whole button bobs together: the rings' lowest point stays above the card's top edge.
     expect(AIR_CRYSTAL_Y - AIR_RINGS_RADIUS).toBeGreaterThan(AIR_CARD.height / 2);
   });
-  it('puts « Close » above the card top right, clear of the bobbing card and the rings', () => {
+  it('puts « Close » right of the scan card, out of the scan button ray radius (VS-T47)', () => {
+    // Before: above the card's top right, out of view and inside AIR_BUTTON_RADIUS: a near miss scanned.
     const [x, y] = MENU_CLOSE_OFFSET;
-    const cardTop = MENU_SCAN_OFFSET[1] + AIR_CARD.height / 2 + AIR_BOB;
-    expect(y - MENU_CLOSE_SIZE.height / 2).toBeGreaterThan(cardTop);
-    expect(x - MENU_CLOSE_SIZE.width / 2).toBeGreaterThan(AIR_RINGS_RADIUS);
-    expect(x + MENU_CLOSE_SIZE.width / 2).toBeLessThanOrEqual(AIR_CARD.width / 2);
+    const left = x - MENU_CLOSE_SIZE.width / 2;
+    expect(left).toBeGreaterThan(AIR_CARD.width / 2);
+    expect(left).toBeGreaterThan(AIR_BUTTON_RADIUS);
+    expect(y + MENU_CLOSE_SIZE.height / 2).toBeLessThanOrEqual(
+      MENU_SCAN_OFFSET[1] + AIR_CARD.height / 2
+    );
   });
 });
 

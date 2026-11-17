@@ -182,6 +182,11 @@ export const VillageXRStudio = memo(function VillageXRStudio({
     });
     return m;
   }, []);
+  // No menu in the studio (VS-T47): it covered the panels, and its only use there, « Analyse the
+  // current view », means nothing in the lab. Opened in the 360° view, it closes on the way in.
+  useEffect(() => {
+    if (studio && menu.open) menu.toggle();
+  }, [studio, menu]);
   // Dev only: lets `make vr-probe` aim at the wrist button (same pattern as __IWER_DEVICE__).
   useEffect(() => {
     if (process.env.NODE_ENV === 'production') return;
@@ -446,13 +451,11 @@ export const VillageXRStudio = memo(function VillageXRStudio({
   const buildSeconds = useElapsedSeconds(extract?.shape.startedAt, building);
   const leaveLab = useCallback(() => {
     if (!extract?.id) return;
-    const id = extract.id;
-    const target = findTarget(id);
-    if (target) shotTargetsRef.current.set(id, target);
-    setMaterialized((prev) => (prev.includes(id) ? prev : [...prev, id]));
-    notifyEvent(t('vrHudEventMaterialized', { name: extractName }));
+    // No miniature back in the 360° view (VS-T47): the object is already in the lab, and its
+    // miniature with its card sat in front of « Back to the studio », catching the laser.
+    notifyEvent(t('vrHudEventStaysInLab', { name: extractName }));
     extract.exitLab();
-  }, [extract, findTarget, notifyEvent, t, extractName]);
+  }, [extract, notifyEvent, t, extractName]);
   /** Leaves the studio from any step; the step and the object wait for « Back to the studio ». */
   const leaveStudio = useCallback(() => {
     if (stage === 'lab') leaveLab();
@@ -708,9 +711,15 @@ export const VillageXRStudio = memo(function VillageXRStudio({
         )}
       </group>
 
-      {/* 4. Wrist button → menu (scan button, guide, HUD VS-T8), following the viewer */}
-      <WristMenuButton menu={menu} open={menuOpen} hovered={hoveredTargetId === WRIST_BUTTON_ID} />
-      {menuOpen && (
+      {/* 4. Wrist button → menu (scan button, guide, HUD VS-T8), following the viewer; not in the studio */}
+      {!studio && (
+        <WristMenuButton
+          menu={menu}
+          open={menuOpen}
+          hovered={hoveredTargetId === WRIST_BUTTON_ID}
+        />
+      )}
+      {menuOpen && !studio && (
         <WristMenuPanel menu={menu} scanOffset={MENU_SCAN_OFFSET}>
           <SpatialAirButton
             status={status}

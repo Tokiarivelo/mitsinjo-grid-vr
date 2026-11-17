@@ -468,3 +468,17 @@ Style : hologramme futuriste (cyan / ambre, lignes de balayage, coins lumineux, 
 - [x] `make vr-probe` : une carte par miniature ; la souris sur « Ranger » le survole malgré le laser posé sur
       la miniature, et le clic la range.
 - [ ] **Done when :** vu au casque (manettes et mains).
+
+### VS-T47 : Labo sans menu, « Fermer » du menu cliquable, pas de miniature au retour du labo
+
+> Retour 2026-11-17 (émulateur) : dans le labo, le menu cachait les panneaux et proposait « Analyser la vue
+> actuelle » ; « Fermer » ne se cliquait pas ; au retour du labo, la miniature et sa carte cachaient
+> « Revenir au studio », le laser visait l'objet derrière.
+
+- [x] Pas de menu dans le studio (vues 2D, construction, labo) : ni bouton poignet ni panneau ; un menu
+      ouvert se ferme en entrant.
+- [x] « Fermer » à droite de la carte de scan, dans le champ de vision et hors du rayon de visée du bouton de
+      scan (avant : au-dessus de la carte, hors champ, un tir à côté analysait la vue).
+- [x] Quitter le labo ne pose plus de miniature dans la vue 360° (l'objet est dans le labo) : un avis dit
+      que « Revenir au studio » le rouvre.
+- [ ] **Done when :** vu au casque (manettes et mains).

@@ -1027,6 +1027,7 @@
       "vrHudEventConnected": "+{watts} W · {name} nampifandraisina",
       "vrHudEventDisconnected": "−{watts} W · {name} nesorina",
       "vrHudEventMaterialized": "Eo anoloanao i {name}: gâchette hampifandray azy, grip hanodina azy, « Atokàny » hanesorana azy",
+      "vrHudEventStaysInLab": "Mijanona ao amin’ny labo 3D i {name} : « Miverena any amin’ny studio » no hanokatra azy indray",
       "vrHudEventNoObject": "Tsy misy zavatra hita eto",
       "vrMini": {
         "connected": "✓ Mifandray amin'ny tambajotran'ny tanàna",
