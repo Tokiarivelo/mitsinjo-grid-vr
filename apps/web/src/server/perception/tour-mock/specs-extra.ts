@@ -24,8 +24,11 @@ import {
   METAL,
   ironRailing,
   latticeTower,
+  log,
+  rock,
   rods,
   rug,
+  tyre,
   sofa,
   stool,
   table,
@@ -48,19 +51,8 @@ const parts = (p: PartSpec[], yaw?: number): Spec => ({
 const plant = (label: string, hints: PlantHints): Spec => ({ kind: 'plant', label, hints });
 
 const WHITE = '#e8e7e3';
+const rockOf = (h: number, d: number, color: string): Spec => parts(rock(h, d, color));
 
-/** Side ring of a rock: flat bottom, rounded back and top (z, y). */
-const BOULDER: Array<[number, number]> = [
-  [-0.5, -0.5],
-  [0.5, -0.5],
-  [0.5, -0.1],
-  [0.38, 0.3],
-  [0.1, 0.5],
-  [-0.25, 0.42],
-  [-0.48, 0.1],
-];
-
-/** A free-standing rock: its traced outline as the front, a boulder section as the side. */
 /** Parts that keep one colour (`fixed`): open iron and steel, whose photo pixels are what shows through. */
 function fixedColor(p: PartSpec[], color: string): PartSpec[] {
   return p.map((x) => ({ ...x, color, fixed: true }));
@@ -103,17 +95,6 @@ function bareTree(): PartSpec[] {
       })
     ),
   ];
-}
-
-function rock(h: number, d: number, color: string): Spec {
-  return parts([
-    box([0, h / 2, 0], [h, h, d], color, {
-      material: 'stone',
-      kind: 'body',
-      concept: 'stone_foundation',
-      silhouette: { section: BOULDER },
-    }),
-  ]);
 }
 
 /** A vase of cut flowers or dried grasses, read as a plant on its vase. */
@@ -878,15 +859,7 @@ export const EXTRA_SPECS: Record<string, Spec> = {
   'garden-tree-2': parts(bareTree()),
   'garden-shrub': plant('shrub', { habit: 'shrub', leaf: 'broad', species: 'privet shrub' }),
   'garden-tree-3': plant('oak tree', { habit: 'spreading', leaf: 'broad', species: 'old oak' }),
-  'garden-log': parts([
-    // A fallen trunk: its traced outline, a round section.
-    box([0, 0.7, 0], [1.4, 1.4, 0.6], '#6b5f50', {
-      material: 'wood',
-      kind: 'trunk',
-      concept: 'tree_trunk',
-      silhouette: {},
-    }),
-  ]),
+  'garden-log': parts(log(1.4, 0.6, '#6b5f50')),
   'garden-tree-4': plant('evergreen tree', { ...ROUND, species: 'holm oak' }),
 
   // ── Avenue ────────────────────────────────────────────────────────────────────────────────
@@ -896,19 +869,11 @@ export const EXTRA_SPECS: Record<string, Spec> = {
   'avenue-tree-small': plant('young tree', { ...ROUND, species: 'young acacia' }),
 
   // ── Forest & woods ────────────────────────────────────────────────────────────────────────
-  'forest-rock-2': rock(0.45, 0.6, '#7d786c'),
-  'forest-rock-3': rock(0.45, 0.7, '#8a877e'),
-  'forest-rock-4': rock(0.9, 1.0, '#545a2f'),
-  'forest-rock-5': rock(0.8, 1.1, '#56592f'),
-  'forest-log': parts([
-    // A fallen trunk: its traced outline, a round section.
-    box([0, 0.8, 0], [1.6, 1.6, 0.25], '#4b4136', {
-      material: 'wood',
-      kind: 'trunk',
-      concept: 'tree_trunk',
-      silhouette: {},
-    }),
-  ]),
+  'forest-rock-2': rockOf(0.45, 0.6, '#7d786c'),
+  'forest-rock-3': rockOf(0.45, 0.7, '#8a877e'),
+  'forest-rock-4': rockOf(0.9, 1.0, '#545a2f'),
+  'forest-rock-5': rockOf(0.8, 1.1, '#56592f'),
+  'forest-log': parts(log(1.6, 0.25, '#4b4136')),
   'forest-tree-3': plant('forest tree', {
     habit: 'spreading',
     leaf: 'broad',
@@ -978,28 +943,6 @@ function planter(w: number, h: number, d: number): PartSpec[] {
       concept: 'pot',
     }),
     box([0, h + 0.01, 0], [w - 0.1, 0.03, d - 0.1], '#5e3b2a', { material: 'stone', kind: 'body' }),
-  ];
-}
-
-/** A tractor tyre lying flat: tread ring and the soil filling its hole. */
-function tyre(dia: number, h: number): PartSpec[] {
-  return [
-    lathe(
-      [0, h / 2, 0],
-      [dia, h, dia],
-      '#5a5644',
-      [
-        [0.42, -0.5],
-        [0.5, -0.25],
-        [0.5, 0.25],
-        [0.42, 0.5],
-      ],
-      { material: 'rubber', kind: 'body', concept: 'wheel' }
-    ),
-    cyl([0, h * 0.8, 0], [dia * 0.55, h * 0.4, dia * 0.55], '#4a3a2c', {
-      material: 'stone',
-      kind: 'body',
-    }),
   ];
 }
 

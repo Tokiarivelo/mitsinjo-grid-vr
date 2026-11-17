@@ -23,6 +23,7 @@ const ATLAS = 'data:image/jpeg;base64,AAAA';
 import {
   FIXTURE_FIXTURES,
   STRUCTURE_FIXTURES,
+  TERRAIN_FIXTURES,
   TEXTILE_FIXTURES,
 } from '../__fixtures__/teams/parts';
 import { TOUR_OUTLINES } from '@/features/vision-insert/ui/xr/tour/tour-outlines';
@@ -31,6 +32,7 @@ import type { PartsOutline } from '../team/teams';
 import { parseDrape, textileParts, type TextileReading } from '../team/teams/textile';
 import { fixtureParts, type FixtureReading } from '../team/teams/fixture';
 import { parseLattice, structureParts, type StructureReading } from '../team/teams/structure';
+import { terrainParts, type TerrainReading } from '../team/teams/terrain';
 
 const FURNITURE_FIXTURES = [
   ...RECORDED,
@@ -39,6 +41,7 @@ const FURNITURE_FIXTURES = [
   ...TEXTILE_FIXTURES,
   ...FIXTURE_FIXTURES,
   ...STRUCTURE_FIXTURES,
+  ...TERRAIN_FIXTURES,
 ];
 
 /** The tour outline of an object as the real path hands it: box fractions, box pixel aspect (pano 2:1). */
@@ -249,6 +252,16 @@ describe('part-plan teams (PQ-T89, PQ-T90)', () => {
       d: 0.01,
     });
     expect(rail.every((x) => x.fixed)).toBe(true);
+  });
+
+  it('builds a rock on its outline, a tyre and a stump by kind', () => {
+    const t = (kind: string) => read({}, { kind } as never) as unknown as TerrainReading;
+    const p = { w: 1, h: 0.4, d: 0.9 };
+    expect(terrainParts(t('rock'), p)[0]!.silhouette?.section).toHaveLength(7);
+    expect(terrainParts(t('log'), p)[0]!.silhouette).toEqual({});
+    expect(terrainParts(t('tyre'), p).map((x) => x.concept)).toEqual(['wheel', undefined]);
+    const [w, h] = partsBounds(terrainParts(t('stump'), p)).dims;
+    expect(w / h).toBeCloseTo(1 / 0.4, 1);
   });
 
   it('cuts silhouette parts from the outline, boxes without one', async () => {

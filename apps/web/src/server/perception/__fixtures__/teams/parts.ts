@@ -413,3 +413,39 @@ export const STRUCTURE_FIXTURES: FurnitureFixture[] = [
     ['timber_beam', 'stone_foundation']
   ),
 ];
+
+const terrainFx = (
+  id: string,
+  label: string,
+  kind: string,
+  color: string,
+  more: Partial<Parameters<typeof partsFixture>[0]> = {}
+) =>
+  partsFixture({
+    id,
+    team: 'terrain',
+    label,
+    kind,
+    top: 'rounded',
+    own: {},
+    finishes: [['surface', kind === 'tyre' ? 'rubber' : kind === 'log' ? 'wood' : 'stone', color]],
+    concepts: [kind === 'tyre' ? 'wheel' : kind === 'log' ? 'tree_trunk' : 'stone_foundation'],
+    outline: kind !== 'tyre',
+    ...more,
+  });
+
+export const TERRAIN_FIXTURES: FurnitureFixture[] = [
+  terrainFx('garden-tyre-1', 'Tyre', 'tyre', '#5a5644'),
+  terrainFx('garden-tyre-2', 'Tyre', 'tyre', '#5a5644'),
+  terrainFx('garden-log', 'Fallen log', 'log', '#6b5f50'),
+  terrainFx('forest-log', 'Fallen log', 'log', '#4b4136'),
+  terrainFx('forest-rock', 'Rock', 'rock', '#4e4a32', {
+    minIou: 0.7,
+    limit:
+      'The tour model of this rock is three hand-sculpted SDF blobs, not its outline: the team cuts the rock to the traced outline (its other rocks match it at 1.00).',
+  }),
+  terrainFx('forest-rock-2', 'Rock', 'rock', '#7d786c'),
+  terrainFx('forest-rock-3', 'Rock', 'rock', '#8a877e'),
+  terrainFx('forest-rock-4', 'Rock', 'rock', '#545a2f'),
+  terrainFx('forest-rock-5', 'Rock', 'rock', '#56592f'),
+];
