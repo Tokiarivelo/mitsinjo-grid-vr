@@ -1,8 +1,7 @@
 import 'server-only';
 
-import type { PerceptionClient } from '../client';
 import { cropToObject } from '../house/house-specialist';
-import { runTeam } from '../team/team';
+import { runTeam, type AskTeamTool } from '../team/team';
 import type { AlignedViews, ViewFrame, ViewName } from '../recon/views';
 import {
   CAR_TEAM,
@@ -23,15 +22,7 @@ export { CAR_TOOL_TIMEOUT_MS };
  */
 
 /** One call of the car team: the pilot or a specialist, its system prompt and schema, the images. */
-export type AskCarTool = (
-  tool: CarTool | 'pilot',
-  system: string,
-  schema: { name: string; schema: object },
-  imageUrl: string,
-  question: string,
-  references: ReadonlyArray<string>,
-  signal?: AbortSignal
-) => Promise<string | null>;
+export type AskCarTool = AskTeamTool<CarTool>;
 
 /** The whole reading of a car's drawings (live team, or a saved reading replayed). */
 export type ReadCar = (
@@ -40,14 +31,6 @@ export type ReadCar = (
   images: ReadonlyArray<string>,
   signal?: AbortSignal
 ) => Promise<CarReading | null>;
-
-/** The client's call as an `AskCarTool` (a mock answer counts as none). */
-export const carToolAsk =
-  (p: Pick<PerceptionClient, 'askCarTool'>): AskCarTool =>
-  async (...args) => {
-    const r = await p.askCarTool(...args);
-    return r.source === 'meta' ? r.content : null;
-  };
 
 /** The team's reading; null when the body or the glazing is missing after its retry. */
 export async function readCarParts(

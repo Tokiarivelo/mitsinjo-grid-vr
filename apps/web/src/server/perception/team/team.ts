@@ -1,3 +1,4 @@
+import type { PerceptionClient } from '../client';
 import { askSpecialists, callWithDeadline } from '../team-call';
 
 /**
@@ -46,6 +47,9 @@ export interface SpecialistTeam<Tool extends string, Brief, Reading, View extend
   summary: (reading: Reading) => string;
   briefSummary?: (brief: Brief) => string;
 }
+
+/** What the client needs to know of a team to call it (log kind, prompt version). */
+export type TeamRef = Pick<SpecialistTeam<string, unknown, unknown>, 'id' | 'promptVersion'>;
 
 /** One call of a team: the pilot or a specialist, its prompt and schema, the main image and the others. */
 export type AskTeamTool<Tool extends string = string> = (
@@ -139,3 +143,17 @@ export async function runTeam<Tool extends string, Brief, Reading, View extends 
     return { reading: null, brief: null };
   }
 }
+
+/**
+ * The client's team call as an `AskTeamTool` for one team (PQ-T85): the single factory every
+ * team is read with. A mock answer counts as none.
+ */
+export const teamAsk =
+  <Tool extends string>(
+    p: Pick<PerceptionClient, 'askTeamTool'>,
+    team: TeamRef
+  ): AskTeamTool<Tool> =>
+  async (...args) => {
+    const r = await p.askTeamTool(team, ...args);
+    return r.source === 'meta' ? r.content : null;
+  };

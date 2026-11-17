@@ -5,16 +5,17 @@
  * are put back into the one completion the callers read. Pure, no network.
  */
 
-/** Call kinds asked as a stream (long answers only: a short one gains nothing). */
-export const STREAMED_KINDS: ReadonlySet<string> = new Set([
-  'readHouse',
-  'housePilot',
-  'houseTool',
-  'carPilot',
-  'carTool',
-  'plantPilot',
-  'plantTool',
-]);
+/** The log kind of a team call (PQ-T85): `housePilot`, `carTool`, `seatTool`… */
+export const teamCallKind = (team: string, tool: string) =>
+  `${team}${tool === 'pilot' ? 'Pilot' : 'Tool'}`;
+
+const TEAM_KIND = /^[a-z]+(Pilot|Tool)$/;
+
+/**
+ * Whether a call kind is asked as a stream (long answers only: a short one gains nothing): the
+ * single house reading and every call of a specialist team.
+ */
+export const isStreamedKind = (kind: string) => kind === 'readHouse' || TEAM_KIND.test(kind);
 
 /** The completion as a non-streamed call returns it. */
 export interface ChatCompletion {

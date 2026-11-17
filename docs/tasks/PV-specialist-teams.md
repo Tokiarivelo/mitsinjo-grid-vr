@@ -127,13 +127,13 @@ En gras : spécialistes propres à une équipe. Les autres viennent de `team/sha
 - [x] `make house-regress` identique avant / après (sortie jointe au commit).
 - [x] Boucles pilote → spécialistes → fusion supprimées des trois `*-specialist.ts` (zéro duplication).
 
-### PQ-T85 — Un seul appel Meta d'équipe
+### [x] PQ-T85 — Un seul appel Meta d'équipe
 
-- [ ] `askTeamTool(team, tool, system, schema, imageUrl, question, refs, signal)` dans `meta.ts` (étape `parts`).
-- [ ] Même méthode dans `client.ts` et `mock.ts` (mock → pas de réponse).
-- [ ] `askHouseTool` / `askCarTool` / `askPlantTool` retirés, appelants migrés.
-- [ ] `object-shape.ts` : une fabrique `readWith(team)` au lieu de trois branches.
-- [ ] Tests client / meta mis à jour ; `docs/copilot.md` (appels de l'étape `parts`).
+- [x] `askTeamTool(team, tool, system, schema, imageUrl, question, refs, signal)` dans `meta.ts` (étape `parts`).
+- [x] Même méthode dans `client.ts` et `mock.ts` (mock → pas de réponse).
+- [x] `askHouseTool` / `askCarTool` / `askPlantTool` retirés, appelants migrés.
+- [x] `object-shape.ts` : une fabrique `readWith(team)` au lieu de trois branches.
+- [x] Tests client / meta mis à jour ; `docs/copilot.md` (appels de l'étape `parts`).
 
 ### PQ-T86 — Spécialistes partagés
 

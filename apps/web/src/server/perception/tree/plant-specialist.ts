@@ -1,7 +1,6 @@
 import 'server-only';
 
-import type { PerceptionClient } from '../client';
-import { runTeam } from '../team/team';
+import { runTeam, type AskTeamTool } from '../team/team';
 import {
   PLANT_TEAM,
   PLANT_TOOL_TIMEOUT_MS,
@@ -20,14 +19,7 @@ export { PLANT_TOOL_TIMEOUT_MS };
  */
 
 /** One call of the plant team: the pilot or a specialist, its system prompt and schema, the image. */
-export type AskPlantTool = (
-  tool: PlantTool | 'pilot',
-  system: string,
-  schema: { name: string; schema: object },
-  imageUrl: string,
-  question: string,
-  signal?: AbortSignal
-) => Promise<string | null>;
+export type AskPlantTool = AskTeamTool<PlantTool>;
 
 /** The whole reading of a plant's front drawing (live team, or a saved reading replayed). */
 export type ReadPlant = (
@@ -35,14 +27,6 @@ export type ReadPlant = (
   image: string,
   signal?: AbortSignal
 ) => Promise<PlantReading | null>;
-
-/** The client's call as an `AskPlantTool` (a mock answer counts as none). */
-export const plantToolAsk =
-  (p: Pick<PerceptionClient, 'askPlantTool'>): AskPlantTool =>
-  async (...args) => {
-    const r = await p.askPlantTool(...args);
-    return r.source === 'meta' ? r.content : null;
-  };
 
 /** The team's reading; null when the foliage is missing after its retry. */
 export async function readPlantParts(
@@ -52,12 +36,13 @@ export async function readPlantParts(
   signal?: AbortSignal,
   timeoutMs = PLANT_TOOL_TIMEOUT_MS
 ): Promise<{ reading: PlantReading | null; brief: PlantBrief | null }> {
-  const { reading, brief } = await runTeam(
-    PLANT_TEAM,
-    (tool, system, schema, img, question, _refs, both) =>
-      rawAsk(tool, system, schema, img, question, both),
-    { label, views: ['front'], images: [image], signal, timeoutMs }
-  );
+  const { reading, brief } = await runTeam(PLANT_TEAM, rawAsk, {
+    label,
+    views: ['front'],
+    images: [image],
+    signal,
+    timeoutMs,
+  });
   return { reading, brief };
 }
 

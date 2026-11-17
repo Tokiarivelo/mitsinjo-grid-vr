@@ -9,12 +9,11 @@ import {
   type HouseWall,
   type HouseSwatch,
 } from '@/lib/house-plan';
-import type { PerceptionClient } from '../client';
 import type { HouseReadResult } from '../schemas';
 import type { AlignedViews, GridView, ViewFrame, ViewName } from '../recon/views';
 import { cleanSwatch, fitHouse, housePatches, swatchOblique, type HousePatch } from './house-fit';
 import { buildHouseQuestion, type HouseReading } from './house-prompt';
-import { runTeam } from '../team/team';
+import { runTeam, type AskTeamTool } from '../team/team';
 import {
   HOUSE_TEAM,
   HOUSE_TOOL_TIMEOUT_MS,
@@ -44,27 +43,8 @@ export type ReadHouse = (
   signal?: AbortSignal
 ) => Promise<Pick<HouseReadResult, 'reading'>>;
 
-/**
- * One call of the piloted house reading (PQ-T73): the pilot or a part specialist, its own system
- * prompt and schema, the same images. Answers the raw content; null when the call fails.
- */
-export type AskHouseTool = (
-  tool: HouseTool | 'pilot',
-  system: string,
-  schema: { name: string; schema: object },
-  imageUrl: string,
-  question: string,
-  references: ReadonlyArray<string>,
-  signal?: AbortSignal
-) => Promise<string | null>;
-
-/** The client's tool call as an `AskHouseTool` (a mock answer counts as none). */
-export const houseToolAsk =
-  (p: Pick<PerceptionClient, 'askHouseTool'>): AskHouseTool =>
-  async (...args) => {
-    const r = await p.askHouseTool(...args);
-    return r.source === 'meta' ? r.content : null;
-  };
+/** One call of the piloted house reading (PQ-T73): a call of the house team. */
+export type AskHouseTool = AskTeamTool<HouseTool>;
 
 /**
  * The piloted reading (PQ-T73): the pilot's brief, then the specialists it calls, in parallel,

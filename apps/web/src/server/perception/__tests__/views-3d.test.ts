@@ -12,11 +12,12 @@ import { CAR_SLOTS, carMesh, type CarSlot } from '@/lib/car-mesh';
 import { rasterCar } from '../car/car-raster';
 import { rasterMesh } from '../recon/mesh-raster';
 import { PLANT_SLOTS, PLANT_TWO_SIDED, plantMesh, plantSlotColors } from '@/lib/plant-mesh';
-import { carToolAsk, liveReadCar } from '../car/car-specialist';
-import { liveReadPlant, plantToolAsk } from '../tree/plant-specialist';
-import { PlantReadingSchema } from '../tree/plant-tools';
-import { CarReadingSchema } from '../car/car-tools';
-import { houseToolAsk } from '../house/house-specialist';
+import { liveReadCar } from '../car/car-specialist';
+import { teamAsk } from '../team/team';
+import { liveReadPlant } from '../tree/plant-specialist';
+import { PLANT_TEAM, PlantReadingSchema } from '../tree/plant-tools';
+import { CAR_TEAM, CarReadingSchema } from '../car/car-tools';
+import { HOUSE_TEAM } from '../house/house-tools';
 import { reconstructObject, reportLine } from '../recon';
 import { reconstructFromViews } from '../recon/reconstruct';
 import { decodeView, type DrawnView } from '../recon/route';
@@ -96,7 +97,9 @@ describe.runIf(
             ? {
                 readHouse: perception.readHouse.bind(perception),
                 // PQ-T73: the pilot and its part specialists (`SINGLE=1` = the PQ-T72 single reading).
-                ...(process.env.VIEWS_3D_SINGLE ? {} : { askHouseTool: houseToolAsk(perception) }),
+                ...(process.env.VIEWS_3D_SINGLE
+                  ? {}
+                  : { askHouseTool: teamAsk(perception, HOUSE_TEAM) }),
               }
             : {}),
         // PQ-T76: a vehicle is read by the car team (`CAR_READING=car-reading.json` replays a saved one).
@@ -108,7 +111,7 @@ describe.runIf(
                 ),
             }
           : perception && !process.env.VIEWS_3D_NO_CAR
-            ? { readCar: liveReadCar(carToolAsk(perception)) }
+            ? { readCar: liveReadCar(teamAsk(perception, CAR_TEAM)) }
             : {}),
         // PQ-T82: a plant is read by the plant team (`PLANT_READING=plant-reading.json` replays one).
         ...(process.env.VIEWS_3D_PLANT_READING
@@ -119,7 +122,7 @@ describe.runIf(
                 ),
             }
           : perception && !process.env.VIEWS_3D_NO_PLANT
-            ? { readPlant: liveReadPlant(plantToolAsk(perception)) }
+            ? { readPlant: liveReadPlant(teamAsk(perception, PLANT_TEAM)) }
             : {}),
         // Offline: materials given by hand, largest class first (`MATERIALS=slate,wood,…`).
         ...(process.env.VIEWS_3D_MATERIALS

@@ -11,6 +11,11 @@ vi.mock('../inline-image', () => ({
   inlineImageUrl: async (url: string) => (/^https?:/.test(url) ? `inlined:${url}` : url),
 }));
 
+// Streamed calls (team calls, PQ-T85) go through `longFetch`: routed to the fetch mock, never the network.
+vi.mock('../long-fetch', () => ({
+  longFetch: (url: string, init: RequestInit) => global.fetch(url, init),
+}));
+
 const BASE = 'https://api.meta.ai/v1';
 const originalFetch = global.fetch;
 
@@ -155,6 +160,33 @@ describe('MetaPerceptionBackend (shapes recorded from real calls, 2026-10-30)', 
     expect(effortFor('nope')).toBe(DEFAULT_EFFORT);
     for (const kind of Object.keys(CALL_EFFORT))
       expect(['low', 'medium', 'high']).toContain(effortFor(kind));
+    // Every team (PQ-T85): the pilot briefs at medium, the specialists measure at high.
+    expect(effortFor('housePilot')).toBe('medium');
+    expect(effortFor('seatPilot')).toBe('medium');
+    expect(effortFor('carTool')).toBe('high');
+  });
+
+  it('asks any team through one call: its kind, prompt version and images (PQ-T85)', async () => {
+    const fetchMock = respond({
+      choices: [{ message: { content: '{"legs":[]}' } }],
+      usage: { prompt_tokens: 1, completion_tokens: 1 },
+    });
+    const out = await backend.askTeamTool(
+      { id: 'seat', promptVersion: 3 },
+      'legs',
+      'You read legs.',
+      { name: 'Legs', schema: { type: 'object' } },
+      'data:image/png;base64,AA',
+      'Sofa. Read the legs.',
+      ['data:image/png;base64,BB']
+    );
+    expect(out.result.content).toBe('{"legs":[]}');
+    const init = lastRequest(fetchMock).init;
+    const body = JSON.parse(typeof init.body === 'string' ? init.body : '{}');
+    expect(body.reasoning_effort).toBe('high');
+    expect(body.response_format.json_schema.name).toBe('Legs');
+    expect(body.messages[0].content).toContain('You read legs.');
+    expect(JSON.stringify(body.messages[1].content)).toContain('BB');
   });
 
   it('prefers the contributor vision model and resends on the standard one when refused', async () => {

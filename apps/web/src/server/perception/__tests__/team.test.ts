@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { runTeam, teamSpecs, type AskTeamTool, type SpecialistTeam } from '../team/team';
+import { MockPerceptionBackend } from '../mock';
+import { runTeam, teamAsk, teamSpecs, type AskTeamTool, type SpecialistTeam } from '../team/team';
 
 vi.spyOn(console, 'info').mockImplementation(() => {});
 vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -136,5 +137,32 @@ describe('runTeam (PQ-T83)', () => {
       reading: null,
       brief: null,
     });
+  });
+});
+
+describe('teamAsk (PQ-T85)', () => {
+  it('calls the client for the team, a mock answer counting as none', async () => {
+    const askTeamTool = vi.fn(async () => ({ content: '{}', source: 'meta' as const }));
+    const ask = teamAsk<Tool>({ askTeamTool } as never, TEAM);
+    expect(await ask('legs', 's', { name: 'L', schema: {} }, 'img', 'q', ['r'])).toBe('{}');
+    expect(askTeamTool).toHaveBeenCalledWith(
+      TEAM,
+      'legs',
+      's',
+      { name: 'L', schema: {} },
+      'img',
+      'q',
+      ['r']
+    );
+    const mocked = teamAsk<Tool>(
+      { askTeamTool: async () => ({ content: '{}', source: 'mock' as const }) } as never,
+      TEAM
+    );
+    expect(await mocked('legs', 's', { name: 'L', schema: {} }, 'img', 'q', [])).toBeNull();
+  });
+
+  it('the mock backend answers nothing to any team', async () => {
+    const r = await new MockPerceptionBackend().askTeamTool();
+    expect(r.result.content).toBeNull();
   });
 });
