@@ -47,7 +47,8 @@ import {
 } from './rubric-judge';
 import { CODE_JSON_SCHEMA, CODE_PROMPT_VERSION, codePrompt, parseBuildCode } from './shape-code';
 import { logStepModelsOnce, stepModel } from './step-models';
-import { readCompletion, STREAMED_KINDS } from './chat-stream';
+import type { TeamRef, TeamSchema } from './team/team';
+import { isStreamedKind, readCompletion, teamCallKind } from './chat-stream';
 import { longFetch } from './long-fetch';
 import {
   HOUSE_JSON_SCHEMA,
@@ -55,9 +56,6 @@ import {
   HOUSE_SYSTEM_PROMPT,
   parseHouseReading,
 } from './house/house-prompt';
-import { CAR_TOOLS_PROMPT_VERSION } from './car/car-tools';
-import { PLANT_TOOLS_PROMPT_VERSION } from './tree/plant-tools';
-import { HOUSE_TOOLS_PROMPT_VERSION } from './house/house-tools';
 import {
   LABEL_JSON_SCHEMA,
   LABEL_SYSTEM_PROMPT,
@@ -249,7 +247,7 @@ export class MetaPerceptionBackend implements PerceptionBackend {
         `Meta perception API error (${res.status}) on ${path}: ${text.slice(0, 300)}`
       );
     }
-    // A streamed call (`STREAMED_KINDS`) answers in server-sent events: put back into one completion.
+    // A streamed call (`isStreamedKind`) answers in server-sent events: put back into one completion.
     return { data: await readCompletion(res), model };
   }
 
@@ -332,7 +330,7 @@ export class MetaPerceptionBackend implements PerceptionBackend {
       ],
       response_format: { type: 'json_schema', json_schema: jsonSchema },
       // Long reasoning calls stream: headers at once, no 300 s wait for the first byte.
-      ...(log && STREAMED_KINDS.has(log.kind)
+      ...(log && isStreamedKind(log.kind)
         ? { stream: true, stream_options: { include_usage: true } }
         : {}),
     });
@@ -343,7 +341,7 @@ export class MetaPerceptionBackend implements PerceptionBackend {
       { 'Content-Type': 'application/json' },
       timeoutSignal(VISION_CALL_MAX_MS, signal),
       allowContributor,
-      Boolean(log && STREAMED_KINDS.has(log.kind))
+      Boolean(log && isStreamedKind(log.kind))
     );
     const data = sent.data as {
       choices?: Array<{ message?: { content?: string | null } }>;
@@ -618,17 +616,17 @@ export class MetaPerceptionBackend implements PerceptionBackend {
     return { model, usage, result: { reading } };
   }
 
-  async askHouseTool(
+  async askTeamTool(
+    team: TeamRef,
     tool: string,
     system: string,
-    schema: { name: string; schema: object },
+    schema: TeamSchema,
     imageUrl: string,
     question: string,
     references: ReadonlyArray<string>,
     signal?: AbortSignal
   ): Promise<PerceptionCall<{ content: string | null }>> {
-    // PQ-T73: the pilot and each part specialist, on the seeing model of the parts step.
-    const kind = tool === 'pilot' ? 'housePilot' : 'houseTool';
+    // PQ-T85: the pilot and each specialist of any team, on the seeing model of the parts step.
     const { content, model, usage } = await this.visionJson(
       system,
       question,
@@ -636,67 +634,15 @@ export class MetaPerceptionBackend implements PerceptionBackend {
       schema,
       signal,
       true,
-      { kind, params: { tool, promptVersion: HOUSE_TOOLS_PROMPT_VERSION } },
+      {
+        kind: teamCallKind(team.id, tool),
+        params: { tool, promptVersion: team.promptVersion },
+      },
       references,
       this.modelFor('parts')
     );
     console.info(
-      `[vision] 3D house ${tool} from ${model}: ${content ? `${content.length} chars` : 'empty'}`
-    );
-    return { model, usage, result: { content: content || null } };
-  }
-
-  async askCarTool(
-    tool: string,
-    system: string,
-    schema: { name: string; schema: object },
-    imageUrl: string,
-    question: string,
-    references: ReadonlyArray<string>,
-    signal?: AbortSignal
-  ): Promise<PerceptionCall<{ content: string | null }>> {
-    // PQ-T76: the car pilot and each specialist, on the seeing model of the parts step.
-    const kind = tool === 'pilot' ? 'carPilot' : 'carTool';
-    const { content, model, usage } = await this.visionJson(
-      system,
-      question,
-      imageUrl,
-      schema,
-      signal,
-      true,
-      { kind, params: { tool, promptVersion: CAR_TOOLS_PROMPT_VERSION } },
-      references,
-      this.modelFor('parts')
-    );
-    console.info(
-      `[vision] 3D car ${tool} from ${model}: ${content ? `${content.length} chars` : 'empty'}`
-    );
-    return { model, usage, result: { content: content || null } };
-  }
-
-  async askPlantTool(
-    tool: string,
-    system: string,
-    schema: { name: string; schema: object },
-    imageUrl: string,
-    question: string,
-    signal?: AbortSignal
-  ): Promise<PerceptionCall<{ content: string | null }>> {
-    // PQ-T82: the plant pilot and each specialist, on the seeing model of the parts step.
-    const kind = tool === 'pilot' ? 'plantPilot' : 'plantTool';
-    const { content, model, usage } = await this.visionJson(
-      system,
-      question,
-      imageUrl,
-      schema,
-      signal,
-      true,
-      { kind, params: { tool, promptVersion: PLANT_TOOLS_PROMPT_VERSION } },
-      [],
-      this.modelFor('parts')
-    );
-    console.info(
-      `[vision] 3D plant ${tool} from ${model}: ${content ? `${content.length} chars` : 'empty'}`
+      `[vision] 3D ${team.id} ${tool} from ${model}: ${content ? `${content.length} chars` : 'empty'}`
     );
     return { model, usage, result: { content: content || null } };
   }

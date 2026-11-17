@@ -2,6 +2,7 @@ import type { ApplianceCategory } from '@mitsinjo/engine';
 import type { KitArchetype } from '@/lib/object-kit';
 import type { SceneryType } from '@/lib/vision';
 import type { UsageSample } from '@/server/spend';
+import type { TeamRef, TeamSchema } from './team/team';
 import type {
   CodeResult,
   CriticResult,
@@ -124,41 +125,18 @@ export interface PerceptionBackend {
     signal?: AbortSignal
   ): Promise<PerceptionCall<HouseReadResult>>;
   /**
-   * One call of the piloted house reading (PQ-T73): the pilot or a part specialist, with its own
-   * system prompt and JSON schema; the raw answer. Optional: without it the single reading runs.
+   * One call of a specialist team (PQ-T85): the pilot or a specialist of `team`, with its own
+   * system prompt and JSON schema; the raw answer. Optional: without it every team is skipped
+   * (the house keeps its single reading, a car its measured plan, a plant its label and outline).
    */
-  askHouseTool?(
+  askTeamTool?(
+    team: TeamRef,
     tool: string,
     system: string,
-    schema: { name: string; schema: object },
+    schema: TeamSchema,
     imageUrl: string,
     question: string,
     references: ReadonlyArray<string>,
-    signal?: AbortSignal
-  ): Promise<PerceptionCall<{ content: string | null }>>;
-  /**
-   * One call of the car team (PQ-T76): the pilot or a specialist, with its own system prompt and
-   * JSON schema; the raw answer. Optional: without it a car keeps its measured plan only.
-   */
-  askCarTool?(
-    tool: string,
-    system: string,
-    schema: { name: string; schema: object },
-    imageUrl: string,
-    question: string,
-    references: ReadonlyArray<string>,
-    signal?: AbortSignal
-  ): Promise<PerceptionCall<{ content: string | null }>>;
-  /**
-   * One call of the plant team (PQ-T82): the pilot or a specialist on the front drawing. Optional:
-   * without it a plant is built from its label and its outline.
-   */
-  askPlantTool?(
-    tool: string,
-    system: string,
-    schema: { name: string; schema: object },
-    imageUrl: string,
-    question: string,
     signal?: AbortSignal
   ): Promise<PerceptionCall<{ content: string | null }>>;
   /**

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { teamSpecs, type SpecialistTeam } from '../team/team';
 import { LEAF_TYPES, PLANT_HABITS, type LeafType, type PlantHabit } from '@/lib/plant-plan';
 import { answerJson } from '../house/house-tools';
 import type { PlantHints } from './plant-build';
@@ -421,3 +422,33 @@ export function plantHints(reading: PlantReading | null): PlantHints {
     ...(flowers ? { bloom: flowers.flowers || flowers.fruit ? flowers.share : 0 } : {}),
   };
 }
+
+// ---------------------------------------------------------------- team
+
+/** Longest wait for one call: one drawing, shorter answers than a car's. */
+export const PLANT_TOOL_TIMEOUT_MS = 5 * 60_000;
+
+/** The plant team as a `SpecialistTeam` (PQ-T84): run by `runTeam`, one front drawing. */
+export const PLANT_TEAM: SpecialistTeam<PlantTool, PlantBrief, PlantReading, 'front'> = {
+  id: 'plant',
+  promptVersion: PLANT_TOOLS_PROMPT_VERSION,
+  tools: PLANT_TOOLS,
+  required: PLANT_TOOLS_REQUIRED,
+  timeoutMs: PLANT_TOOL_TIMEOUT_MS,
+  pilot: {
+    system: PLANT_PILOT_SYSTEM_PROMPT,
+    schema: PLANT_PILOT_JSON_SCHEMA,
+    question: (label) => plantPilotQuestion(label),
+    parse: parsePlantBrief,
+  },
+  specs: teamSpecs(
+    PLANT_TOOLS,
+    (t) => PLANT_TOOL_SPECS[t],
+    (t, label, _views, brief) => plantToolQuestion(t, label, brief)
+  ),
+  answered: plantToolAnswered,
+  merge: mergePlantAnswers,
+  briefSummary: (b) => `${b.species ?? 'unnamed'}, ${b.habit}, ${b.leaf} leaves`,
+  summary: (r) =>
+    `${r.habit}, ${r.leaf} leaves, ${r.foliage?.arrangement}, ${r.trunks.length} trunks, ${r.branches.length} limbs, ${r.foliage?.bigLeaves ?? 0} big leaves, ${r.flowers ? `flowers ${r.flowers.flowers} fruit ${r.flowers.fruit} ${r.flowers.share}` : 'no flower answer'}`,
+};

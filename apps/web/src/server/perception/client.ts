@@ -13,6 +13,7 @@ import type {
 } from './backend';
 import { MetaPerceptionBackend } from './meta';
 import { MockPerceptionBackend } from './mock';
+import type { TeamRef, TeamSchema } from './team/team';
 import type {
   CodeResult,
   CriticResult,
@@ -195,52 +196,20 @@ export class PerceptionClient {
     );
   }
 
-  /** Pilot or part specialist of a house (PQ-T73); null content without it (single reading). */
-  askHouseTool(
+  /** Pilot or specialist of a team (PQ-T85); null content without it (the team is skipped). */
+  askTeamTool(
+    team: TeamRef,
     tool: string,
     system: string,
-    schema: { name: string; schema: object },
+    schema: TeamSchema,
     imageUrl: string,
     question: string,
     references: ReadonlyArray<string>,
     signal?: AbortSignal
   ): Promise<{ content: string | null } & PerceptionSource> {
-    return this.run('askHouseTool', (b) =>
-      b.askHouseTool
-        ? b.askHouseTool(tool, system, schema, imageUrl, question, references, signal)
-        : Promise.resolve({ model: b.name, usage: {}, result: { content: null } })
-    );
-  }
-
-  /** Pilot or specialist of the car team (PQ-T76); null content without it (measured plan only). */
-  askCarTool(
-    tool: string,
-    system: string,
-    schema: { name: string; schema: object },
-    imageUrl: string,
-    question: string,
-    references: ReadonlyArray<string>,
-    signal?: AbortSignal
-  ): Promise<{ content: string | null } & PerceptionSource> {
-    return this.run('askCarTool', (b) =>
-      b.askCarTool
-        ? b.askCarTool(tool, system, schema, imageUrl, question, references, signal)
-        : Promise.resolve({ model: b.name, usage: {}, result: { content: null } })
-    );
-  }
-
-  /** Pilot or specialist of the plant team (PQ-T82); null content without it (label and outline). */
-  askPlantTool(
-    tool: string,
-    system: string,
-    schema: { name: string; schema: object },
-    imageUrl: string,
-    question: string,
-    signal?: AbortSignal
-  ): Promise<{ content: string | null } & PerceptionSource> {
-    return this.run('askPlantTool', (b) =>
-      b.askPlantTool
-        ? b.askPlantTool(tool, system, schema, imageUrl, question, signal)
+    return this.run('askTeamTool', (b) =>
+      b.askTeamTool
+        ? b.askTeamTool(team, tool, system, schema, imageUrl, question, references, signal)
         : Promise.resolve({ model: b.name, usage: {}, result: { content: null } })
     );
   }

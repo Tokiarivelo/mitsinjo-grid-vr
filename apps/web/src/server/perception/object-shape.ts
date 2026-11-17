@@ -46,9 +46,12 @@ import {
   sampleObjectPixels,
   sampleObjectRgb,
 } from './shape-colors';
-import { carToolAsk, liveReadCar } from './car/car-specialist';
-import { liveReadPlant, plantToolAsk } from './tree/plant-specialist';
-import { houseToolAsk } from './house/house-specialist';
+import { liveReadCar } from './car/car-specialist';
+import { CAR_TEAM } from './car/car-tools';
+import { liveReadPlant } from './tree/plant-specialist';
+import { PLANT_TEAM } from './tree/plant-tools';
+import { HOUSE_TEAM } from './house/house-tools';
+import { teamAsk, type TeamRef } from './team/team';
 import { conceptOf, fetchOutlineForBox, samRetries, type OutlineCrop } from './outline';
 import { applyConstraints, buildGraph, notBuilt, partCoverage, repairGraph } from './object-graph';
 import { deduceHiddenSides } from './hidden-sides';
@@ -242,9 +245,7 @@ export async function runObjectShape(
         | 'writeBuildCode'
         | 'nameClasses'
         | 'readHouse'
-        | 'askHouseTool'
-        | 'askCarTool'
-        | 'askPlantTool'
+        | 'askTeamTool'
       >
     >,
   photo: PhotoForRegions | null,
@@ -414,6 +415,11 @@ export async function runObjectShape(
     // from the photo), the right side, the back and the left — by measuring them: no template,
     // no family, no model-written geometry. Null (no drawing, unreadable, views that disagree)
     // falls back to the photo pipeline below.
+    // PQ-T85: every specialist team is read through the one client call, one factory per team.
+    const askTeamTool = perception.askTeamTool?.bind(perception);
+    const readWith = askTeamTool
+      ? <Tool extends string>(team: TeamRef) => teamAsk<Tool>({ askTeamTool }, team)
+      : null;
     const reconDeps: ReconDeps | null =
       reconOption !== undefined
         ? reconOption
@@ -424,25 +430,11 @@ export async function runObjectShape(
                 ? { nameClasses: perception.nameClasses.bind(perception) }
                 : {}),
               ...(perception.readHouse ? { readHouse: perception.readHouse.bind(perception) } : {}),
-              ...(perception.askHouseTool
+              ...(readWith
                 ? {
-                    askHouseTool: houseToolAsk({
-                      askHouseTool: perception.askHouseTool.bind(perception),
-                    }),
-                  }
-                : {}),
-              ...(perception.askCarTool
-                ? {
-                    readCar: liveReadCar(
-                      carToolAsk({ askCarTool: perception.askCarTool.bind(perception) })
-                    ),
-                  }
-                : {}),
-              ...(perception.askPlantTool
-                ? {
-                    readPlant: liveReadPlant(
-                      plantToolAsk({ askPlantTool: perception.askPlantTool.bind(perception) })
-                    ),
+                    askHouseTool: readWith(HOUSE_TEAM),
+                    readCar: liveReadCar(readWith(CAR_TEAM)),
+                    readPlant: liveReadPlant(readWith(PLANT_TEAM)),
                   }
                 : {}),
             }

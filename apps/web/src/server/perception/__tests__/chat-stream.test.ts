@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { collectChatStream, readCompletion, STREAMED_KINDS } from '../chat-stream';
+import { collectChatStream, isStreamedKind, readCompletion, teamCallKind } from '../chat-stream';
 
 const sse = (chunks: unknown[]) =>
   chunks.map((c) => `data: ${typeof c === 'string' ? c : JSON.stringify(c)}\n\n`).join('');
@@ -33,16 +33,13 @@ describe('streamed chat completions (PQ-T72)', () => {
     expect(await readCompletion(plain)).toEqual({ choices: [{ message: { content: 'ok' } }] });
   });
 
-  it('streams the house specialist, its pilot and its part specialists, the car team and the plant team, only', () => {
-    expect([...STREAMED_KINDS]).toEqual([
-      'readHouse',
-      'housePilot',
-      'houseTool',
-      'carPilot',
-      'carTool',
-      'plantPilot',
-      'plantTool',
-    ]);
+  it('streams the single house reading and every specialist team call, only (PQ-T85)', () => {
+    for (const k of ['readHouse', 'housePilot', 'houseTool', 'carTool', 'plantPilot', 'seatTool'])
+      expect(isStreamedKind(k)).toBe(true);
+    for (const k of ['describeShape', 'judgeShape', 'askPart', 'nameClasses'])
+      expect(isStreamedKind(k)).toBe(false);
+    expect(teamCallKind('car', 'pilot')).toBe('carPilot');
+    expect(teamCallKind('seat', 'legs')).toBe('seatTool');
   });
 });
 

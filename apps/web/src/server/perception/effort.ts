@@ -25,22 +25,18 @@ export const CALL_EFFORT: Readonly<Record<string, ReasoningEffort>> = {
    * drops a call after 300 s without headers or without a body chunk).
    */
   readHouse: 'high',
-  /**
-   * Piloted house reading (PQ-T73): the pilot only briefs (type, parts, notes): `medium`; each
-   * part specialist measures its part on every drawing: `high`, streamed like `readHouse`.
-   */
-  housePilot: 'medium',
-  houseTool: 'high',
-  /** Car team (PQ-T76): the pilot briefs (`medium`), each specialist measures its part (`high`). */
-  carPilot: 'medium',
-  carTool: 'high',
-  /** Plant team (PQ-T82): the same split, one drawing. */
-  plantPilot: 'medium',
-  plantTool: 'high',
 };
 
 export const DEFAULT_EFFORT: ReasoningEffort = 'high';
 
-/** Effort sent with one call: its table entry, else the default. */
+/**
+ * Specialist teams (PQ-T73/T76/T82, any team since PQ-T85): the pilot only briefs (kind, parts,
+ * notes): `medium`; each specialist measures its part on the drawings: the default `high`,
+ * streamed like `readHouse`.
+ */
+export const TEAM_PILOT_EFFORT: ReasoningEffort = 'medium';
+
+/** Effort sent with one call: its table entry, a team pilot's, else the default. */
 export const effortFor = (kind?: string): ReasoningEffort =>
-  (kind && CALL_EFFORT[kind]) || DEFAULT_EFFORT;
+  (kind && CALL_EFFORT[kind]) ||
+  (kind && /^[a-z]+Pilot$/.test(kind) ? TEAM_PILOT_EFFORT : DEFAULT_EFFORT);

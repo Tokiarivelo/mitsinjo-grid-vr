@@ -107,33 +107,33 @@ En gras : spécialistes propres à une équipe. Les autres viennent de `team/sha
 > ses cases le sont ; coche alors sa ligne de titre. Ne coche jamais une case non vérifiée : écris plutôt la
 > limite à côté (« — reste : … »). Statut global en tête de `HANDOFF.md`.
 
-### PQ-T83 — Moteur d'équipe générique
+### [x] PQ-T83 — Moteur d'équipe générique
 
-- [ ] `team/team.ts` : type `SpecialistTeam<Tool, Brief, Reading>` (champs du § 3).
-- [ ] `runTeam(team, ask, { label, views, images, signal })` → `{ reading, brief }`, ne lève jamais.
-- [ ] Test : toutes les réponses OK → lecture fusionnée.
-- [ ] Test : un spécialiste vide → relancé une fois seul, puis fusion.
-- [ ] Test : spécialiste requis manquant après relance → `reading: null`, brief gardé.
-- [ ] Test : signal annulé / délai dépassé → null, sans lever.
-- [ ] `docs/architecture.md` : dossier `server/perception/team/`.
+- [x] `team/team.ts` : type `SpecialistTeam<Tool, Brief, Reading>` (champs du § 3).
+- [x] `runTeam(team, ask, { label, views, images, signal })` → `{ reading, brief }`, ne lève jamais.
+- [x] Test : toutes les réponses OK → lecture fusionnée.
+- [x] Test : un spécialiste vide → relancé une fois seul, puis fusion.
+- [x] Test : spécialiste requis manquant après relance → `reading: null`, brief gardé.
+- [x] Test : signal annulé / délai dépassé → null, sans lever.
+- [x] `docs/architecture.md` : dossier `server/perception/team/`.
 
-### PQ-T84 — Plante, voiture, maison sur `runTeam` (comportement constant)
+### [x] PQ-T84 — Plante, voiture, maison sur `runTeam` (comportement constant)
 
-- [ ] `PLANT_TEAM` dans `tree/plant-tools.ts` ; `readPlantParts` = `runTeam(PLANT_TEAM, …)`.
-- [ ] `CAR_TEAM` dans `car/car-tools.ts` ; `readCarParts` = `runTeam(CAR_TEAM, …)`.
-- [ ] `HOUSE_TEAM` dans `house/house-tools.ts` ; `readHouseParts` = `runTeam(HOUSE_TEAM, …)`.
-- [ ] Tests existants plante / voiture / maison verts **sans changer leurs attentes**.
-- [ ] Prompts et `*_PROMPT_VERSION` inchangés (diff vide sur les prompts).
-- [ ] `make house-regress` identique avant / après (sortie jointe au commit).
-- [ ] Boucles pilote → spécialistes → fusion supprimées des trois `*-specialist.ts` (zéro duplication).
+- [x] `PLANT_TEAM` dans `tree/plant-tools.ts` ; `readPlantParts` = `runTeam(PLANT_TEAM, …)`.
+- [x] `CAR_TEAM` dans `car/car-tools.ts` ; `readCarParts` = `runTeam(CAR_TEAM, …)`.
+- [x] `HOUSE_TEAM` dans `house/house-tools.ts` ; `readHouseParts` = `runTeam(HOUSE_TEAM, …)`.
+- [x] Tests existants plante / voiture / maison verts **sans changer leurs attentes**.
+- [x] Prompts et `*_PROMPT_VERSION` inchangés (diff vide sur les prompts).
+- [x] `make house-regress` identique avant / après (sortie jointe au commit).
+- [x] Boucles pilote → spécialistes → fusion supprimées des trois `*-specialist.ts` (zéro duplication).
 
-### PQ-T85 — Un seul appel Meta d'équipe
+### [x] PQ-T85 — Un seul appel Meta d'équipe
 
-- [ ] `askTeamTool(team, tool, system, schema, imageUrl, question, refs, signal)` dans `meta.ts` (étape `parts`).
-- [ ] Même méthode dans `client.ts` et `mock.ts` (mock → pas de réponse).
-- [ ] `askHouseTool` / `askCarTool` / `askPlantTool` retirés, appelants migrés.
-- [ ] `object-shape.ts` : une fabrique `readWith(team)` au lieu de trois branches.
-- [ ] Tests client / meta mis à jour ; `docs/copilot.md` (appels de l'étape `parts`).
+- [x] `askTeamTool(team, tool, system, schema, imageUrl, question, refs, signal)` dans `meta.ts` (étape `parts`).
+- [x] Même méthode dans `client.ts` et `mock.ts` (mock → pas de réponse).
+- [x] `askHouseTool` / `askCarTool` / `askPlantTool` retirés, appelants migrés.
+- [x] `object-shape.ts` : une fabrique `readWith(team)` au lieu de trois branches.
+- [x] Tests client / meta mis à jour ; `docs/copilot.md` (appels de l'étape `parts`).
 
 ### PQ-T86 — Spécialistes partagés
 

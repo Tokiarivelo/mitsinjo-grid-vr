@@ -308,4 +308,9 @@ export class MockPerceptionBackend implements PerceptionBackend {
     // No construction code without Meta: route B skips, the draft stays.
     return { model: MOCK_PERCEPTION_MODEL, usage: {}, result: { code: null } };
   }
+
+  async askTeamTool(): Promise<PerceptionCall<{ content: string | null }>> {
+    // No specialist team without Meta (PQ-T85): no answer, each team's current path decides.
+    return { model: MOCK_PERCEPTION_MODEL, usage: {}, result: { content: null } };
+  }
 }

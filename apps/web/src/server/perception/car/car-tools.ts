@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { teamSpecs, type SpecialistTeam } from '../team/team';
 import { CAR_KINDS, type CarKind } from '@/lib/car-plan';
 import { answerJson } from '../house/house-tools';
 
@@ -487,3 +488,30 @@ export function mergeCarAnswers(
     finishes: items(CarFinishSchema, answerOf('finishes', answers.finishes)?.finishes),
   };
 }
+
+// ---------------------------------------------------------------- team
+
+/** Longest wait for one call: a car is smaller than a house, the slowest specialist still minutes. */
+export const CAR_TOOL_TIMEOUT_MS = 8 * 60_000;
+
+/** The car team as a `SpecialistTeam` (PQ-T84): run by `runTeam`. */
+export const CAR_TEAM: SpecialistTeam<CarTool, CarBrief, CarReading, CarView> = {
+  id: 'car',
+  promptVersion: CAR_TOOLS_PROMPT_VERSION,
+  tools: CAR_TOOLS,
+  required: CAR_TOOLS_REQUIRED,
+  timeoutMs: CAR_TOOL_TIMEOUT_MS,
+  pilot: {
+    system: CAR_PILOT_SYSTEM_PROMPT,
+    schema: CAR_PILOT_JSON_SCHEMA,
+    question: carPilotQuestion,
+    parse: parseCarBrief,
+  },
+  specs: teamSpecs(CAR_TOOLS, (t) => CAR_TOOL_SPECS[t], carToolQuestion),
+  answered: carToolAnswered,
+  merge: mergeCarAnswers,
+  briefSummary: (b) =>
+    `${b.kind}${b.doors ? `, ${b.doors} doors` : ''}, parts ${Object.keys(b.parts).join(', ') || 'none'}`,
+  summary: (r) =>
+    `${r.windows.length} windows, ${r.details.length} details, finishes ${r.finishes.map((f) => f.finish).join(', ') || 'none'}`,
+};
