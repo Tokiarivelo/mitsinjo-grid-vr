@@ -30,7 +30,7 @@ Meta feature and carries external-API risk; 3D is local work and easy to time-bo
 | —   | PV-G 3D by script, piece by piece, loop vs 2D elevation                                | `PV-shape-script.md`          | 🟡 G0–G1 done                    |
 | —   | PV-H Any object from its 2D view (hull + AI check)                                     | `PV-any-object.md`            | 🟡 H1–H2 done                    |
 | —   | PV-Q Strongest photo → 3D (real set, detail score, Muse skill cards, photo loop)       | `PV-vision-quality.md`        | ❌ planned                       |
-| —   | PV-T Specialist teams for every object class (generic team engine, shared specialists) | `PV-specialist-teams.md`      | ❌ planned (PQ-T83–T91)          |
+| —   | PV-T Specialist teams for every object class (generic team engine, shared specialists) | `PV-specialist-teams.md`      | ✅ done (PQ-T83–T91)             |
 | —   | PV-H House generation: limits and next steps (brief for Claude Fable)                  | `PV-house-generation-next.md` | ❌ planned                       |
 | —   | PV-C Car generation: starting brief (fresh context)                                    | `PV-car-generation.md`        | ❌ planned                       |
 | —   | PV-C Instant capture, elastic grab, hologram, 3D Lab + AI assistant (screen and VR)    | `PV-capture-lab.md`           | ❌ planned                       |
