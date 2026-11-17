@@ -6,6 +6,7 @@ import { HOUSE_SLOTS } from '@/lib/house-mesh';
 import type { ObjectRecipe } from '@/lib/object-shape';
 import type { PieceEdit, PieceEdits, PieceMask } from '@/lib/piece-edits';
 import { SURFACES } from './surface-look';
+import { skinPieceNames } from './skin-projection';
 
 /**
  * The pieces of a model for the 3D Studio (PQ-T77): one per geometry group, named by its slot.
@@ -15,12 +16,16 @@ import { SURFACES } from './surface-look';
  * pivot) and baked into a geometry for the village and the Blender export.
  */
 
-export type ModelKind = 'house' | 'car' | 'plant' | 'faces' | 'parts';
+export type ModelKind = 'house' | 'car' | 'plant' | 'faces' | 'skin' | 'parts';
 
-/** How the model is built, as the object view and the village choose it. */
+/**
+ * How the model is built, as the object view and the village choose it. Parts wearing their faces
+ * (VS-T43) carry the photo's turn in their skin, never as a yaw of their own.
+ */
 export function modelKind(
-  recipe: Pick<ObjectRecipe, 'yaw' | 'house' | 'car' | 'plant' | 'faces'>
+  recipe: Pick<ObjectRecipe, 'yaw' | 'house' | 'car' | 'plant' | 'faces' | 'skin'>
 ): ModelKind {
+  if (recipe.skin && !recipe.plant) return 'skin';
   if (recipe.yaw) return 'parts';
   if (recipe.house) return 'house';
   if (recipe.car?.body) return 'car';
@@ -29,9 +34,14 @@ export function modelKind(
   return 'parts';
 }
 
-/** Slot names by material index, for a model of this kind. */
-export function pieceNames(kind: ModelKind): readonly string[] {
+/** Slot names by material index, for a model of this kind (a skinned one names its own pieces). */
+export function pieceNames(
+  kind: ModelKind,
+  recipe?: Pick<ObjectRecipe, 'skin'>
+): readonly string[] {
   switch (kind) {
+    case 'skin':
+      return recipe?.skin ? skinPieceNames(recipe.skin) : SURFACES;
     case 'house':
       return HOUSE_SLOTS;
     case 'car':
@@ -426,10 +436,10 @@ export function bakePieceEdits(
  */
 export function withPieceEdits(
   geometry: THREE.BufferGeometry,
-  recipe: Pick<ObjectRecipe, 'yaw' | 'house' | 'car' | 'faces' | 'pieces'>
+  recipe: Pick<ObjectRecipe, 'yaw' | 'house' | 'car' | 'faces' | 'skin' | 'pieces'>
 ): THREE.BufferGeometry {
   if (!recipe.pieces || !Object.keys(recipe.pieces).length) return geometry;
-  const baked = bakePieceEdits(geometry, pieceNames(modelKind(recipe)), recipe.pieces);
+  const baked = bakePieceEdits(geometry, pieceNames(modelKind(recipe), recipe), recipe.pieces);
   if (baked !== geometry) geometry.dispose();
   return baked;
 }

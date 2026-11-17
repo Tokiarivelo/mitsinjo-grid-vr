@@ -16,6 +16,9 @@ import {
   tourMockEntry,
   tourMockShape,
   tourPartMasks,
+  skinnedRecipe,
+  skinWrap,
+  tourSkin,
 } from '../tour-mock';
 
 const TOUR_IDS = Object.values(TOUR_ROOMS).flatMap((r) => r.objects.map((o) => o.id));
@@ -116,6 +119,12 @@ describe('tour mock (VS-T41)', () => {
     expect(shape).toMatchObject({ detectionId: 'loft-fridge', mode: 'recipe', source: 'mock' });
     expect(shape!.imaginedViews).toHaveLength(6);
     expect(shape!.outline).toBe(target.outline);
+    // VS-T43: its parts wear the faces cut from its photo, one layer per named part.
+    expect(ObjectRecipeSchema.safeParse(shape!.recipe!).success).toBe(true);
+    expect(shape!.recipe!.yaw).toBeUndefined();
+    expect(shape!.recipe!.skin?.atlas).toMatch(/^data:image\/jpeg;base64,/);
+    expect(shape!.recipe!.skin?.pieces).toHaveLength(shape!.recipe!.parts.length);
+    expect(shape!.recipe!.skin?.pieces).toContain('handle');
     expect(await tourMockShape({ ...target, id: 'det-1' }, null)).toBeNull();
   });
 
@@ -126,6 +135,33 @@ describe('tour mock (VS-T41)', () => {
     expect(faceView('front', car, true).yaw).toBeCloseTo(Math.PI / 2);
     expect(faceView('side', car, false).yaw).toBeCloseTo(-Math.PI / 2);
     expect(faceView('top', car, false).pitch).toBeGreaterThan(1.5);
+  });
+
+  it('has a front face cut from its photo for every tour object', async () => {
+    const skins = (await import('../tour-mock/tour-skins.json')).default as Record<string, string>;
+    for (const id of TOUR_IDS) expect(skins[id], id).toMatch(/^\/9j\//);
+  });
+
+  it('wears the front on a plant and wraps grown things', async () => {
+    const plantId = TOUR_IDS.find((id) => tourMockEntry(id)!.recipe.plant)!;
+    const skin = await tourSkin(plantId);
+    const recipe = skinnedRecipe(tourMockEntry(plantId)!, skin);
+    expect(recipe.plant?.skin).toBe(skin!.frontUrl);
+    expect(recipe.skin).toBeUndefined();
+    expect(skinWrap(tourMockEntry(plantId)!)).toBe('wrap');
+    expect(skinWrap(tourMockEntry('loft-fridge')!)).toBe('fold');
+  });
+
+  it('draws the front as cut from the photo and the other faces from the model wearing it', async () => {
+    const main = await sharp((await tourMockDrawing({ id: 'loft-fridge' }, 'main'))!)
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    // A tall fridge on white paper: paper at the sides, the photo in the middle.
+    const at = (x: number, y: number) => main.data[(y * main.info.width + x) * main.info.channels]!;
+    expect(at(5, 256)).toBe(255);
+    expect(at(256, 256)).toBeLessThan(250);
+    const side = await tourMockDrawing({ id: 'loft-fridge' }, 'side');
+    expect((await sharp(side!).metadata()).width).toBe(512);
   });
 
   it('draws a face as a white-paper PNG', async () => {

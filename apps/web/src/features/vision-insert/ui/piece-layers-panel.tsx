@@ -51,7 +51,8 @@ export function usePieceLabel() {
       ? t(`studio.piece.${base}` as 'studio.piece.roof')
       : MATERIALS.has(base)
         ? t(`model3dMaterial.${base}` as 'model3dMaterial.stone')
-        : base;
+        : // A skinned model's piece is a part concept (VS-T43: seat, leg, cushion…).
+          t(`model3dPart.${base}` as 'model3dPart.seat');
     return index === null ? label : t('studio.pieceItem', { piece: label, n: index });
   };
 }

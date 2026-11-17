@@ -10,10 +10,21 @@ import {
   type PartMask,
   type ShapeTarget,
 } from '@/lib/object-shape';
-import { renderFlat, type FlatView } from '../flat-render';
+import { TOUR_ROOMS } from '@/features/vision-insert/ui/xr/tour/tour-data';
+import type { SkinBox, SkinView } from '@/lib/face-skin';
+import { renderFlat, type FlatPaint, type FlatView } from '../flat-render';
 import { cropRectForShape } from '../shape-crop';
+import { ringsMask, type Mask } from '../silhouette-fit';
 import { generateImaginedViews } from '../views-generation';
 import { renderAtPhoto, type TourMockEntry } from './render';
+import {
+  outlineFrame,
+  recipeBox,
+  skinAtlas,
+  skinPaint,
+  type PanoRing,
+  type SkinWrap,
+} from './skin';
 import DATA from './tour-mock.json';
 
 /**
@@ -28,13 +39,136 @@ import DATA from './tour-mock.json';
 export const TOUR_MOCK_STOP = { iou: 0.85, deltaE: 8 } as const;
 
 /** Model id of every tour mock answer. */
-export const TOUR_MOCK_MODEL = 'mock-tour-v1';
+export const TOUR_MOCK_MODEL = 'mock-tour-v2';
 
 const ENTRIES = DATA as unknown as Readonly<Record<string, TourMockEntry>>;
 
 /** The built entry of a tour object, or null for any other id. */
 export function tourMockEntry(id: string): TourMockEntry | null {
   return Object.hasOwn(ENTRIES, id) ? ENTRIES[id]! : null;
+}
+
+/** JPEG quality of the face atlas sent with a tour model. */
+const SKIN_ATLAS_QUALITY = 84;
+
+/** A tour object's faces (VS-T43): what its model wears and what its 2D faces are drawn from. */
+export interface TourSkin {
+  /** The recipe without its photo turn: the faces are drawn as the object itself. */
+  recipe: ObjectRecipe;
+  box: SkinBox;
+  /** Camera turn of the front face: the photo's yaw of the model and its pitch. */
+  view: SkinView;
+  /** Front face cut from the photo (data URL, one tile, spans the model box). */
+  frontUrl: string;
+  /** Face atlas (data URL). */
+  atlasUrl: string;
+  /** Outline on the front tile. */
+  mask: Mask;
+  /** Front tile pixels (RGB) and the photo aspect of the object's box (w / h). */
+  front: Uint8Array;
+  aspect: number;
+  paint: FlatPaint;
+}
+
+/** Outline of a tour object by id (`tour-data.ts`). */
+function tourOutline(id: string) {
+  for (const room of Object.values(TOUR_ROOMS)) {
+    const o = room.objects.find((x) => x.id === id);
+    if (o?.outline) return o.outline;
+  }
+  return null;
+}
+
+let FRONTS: Promise<Record<string, string>> | null = null;
+/** The stored front faces (`make tour-mock`), loaded on first use. */
+const fronts = () =>
+  (FRONTS ??= import('./tour-skins.json').then((m) => m.default as Record<string, string>));
+
+const SKINS = new Map<string, Promise<TourSkin | null>>();
+
+/** The faces of a tour object (cached), or null without a stored front face. */
+export function tourSkin(id: string): Promise<TourSkin | null> {
+  let hit = SKINS.get(id);
+  if (!hit) {
+    hit = buildTourSkin(id).catch((err) => {
+      console.warn(`[tour-mock] ${id}: faces failed:`, err instanceof Error ? err.message : err);
+      return null;
+    });
+    SKINS.set(id, hit);
+  }
+  return hit;
+}
+
+async function buildTourSkin(id: string): Promise<TourSkin | null> {
+  const entry = tourMockEntry(id);
+  const outline = tourOutline(id);
+  const b64 = (await fronts())[id];
+  if (!entry || !outline || !b64) return null;
+  return skinFromFront(entry, Buffer.from(b64, 'base64'), outline);
+}
+
+/** A tour object's faces from its stored front face (JPEG) and its panorama outline. */
+export async function skinFromFront(
+  entry: Pick<TourMockEntry, 'recipe' | 'concepts' | 'pitch'>,
+  jpg: Buffer,
+  outline: ReadonlyArray<PanoRing>
+): Promise<TourSkin> {
+  const { data, info } = await sharp(jpg).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+  const front = new Uint8Array(data.buffer, data.byteOffset, data.length);
+  const frame = outlineFrame(outline);
+  const mask = ringsMask(frame.rings, frame.box, info.width, info.height);
+  const recipe: ObjectRecipe = { ...entry.recipe, yaw: undefined };
+  const view: SkinView = { yaw: entry.recipe.yaw ?? 0, pitch: entry.pitch };
+  const box = recipeBox(recipe, view);
+  const atlas = skinAtlas(front, mask, box, skinWrap(entry));
+  const atlasJpg = await sharp(Buffer.from(atlas.rgb), {
+    raw: { width: atlas.width, height: atlas.height, channels: 3 },
+  })
+    .jpeg({ quality: SKIN_ATLAS_QUALITY, mozjpeg: true })
+    .toBuffer();
+  return {
+    recipe,
+    box,
+    view,
+    frontUrl: `data:image/jpeg;base64,${jpg.toString('base64')}`,
+    atlasUrl: `data:image/jpeg;base64,${atlasJpg.toString('base64')}`,
+    mask,
+    front,
+    // The panorama is twice as wide as high: a box's pixel aspect is 2 w / h.
+    aspect: (2 * frame.box.w) / frame.box.h,
+    paint: skinPaint(atlas, box, view),
+  };
+}
+
+/** Grown things (a plant, flowers, foliage) wrap their faces round; made things fold them. */
+export function skinWrap(entry: Pick<TourMockEntry, 'recipe' | 'concepts'>): SkinWrap {
+  return entry.recipe.plant || entry.concepts.some((c) => c === 'foliage' || c === 'flower')
+    ? 'wrap'
+    : 'fold';
+}
+
+/**
+ * Piece (layer) name of each part of a skinned model: its part concept (`model3dPart` key: seat,
+ * leg, cushion…), else its material: all legs are one piece, every glass pane another.
+ */
+export function skinPieces(entry: Pick<TourMockEntry, 'recipe' | 'concepts'>): string[] {
+  return entry.recipe.parts.map((p, k) => entry.concepts[k] || p.material || 'painted');
+}
+
+/** The recipe a tour object is answered with: its parts wearing their faces (a plant its front). */
+export function skinnedRecipe(entry: TourMockEntry, skin: TourSkin | null): ObjectRecipe {
+  if (!skin) return entry.recipe;
+  if (skin.recipe.plant)
+    return { ...skin.recipe, plant: { ...skin.recipe.plant, skin: skin.frontUrl } };
+  return {
+    ...skin.recipe,
+    skin: {
+      atlas: skin.atlasUrl,
+      view: { ...skin.view },
+      box: [...skin.box],
+      pieces: skinPieces(entry),
+    },
+  };
 }
 
 /** Grid the part masks are read on (long side, cells). */
@@ -104,11 +238,19 @@ export async function tourMockShape(
   const entry = tourMockEntry(target.id);
   if (!entry) return null;
   const partMasks = photo ? tourPartMasks(entry, target.box, photo) : [];
-  const imaginedViews = await generateImaginedViews(entry.recipe, target, 1, 256).catch(() => []);
+  const skin = await tourSkin(target.id);
+  const recipe = skinnedRecipe(entry, skin);
+  const imaginedViews = await generateImaginedViews(
+    skin?.recipe ?? entry.recipe,
+    target,
+    1,
+    256,
+    skin?.paint
+  ).catch(() => []);
   return {
     detectionId: target.id,
     mode: 'recipe',
-    recipe: entry.recipe,
+    recipe,
     source: 'mock',
     model: TOUR_MOCK_MODEL,
     family: entry.recipe.plant ? 'procedural' : 'parametric',
@@ -160,11 +302,51 @@ export function faceView(
 
 /** Side of a drawn face (pixels). */
 export const DRAWING_PX = 512;
+/** Paper kept around the object on a drawn face (share of the side). */
+const DRAWING_MARGIN = 0.06;
+
+/** RGB pixels on white paper as a PNG. */
+const paperPng = (rgb: Uint8Array | Buffer, w: number, h: number) =>
+  sharp(Buffer.from(rgb.buffer, rgb.byteOffset, rgb.length), {
+    raw: { width: w, height: h, channels: 3 },
+  })
+    .png()
+    .toBuffer();
 
 /**
- * One 2D view of a tour object drawn from its model (the mock's « Muse Image » answer): an
- * orthographic elevation on white paper, the object as itself (its own turn on the photo dropped).
- * Null for any other id.
+ * The front face as cut from the photo (VS-T43): the object inside its outline, on white paper,
+ * at its own proportions. PNG.
+ */
+export async function frontCutout(skin: TourSkin): Promise<Buffer> {
+  const { mask, front } = skin;
+  const size = mask.cols;
+  const cut = Buffer.alloc(size * size * 3, 255);
+  for (let i = 0; i < size * size; i++)
+    if (mask.data[i]) for (let k = 0; k < 3; k++) cut[i * 3 + k] = front[i * 3 + k]!;
+  const inner = Math.round(DRAWING_PX * (1 - 2 * DRAWING_MARGIN));
+  const [w, h] =
+    skin.aspect >= 1
+      ? [inner, Math.max(8, Math.round(inner / skin.aspect))]
+      : [Math.max(8, Math.round(inner * skin.aspect)), inner];
+  const left = Math.floor((DRAWING_PX - w) / 2);
+  const top = Math.floor((DRAWING_PX - h) / 2);
+  return sharp(cut, { raw: { width: size, height: size, channels: 3 } })
+    .resize(w, h, { fit: 'fill', kernel: 'lanczos3' })
+    .extend({
+      left,
+      right: DRAWING_PX - w - left,
+      top,
+      bottom: DRAWING_PX - h - top,
+      background: '#ffffff',
+    })
+    .png()
+    .toBuffer();
+}
+
+/**
+ * One 2D view of a tour object (the mock's « Muse Image » answer): the front as cut from its photo,
+ * every other face drawn from its model wearing that front (VS-T43), an orthographic elevation on
+ * white paper, the object as itself (its own turn on the photo dropped). Null for any other id.
  */
 export async function tourMockDrawing(
   target: Pick<ShapeTarget, 'id' | 'scenery'>,
@@ -172,9 +354,14 @@ export async function tourMockDrawing(
 ): Promise<Buffer | null> {
   const entry = tourMockEntry(target.id);
   if (!entry) return null;
-  const recipe: ObjectRecipe = { ...entry.recipe, yaw: undefined };
-  const view = faceView(face, recipe, target.scenery === 'vehicle');
-  const flat = renderFlat(recipe, 1, DRAWING_PX, DRAWING_PX, view);
+  const skin = await tourSkin(target.id);
+  const recipe: ObjectRecipe = skin?.recipe ?? { ...entry.recipe, yaw: undefined };
+  const vehicle = target.scenery === 'vehicle';
+  // The photo shows the front (a car: its profile, its main view).
+  if (skin && (face === 'main' || (!vehicle && face === 'front') || (vehicle && face === 'side')))
+    return frontCutout(skin);
+  const view = faceView(face, recipe, vehicle);
+  const flat = renderFlat(recipe, 1, DRAWING_PX, DRAWING_PX, view, undefined, skin?.paint);
   const n = DRAWING_PX * DRAWING_PX;
   const rgb = Buffer.alloc(n * 3, 255);
   for (let i = 0; i < n; i++)
@@ -183,7 +370,5 @@ export async function tourMockDrawing(
       rgb[i * 3 + 1] = flat.rgb[i * 3 + 1]!;
       rgb[i * 3 + 2] = flat.rgb[i * 3 + 2]!;
     }
-  return sharp(rgb, { raw: { width: DRAWING_PX, height: DRAWING_PX, channels: 3 } })
-    .png()
-    .toBuffer();
+  return paperPng(rgb, DRAWING_PX, DRAWING_PX);
 }

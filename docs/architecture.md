@@ -68,7 +68,7 @@ mitsinjo-grid/
             ├── server/perception/      # server-only: voice / vision / SAM clients (Meta + deterministic mock)
             │   ├── team/               # specialist teams (PQ-T83): `SpecialistTeam` definition + `runTeam` (pilot → specialists in parallel, one retry → merge), the only team engine; `shared/` = specialists reused across teams (finishes, openings, legs, profile); `registry.ts` = archetype → team
             │   ├── furniture/          # parametric builders in metres (PQ-T88): part model + `compileSpec`, sofa, chair, stool, bed, table, cabinet, glazing, door, curtain, railing, fence → `furnitureRecipe`; shared by the real path and the tour mock
-            │   ├── tour-mock/          # mock answers of the 360° tour objects (VS-T41/T42): hand specs + outline `silhouette` parts, `make tour-mock` → tour-mock.json
+            │   ├── tour-mock/          # mock answers of the 360° tour objects (VS-T41/T42): hand specs + outline `silhouette` parts, `make tour-mock` → tour-mock.json; VS-T43 front faces cut from the photos (tour-skins.json) → skin atlas worn by the parts (`skin.ts`)
             │   └── recon/              # views → 3D (PQ-T69/T70/T71): pure math (views, palette, carve, recipe, score, texture) + route.ts (drawing, naming, face atlas)
             ├── server/media/           # server-only: engine result → image prompts + overlays (M5-T1, pure)
             ├── server/spend/           # server-only: estimated Meta spend per session, cap → mock

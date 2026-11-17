@@ -413,3 +413,15 @@ Style : hologramme futuriste (cyan / ambre, lignes de balayage, coins lumineux, 
 - [x] Générateur affiné : pièce `silhouette` (le contour tracé comme face avant d'un hull, coupé à une bande, section au choix ; jamais les pixels) pour rideaux, rochers, troncs, fonds photo, pylône ; repli des plantes sur leur contour (couronne + tronc) quand `reconstructTree` lit mal (IoU < 0,45) ; cylindres couchés corrigés (taille = boîte monde).
 - [x] Scores (159) : IoU moyen 0,76, 55 IoU ≥ 0,85, 75 ΔE ≤ 8. Sous 0,6 : surtout le mobilier ajouré (étagère métal, tabourets, chaises, pont, arches, garde-corps), dont le contour plein compte le fond vu à travers.
 - [ ] **Done when :** vu à l'écran (V484–V488) et au casque.
+
+### VS-T43 : Visite 360° : faces 2D tirées des photos, 3D habillée, calques par pièce (mode mock)
+
+> Demande 2026-11-17 : 3D et faces 2D « le plus réalistes possible », fidèles aux photos (montage vidéo).
+> Exception à « jamais la photo sur le modèle » accordée pour le **mock de la visite seulement** ; le chemin Meta la garde.
+
+- [x] Face avant = l'objet découpé dans son panorama (contour resserré de 2 px, fond vu à travers écarté sur les pièces unies, reste comblé par les couleurs voisines), une tuile 512² par objet (`make tour-mock`, ou `make tour-skins` pour ne refaire que les faces → `tour-skins.json`).
+- [x] Côtés, dos : objets fabriqués = bandes de bord de la face repliées (raccord aux deux coins), objets vivants (plantes, fleurs) = face enroulée (dos = face vue de derrière) ; atlas 3 × 2 (`tour-mock/skin.ts`).
+- [x] 3D : les pièces du modèle portent les faces, projetées depuis la caméra de la photo (lacet et tangage de la prise de vue : un canapé vu de biais reçoit son vrai côté) ; dessus lus au-dessus de leur bord (`lib/face-skin.ts`, `ObjectRecipe.skin`) ; plantes : face avant comme peau (`plant.skin`).
+- [x] Calques = pièces nommées (assise, pied, coussin…) dans le Studio 3D ; village et export Blender suivent.
+- [x] Faces 2D : avant = la découpe photo sur papier blanc, autres faces et 6 angles imaginés = le modèle habillé rendu sous chaque angle.
+- [ ] **Done when :** vu à l'écran (V496–V501) et au casque.

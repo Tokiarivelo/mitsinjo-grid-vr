@@ -6,6 +6,7 @@ import type { ObjectRecipe } from '@/lib/object-shape';
 import { facesMesh } from '@/features/vision-insert/utils/face-projection';
 import { carGeometry } from '@/features/vision-insert/utils/car-projection';
 import { plantGeometry } from '@/features/vision-insert/utils/plant-projection';
+import { skinGeometry } from '@/features/vision-insert/utils/skin-projection';
 import { houseGeometry } from '@/features/vision-insert/utils/house-projection';
 import { withPieceEdits } from '@/features/vision-insert/utils/model-pieces';
 import { recipeMesh, triangleCount } from '@/features/vision-insert/utils/object-geometry';
@@ -176,6 +177,8 @@ export function buildPlacedModelsGeometry(
     const carMesh = carPlan ? carGeometry({ ...item.recipe, car: carPlan }) : null;
     // A plant built from its plan (PQ-T82): trunk, limbs, foliage, its own materials.
     const plantPlan = own && !house && !carMesh ? item.recipe.plant : undefined;
+    // Parts wearing their 2D faces (VS-T43, tour mock).
+    const skin = own && !house && !carMesh && !plantPlan ? item.recipe.skin : undefined;
     // The operator's piece edits from the 3D Studio (PQ-T77) are baked in before the turn.
     const edited = (geo: THREE.BufferGeometry) => withPieceEdits(geo, item.recipe);
     let g = house
@@ -184,12 +187,14 @@ export function buildPlacedModelsGeometry(
         ? edited(carMesh).rotateY(effYaw)
         : plantPlan
           ? edited(plantGeometry({ ...item.recipe, plant: plantPlan })).rotateY(effYaw)
-          : faces
-            ? edited(facesMesh({ proportions: item.recipe.proportions, faces })).rotateY(effYaw)
-            : withPieceEdits(
-                recipeMesh(recipeWithYaw, tier === 'low' ? 'low' : 'full'),
-                recipeWithYaw
-              );
+          : skin
+            ? edited(skinGeometry({ ...item.recipe, skin })).rotateY(effYaw)
+            : faces
+              ? edited(facesMesh({ proportions: item.recipe.proportions, faces })).rotateY(effYaw)
+              : withPieceEdits(
+                  recipeMesh(recipeWithYaw, tier === 'low' ? 'low' : 'full'),
+                  recipeWithYaw
+                );
     if (tier === 'low') {
       const tris = triangleCount(g);
       if (lowTriangles + tris > PLACED_LOW_TRIANGLES) {
@@ -216,7 +221,7 @@ export function buildPlacedModelsGeometry(
     // the village's buildings (VS-T35).
     const dim = placedDim((sec?.unserved ?? false) || !item.running, darkness);
 
-    if (faces || house || carMesh || plantPlan) {
+    if (faces || house || carMesh || plantPlan || skin) {
       // Wears its drawings: its own mesh and texture, same place, same bounds.
       drawn.push({
         id: item.id,

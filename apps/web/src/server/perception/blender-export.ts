@@ -14,6 +14,11 @@ import {
   type PlantRecipe,
 } from '@/features/vision-insert/utils/plant-projection';
 import { recipeMesh } from '@/features/vision-insert/utils/object-geometry';
+import {
+  skinGeometry,
+  skinPieceNames,
+  type SkinRecipe,
+} from '@/features/vision-insert/utils/skin-projection';
 import { withPieceEdits } from '@/features/vision-insert/utils/model-pieces';
 import { HULL_SURFACES } from '@/lib/face-hull';
 import { SURFACES } from '@/features/vision-insert/utils/surface-look';
@@ -136,12 +141,27 @@ function plantGroups(recipe: PlantRecipe): DrawnGroup[] {
   return out;
 }
 
+/** Parts wearing their faces (VS-T43) by piece, each piece the atlas with its own uvs. */
+function skinGroups(recipe: SkinRecipe): DrawnGroup[] {
+  const geo = withPieceEdits(skinGeometry(recipe), recipe);
+  const names = skinPieceNames(recipe.skin);
+  const out = geo.groups
+    .filter((g) => g.count > 0)
+    .map((g): DrawnGroup => ({
+      surface: names[g.materialIndex ?? 0] ?? 'painted',
+      ...groupVertices(geo, g.start, g.count),
+    }));
+  geo.dispose();
+  return out;
+}
+
 /** The drawn hull of a recipe by surface, as the 3D view draws it; empty without drawn faces. */
 export function drawnGroups(recipe: ObjectRecipe): DrawnGroup[] {
   if (recipe.house) return houseGroups({ ...recipe, house: recipe.house });
   const car = recipe.car?.body ? carGroups({ ...recipe, car: recipe.car }) : null;
   if (car) return car;
   if (recipe.plant) return plantGroups({ ...recipe, plant: recipe.plant });
+  if (recipe.skin) return skinGroups({ ...recipe, skin: recipe.skin });
   if (!recipe.faces) return [];
   const geo = withPieceEdits(
     facesMesh({ proportions: recipe.proportions, faces: recipe.faces }),
@@ -416,8 +436,15 @@ export function recipeToBlender(
     ...meta,
     groups: recipeGroups(recipe),
     recipe,
-    ...(recipe.faces || recipe.house || recipe.car?.body || recipe.plant
-      ? { drawn: drawnGroups(recipe), ...(recipe.faces ? { atlas: recipe.faces.atlas } : {}) }
+    ...(recipe.faces || recipe.house || recipe.car?.body || recipe.plant || recipe.skin
+      ? {
+          drawn: drawnGroups(recipe),
+          ...(recipe.faces
+            ? { atlas: recipe.faces.atlas }
+            : recipe.skin && !recipe.plant
+              ? { atlas: recipe.skin.atlas }
+              : {}),
+        }
       : {}),
   });
 }

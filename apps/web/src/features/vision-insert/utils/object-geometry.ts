@@ -511,15 +511,27 @@ export function recipeMesh(
   return buildMesh(recipe, 'low');
 }
 
-function buildMesh(recipe: ObjectRecipe, detail: AssemblyDetail): THREE.BufferGeometry {
+/**
+ * The recipe's parts as one geometry, grouped by `slotOf` (default: the surface of each part's
+ * material). `slotOf` gets the index of the recipe part an expanded part comes from (VS-T43: one
+ * group per skin piece).
+ */
+export function buildMesh(
+  recipe: ObjectRecipe,
+  detail: AssemblyDetail,
+  slotOf?: (origin: number, surface: number) => number
+): THREE.BufferGeometry {
   const dims = [recipe.proportions.w, recipe.proportions.h, recipe.proportions.d] as const;
   // Windows and doors drawn with frame, glass, bars and sill (PG-T8), cut into their wall (PG-T11).
   // Roofs with a bulge end in a rounded eave roll (PG-T12), chimneys may wear a cap (PG-T10);
   // half-timbered walls get their beams. Objects from their 2D view: wheel rims, solar cell lines (PG-T21).
-  const { parts: expanded, holes } = expandAssemblies(recipe, detail, ROOF_OVERHANG);
+  const { parts: expanded, holes, origin } = expandAssemblies(recipe, detail, ROOF_OVERHANG);
   const sorted = expanded
-    .map((p) => ({ p, surface: surfaceIndex(p.material) }))
-    .sort((a, b) => a.surface - b.surface);
+    .map((p, j) => {
+      const surface = surfaceIndex(p.material);
+      return { p, surface, slot: slotOf ? slotOf(origin[j]!, surface) : surface };
+    })
+    .sort((a, b) => a.slot - b.slot);
   const seed = seedForRecipe(recipe);
   const parts = sorted.map(({ p, surface }, i) => {
     const [sx, sy, sz] = [p.size[0] * dims[0], p.size[1] * dims[1], p.size[2] * dims[2]];
@@ -614,9 +626,9 @@ function buildMesh(recipe: ObjectRecipe, detail: AssemblyDetail): THREE.BufferGe
   let start = 0;
   parts.forEach((g, i) => {
     const count = g.getAttribute('position').count;
-    const surface = sorted[i]!.surface;
-    if (i > 0 && sorted[i - 1]!.surface === surface) body.groups.at(-1)!.count += count;
-    else body.addGroup(start, count, surface);
+    const slot = sorted[i]!.slot;
+    if (i > 0 && sorted[i - 1]!.slot === slot) body.groups.at(-1)!.count += count;
+    else body.addGroup(start, count, slot);
     start += count;
   });
   parts.forEach((g) => g.dispose());
