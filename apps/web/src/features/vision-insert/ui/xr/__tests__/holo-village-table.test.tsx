@@ -8,14 +8,27 @@ import type { ObjectRecipe } from '@/lib/object-shape';
 import { resetSimulationStore, usePlacedModelsStore, useSimulationStore } from '@/stores';
 import type { HoloPanelHandlers } from '../holo-panel';
 
-const nav = vi.hoisted(() => ({ push: vi.fn(), end: vi.fn(() => Promise.resolve()) }));
+const nav = vi.hoisted(() => ({
+  push: vi.fn(),
+  end: vi.fn(() => Promise.resolve()),
+  presenting: false,
+}));
 const panels = vi.hoisted(() => new Map<string, HoloPanelHandlers>());
 const draws = vi.hoisted(() => [] as Array<Record<string, unknown>>);
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: nav.push }) }));
 vi.mock('@react-three/fiber', () => ({
   useThree: (sel: (s: unknown) => unknown) =>
-    sel({ gl: { xr: { getSession: () => ({ end: nav.end }) } } }),
+    sel({
+      gl: {
+        xr: {
+          getSession: () => ({ end: nav.end }),
+          get isPresenting() {
+            return nav.presenting;
+          },
+        },
+      },
+    }),
   useFrame: vi.fn(),
 }));
 vi.mock('../holo-panel', () => ({
@@ -40,6 +53,8 @@ vi.mock('@/features/microgrid-3d/utils/sim-xr-map-draw', () => ({
   drawVillageMap: (_ctx: unknown, o: Record<string, unknown>) => draws.push(o),
 }));
 
+import { useXrWorld } from '../xr-world-switch';
+import { useXrHandoff } from '@/features/microgrid-3d/utils/xr-handoff';
 import { HoloVillageTable } from '../holo-village-table';
 import { HOLO } from '../holo-style';
 
@@ -108,13 +123,29 @@ describe('HoloVillageTable (VS-T28)', () => {
     expect(screen.getByRole('button', { name: v.insertUpdate })).toBeTruthy();
   });
 
-  it('« Go to the simulation » ends the headset session and opens /simulation', () => {
+  it('« Go to the simulation » off the headset opens /simulation', () => {
+    nav.presenting = false;
     setup();
     tapTable(0.6, 0.6);
     fireEvent.click(screen.getByRole('button', { name: v.insertButton }));
     fireEvent.click(screen.getByRole('button', { name: v.vrVillage.goSimulation }));
-    expect(nav.end).toHaveBeenCalled();
     expect(nav.push).toHaveBeenCalledWith('/simulation?immersion=vr');
+  });
+
+  it('« Go to the simulation » in the headset keeps the session and swaps to the village (VS-T49)', () => {
+    useXrWorld.getState().reset();
+    nav.presenting = true;
+    nav.end.mockClear();
+    setup();
+    tapTable(0.6, 0.6);
+    fireEvent.click(screen.getByRole('button', { name: v.insertButton }));
+    fireEvent.click(screen.getByRole('button', { name: v.vrVillage.goSimulation }));
+    expect(nav.end).not.toHaveBeenCalled();
+    expect(nav.push).not.toHaveBeenCalled();
+    expect(useXrWorld.getState()).toMatchObject({ phase: 'cover', target: 'village' });
+    expect(useXrHandoff.getState().pending?.at).toBeTruthy();
+    nav.presenting = false;
+    useXrWorld.getState().reset();
   });
 
   it('the table is the /simulation map: named buildings, feeder in green, no walker (VS-T39)', () => {

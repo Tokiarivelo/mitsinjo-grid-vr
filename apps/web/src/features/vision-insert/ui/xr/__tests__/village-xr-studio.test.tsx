@@ -1,9 +1,10 @@
-import { act, fireEvent, render } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import * as THREE from 'three';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '@/lib/i18n';
 import type { ApplianceDetection } from '@/lib/vision';
 import type { XRBlasterControllerProps } from '../xr-blaster-controller';
+import { useXrWorld } from '../xr-world-switch';
 import { VillageXRStudio } from '../village-xr-studio';
 import type { XrExtract } from '../../../hooks/use-xr-extract';
 
@@ -14,7 +15,7 @@ vi.mock('../xr-blaster-controller', () => ({
   createAimReadout: () => ({ pointers: [{}, {}] }),
   XRBlasterController: (props: XRBlasterControllerProps) => {
     blaster.props = props;
-    return null;
+    return <div data-testid="blaster" />;
   },
 }));
 vi.mock('../live-webcam-backdrop', () => ({ LiveWebcamBackdrop: () => null }));
@@ -529,5 +530,32 @@ describe('VillageXRStudio — controls help (VS-T24)', () => {
     const hide = getByRole('button', { name: 'Hide the controls help' });
     act(() => hide.click());
     expect(getByRole('button', { name: 'Show the controls help' })).toBeTruthy();
+  });
+});
+
+describe('VillageXRStudio — suspended behind the simulation village (VS-T49)', () => {
+  beforeEach(() => {
+    blaster.props = null;
+    useXrWorld.getState().reset();
+  });
+
+  it('hides the lab and drops its inputs, then gives everything back as it was', () => {
+    const { rerender, view, container } = setup();
+    rerender(view([fridge], false));
+    act(() => blaster.props!.onShootTarget('fridge'));
+    expect(blaster.props!.miniatures?.map((m) => m.id)).toEqual(['fridge']);
+    expect(screen.queryByTestId('blaster')).toBeTruthy();
+
+    act(() => useXrWorld.setState({ world: 'village' }));
+    expect(screen.queryByTestId('blaster')).toBeNull();
+    expect(screen.queryByTestId('nav-pad')).toBeNull();
+    // Still mounted (its state lives on), only hidden.
+    expect(container.querySelector('group[name="village-xr-studio-root"]')).toBeTruthy();
+
+    blaster.props = null;
+    act(() => useXrWorld.setState({ world: 'lab' }));
+    expect(screen.queryByTestId('blaster')).toBeTruthy();
+    // The miniature shot before the village is still in reach.
+    expect(blaster.props!.miniatures?.map((m) => m.id)).toEqual(['fridge']);
   });
 });

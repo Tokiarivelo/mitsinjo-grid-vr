@@ -5,6 +5,7 @@ import {
   createHandMesh,
   HAND_JOINTS,
   setupXRHandsAndControllers,
+  traverseLive,
   updateHandMesh,
 } from '../xr-hands';
 
@@ -247,5 +248,32 @@ describe('pickUsable (VS-T36)', () => {
     const caster = new THREE.Raycaster(new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -1));
     const hits = pickUsable(caster, [far, cable, close], []);
     expect(hits.map((h) => h.object.name)).toEqual(['close', 'far']);
+  });
+});
+
+describe('traverseLive (VS-T49)', () => {
+  it('skips a suspended branch: the hidden lab never takes the village pointer', () => {
+    const scene = new THREE.Scene();
+    const lab = new THREE.Group();
+    lab.name = 'lab';
+    lab.userData.xrSuspended = true;
+    const labButton = new THREE.Mesh();
+    labButton.name = 'lab-button';
+    lab.add(labButton);
+    const village = new THREE.Group();
+    village.name = 'village';
+    const sector = new THREE.Mesh();
+    sector.name = 'sector';
+    village.add(sector);
+    scene.add(lab, village);
+    const names: string[] = [];
+    traverseLive(scene, (o) => names.push(o.name));
+    expect(names).toContain('sector');
+    expect(names).not.toContain('lab');
+    expect(names).not.toContain('lab-button');
+    lab.userData.xrSuspended = false;
+    names.length = 0;
+    traverseLive(scene, (o) => names.push(o.name));
+    expect(names).toContain('lab-button');
   });
 });

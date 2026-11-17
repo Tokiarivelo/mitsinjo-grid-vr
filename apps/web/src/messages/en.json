@@ -368,7 +368,10 @@
         "legendThumbTurn": "Thumb swipe ←/→: turn · ↑/↓: one step",
         "legendThumbTap": "Thumb tap: show / hide labels",
         "legendStickHold": "Hold a stick 1 s: show / hide hands & controllers",
-        "legendPad": "Arrows under your view: turn · one step"
+        "legendPad": "Arrows under your view: turn · one step",
+        "backToLab": "Back to the lab",
+        "backToLabHide": "Hide « Back to the lab »",
+        "backToLabShow": "Show « Back to the lab »"
       },
       "vrMixer": {
         "title": "Dispatcher · mixing desk",

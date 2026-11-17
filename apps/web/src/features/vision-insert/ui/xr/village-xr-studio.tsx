@@ -66,6 +66,7 @@ import { createAimReadout } from './xr-blaster-controller';
 import { XrAimHint, XrControlLegend } from './xr-control-hints';
 import { XrControlsDriver } from './xr-controls-driver';
 import { XrNavPad } from './xr-nav-pad-3d';
+import { useXrWorld } from './xr-world-switch';
 import { SNAP_TURN, snapshotSources, STEP_DISTANCE, type XrControlAction } from './xr-controls';
 import { snapTurn } from './xr-rig';
 import { newStudioWalk, StudioWalk, wheelStep } from './studio-walk';
@@ -157,6 +158,9 @@ export const VillageXRStudio = memo(function VillageXRStudio({
   const modal = stage !== 'idle';
   /** « Extract in 3D » said: the studio room replaces the 360° view until the lab is left. */
   const studio = stage === 'views' || stage === 'build' || stage === 'lab';
+  // In the simulation's village (same XR session, VS-T49) the lab stays mounted, hidden and deaf:
+  // its targets, miniatures, lab object and tour spot are all there on the way back.
+  const suspended = useXrWorld((st) => st.world !== 'lab');
   /** Where the viewer walked in the studio (VS-T25); back at its door each time it opens. */
   const studioWalk = useRef(newStudioWalk());
   useEffect(() => {
@@ -166,14 +170,14 @@ export const VillageXRStudio = memo(function VillageXRStudio({
   useEffect(() => {
     const dom = gl?.domElement;
     const doc = dom?.ownerDocument;
-    if (!studio || !dom || !doc) return;
+    if (!studio || suspended || !dom || !doc) return;
     const onWheel = (e: WheelEvent) => {
       if (!mouseTarget(e.target, dom, !!gl.xr?.isPresenting)) return;
       studioWalk.current.step = wheelStep(studioWalk.current.step, e.deltaY);
     };
     doc.addEventListener('wheel', onWheel, { capture: true, passive: true });
     return () => doc.removeEventListener('wheel', onWheel, { capture: true });
-  }, [studio, studioWalk, gl]);
+  }, [studio, suspended, studioWalk, gl]);
   /** Wrist menu: closed on entry; the wrist button toggles it (read by the input controller). */
   const [menuOpen, setMenuOpen] = useState(false);
   const menu = useMemo(() => {
@@ -556,7 +560,7 @@ export const VillageXRStudio = memo(function VillageXRStudio({
   // Dev only: lets `make vr-probe` read the controls (help, live gamepads, view heading, hints).
   const { scene } = useThree();
   useEffect(() => {
-    if (process.env.NODE_ENV === 'production') return;
+    if (process.env.NODE_ENV === 'production' || suspended) return;
     const w = window as Window & { __VR_CONTROLS__?: unknown };
     w.__VR_CONTROLS__ = {
       help,
@@ -589,7 +593,7 @@ export const VillageXRStudio = memo(function VillageXRStudio({
     return () => {
       delete w.__VR_CONTROLS__;
     };
-  }, [help, gl, camera, scene]);
+  }, [help, gl, camera, scene, suspended]);
   const aimOut = useMemo(() => createAimReadout(), []);
   const hintContext = useMemo<AimHintContext>(
     () => ({
@@ -665,7 +669,12 @@ export const VillageXRStudio = memo(function VillageXRStudio({
   }, [panels]);
 
   return (
-    <group name="village-xr-studio-root">
+    <group
+      name="village-xr-studio-root"
+      visible={!suspended}
+      // The village's pointers skip a suspended lab (xr-hands `usableObjects`).
+      userData={{ xrSuspended: suspended }}
+    >
       {/* 1. Studio Lighting */}
       <ambientLight intensity={0.7} />
       <hemisphereLight args={['#7dd3fc', '#0f172a', 0.6]} />
@@ -713,14 +722,14 @@ export const VillageXRStudio = memo(function VillageXRStudio({
       </group>
 
       {/* 4. Wrist button → menu (scan button, guide, HUD VS-T8), following the viewer; not in the studio */}
-      {!studio && (
+      {!studio && !suspended && (
         <WristMenuButton
           menu={menu}
           open={menuOpen}
           hovered={hoveredTargetId === WRIST_BUTTON_ID}
         />
       )}
-      {menuOpen && !studio && (
+      {menuOpen && !studio && !suspended && (
         <WristMenuPanel menu={menu} scanOffset={MENU_SCAN_OFFSET}>
           <SpatialAirButton
             status={status}
@@ -769,7 +778,7 @@ export const VillageXRStudio = memo(function VillageXRStudio({
       <XrEventToast message={recentEvent} menuOpen={menuOpen} />
 
       {/* 4c. Hands-first pad: turn / step / help without a stick, seated (Meta VR Start) */}
-      {((studio && stage !== 'lab') || (tourMode && !modal)) && !menuOpen && (
+      {((studio && stage !== 'lab') || (tourMode && !modal)) && !menuOpen && !suspended && (
         <XrNavPad registry={panels} hoveredId={hoveredTargetId} />
       )}
 
@@ -961,28 +970,33 @@ export const VillageXRStudio = memo(function VillageXRStudio({
         ))}
 
       {/* Controls (VS-T23): what each select will do, button legends, buttons / sticks / thumbs */}
-      <XrAimHint aim={aimOut} context={hintContext} />
-      <XrControlLegend visible={help} />
-      <XrControlsDriver onAction={handleControl} />
+      {/* Inputs only while the lab is shown: they hold no lab state (VS-T49). */}
+      {!suspended && (
+        <>
+          <XrAimHint aim={aimOut} context={hintContext} />
+          <XrControlLegend visible={help} />
+          <XrControlsDriver onAction={handleControl} />
 
-      {/* 6. XR Blaster Controller Raycasting & Particle Effects */}
-      <XRBlasterController
-        targets={modal ? NO_TARGETS : targets}
-        menu={menu}
-        miniatures={modal ? NO_MINIATURES : miniatures}
-        panels={panels}
-        onTapMiniature={handleShootTarget}
-        onHoverTarget={setHoveredTargetId}
-        onShootTarget={handleShootTarget}
-        onTriggerScan={handleTriggerScan}
-        onShootScreen={modal ? undefined : handleShootScreen}
-        surface={modal ? null : surface}
-        hotspots={modal ? NO_HOTSPOTS : tour.arrows}
-        onHotspot={tour.walkThrough}
-        onShootOutside={tourMode && !modal ? handleShootOutside : undefined}
-        aimOut={aimOut}
-        {...(photoGround ? { photo: photoGround } : {})}
-      />
+          {/* 6. XR Blaster Controller Raycasting & Particle Effects */}
+          <XRBlasterController
+            targets={modal ? NO_TARGETS : targets}
+            menu={menu}
+            miniatures={modal ? NO_MINIATURES : miniatures}
+            panels={panels}
+            onTapMiniature={handleShootTarget}
+            onHoverTarget={setHoveredTargetId}
+            onShootTarget={handleShootTarget}
+            onTriggerScan={handleTriggerScan}
+            onShootScreen={modal ? undefined : handleShootScreen}
+            surface={modal ? null : surface}
+            hotspots={modal ? NO_HOTSPOTS : tour.arrows}
+            onHotspot={tour.walkThrough}
+            onShootOutside={tourMode && !modal ? handleShootOutside : undefined}
+            aimOut={aimOut}
+            {...(photoGround ? { photo: photoGround } : {})}
+          />
+        </>
+      )}
     </group>
   );
 });

@@ -130,6 +130,10 @@ vr-hands-probe: ## Hands-only VR check in the IWER emulator (Meta VR Start « no
 	$(need_ws)
 	@$(PNPM) --filter $(WEB) exec node scripts/vr-hands-probe.mjs $(URL) $(CURDIR)/test-results/vr-hands-probe
 
+vr-world-probe: ## Lab ↔ simulation village in one VR session in the IWER emulator (VS-T49): hand-over shell, village world, « Back to the lab » by pinch, session never ends (dev server must run)
+	$(need_ws)
+	@$(PNPM) --filter $(WEB) exec node scripts/vr-world-probe.mjs $(URL) $(CURDIR)/test-results/vr-world-probe
+
 vr-iwer-tools: ## Exercise every IWER emulator tool + the /village controls (A/B/X/Y, sticks, thumb gestures, legends, hints) (dev server must run)
 	$(need_ws)
 	@$(PNPM) --filter $(WEB) exec node scripts/vr-iwer-tools.mjs $(URL) $(CURDIR)/test-results/vr-iwer-tools

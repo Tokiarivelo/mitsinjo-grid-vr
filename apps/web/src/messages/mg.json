@@ -368,7 +368,10 @@
         "legendThumbTurn": "Ankihibe ←/→ : mihodina · ↑/↓ : dingana iray",
         "legendThumbTap": "Kitiho ny ankihibe : aseho / afenina ny marika",
         "legendStickHold": "Tazomy 1 s ny stick: aseho / afeno ny tanana sy ny fitantanana",
-        "legendPad": "Zana-tsipika eo ambanin'ny fijery : mihodina · dingana iray"
+        "legendPad": "Zana-tsipika eo ambanin'ny fijery : mihodina · dingana iray",
+        "backToLab": "Hiverina any amin'ny laboratoara",
+        "backToLabHide": "Afeno ny « Hiverina any amin'ny laboratoara »",
+        "backToLabShow": "Asehoy ny « Hiverina any amin'ny laboratoara »"
       },
       "vrMixer": {
         "title": "Dispatcher · latabatra fampifangaroana",

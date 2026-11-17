@@ -1,7 +1,15 @@
 'use client';
 
 import { XrInputsLayer } from '@/features/microgrid-3d/ui/xr-inputs-layer';
-import { memo, useCallback, useRef, useState, type ComponentRef, type RefObject } from 'react';
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ComponentRef,
+  type RefObject,
+} from 'react';
 import * as THREE from 'three';
 import type { WebGLRenderer } from 'three';
 import { Canvas } from '@react-three/fiber';
@@ -21,6 +29,9 @@ import {
 } from '@/features/microgrid-3d';
 import { TOUR_EYE } from './tour/tour-nav';
 import { VillageXRStudio } from './village-xr-studio';
+import { VillageXrWorld } from './village-xr-world';
+import { XrWorldTransition } from './xr-world-transition';
+import { useXrWorld } from './xr-world-switch';
 import type { XrExtract } from '../../hooks/use-xr-extract';
 
 export interface VillageXRViewportProps {
@@ -79,6 +90,17 @@ export const VillageXRViewport = memo(function VillageXRViewport({
 
   // 360° tour off a real headset (desktop preview, IWER emulator); real headset = webcam wall.
   const tourMode = !xrActive || isDevXREmulated();
+  // Lab ↔ village in this same XR session (VS-T49); a new session always starts in the lab.
+  const world = useXrWorld((s) => s.world);
+  const resetWorld = useXrWorld((s) => s.reset);
+  useEffect(() => {
+    if (!xrActive) resetWorld();
+  }, [xrActive, resetWorld]);
+  useEffect(() => resetWorld, [resetWorld]);
+  // Warm the village's code in the lab, so the hand-over never reveals an empty sky.
+  useEffect(() => {
+    if (xrActive) void import('@/features/microgrid-3d/ui/village-canvas');
+  }, [xrActive]);
 
   // Desktop look-around turns in place (Street View): zoom = narrower field of view, not dolly.
   const zoomBy = useCallback((factor: number) => {
@@ -277,6 +299,10 @@ export const VillageXRViewport = memo(function VillageXRViewport({
             {...(extract ? { extract } : {})}
             imageUrl={imageUrl ?? null}
           />
+          {/* The simulation's village, same session (VS-T49); the lab above stays mounted and
+              suspended behind it, so all its state is there on the way back. */}
+          {world === 'village' && <VillageXrWorld />}
+          {xrActive && <XrWorldTransition />}
         </Canvas>
       </CanvasCreationBoundary>
     </div>

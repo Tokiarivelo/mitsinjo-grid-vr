@@ -1,6 +1,7 @@
 'use client';
 
 import { memo, useEffect, useMemo, useRef } from 'react';
+import { labSuspended } from '../xr-world-switch';
 import * as THREE from 'three';
 import { useFrame, useThree } from '@react-three/fiber';
 import { Billboard } from '@react-three/drei';
@@ -286,6 +287,8 @@ export const PanoramaTour = memo(function PanoramaTour({
       const target = e.target as HTMLElement | null;
       if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
       if (!gl.xr?.isPresenting && !hoverRef.current) return;
+      // The lab is hidden behind the simulation's village (VS-T49): its keys walk the village.
+      if (labSuspended()) return;
       if (e.key.startsWith('Arrow')) e.preventDefault();
       held.add(e.key.toLowerCase());
     };
@@ -307,6 +310,7 @@ export const PanoramaTour = memo(function PanoramaTour({
   }, [gl]);
 
   useFrame((_, rawDelta) => {
+    if (labSuspended()) return;
     const delta = Math.min(rawDelta, 0.1);
     camera.getWorldDirection(_dir);
     const headYaw = yawPitchOf([_dir.x, _dir.y, _dir.z]).yaw;

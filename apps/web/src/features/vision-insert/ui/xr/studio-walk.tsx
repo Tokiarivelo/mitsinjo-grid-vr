@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, type MutableRefObject, type ReactNode } from 'react';
+import { labSuspended } from './xr-world-switch';
 import * as THREE from 'three';
 import { useFrame, useThree } from '@react-three/fiber';
 import { yawPitchOf } from './tour/equirect';
@@ -52,6 +53,7 @@ export function StudioWalk({
   const ref = useRef<THREE.Group>(null);
   const { gl, camera } = useThree();
   useFrame((_, rawDelta) => {
+    if (labSuspended()) return;
     const walk = walkRef.current;
     const delta = Math.min(rawDelta, 0.1);
     camera.getWorldDirection(_dir);

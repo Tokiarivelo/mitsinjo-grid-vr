@@ -152,4 +152,14 @@ describe('CameraController XR (VR-T2)', () => {
     rerender(<CameraController preset="village" reducedMotion />);
     expect(camera.scale.toArray()).toEqual([1, 1, 1]);
   });
+
+  it('gives the camera back when unmounted mid-session (lab ↔ village in one session, VS-T49)', () => {
+    const { unmount } = render(<CameraController preset="village" reducedMotion xrActive />);
+    const rig = camera.parent;
+    expect(rig).toBeInstanceOf(THREE.Group);
+    unmount();
+    expect(camera.parent).not.toBe(rig);
+    expect(three.state.scene.children).not.toContain(rig);
+    expect(camera.scale.toArray()).toEqual([1, 1, 1]);
+  });
 });

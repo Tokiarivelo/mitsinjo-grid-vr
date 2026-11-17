@@ -20,6 +20,7 @@ import { leaveImmersionFor } from '@/features/microgrid-3d/hooks/use-immersion-q
 import { useApplianceInsert } from '../../hooks/use-appliance-insert';
 import { tableUvToVillage, villageToTable, VILLAGE_HOLO_RANGE } from '../../utils/village-holo';
 import { useHoloPanel, type PanelRegistry } from './holo-panel';
+import { useXrWorld } from './xr-world-switch';
 import { HoloButton, HoloFrame, HoloText } from './holo-ui';
 import { HOLO, HOLO_TEXT_DMM, holoTextPx, type HoloCardSpec } from './holo-style';
 import type { AimReadout } from './xr-blaster-controller';
@@ -223,17 +224,18 @@ export const HoloVillageTable = memo(function HoloVillageTable({
   });
 
   const requestXr = useXrHandoff((st) => st.request);
+  const goWorld = useXrWorld((st) => st.go);
   const goSimulation = () => {
-    // The simulation opens its own VR session next to the object (VS-T29).
+    // Arrive next to the object just added (VS-T29).
     if (pos) requestXr([pos.x, pos.z]);
+    // In the headset: the village opens in this same session, behind the hand-over (VS-T49).
+    if (gl.xr.isPresenting) {
+      goWorld('village');
+      return;
+    }
     const href = immersionHref('/simulation');
     // This page must not rewrite its URL while it leaves (it would cancel the push).
     leaveImmersionFor(href);
-    // Leave this immersive session first: one session at a time.
-    void gl.xr
-      .getSession()
-      ?.end()
-      .catch(() => {});
     router.push(href);
   };
 
