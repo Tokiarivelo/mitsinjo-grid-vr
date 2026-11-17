@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { teamSpecs, type SpecialistTeam } from '../team/team';
 import { LEAF_TYPES, PLANT_HABITS, type LeafType, type PlantHabit } from '@/lib/plant-plan';
-import { answerJson } from '../house/house-tools';
+import { answerJson } from '../team/shared/common';
 import type { PlantHints } from './plant-build';
 
 /**

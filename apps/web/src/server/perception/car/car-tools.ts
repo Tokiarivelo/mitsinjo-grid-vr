@@ -1,7 +1,9 @@
 import { z } from 'zod';
 import { teamSpecs, type SpecialistTeam } from '../team/team';
 import { CAR_KINDS, type CarKind } from '@/lib/car-plan';
-import { answerJson } from '../house/house-tools';
+import { answerJson } from '../team/shared/common';
+import { finishesSpec, type FinishesConfig } from '../team/shared/finishes';
+import { openingsSpec, type OpeningsConfig } from '../team/shared/openings';
 
 /**
  * The car team (PQ-T76): a pilot and part specialists that read the validated drawings of ONE car,
@@ -21,7 +23,8 @@ import { answerJson } from '../house/house-tools';
  * parsers, the merge.
  */
 
-export const CAR_TOOLS_PROMPT_VERSION = 1;
+/** 2: glazing and finishes from the shared specialists (PQ-T86). */
+export const CAR_TOOLS_PROMPT_VERSION = 2;
 
 export const CAR_TOOLS = ['body', 'glazing', 'lights', 'finishes'] as const;
 export type CarTool = (typeof CAR_TOOLS)[number];
@@ -175,8 +178,42 @@ export interface CarToolSpec {
   /** The one-line task closing the question. */
   task: string;
   /** The list (or object) its answer must hold to count as one. */
-  key: 'body' | 'windows' | 'details' | 'finishes';
+  key: string;
 }
+
+export const CAR_GLAZING_CONFIG: OpeningsConfig = {
+  subject: 'ONE car',
+  frame: FRAME,
+  what: 'every window',
+  key: 'windows',
+  kinds: CAR_WINDOWS,
+  views: CAR_VIEWS,
+  shape: 'outline',
+  notes: [
+    'kind: windscreen on the front, rear on the back, side for door windows, quarter for small fixed windows behind them, sunroof on the view from above.',
+    'Give every side window separately (front door, rear door, quarter), on each side image.',
+  ],
+  schemaName: 'CarGlazing',
+  task: 'List every window with its outline.',
+};
+
+export const CAR_FINISHES_CONFIG: FinishesConfig = {
+  subject: 'ONE car',
+  frame: FRAME,
+  finishes: [
+    ['paint', 'the main body colour'],
+    ['paint2', 'the second colour of a two-tone car: roof, lower body'],
+    ['trim', 'strips and frames, chrome or black'],
+    ['bumper', 'the bumpers'],
+    ['grille', 'the grille'],
+    ['glass', 'the windows'],
+    ['canopy', 'the canopy of a pick-up'],
+  ] satisfies ReadonlyArray<readonly [(typeof CAR_FINISHES)[number], string]>,
+  materials: CAR_MATERIALS,
+  views: CAR_VIEWS,
+  required: ['finish', 'color'],
+  schemaName: 'CarFinishes',
+};
 
 export const CAR_TOOL_SPECS: Readonly<Record<CarTool, CarToolSpec>> = {
   body: {
@@ -225,42 +262,7 @@ export const CAR_TOOL_SPECS: Readonly<Record<CarTool, CarToolSpec>> = {
     task: 'Read the body: stations, heights, widths, and the bed if any.',
     key: 'body',
   },
-  glazing: {
-    system: [
-      'You are the glazing specialist of a 3D modelling team. You find every window of ONE car on its orthographic drawings.',
-      'For each window give the image it is on, its kind (windscreen on the front, rear on the back, side for door windows, quarter for small fixed windows behind them, sunroof on the view from above) and its outline as 3 to 8 points [x, y] in order round it.',
-      'Give every side window separately (front door, rear door, quarter), on each side image.',
-      FRAME,
-    ].join('\n'),
-    schema: {
-      name: 'CarGlazing',
-      schema: {
-        type: 'object',
-        properties: {
-          windows: {
-            type: 'array',
-            items: {
-              type: 'object',
-              properties: {
-                view,
-                kind: { type: 'string', enum: [...CAR_WINDOWS] },
-                points: {
-                  type: 'array',
-                  items: { type: 'array', items: share, minItems: 2, maxItems: 2 },
-                  minItems: 3,
-                  maxItems: 8,
-                },
-              },
-              required: ['view', 'kind', 'points'],
-            },
-          },
-        },
-        required: ['windows'],
-      },
-    },
-    task: 'List every window with its outline.',
-    key: 'windows',
-  },
+  glazing: openingsSpec(CAR_GLAZING_CONFIG),
   lights: {
     system: [
       'You are the details specialist of a 3D modelling team. You find the small parts of ONE car on its orthographic drawings.',
@@ -293,39 +295,7 @@ export const CAR_TOOL_SPECS: Readonly<Record<CarTool, CarToolSpec>> = {
     task: 'List the lamps, grille, bumpers, plates, mirrors and other details.',
     key: 'details',
   },
-  finishes: {
-    system: [
-      'You are the finishes specialist of a 3D modelling team. You name the materials and colours of ONE car on its orthographic drawings.',
-      `For each finish (${CAR_FINISHES.join(', ')}) the car has, give its material (${CAR_MATERIALS.join(', ')}), its colour #rrggbb as drawn (the flat colour, not a reflection or a highlight) and a sample box [x0, y0, x1, y1] on one image where only that finish shows.`,
-      'paint = the main body colour; paint2 = the second colour of a two-tone car (roof, lower body); trim = strips and frames (chrome or black).',
-      FRAME,
-    ].join('\n'),
-    schema: {
-      name: 'CarFinishes',
-      schema: {
-        type: 'object',
-        properties: {
-          finishes: {
-            type: 'array',
-            items: {
-              type: 'object',
-              properties: {
-                finish: { type: 'string', enum: [...CAR_FINISHES] },
-                material: { type: 'string', enum: [...CAR_MATERIALS] },
-                color: hex,
-                view,
-                box,
-              },
-              required: ['finish', 'color'],
-            },
-          },
-        },
-        required: ['finishes'],
-      },
-    },
-    task: 'Name each finish, its colour and where to sample it.',
-    key: 'finishes',
-  },
+  finishes: finishesSpec(CAR_FINISHES_CONFIG),
 };
 
 /** Which image is which, as every call says it. */
