@@ -12,6 +12,7 @@ import {
 } from '@/lib/face-atlas';
 import { planContrast, silhouetteHull, type RoofVolume } from '@/lib/face-hull';
 import { archetypeOf } from '@/lib/object-kit';
+import { teamIdOf } from '../team/registry';
 import type { ObjectRecipe, ShapeTarget } from '@/lib/object-shape';
 import type { ClassMaterialsResult } from '../schemas';
 import { FACE_ORDER, buildFacePrompt, buildTopPrompt } from '../facade-faces';
@@ -308,6 +309,8 @@ export async function reconstructObject(
   const tag = `[vision] 3D views reconstruction for "${target.label}"`;
   try {
     const archetype = archetypeOf(target);
+    // PQ-T87: the class's specialist team decides the drawings and the reading (registry).
+    const team = teamIdOf(archetype);
     const drawn: DrawnView[] = [];
     const draw = async (view: DrawnView, prompt: string, references: string[]) => {
       if (!deps.draw || signal?.aborted) return null;
@@ -325,7 +328,7 @@ export async function reconstructObject(
       topPng ?? (target.faceUrls?.top ? await bytesOf(target.faceUrls.top) : null);
     /** A vehicle's underside (PQ-T76): its tile wears the floor of the car. */
     let bottom: Buffer | null = null;
-    if (archetype === 'vehicle') {
+    if (team === 'car') {
       // A vehicle is drawn from its profile (PQ-T76): the validated 2D view, else drawn from the
       // photo crop. Its left side is the profile mirrored, never drawn; then its front, and with
       // `fourFaces` its back, view from above and underside, each from the profile and the front.
@@ -412,7 +415,7 @@ export async function reconstructObject(
           onView?.(view, png);
         }
       };
-      if (archetype === 'tree' || archetype === 'bush') {
+      if (team === 'plant') {
         // A plant is round about its trunk: its side is its front, never drawn (a drawn side
         // shows another tree and the crown would be cut where the two disagree). The views the
         // operator validated are still read.
@@ -445,7 +448,7 @@ export async function reconstructObject(
       return null;
     }
     // A tree or a bush is one crown on one trunk (PQ-T79): read on the drawings, not carved into boxes.
-    if (archetype === 'tree' || archetype === 'bush') {
+    if (team === 'plant') {
       // The plant team names what the outline cannot: the species, the habit, the leaves, the limbs.
       let plantReading: PlantReading | null = null;
       const frontFrame = reading.aligned.frames.front;
@@ -513,13 +516,12 @@ export async function reconstructObject(
     const { recipe, report } = finishRecipe(recon);
     // A vehicle's length is its profile (PQ-T76): read on the elevations, not clamped by the grid,
     // its width on the body without the wing mirrors.
-    if (archetype === 'vehicle')
-      recipe.proportions = profileProportions(vehicleAspects(recon.aligned));
+    if (team === 'car') recipe.proportions = profileProportions(vehicleAspects(recon.aligned));
     // The drawings themselves go on the model (never the photo): best effort, flat colours without.
     const { W, D } = recon.aligned;
     // A vehicle's plan is turned the way its profile runs (PQ-T78): Muse may lay it across the sheet.
     const carTop =
-      top && archetype === 'vehicle'
+      top && team === 'car'
         ? await readCarTop(top, recon.aligned.views.right, W, D, decodeView)
         : null;
     if (carTop && top && carTop.turn) {
@@ -584,7 +586,7 @@ export async function reconstructObject(
       );
       // The plan shows width and depth on one drawing: it sets the depth of the model (not of a
       // vehicle, whose depth is its profile: Muse draws a car seen from above too wide).
-      if (footprint && topRead && archetype !== 'vehicle')
+      if (footprint && topRead && team !== 'car')
         recipe.proportions = depthFromPlan(recipe.proportions, topRead.aspect);
       if (hull.boxes.length)
         recipe.faces = {
@@ -595,7 +597,7 @@ export async function reconstructObject(
         };
     }
     // A vehicle: its wheels, track and clearance measured on the drawings (PQ-T76).
-    if (archetype === 'vehicle' && !signal?.aborted) {
+    if (team === 'car' && !signal?.aborted) {
       // The car team reads what pixels cannot name: kind, body stations, windows, lamps, finishes.
       let reading: CarReading | null = null;
       if (deps.readCar && !signal?.aborted) {
@@ -627,7 +629,7 @@ export async function reconstructObject(
       );
     }
     // A house or a building: its specialist reads it room by room (volumes, roofs, openings).
-    if (deps.readHouse && !signal?.aborted && (archetype === 'house' || archetype === 'building')) {
+    if (deps.readHouse && !signal?.aborted && team === 'house') {
       const wallPart = recipe.parts
         .filter((p) => p.shape === 'box')
         .sort((a, b) => b.size[0] * b.size[1] * b.size[2] - a.size[0] * a.size[1] * a.size[2])[0];

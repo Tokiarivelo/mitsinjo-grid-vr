@@ -40,6 +40,14 @@ const USUAL_FILL: Record<KitArchetype, number> = {
   person: 0.45,
   animal: 0.55,
   water: 0.9,
+  seat: 0.6,
+  table: 0.45,
+  storage: 0.85,
+  bed: 0.7,
+  textile: 0.85,
+  fixture: 0.8,
+  structure: 0.35,
+  terrain: 0.8,
   other: 0.8,
 };
 

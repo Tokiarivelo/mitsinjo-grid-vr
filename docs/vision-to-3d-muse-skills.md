@@ -365,6 +365,133 @@ Colours: main = water in daylight · secondary = bank or rim · accent = reflect
 Traps: height is near zero: never a box.
 ```
 
+### 5.14 `seat`
+
+```
+SEAT (sofa, armchair, chair, stool, pouf, bench)
+Always: a seat at sitting height; most have a backrest.
+Check: seat cushions and how many side by side · backrest: height, straight or curved ·
+armrests: none, low or as high as the back · legs: how many, square, round or turned, or a
+plinth to the floor · loose cushions on the back.
+Usual proportions, width : height : depth — sofa 1 : 0.42 : 0.42 · armchair 0.9 : 1 : 0.95 ·
+chair 0.5 : 1 : 0.55 · stool 0.45 : 1 : 0.45.
+Colours: main = upholstery or seat · secondary = frame or legs · accent = cushions or piping.
+Traps: an open chair shows the floor between its legs: that floor is not the seat · a throw or
+a cushion is a part, not a second seat.
+SAM words: seat, backrest, cushion, armrest, leg.
+Anatomy: seat, backrest, armrests, cushions, legs.
+```
+
+### 5.15 `table`
+
+```
+TABLE (table, kitchen island, side table, trolley)
+Always: a flat top carried by legs, a pedestal or a cabinet base.
+Check: top shape (rectangle, round, oval) and thickness · legs: how many, where, splayed or
+straight · apron under the top · shelf or drawer under it · castors.
+Usual proportions, width : height : depth — dining table 1 : 0.45 : 0.55 · side table
+0.6 : 1 : 0.6 · island 1 : 0.5 : 0.5.
+Colours: main = top · secondary = legs or base · accent = drawer handles or edging.
+Traps: things standing on the table are separate objects · the floor seen under the top is not
+the table.
+SAM words: table, leg, drawer.
+Anatomy: top, apron, legs.
+```
+
+### 5.16 `storage`
+
+```
+STORAGE (wardrobe, cupboard, sideboard, shelf, bookcase, counter)
+Always: a box body with doors, drawers or open shelves.
+Check: doors and drawers on the front and how they split it · open shelves: how many levels ·
+glazed doors · handles: knobs or bars, where · plinth or feet.
+Usual proportions, width : height : depth — wardrobe 0.55 : 1 : 0.3 · sideboard 1 : 0.5 : 0.28 ·
+bookcase 0.45 : 1 : 0.17.
+Colours: main = body and doors · secondary = plinth, frame or shelves · accent = handles or glass.
+Traps: what stands on the shelves is not the storage colour · a door gap is a thin line, not
+two cupboards.
+SAM words: door, drawer, shelf, handle.
+Anatomy: body, doors, drawers, shelves, handles, plinth.
+```
+
+### 5.17 `bed`
+
+```
+BED (bed, bunk, cot)
+Always: a frame, a mattress on it, usually a headboard.
+Check: headboard height and shape · footboard · legs or a base to the floor · pillows: how many ·
+blanket or cover hanging over the sides · bunk: two levels and a ladder.
+Usual proportions, width : height : depth — double bed seen from the foot 0.7 : 0.45 : 1 ·
+single bed 0.45 : 0.45 : 1.
+Colours: main = bedding (cover) · secondary = frame and headboard · accent = pillows.
+Traps: the cover hides the frame sides: the bed is still a full box · a mosquito net is not a
+part of the bed shape.
+SAM words: mattress, headboard, pillow, blanket.
+Anatomy: frame, mattress, headboard, pillows, blanket, legs.
+```
+
+### 5.18 `textile`
+
+```
+TEXTILE (curtain, sheer, blind, rug, photo backdrop)
+Always: a soft sheet: hanging from a rod or lying on the floor.
+Check: hanging or lying · rod or track at the top · folds: many narrow or few wide · tied back
+or straight · how far it falls (to the floor, to the sill) · fringe or hem.
+Usual proportions: a curtain is thin (depth 0.03 to 0.1 of its width); a rug is flat (height near
+zero).
+Colours: main = the fabric in daylight · secondary = rod or lining · accent = tieback or pattern.
+Traps: light through a sheer shows the window behind: the fabric is still its own colour ·
+a rug is never a box.
+SAM words: curtain, rail, rug.
+Anatomy: rod, panel, folds, tieback.
+```
+
+### 5.19 `fixture`
+
+```
+FIXTURE (door, window, mirror, picture, frame)
+Always: a thin frame in or on a wall, with a leaf, glass or a picture inside.
+Check: frame width · panes [across, down] · arched or flat top · handle side and height ·
+shutters · what fills it: wood, glass, mirror, picture.
+Usual proportions: depth 0.03 to 0.1 of the width; a door is 0.4 to 0.5 as wide as it is tall.
+Colours: main = frame or leaf · secondary = wall trim around it · accent = glass or mirror.
+Traps: the view through a window or in a mirror is not its colour · the wall around it is not
+part of the fixture.
+SAM words: door, window pane, frame, handle.
+Anatomy: frame, panes, handle, arch.
+```
+
+### 5.20 `structure`
+
+```
+STRUCTURE (fence, gate, railing, pylon, bridge, solar array)
+Always: repeated thin members: posts, rails, bars or a lattice.
+Check: posts: how many and their spacing · rails: how many rows · bars or boards between them
+and their pitch · lattice pattern · gate leaves · top shape (flat, pointed, arched).
+Usual proportions: long and thin; depth 0.02 to 0.1 of the length for a fence.
+Colours: main = posts and rails · secondary = bars or infill · accent = caps or hinges.
+Traps: the ground and plants seen through it are not the structure · count the posts on the
+side you see.
+SAM words: post, rail, bar, gate.
+Anatomy: posts, rails, bars, lattice, gate.
+```
+
+### 5.21 `terrain`
+
+```
+TERRAIN (rock, boulder, fallen log, stump, tyre)
+Always: one lump lying on the ground, no regular parts.
+Check: outline seen from the front · flat or rounded top · cracks or rings · moss or bark ·
+half buried or sitting on the ground.
+Usual proportions, width : height : depth — boulder 1 : 0.6 : 0.8 · log 1 : 0.2 : 0.2 ·
+tyre 1 : 1 : 0.3.
+Colours: main = the surface in daylight · secondary = the shadowed or mossy side · accent =
+lichen, rings or tread.
+Traps: the ground around it is not part of it · a log lying is long across, not tall.
+SAM words: rock, log, tyre.
+Anatomy: body.
+```
+
 ---
 
 ## 6. FREE PARTS card (Spark, `describeParts`: objects without a template)
