@@ -1,33 +1,31 @@
 # HANDOFF — read first, overwrite at end of session (≤40 lines)
 
-**Updated:** 2026-11-17 · **By:** Claude Code · **Branch:** `feat/vs-t46-tour-outdoor-faces` (VS-T46, plus VS-T47 commits from a parallel session, from `main` 2707dfac). Tasks in `docs/tasks/VR-village-spatial-shoot.md` and `docs/tasks/PV-specialist-teams.md`.
+**Updated:** 2026-11-17 · **By:** Claude Code · **Branch:** `fix/vs-t48-studio-pad-ids` (from `main` 18ab8823, PR #36 merged). Task: VS-T48 in `docs/tasks/VR-village-spatial-shoot.md`.
+
+## Context
+
+Meta VR Start Devpost closes **2026-11-18 12:00 PT** (23:00 Madagascar). Rules read from the Devpost page: hands-first required, video < 3 min on Quest or emulator (YouTube/Vimeo public), text with target launch date, track (Productivity) + division (New Experience, first commit 2026-10-26), app free until ~Dec 11, no edits after the deadline.
 
 ## NEXT
 
-1. PV-specialist-teams PQ-T89/T90: `STRUCTURE_TEAM` can build on `ironRailing` / `latticeTower` (`furniture/structure.ts`); plant team: ask the pilot « pot or ground » and fill `PlantHints.ground` (promptVersion + 1).
-2. Colour score of white walls / planters (ΔE 15–30): `measurePartColors` scales the base by photo / shaded render, white clips at 255 while ΔE compares the unshaded colour. Decide one convention for all 159 (photo median as for plants?) and rerun `make tour-mock`.
-3. Weak tour objects: cypresses and dark pines (IoU 0.58–0.68), woods-bridge 0.28, street-lamp-2 0.53; open structures need a part-aware outline mask to be scored fairly.
-4. Screen check V515–V520 (`test-scenarios/06-village.md`), headset later.
+1. Transition lab ↔ village **in the same XR session** (user ask): extract `VillageWorld` from `microgrid-3d/ui/village-canvas.tsx`, mount it in the /village session, `lab-dissolve` style hand-over both ways, « Back to the lab » button. Today `holo-village-table.tsx` `goSimulation` ends the session and `router.push`es (Meta docs: no cross-page immersive navigation).
+2. Report to the user on the other Devpost points: IWSDK (rules list IWSDK link or engine APK; R3F WebXR sits between → ship Vercel link **and** a bubblewrap PWA APK, skill `hz-store-pwa`), Vercel auto-deploy freeze after submission, tour photos (identifiable people?), CC BY-SA photo / music out of the new video, 60 fps unmeasured (no headset).
+3. Screen check V521 / S164–S165, headset later.
 
-## Done this session (VS-T46)
+## Done this session (VS-T48)
 
-- Plants scored, drawn on sheets and imagined from the `plantMesh` the viewer shows: `tour-mock/plant-render.ts` (z-buffer, slot colours, leaf tone, crown self-shade).
-- `tour-mock/plant-clean.ts`: outlined photo cleaned for the tree reader (sky gaps → leaf green, backlit crown tinted, trunk strays dropped); `buildEntry` keeps the better of raw / cleaned reading.
-- Plant look measured on the photo without sky (`measurePlantLook`, `measureGroupColors` shared with parts).
-- `PlantHints.ground` (no pot search, `tree-recon.ts`); outdoor tour plants grounded in `specs.ts`.
-- `ironRailing`, `latticeTower`, `barRibbon`, `sCurve`, `cScroll` builders; terrace railings, pylon, garden-tree-1 / -2 respecified.
-- `IMAGINED_LOOK = 2`; `make tour-faces` run (all faces in `node_modules/.cache/tour-imagined/`).
-- Scores: outdoor plants IoU 0.69 → 0.77; tour IoU ≥ 0.85 55 → 62, ΔE ≤ 8 75 → 81.
+- Hands-first nav pad: `xr-nav-pad.ts` (buttons, queue, layout), `xr-nav-pad-3d.tsx` (studio, tour), `microgrid-3d/ui/sim-xr-nav-pad.tsx` (simulation); `XrControlsDriver` drains the queue → same actions as the sticks.
+- `HoloButton` `iconOnly` (studio), `icon` (simulation); icons up / down / turnLeft / turnRight / help; hand legend « legendPad ».
+- `make vr-hands-probe`: IWER hand mode only, /simulation + /village, 20/20.
+- Fix: studio pad ids carry `holo:` (`navPadPanelId`), like every studio panel.
 
 ## Decisions
 
-- Plants are scored level (pitch 0): read as the photo's front, a panorama keeps verticals.
-- A plant's look is the photo median (its light is in the photo), not shading-compensated like parts.
-- Open iron / steel keep fixed colours: what shows between the bars is the background.
-- The cleaned photo is only read, never shown or projected (rule: no photo on models).
-- No Neon migration, no HF dataset change (mock answers, not bench).
+- Hands = pinch only (Meta « WebXR Hands »): no reliance on thumb microgestures.
+- Pad shown only while hands are tracked and no controller is used (user choice; `useHandsOnly`). IWER and the `__VR_*__` probes never load on a real Quest.
+- Pad ≈ 20° under the view, centred, between Menu and the studio door; hidden with menu / modal / lab (studio) and with a panel or the big map (simulation).
+- PR #36 merged without waiting for CI, at the user's request.
 
 ## Open
 
-- `xr-layout.test.ts` had a duplicate `MENU_INPUTS_OFFSET` from the parallel XR session mid-work: recheck typecheck.
-- `make check`: `recon` / chart time-budget tests flake under full-suite load (pass alone).
+- `make check`: `recon` / golden-shape / region-colors time-budget tests flake under full-suite load (pass alone).

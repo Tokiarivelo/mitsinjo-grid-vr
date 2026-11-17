@@ -9,6 +9,7 @@ import {
   navPadX,
   pushNavAction,
 } from '@/features/vision-insert/ui/xr/xr-nav-pad';
+import { useHandsOnly } from '@/features/vision-insert/ui/xr/use-hands-only';
 import { HoloButton, type PanelButton } from './sim-xr-holo';
 import { RigFollow } from './sim-xr-minimap';
 
@@ -32,6 +33,9 @@ export const SimXrNavPad = memo(function SimXrNavPad() {
       })),
     [tc]
   );
+  // Controllers have their sticks: the pad is for hands only.
+  const handsOnlyNow = useHandsOnly();
+  if (!handsOnlyNow) return null;
   return (
     <RigFollow offset={NAV_PAD_OFFSET} tilt={PAD_TILT} name="sim-xr-nav-pad">
       {buttons.map((b, i) => (

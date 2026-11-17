@@ -231,6 +231,16 @@ export function mouseCursorShown(kind: AimKind, locked = false): boolean {
 }
 
 /**
+ * Whether a mouse click shoots (VS-T48 regression): off the headset always; in the headset view
+ * (emulator) only while its cursor shows, i.e. on the interface. Objects and the photo belong to
+ * the lasers: one emulator click also pulls the controller trigger, so a mouse shot on top of it
+ * fired twice (« Extract to 3D? » and « No object detected here » together).
+ */
+export function mouseClickShoots(presenting: boolean, cursorShown: boolean): boolean {
+  return !presenting || cursorShown;
+}
+
+/**
  * Whether a mouse event belongs to the scene: on our canvas, or, in the headset view, on a canvas
  * laid over it (the IWER DevUI overlay of the emulator). HTML panels and buttons never count.
  */
@@ -458,6 +468,11 @@ export const XRBlasterController = memo(function XRBlasterController({
   const mouseNdcRef = useRef<{ x: number; y: number } | null>(null);
   /** Last mouse move over the scene (ms): in the headset view the mouse hovers for a while. */
   const mouseAtRef = useRef(-Infinity);
+  /** What the mouse can aim at, kept current for its click handler (registered once). */
+  const aimSceneRef = useRef<AimScene>({ targets, menu, surface, hotspots });
+  useEffect(() => {
+    aimSceneRef.current = { targets, menu, miniatures, surface, hotspots, panels, photo };
+  });
   /** Last time a laser turned (ms), and each laser's last direction. */
   const laserAtRef = useRef(-Infinity);
   const laserDirsRef = useRef([new THREE.Vector3(), new THREE.Vector3()] as const);
@@ -921,6 +936,14 @@ export const XRBlasterController = memo(function XRBlasterController({
       release('mouse');
       if (held || moved || !camera) return;
       rayAt(e);
+      // Headset view: the mouse shoots only on the interface, as its cursor shows (VS-T48).
+      const onInterface =
+        presenting() &&
+        mouseCursorShown(
+          aimAt(_vOrigin, _vDirection, _vEnd, aimSceneRef.current).kind,
+          !!doc.pointerLockElement
+        );
+      if (!mouseClickShoots(presenting(), onInterface)) return;
       triggerShot(_vOrigin, _vDirection);
     };
     const onLeave = () => {

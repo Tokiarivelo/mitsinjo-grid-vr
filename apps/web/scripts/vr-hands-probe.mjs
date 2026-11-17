@@ -1,5 +1,5 @@
 // Hands-first probe (Meta VR Start: « can someone finish the whole experience without ever pairing a
-// controller? »). Drives the dev IWER emulator in HAND mode only — no controller is ever used — on
+// controller? »). Drives the dev IWER emulator in HAND mode — a controller only to check the pad hides — on
 // /simulation: the nav pad shows, a pinch on each pad button turns / steps / toggles the help, a
 // building label opens its power panel, « Cut » goes through the engine, « Close ✕ » closes it.
 // Usage: node scripts/vr-hands-probe.mjs <baseUrl> <outDir>   (dev server must run, mock LLM)
@@ -185,6 +185,13 @@ try {
   await pinchNamed('sim-xr-button-close');
   check('pinch « Close ✕ » closes the panel', (await state()).panel === null);
   check('the nav pad is back', (await sim((s) => s.shown('sim-xr-nav-pad'))) === 1);
+  // A controller picked up: the sticks already turn and step, the pad goes away.
+  await rc('set_input_mode', { mode: 'controller' });
+  await frames(10);
+  check('the nav pad hides with controllers', (await sim((s) => s.shown('sim-xr-nav-pad'))) === 0);
+  await rc('set_input_mode', { mode: 'hand' });
+  await frames(10);
+  check('…and comes back with hands', (await sim((s) => s.shown('sim-xr-nav-pad'))) === 1);
 
   // --- /village 360° tour, hands only (studio pad, same queue) -----------------------------
   await rc('end_session').catch(() => {});
@@ -214,7 +221,17 @@ try {
       return { x: p.x, y: p.y, z: p.z };
     }, `holo:${id}`);
   const pinchPad = async (id) => {
-    const at = await panelAt(id);
+    // The pad lazy-follows the walker: after a step it glides back under the view (slow frames in
+    // software GL), so aim once it has settled.
+    let at = await panelAt(id);
+    for (let i = 0; i < 30 && at; i++) {
+      await sleep(1000);
+      const next = await panelAt(id);
+      if (!next) break;
+      const still = Math.hypot(next.x - at.x, next.y - at.y, next.z - at.z) < 0.005;
+      at = next;
+      if (still) break;
+    }
     if (!at) return false;
     await rc('set_transform', { device: 'hand-right', position: { x: 0.15, y: 1.25, z: -0.1 } });
     await rc('look_at', { device: 'hand-right', target: at });
