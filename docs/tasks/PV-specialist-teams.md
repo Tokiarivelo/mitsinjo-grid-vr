@@ -107,15 +107,15 @@ En gras : spécialistes propres à une équipe. Les autres viennent de `team/sha
 > ses cases le sont ; coche alors sa ligne de titre. Ne coche jamais une case non vérifiée : écris plutôt la
 > limite à côté (« — reste : … »). Statut global en tête de `HANDOFF.md`.
 
-### PQ-T83 — Moteur d'équipe générique
+### [x] PQ-T83 — Moteur d'équipe générique
 
-- [ ] `team/team.ts` : type `SpecialistTeam<Tool, Brief, Reading>` (champs du § 3).
-- [ ] `runTeam(team, ask, { label, views, images, signal })` → `{ reading, brief }`, ne lève jamais.
-- [ ] Test : toutes les réponses OK → lecture fusionnée.
-- [ ] Test : un spécialiste vide → relancé une fois seul, puis fusion.
-- [ ] Test : spécialiste requis manquant après relance → `reading: null`, brief gardé.
-- [ ] Test : signal annulé / délai dépassé → null, sans lever.
-- [ ] `docs/architecture.md` : dossier `server/perception/team/`.
+- [x] `team/team.ts` : type `SpecialistTeam<Tool, Brief, Reading>` (champs du § 3).
+- [x] `runTeam(team, ask, { label, views, images, signal })` → `{ reading, brief }`, ne lève jamais.
+- [x] Test : toutes les réponses OK → lecture fusionnée.
+- [x] Test : un spécialiste vide → relancé une fois seul, puis fusion.
+- [x] Test : spécialiste requis manquant après relance → `reading: null`, brief gardé.
+- [x] Test : signal annulé / délai dépassé → null, sans lever.
+- [x] `docs/architecture.md` : dossier `server/perception/team/`.
 
 ### PQ-T84 — Plante, voiture, maison sur `runTeam` (comportement constant)
 
