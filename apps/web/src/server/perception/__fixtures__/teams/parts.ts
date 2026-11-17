@@ -584,3 +584,160 @@ export const APPLIANCE_FIXTURES: FurnitureFixture[] = [
     limit: FIREPLACE_LIMIT,
   }),
 ];
+
+const lightFx = (
+  id: string,
+  label: string,
+  kind: string,
+  lamp: { shade: string; bulbs: number; arm: string; taper?: number },
+  finishes: Finish[],
+  concepts: string[],
+  more: Partial<Parameters<typeof partsFixture>[0]> = {}
+) =>
+  partsFixture({
+    id,
+    team: 'light',
+    label,
+    kind,
+    own: { lamp: { lamp } },
+    finishes,
+    concepts,
+    ...more,
+  });
+
+const DISC: Finish[] = [
+  ['frame', 'metal', '#d9d9d6'],
+  ['shade', 'plastic', '#efefec'],
+];
+
+export const LIGHT_FIXTURES: FurnitureFixture[] = [
+  lightFx(
+    'bath-ceiling-1',
+    'Ceiling light',
+    'ceiling',
+    { shade: 'disc', bulbs: 0, arm: 'none' },
+    DISC,
+    ['frame', 'lamp']
+  ),
+  lightFx(
+    'bath-ceiling-2',
+    'Ceiling light',
+    'ceiling',
+    { shade: 'disc', bulbs: 0, arm: 'none' },
+    DISC,
+    ['frame', 'lamp']
+  ),
+  lightFx(
+    'salon-ceiling',
+    'Ceiling light',
+    'ceiling',
+    { shade: 'disc', bulbs: 0, arm: 'none' },
+    DISC,
+    ['frame', 'lamp']
+  ),
+  lightFx(
+    'lounge-ceiling',
+    'Ceiling light',
+    'ceiling',
+    { shade: 'panel', bulbs: 0, arm: 'none' },
+    [
+      ['frame', 'plastic', '#e1e1df'],
+      ['shade', 'plastic', '#f2f2f0'],
+    ],
+    ['frame', 'lamp']
+  ),
+  lightFx(
+    'salon-chandelier',
+    'Chandelier',
+    'chandelier',
+    { shade: 'bowl', bulbs: 8, arm: 'none' },
+    [
+      ['frame', 'metal', '#a8894f'],
+      ['shade', 'glass', '#cdc6b6'],
+      ['bulb', 'plastic', '#efe6d2'],
+    ],
+    ['pipe', 'lamp', 'arm']
+  ),
+  ...['lounge-sconce-1', 'lounge-sconce-2'].map((id) =>
+    lightFx(
+      id,
+      'Wall lamp',
+      'sconce',
+      { shade: 'cone', bulbs: 0, arm: 'none' },
+      [
+        ['frame', 'metal', '#e9e9e5'],
+        ['shade', 'metal', '#ecece8'],
+      ],
+      ['base', 'arm', 'lamp']
+    )
+  ),
+  ...(
+    [
+      ['street-lamp', 'right'],
+      ['street-lamp-2', 'left'],
+    ] as const
+  ).map(([id, arm]) =>
+    lightFx(
+      id,
+      'Street light',
+      'street_lamp',
+      { shade: 'box', bulbs: 0, arm },
+      [
+        ['frame', 'metal', '#9da3aa'],
+        ['shade', 'metal', '#bfc4c9'],
+      ],
+      ['pole', 'arm', 'lamp']
+    )
+  ),
+  ...(
+    [
+      ['house-wall-lamp', 0.72],
+      ['house-wall-lamp-2', 0.6],
+    ] as const
+  ).map(([id, taper]) =>
+    lightFx(
+      id,
+      'Wall lamp',
+      'wall_lantern',
+      { shade: 'lantern', bulbs: 0, arm: 'none', taper },
+      [
+        ['frame', 'metal', '#2f3236'],
+        ['shade', 'glass', '#454a50'],
+      ],
+      ['lid', 'lamp', 'base'],
+      id === 'house-wall-lamp-2'
+        ? {
+            minIou: 0.75,
+            limit:
+              'Its glass is taller and its lid flatter than the lantern builder draws them: the share of glass, lid and hook inside a lantern is not read (0.79).',
+          }
+        : {}
+    )
+  ),
+  lightFx(
+    'bedroom-softbox',
+    'Studio light',
+    'studio',
+    { shade: 'box', bulbs: 0, arm: 'none' },
+    [['shade', 'fabric', '#e4e2de']],
+    ['screen'],
+    {
+      minIou: 0.3,
+      limit:
+        'Two octagonal softboxes leaning on their stands: the light team builds one lit panel on the box (a studio light kit is two fittings).',
+    }
+  ),
+  lightFx(
+    'hall-letters',
+    'Light-up letters',
+    'sign',
+    { shade: 'box', bulbs: 0, arm: 'none' },
+    [['shade', 'metal', '#e8e3d6']],
+    ['screen'],
+    {
+      minIou: 0.2,
+      limit:
+        'Marquee letters « MARRY »: a lit sign is its glyph outlines, not a fitting; the light team gives one lit panel on the box.',
+    }
+  ),
+];

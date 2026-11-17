@@ -11,7 +11,7 @@ import {
   type PartSpec,
   type TourSpec,
 } from './spec';
-import { airUnit } from '../furniture';
+import { airUnit, ceilingDisc as ceilingDiscParts, sconce as sconceParts } from '../furniture';
 
 /**
  * The studio rooms' objects (VS-T41), modelled on their photo (`public/tour/studio/*.jpg`).
@@ -557,44 +557,10 @@ export const INDOOR_SPECS: Record<string, TourSpec> = {
 
 /** A flush round ceiling light: base rim and a domed diffuser under it (seen from below). */
 function ceilingDisc(d: number): TourSpec {
-  return {
-    kind: 'parts',
-    parts: [
-      cyl([0, 0.035, 0], [d, 0.05, d], '#d9d9d6', {
-        material: 'metal',
-        kind: 'frame',
-        concept: 'frame',
-      }),
-      cyl([0, 0.0, 0], [d * 0.86, 0.03, d * 0.86], '#efefec', {
-        material: 'plastic',
-        kind: 'light',
-        concept: 'lamp',
-      }),
-    ],
-  };
+  return { kind: 'parts', parts: ceilingDiscParts(d) };
 }
 
 /** A white wall sconce: round wall plate, short arm, cone shade open downward. */
 function sconce(): TourSpec {
-  return {
-    kind: 'parts',
-    parts: [
-      cyl([0.03, 0.2, -0.06], [0.1, 0.1, 0.02], '#e9e9e5', {
-        material: 'metal',
-        kind: 'frame',
-        axis: 'z',
-        concept: 'base',
-      }),
-      box([0.0, 0.26, 0.0], [0.02, 0.1, 0.1], '#dcdcd8', {
-        material: 'metal',
-        kind: 'body',
-        concept: 'arm',
-      }),
-      cone([0.0, 0.09, 0.03], [0.17, 0.2, 0.17], '#ecece8', {
-        material: 'metal',
-        kind: 'light',
-        concept: 'lamp',
-      }),
-    ],
-  };
+  return { kind: 'parts', parts: sconceParts() };
 }

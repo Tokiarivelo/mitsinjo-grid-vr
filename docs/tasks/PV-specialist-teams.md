@@ -178,7 +178,7 @@ En gras : spécialistes propres à une équipe. Les autres viennent de `team/sha
 - [x] `STRUCTURE_TEAM` (lattice, finishes) + fixtures + test. — garde-corps, pylône, clôtures, portail de la visite rejoués : 6/6 à IoU 1,00 ; `gate` promu en builder (la visite le réutilise). Reste hors équipe : `pole` (poteau bois) et `panel` (panneaux solaires) gardent leur chemin.
 - [x] `TERRAIN_TEAM` (profile, finishes) + fixtures + test. — 9 rochers, troncs, pneus de la visite rejoués sur leur contour : 8 à 1,00 ; `forest-rock` 0,72 (modèle de visite en blobs SDF, limite écrite) ; `rock`, `log`, `tyre`, `stump` promus en builders.
 - [x] `APPLIANCE_TEAM` (profile, controls, legs, finishes) pour cabinet / screen / fan / machine / tank + test. — frigo, clims, hotte, cache-radiateur, cheminées de la visite rejoués : 5/7 ≥ 0,85, cheminées 0,84 de côté (limite écrite) ; libellés d'appareils en / fr / mg (`APPLIANCE_LABELS`) ; `airUnit` promu en builder.
-- [ ] `LIGHT_TEAM` (profile, lamp, finishes) pour lamp_post et luminaires intérieurs + test.
+- [x] `LIGHT_TEAM` (profile, lamp, finishes) pour lamp_post et luminaires intérieurs + test. — 13 luminaires de la visite rejoués : 10 ≥ 0,85 ; limites écrites : lanterne évasée (0,79), boîtes à lumière studio et lettres lumineuses (enseigne).
 - [ ] Branchées dans `registry.ts` ; scénarios manuels (rideau, porte, clôture, rocher, frigo, applique).
 
 ### PQ-T91 — Banc, dataset et doc

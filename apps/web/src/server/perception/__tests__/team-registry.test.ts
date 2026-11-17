@@ -15,6 +15,7 @@ import { FIXTURE_TEAM } from '../team/teams/fixture';
 import { STRUCTURE_TEAM } from '../team/teams/structure';
 import { TERRAIN_TEAM } from '../team/teams/terrain';
 import { APPLIANCE_TEAM } from '../team/teams/appliance';
+import { LIGHT_TEAM } from '../team/teams/light';
 
 const NEW = [
   'seat',
@@ -48,6 +49,7 @@ describe('teamFor (PQ-T87)', () => {
     expect(teamFor('terrain')).toBe(TERRAIN_TEAM);
     for (const a of ['cabinet', 'screen', 'fan', 'machine', 'tank'] as KitArchetype[])
       expect(teamFor(a), a).toBe(APPLIANCE_TEAM);
+    expect(teamFor('lamp_post')).toBe(LIGHT_TEAM);
     for (const a of ['person', 'water', 'other'] as KitArchetype[])
       expect(teamFor(a), a).toBeNull();
   });

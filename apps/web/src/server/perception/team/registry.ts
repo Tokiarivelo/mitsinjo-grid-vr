@@ -11,6 +11,7 @@ import { FIXTURE_TEAM } from './teams/fixture';
 import { STRUCTURE_TEAM } from './teams/structure';
 import { TERRAIN_TEAM } from './teams/terrain';
 import { APPLIANCE_TEAM } from './teams/appliance';
+import { LIGHT_TEAM } from './teams/light';
 
 /**
  * Which specialist team reads which class of object (PQ-T87). A class without a team keeps its
@@ -37,6 +38,7 @@ export const TEAM_BY_ARCHETYPE = {
   fan: APPLIANCE_TEAM,
   machine: APPLIANCE_TEAM,
   tank: APPLIANCE_TEAM,
+  lamp_post: LIGHT_TEAM,
 } as const satisfies Partial<Record<KitArchetype, { id: string }>>;
 
 export type RegisteredTeam = (typeof TEAM_BY_ARCHETYPE)[keyof typeof TEAM_BY_ARCHETYPE];

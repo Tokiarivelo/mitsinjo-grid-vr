@@ -23,6 +23,7 @@ const ATLAS = 'data:image/jpeg;base64,AAAA';
 import {
   APPLIANCE_FIXTURES,
   FIXTURE_FIXTURES,
+  LIGHT_FIXTURES,
   STRUCTURE_FIXTURES,
   TERRAIN_FIXTURES,
   TEXTILE_FIXTURES,
@@ -35,6 +36,7 @@ import { fixtureParts, type FixtureReading } from '../team/teams/fixture';
 import { parseLattice, structureParts, type StructureReading } from '../team/teams/structure';
 import { terrainParts, type TerrainReading } from '../team/teams/terrain';
 import { applianceParts, type ApplianceReading } from '../team/teams/appliance';
+import { lightParts, parseLamp, type LightReading } from '../team/teams/light';
 
 const FURNITURE_FIXTURES = [
   ...RECORDED,
@@ -45,6 +47,7 @@ const FURNITURE_FIXTURES = [
   ...STRUCTURE_FIXTURES,
   ...TERRAIN_FIXTURES,
   ...APPLIANCE_FIXTURES,
+  ...LIGHT_FIXTURES,
 ];
 
 /** The tour outline of an object as the real path hands it: box fractions, box pixel aspect (pano 2:1). */
@@ -280,6 +283,29 @@ describe('part-plan teams (PQ-T89, PQ-T90)', () => {
     const legs = [{ kind: 'plinth', view: 'front', box: [0, 0.9, 1, 1], count: 1 }];
     const fridge = applianceParts(ap('fridge', [handle], { legs }), { w: 0.4, h: 1, d: 0.4 });
     expect(fridge.map((x) => x.concept)).toEqual(['door', 'base', 'handle']);
+  });
+
+  it('reads a lamp and builds a street lamp to its arm side, a disc from its thickness', () => {
+    expect(parseLamp('{"lamp":{"shade":"x","bulbs":99,"arm":"left","taper":3}}')).toEqual({
+      shade: 'disc',
+      bulbs: 24,
+      arm: 'left',
+      taper: 1,
+    });
+    const lt = (kind: string, lamp: object) =>
+      read(parseLamp(JSON.stringify({ lamp })), { kind } as never) as unknown as LightReading;
+    const left = lightParts(lt('street_lamp', { shade: 'box', bulbs: 0, arm: 'left' }), {
+      w: 0.2,
+      h: 1,
+      d: 0.03,
+    });
+    expect(left.find((x) => x.concept === 'lamp')!.at[0]).toBeLessThan(0);
+    const disc = lightParts(lt('ceiling', { shade: 'disc', bulbs: 0, arm: 'none' }), {
+      w: 1,
+      h: 0.15,
+      d: 1,
+    });
+    expect(disc[0]!.size[0]).toBeCloseTo(0.5);
   });
 
   it('cuts silhouette parts from the outline, boxes without one', async () => {
