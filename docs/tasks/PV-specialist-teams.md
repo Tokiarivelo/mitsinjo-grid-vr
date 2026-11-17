@@ -171,7 +171,7 @@ En gras : spécialistes propres à une équipe. Les autres viennent de `team/sha
 - [x] Branchées dans `registry.ts` ; objets de la visite de ces classes à IoU ≥ 0,85 (ou limite écrite). — 28 objets rejoués (toutes les assises, tables, rangements et lits de la visite) : 25 ≥ 0,85 face et côté ; limites écrites : `bath-side-table` (le modèle de la visite compte le vase posé dessus), `loft-shelf` et `bedroom-shelf` (étagères ajourées, planches d'une cellule, piège § 8). Passe de recalage des proportions (`furnitureParts`) pour les builders qui débordent (accoudoirs, montants).
 - [x] Scénarios manuels `test-scenarios/06-village.md` (canapé, chaise, armoire, lit). — V529–V532.
 
-### PQ-T90 — Équipes textile, menuiserie, structure, terrain, appareil, luminaire
+### [x] PQ-T90 — Équipes textile, menuiserie, structure, terrain, appareil, luminaire
 
 - [x] `TEXTILE_TEAM` (drape, finishes) + fixtures + test. — 10 textiles de la visite rejoués sur leur contour : 9 ≥ 0,85 ; `loft-rug` vue de côté sous une cellule (limite écrite).
 - [x] `FIXTURE_TEAM` (openings, finishes) + fixtures + test. — 14 portes, fenêtres, miroirs, tableau et miroir lumineux de la visite rejoués : tous ≥ 0,85.
@@ -179,7 +179,7 @@ En gras : spécialistes propres à une équipe. Les autres viennent de `team/sha
 - [x] `TERRAIN_TEAM` (profile, finishes) + fixtures + test. — 9 rochers, troncs, pneus de la visite rejoués sur leur contour : 8 à 1,00 ; `forest-rock` 0,72 (modèle de visite en blobs SDF, limite écrite) ; `rock`, `log`, `tyre`, `stump` promus en builders.
 - [x] `APPLIANCE_TEAM` (profile, controls, legs, finishes) pour cabinet / screen / fan / machine / tank + test. — frigo, clims, hotte, cache-radiateur, cheminées de la visite rejoués : 5/7 ≥ 0,85, cheminées 0,84 de côté (limite écrite) ; libellés d'appareils en / fr / mg (`APPLIANCE_LABELS`) ; `airUnit` promu en builder.
 - [x] `LIGHT_TEAM` (profile, lamp, finishes) pour lamp_post et luminaires intérieurs + test. — 13 luminaires de la visite rejoués : 10 ≥ 0,85 ; limites écrites : lanterne évasée (0,79), boîtes à lumière studio et lettres lumineuses (enseigne).
-- [ ] Branchées dans `registry.ts` ; scénarios manuels (rideau, porte, clôture, rocher, frigo, applique).
+- [x] Branchées dans `registry.ts` ; scénarios manuels (rideau, porte, clôture, rocher, frigo, applique). — `teamFor` : textile, fixture, structure, terrain, cabinet / screen / fan / machine / tank, lamp_post ; V533–V538.
 
 ### PQ-T91 — Banc, dataset et doc
 
