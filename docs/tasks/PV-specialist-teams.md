@@ -174,7 +174,7 @@ En gras : spécialistes propres à une équipe. Les autres viennent de `team/sha
 ### PQ-T90 — Équipes textile, menuiserie, structure, terrain, appareil, luminaire
 
 - [x] `TEXTILE_TEAM` (drape, finishes) + fixtures + test. — 10 textiles de la visite rejoués sur leur contour : 9 ≥ 0,85 ; `loft-rug` vue de côté sous une cellule (limite écrite).
-- [ ] `FIXTURE_TEAM` (openings, finishes) + fixtures + test.
+- [x] `FIXTURE_TEAM` (openings, finishes) + fixtures + test. — 14 portes, fenêtres, miroirs, tableau et miroir lumineux de la visite rejoués : tous ≥ 0,85.
 - [ ] `STRUCTURE_TEAM` (lattice, finishes) + fixtures + test. — builders prêts (VS-T46) : `ironRailing` (barreaux en S, volutes, poteaux) et `latticeTower` (montants, croisillons, bras) dans `furniture/structure.ts`, testés ; reste l'équipe et la lecture.
 - [ ] `TERRAIN_TEAM` (profile, finishes) + fixtures + test.
 - [ ] `APPLIANCE_TEAM` (profile, controls, legs, finishes) pour cabinet / screen / fan / machine / tank + test.

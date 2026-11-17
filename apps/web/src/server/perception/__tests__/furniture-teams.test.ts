@@ -20,17 +20,19 @@ import tourMock from '../tour-mock/tour-mock.json';
 
 const TOUR = tourMock as unknown as Record<string, { recipe: ObjectRecipe }>;
 const ATLAS = 'data:image/jpeg;base64,AAAA';
-import { TEXTILE_FIXTURES } from '../__fixtures__/teams/parts';
+import { FIXTURE_FIXTURES, TEXTILE_FIXTURES } from '../__fixtures__/teams/parts';
 import { TOUR_OUTLINES } from '@/features/vision-insert/ui/xr/tour/tour-outlines';
 import { outlineFrame } from '../tour-mock/skin';
 import type { PartsOutline } from '../team/teams';
 import { parseDrape, textileParts, type TextileReading } from '../team/teams/textile';
+import { fixtureParts, type FixtureReading } from '../team/teams/fixture';
 
 const FURNITURE_FIXTURES = [
   ...RECORDED,
   ...SEAT_TOUR_FIXTURES,
   ...TABLE_STORAGE_TOUR_FIXTURES,
   ...TEXTILE_FIXTURES,
+  ...FIXTURE_FIXTURES,
 ];
 
 /** The tour outline of an object as the real path hands it: box fractions, box pixel aspect (pano 2:1). */
@@ -202,6 +204,22 @@ describe('part-plan teams (PQ-T89, PQ-T90)', () => {
     const flat = textileParts(r('rug', { hang: 'floor', rods: 0 }), { w: 1, h: 0.02, d: 0.7 });
     expect(flat[0]!.size[1]).toBeCloseTo(0.04);
     expect(flat[0]!.size[0] / flat[0]!.size[2]).toBeCloseTo(1 / 0.7);
+  });
+
+  it('builds a door per leaf read, a frame as deep as measured', () => {
+    const fx = (kind: string, own: object[]) =>
+      read(own, { kind } as never) as unknown as FixtureReading;
+    const leaf = (x0: number, x1: number, kind = 'leaf') => ({
+      view: 'front',
+      kind,
+      box: [x0, 0, x1, 1] as [number, number, number, number],
+    });
+    const two = fixtureParts(fx('door', [leaf(0, 0.5), leaf(0.5, 1)]), { w: 0.6, h: 1, d: 0.05 });
+    expect(two.filter((x) => x.concept === 'door')).toHaveLength(2);
+    for (const d of [0.03, 0.06]) {
+      const [, h, z] = partsBounds(fixtureParts(fx('window', []), { w: 0.6, h: 1, d })).dims;
+      expect(z / h).toBeCloseTo(d, 2);
+    }
   });
 
   it('cuts silhouette parts from the outline, boxes without one', async () => {

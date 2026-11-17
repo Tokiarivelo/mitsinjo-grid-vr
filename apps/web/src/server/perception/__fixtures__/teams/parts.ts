@@ -128,3 +128,198 @@ export const TEXTILE_FIXTURES: FurnitureFixture[] = [
   },
   rugFx('lounge-rug', '#a9adae'),
 ];
+
+type Box = [number, number, number, number];
+const op = (kind: string, box: Box, panes?: [number, number], head?: string) => ({
+  view: 'front',
+  kind,
+  box,
+  ...(panes ? { panes } : {}),
+  ...(head ? { head } : {}),
+});
+const FULL: Box = [0.02, 0.03, 0.98, 0.97];
+
+const fixtureFx = (
+  id: string,
+  label: string,
+  kind: string,
+  openings: object[],
+  finishes: Finish[],
+  concepts: string[],
+  more: Partial<Parameters<typeof partsFixture>[0]> = {}
+) =>
+  partsFixture({
+    id,
+    team: 'fixture',
+    label,
+    kind,
+    own: { openings: { openings } },
+    finishes,
+    concepts,
+    ...more,
+  });
+
+const WINDOW = ['window', 'window_pane'];
+const MIRROR = ['frame', 'mirror'];
+const DOOR = ['frame', 'door', 'handle'];
+
+export const FIXTURE_FIXTURES: FurnitureFixture[] = [
+  fixtureFx(
+    'loft-window',
+    'Window',
+    'window',
+    [op('glass', FULL, [4, 3])],
+    [
+      ['frame', 'wood', '#f0efea'],
+      ['glass', 'glass', '#a9c3d6'],
+    ],
+    WINDOW
+  ),
+  fixtureFx(
+    'hall-door',
+    'Door',
+    'door',
+    [
+      op('glass_leaf', [0.04, 0.03, 0.5, 1], [2, 6]),
+      op('glass_leaf', [0.5, 0.03, 0.96, 1], [2, 6]),
+    ],
+    [['frame', 'wood', '#efefec']],
+    ['frame', 'window_pane', 'handle']
+  ),
+  fixtureFx(
+    'bedroom-vanity',
+    'Vanity mirror lights',
+    'vanity',
+    [
+      op('mirror', [0.164, 0.19, 0.836, 0.881]),
+      op('bulb', [0.166, 0.026, 0.234, 0.116]),
+      op('bulb', [0.366, 0.003, 0.434, 0.093]),
+      op('bulb', [0.566, 0.003, 0.634, 0.093]),
+      op('bulb', [0.766, 0.026, 0.834, 0.116]),
+      op('bulb', [0.039, 0.241, 0.107, 0.331]),
+      op('bulb', [0.039, 0.491, 0.107, 0.581]),
+      op('bulb', [0.039, 0.741, 0.107, 0.831]),
+      op('bulb', [0.893, 0.241, 0.961, 0.331]),
+      op('bulb', [0.893, 0.491, 0.961, 0.581]),
+      op('bulb', [0.893, 0.776, 0.961, 0.866]),
+    ],
+    [
+      ['frame', 'wood', '#4b3a2c'],
+      ['glass', 'glass', '#c8b49a'],
+      ['bulb', 'glass', '#dedad2'],
+    ],
+    ['frame', 'screen', 'lamp']
+  ),
+  fixtureFx(
+    'bedroom-door',
+    'Door',
+    'door',
+    [op('leaf', [0.05, 0.03, 0.95, 1])],
+    [['frame', 'wood', '#e19d26']],
+    DOOR
+  ),
+  fixtureFx(
+    'bedroom-window',
+    'Window',
+    'window',
+    [op('glass', FULL, [1, 1])],
+    [
+      ['frame', 'wood', '#e8e8e4'],
+      ['glass', 'glass', '#f2f4f5'],
+    ],
+    WINDOW
+  ),
+  fixtureFx(
+    'bath-mirror-2',
+    'Mirror',
+    'mirror',
+    [op('mirror', FULL, [3, 4], 'arch')],
+    [
+      ['frame', 'wood', '#efede7'],
+      ['glass', 'glass', '#7b7a72'],
+    ],
+    MIRROR
+  ),
+  fixtureFx(
+    'bath-mirror',
+    'Mirror',
+    'mirror',
+    [op('mirror', FULL, [4, 6], 'arch')],
+    [
+      ['frame', 'wood', '#e9e6de'],
+      ['glass', 'glass', '#8d8a80'],
+    ],
+    MIRROR
+  ),
+  fixtureFx(
+    'bath-door',
+    'Door',
+    'window',
+    [op('glass', [0.08, 0.1, 0.92, 1], [2, 4])],
+    [
+      ['frame', 'wood', '#efefec'],
+      ['glass', 'glass', '#e9eff3'],
+    ],
+    WINDOW
+  ),
+  fixtureFx(
+    'lounge-door',
+    'Door',
+    'door',
+    [op('leaf', [0.05, 0.03, 0.95, 1])],
+    [['frame', 'wood', '#d9dadb']],
+    DOOR
+  ),
+  fixtureFx(
+    'lounge-mirror-1',
+    'Mirror',
+    'mirror',
+    [op('mirror', FULL, [2, 4])],
+    [
+      ['frame', 'wood', '#d7d6d1'],
+      ['glass', 'glass', '#9c9a93'],
+    ],
+    MIRROR
+  ),
+  fixtureFx(
+    'lounge-mirror-2',
+    'Mirror',
+    'mirror',
+    [op('mirror', FULL, [2, 4])],
+    [
+      ['frame', 'wood', '#d7d6d1'],
+      ['glass', 'glass', '#9c9a93'],
+    ],
+    MIRROR
+  ),
+  fixtureFx(
+    'lounge-window-1',
+    'Window',
+    'window',
+    [op('glass', FULL, [4, 7])],
+    [
+      ['frame', 'wood', '#efefef'],
+      ['glass', 'glass', '#d6e6ee'],
+    ],
+    WINDOW
+  ),
+  fixtureFx(
+    'lounge-window-2',
+    'Window',
+    'window',
+    [op('glass', FULL, [4, 7])],
+    [
+      ['frame', 'wood', '#efefef'],
+      ['glass', 'glass', '#d6e6ee'],
+    ],
+    WINDOW
+  ),
+  fixtureFx(
+    'lounge-painting',
+    'Painting',
+    'painting',
+    [op('canvas', [0, 0.105, 0.409, 1]), op('canvas', [0.539, 0, 1, 1])],
+    [['canvas', 'fabric', '#c9bfb6']],
+    ['sign']
+  ),
+];
