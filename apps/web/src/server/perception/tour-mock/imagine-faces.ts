@@ -7,6 +7,7 @@ import { CANONICAL_FLAT_VIEWS } from '../views-generation';
 import { recipeBox, skinOf } from '../recipe-box';
 import { imaginedPaint, inkEdges, partSeams } from './imagined-shader';
 import { fillOutside, mirrorTile, packAtlas } from './skin';
+import { renderPlant } from './plant-render';
 
 /**
  * Every tour object imagined on all its faces (VS-T44): its parts drawn as a game / animated-film
@@ -53,21 +54,24 @@ export function imaginedTile(
   size = FACE_TILE
 ): Uint8Array {
   const { view, flip } = TILE_CAMERA[tile];
-  const r = renderFlat(
-    recipe,
-    1,
-    size,
-    size,
-    view,
-    (b) => ({
-      cx: (b.x0 + b.x1) / 2,
-      cy: (b.y0 + b.y1) / 2,
-      fw: Math.max(1e-6, b.x1 - b.x0),
-      fh: Math.max(1e-6, b.y1 - b.y0),
-    }),
-    imaginedPaint(recipe, view, box)
-  );
-  inkEdges(r, size, size, TILE_INK, partSeams(recipe));
+  // A plant is drawn as its mesh (VS-T46: trunk, limbs, lumpy leaves), never as its clumps.
+  const r = recipe.plant
+    ? renderPlant(recipe, size, size, view, true)
+    : renderFlat(
+        recipe,
+        1,
+        size,
+        size,
+        view,
+        (b) => ({
+          cx: (b.x0 + b.x1) / 2,
+          cy: (b.y0 + b.y1) / 2,
+          fw: Math.max(1e-6, b.x1 - b.x0),
+          fh: Math.max(1e-6, b.y1 - b.y0),
+        }),
+        imaginedPaint(recipe, view, box)
+      );
+  inkEdges(r, size, size, TILE_INK, recipe.plant ? () => false : partSeams(recipe));
   const rgb = Uint8Array.from(r.rgb);
   // A surface hidden at a silhouette edge reads the colours next to it, never black paper.
   fillOutside(rgb, r.mask);
@@ -149,16 +153,18 @@ export async function imaginedDrawing(
   view: FlatView,
   px: number
 ): Promise<Buffer> {
-  const r = renderFlat(
-    faces.base,
-    1,
-    px,
-    px,
-    view,
-    undefined,
-    imaginedPaint(faces.base, view, faces.box)
-  );
-  inkEdges(r, px, px, DRAWING_INK, partSeams(faces.base));
+  const r = faces.base.plant
+    ? renderPlant(faces.base, px, px, view)
+    : renderFlat(
+        faces.base,
+        1,
+        px,
+        px,
+        view,
+        undefined,
+        imaginedPaint(faces.base, view, faces.box)
+      );
+  inkEdges(r, px, px, DRAWING_INK, faces.base.plant ? () => false : partSeams(faces.base));
   const rgb = Buffer.alloc(px * px * 3, 255);
   for (let i = 0; i < px * px; i++)
     if (r.mask.data[i]) {

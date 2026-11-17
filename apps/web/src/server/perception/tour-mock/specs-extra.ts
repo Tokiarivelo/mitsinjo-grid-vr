@@ -1,5 +1,16 @@
 import type { PlantHints } from '../tree/plant-build';
-import { box, cone, cyl, extrude, hull, lathe, type PartSpec, type TourSpec } from './spec';
+import {
+  box,
+  cone,
+  cyl,
+  extrude,
+  hull,
+  lathe,
+  leaf,
+  rod,
+  type PartSpec,
+  type TourSpec,
+} from './spec';
 import {
   bed,
   cabinet,
@@ -10,7 +21,8 @@ import {
   glazing,
   legs,
   METAL,
-  railing,
+  ironRailing,
+  latticeTower,
   sofa,
   stool,
   table,
@@ -46,6 +58,50 @@ const BOULDER: Array<[number, number]> = [
 ];
 
 /** A free-standing rock: its traced outline as the front, a boulder section as the side. */
+/** Parts that keep one colour (`fixed`): open iron and steel, whose photo pixels are what shows through. */
+function fixedColor(p: PartSpec[], color: string): PartSpec[] {
+  return p.map((x) => ({ ...x, color, fixed: true }));
+}
+
+/** The bare oak of the garden (garden-tree-2), traced on its photo: 7 m wide, 10 m tall. */
+function bareTree(): PartSpec[] {
+  const bark = '#6e6458';
+  const wood = { material: 'wood' as const, kind: 'trunk' as const, concept: 'tree_trunk' };
+  const fork: [number, number] = [-0.8, 2.8];
+  const limbs: Array<[[number, number], [number, number], number]> = [
+    [fork, [-1.96, 6.5], 0.3],
+    [[-1.96, 6.5], [-2.66, 8.8], 0.16],
+    [fork, [-0.7, 7.0], 0.34],
+    [[-0.7, 7.0], [-0.35, 9.7], 0.18],
+    [fork, [0.7, 5.5], 0.3],
+    [[0.7, 5.5], [1.75, 8.8], 0.16],
+    [fork, [1.75, 3.8], 0.24],
+    [[1.75, 3.8], [3.15, 5.5], 0.12],
+    [fork, [-3.1, 3.4], 0.18],
+  ];
+  const haze: Array<[number, number, number, number]> = [
+    [-2.2, 7.4, 1.5, 1.7],
+    [0, 8.4, 1.9, 1.4],
+    [2.0, 7.6, 1.5, 1.6],
+    [2.6, 5.3, 1.0, 1.1],
+    [-2.6, 4.8, 1.0, 1.5],
+    [0, 5.6, 1.7, 1.3],
+    [-1.3, 9.2, 1.1, 0.6],
+    [1.0, 9.2, 1.1, 0.6],
+  ];
+  return [
+    rod([-1.0, 0], fork, 0.6, 0, bark, wood),
+    ...limbs.map(([a, b, w]) => rod(a, b, w, 0, bark, { ...wood, concept: undefined })),
+    ...haze.map(([x, y, rx, ry], i) =>
+      leaf([x - rx, y], rx * 2, ry * 2, 0, (i % 3) * 0.4 - 0.4, '#8f8577', {
+        material: 'foliage',
+        kind: 'crown',
+        concept: 'foliage',
+      })
+    ),
+  ];
+}
+
 function rock(h: number, d: number, color: string): Spec {
   return parts([
     box([0, h / 2, 0], [h, h, d], color, {
@@ -713,24 +769,19 @@ export const EXTRA_SPECS: Record<string, Spec> = {
       concept: 'base',
     }),
   ]),
-  'terrace-railing-1': parts(railing(7.0, 1.0, 28)),
-  'terrace-railing-2': parts(railing(6.5, 1.0, 28)),
-  'terrace-pylon': parts([
-    // A lattice tower: its outline, square in plan.
-    box([0, 15, 0], [6, 30, 6], '#8d939a', {
-      material: 'metal',
-      kind: 'frame',
-      concept: 'pole',
-      silhouette: {
-        section: [
-          [-0.5, -0.5],
-          [0.5, -0.5],
-          [0.08, 0.5],
-          [-0.08, 0.5],
-        ],
-      },
-    }),
-  ]),
+  // Wrought iron: S balusters, scrolls under the top rail, iron posts where the photo shows them.
+  // Their colour stays the iron's: what the photo shows between the bars is the lawn and the deck.
+  'terrace-railing-1': parts(
+    fixedColor(ironRailing(7.0, 1.0, 30, [0.01, 0.42, 0.72, 0.99]), '#2c2e33')
+  ),
+  'terrace-railing-2': parts(fixedColor(ironRailing(6.5, 1.0, 28, [0.01, 0.5, 0.99]), '#2c2e33')),
+  // A lattice tower as built (VS-T46): legs, X bracing, cross arms; not a solid of its outline.
+  'terrace-pylon': parts(
+    latticeTower(30, 6, 1.4, 9, [
+      [0.68, 3.4],
+      [0.88, 2.4],
+    ])
+  ),
   'terrace-tree-1': plant('jacaranda tree', {
     habit: 'spreading',
     leaf: 'broad',
@@ -833,16 +884,19 @@ export const EXTRA_SPECS: Record<string, Spec> = {
   // ── Garden ────────────────────────────────────────────────────────────────────────────────
   'garden-tyre-1': parts(tyre(1.5, 0.45), 0),
   'garden-tyre-2': parts(tyre(1.7, 0.5), 0),
-  'garden-tree-1': plant('eucalyptus trunk', {
-    habit: 'columnar',
-    leaf: 'broad',
-    species: 'eucalyptus',
-  }),
-  'garden-tree-2': plant('bare deciduous tree', {
-    habit: 'round',
-    leaf: 'none',
-    species: 'oak in winter',
-  }),
+  // Only the trunk is in the photo (its crown is past the top): a bark column on its outline,
+  // round in section, not a crown of leaves (VS-T46).
+  'garden-tree-1': parts([
+    box([0, 6, 0], [2, 12, 1.1], '#8a8170', {
+      material: 'wood',
+      kind: 'trunk',
+      concept: 'tree_trunk',
+      silhouette: {},
+    }),
+  ]),
+  // Bare in winter: the reader sees the bushes behind its twigs, not the tree. Its trunk and
+  // limbs as traced on the photo, and the twig haze as thin grey masses (VS-T46).
+  'garden-tree-2': parts(bareTree()),
   'garden-shrub': plant('shrub', { habit: 'shrub', leaf: 'broad', species: 'privet shrub' }),
   'garden-tree-3': plant('oak tree', { habit: 'spreading', leaf: 'broad', species: 'old oak' }),
   'garden-log': parts([

@@ -43,6 +43,8 @@ export interface PlantHints {
   traces?: Array<{ points: Array<[number, number]>; width: number }>;
   flower?: string;
   bloom?: number;
+  /** Grows in the ground (a garden tree, a hedge): no pot is looked for at its foot (VS-T46). */
+  ground?: boolean;
 }
 
 /** Strands of a weeping curtain on its outer, middle and inner rings (within `PLANT_STRANDS_MAX`). */
