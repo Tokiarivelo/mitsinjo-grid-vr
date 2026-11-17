@@ -449,3 +449,138 @@ export const TERRAIN_FIXTURES: FurnitureFixture[] = [
   terrainFx('forest-rock-4', 'Rock', 'rock', '#545a2f'),
   terrainFx('forest-rock-5', 'Rock', 'rock', '#56592f'),
 ];
+
+const applianceFx = (f: {
+  id: string;
+  label: string;
+  kind: string;
+  controls: object[];
+  finishes: Finish[];
+  concepts: string[];
+  parts?: string[];
+  lines?: Record<string, number>;
+  top?: string;
+  legs?: object[];
+  minIou?: number;
+  limit?: string;
+}) =>
+  partsFixture({
+    ...f,
+    team: 'appliance',
+    own: { controls: { controls: f.controls } },
+  });
+
+const FIREPLACE_LIMIT =
+  'Side view: the tour fireplace gives its mantel, jambs, firebox and hearth each their own depth (the mantel runs behind the jambs); the builder has one body depth with the hearth and mantel standing out of it (0.84).';
+
+export const APPLIANCE_FIXTURES: FurnitureFixture[] = [
+  applianceFx({
+    id: 'loft-fridge',
+    label: 'Fridge',
+    kind: 'fridge',
+    top: 'rounded',
+    parts: ['door', 'handle', 'plinth'],
+    legs: [
+      { kind: 'plinth', view: 'front', box: [0.05, 0.907, 0.95, 1], count: 1, section: 'square' },
+    ],
+    controls: [
+      op('seam', [0.016, 0.726, 0.984, 0.734]),
+      op('handle', [0.077, 0.149, 0.133, 0.301]),
+    ],
+    finishes: [
+      ['body', 'metal', '#e7e7e3'],
+      ['handle', 'metal', '#b9bcbf'],
+      ['grille', 'metal', '#9a9a96'],
+      ['base', 'metal', '#dcdcd8'],
+    ],
+    concepts: ['door', 'handle', 'base'],
+  }),
+  ...(
+    [
+      ['loft-ac', 14],
+      ['hall-ac', 12],
+    ] as const
+  ).map(([id, perRow]) =>
+    applianceFx({
+      id,
+      label: 'Air conditioner',
+      kind: 'air_conditioner',
+      parts: ['slots', 'grille'],
+      controls: [
+        op('slots', [0.05, 0.07, 0.95, 0.6], [perRow, 4]),
+        op('grille', [0.04, 0.87, 0.96, 0.97]),
+      ],
+      finishes: [
+        ['body', 'plastic', '#e9e9e6'],
+        ['grille', 'plastic', '#2a2a2a'],
+      ],
+      concepts: ['fan_guard', 'grille'],
+    })
+  ),
+  applianceFx({
+    id: 'loft-hood',
+    label: 'Range hood',
+    kind: 'hood',
+    parts: ['flue'],
+    lines: { canopy: 0.46 },
+    controls: [],
+    finishes: [['body', 'metal', '#ececea']],
+    concepts: ['pipe'],
+  }),
+  applianceFx({
+    id: 'loft-radiator',
+    label: 'Radiator cover',
+    kind: 'radiator',
+    parts: ['grille', 'top_board'],
+    controls: [],
+    finishes: [
+      ['body', 'wood', '#dedcd6'],
+      ['top', 'wood', '#e8e6e0'],
+    ],
+    concepts: ['grille', 'table'],
+  }),
+  applianceFx({
+    id: 'hall-fireplace',
+    label: 'Electric fireplace',
+    kind: 'fireplace',
+    parts: ['mantel', 'firebox'],
+    controls: [
+      op('mantel', [0.034, 0, 0.966, 0.064]),
+      op('jamb', [0.075, 0.166, 0.19, 0.835]),
+      op('jamb', [0.81, 0.166, 0.925, 0.835]),
+      op('firebox', [0.264, 0.29, 0.736, 0.835]),
+      op('logs', [0.36, 0.7, 0.64, 0.84]),
+      op('hearth', [0, 0.89, 1, 1]),
+    ],
+    finishes: [
+      ['body', 'stone', '#e6e4e0'],
+      ['firebox', 'stone', '#bdb8b0'],
+      ['base', 'stone', '#d3d0ca'],
+    ],
+    concepts: ['table', 'leg', 'stone_foundation', 'base'],
+    minIou: 0.8,
+    limit: FIREPLACE_LIMIT,
+  }),
+  applianceFx({
+    id: 'lounge-fireplace',
+    label: 'Fireplace',
+    kind: 'fireplace',
+    parts: ['mantel', 'firebox'],
+    controls: [
+      op('mantel', [0, 0.36, 1, 0.39]),
+      op('jamb', [0.165, 0.4, 0.38, 0.95]),
+      op('jamb', [0.62, 0.4, 0.835, 0.95]),
+      op('firebox', [0.23, 0.43, 0.77, 0.95]),
+      op('logs', [0.24, 0.76, 0.76, 0.95]),
+      op('hearth', [0, 0.95, 1, 1]),
+    ],
+    finishes: [
+      ['body', 'wood', '#e4e2de'],
+      ['firebox', 'wood', '#5d4634'],
+      ['base', 'stone', '#d3d0ca'],
+    ],
+    concepts: ['table', 'leg', 'stone_foundation', 'base'],
+    minIou: 0.8,
+    limit: FIREPLACE_LIMIT,
+  }),
+];

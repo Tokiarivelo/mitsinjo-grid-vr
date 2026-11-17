@@ -14,6 +14,7 @@ import { TEXTILE_TEAM } from '../team/teams/textile';
 import { FIXTURE_TEAM } from '../team/teams/fixture';
 import { STRUCTURE_TEAM } from '../team/teams/structure';
 import { TERRAIN_TEAM } from '../team/teams/terrain';
+import { APPLIANCE_TEAM } from '../team/teams/appliance';
 
 const NEW = [
   'seat',
@@ -45,7 +46,9 @@ describe('teamFor (PQ-T87)', () => {
     expect(teamFor('fixture')).toBe(FIXTURE_TEAM);
     expect(teamFor('structure')).toBe(STRUCTURE_TEAM);
     expect(teamFor('terrain')).toBe(TERRAIN_TEAM);
-    for (const a of ['cabinet', 'person', 'water', 'other'] as KitArchetype[])
+    for (const a of ['cabinet', 'screen', 'fan', 'machine', 'tank'] as KitArchetype[])
+      expect(teamFor(a), a).toBe(APPLIANCE_TEAM);
+    for (const a of ['person', 'water', 'other'] as KitArchetype[])
       expect(teamFor(a), a).toBeNull();
   });
 });
@@ -102,6 +105,18 @@ describe('new archetypes (PQ-T87)', () => {
     ['rocher', 'terrain'],
     ['old tyre', 'terrain'],
     ['vato', 'terrain'],
+    // PQ-T90: appliances by their archetype, a cabinet is storage.
+    ['Fridge', 'cabinet'],
+    ['réfrigérateur', 'cabinet'],
+    ['Air conditioner', 'machine'],
+    ['Range hood', 'machine'],
+    ['Electric fireplace', 'machine'],
+    ['Radiator cover', 'machine'],
+    ['flat tv', 'screen'],
+    ['ceiling fan', 'fan'],
+    ['water tank', 'tank'],
+    ['Wall cabinet', 'storage'],
+    ['Folding screen', 'other'],
   ] as const)('reads « %s » as %s', (label, archetype) => {
     expect(defaultArchetype('other', undefined, label)).toBe(archetype);
   });

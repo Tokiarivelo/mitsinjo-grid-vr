@@ -11,6 +11,7 @@ import { textileParts, TEXTILE_TEAM } from './textile';
 import { fixtureParts, FIXTURE_TEAM } from './fixture';
 import { structureParts, STRUCTURE_TEAM } from './structure';
 import { terrainParts, TERRAIN_TEAM } from './terrain';
+import { applianceParts, APPLIANCE_TEAM } from './appliance';
 
 /**
  * The furniture teams (PQ-T89) and what each reading builds: the team, then its builder from the
@@ -34,6 +35,7 @@ export const FURNITURE_TEAMS = {
   fixture: { team: FIXTURE_TEAM, parts: fixtureParts },
   structure: { team: STRUCTURE_TEAM, parts: structureParts },
   terrain: { team: TERRAIN_TEAM, parts: terrainParts },
+  appliance: { team: APPLIANCE_TEAM, parts: applianceParts },
 } as const;
 
 export type FurnitureTeamId = keyof typeof FURNITURE_TEAMS;

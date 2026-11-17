@@ -21,6 +21,7 @@ import tourMock from '../tour-mock/tour-mock.json';
 const TOUR = tourMock as unknown as Record<string, { recipe: ObjectRecipe }>;
 const ATLAS = 'data:image/jpeg;base64,AAAA';
 import {
+  APPLIANCE_FIXTURES,
   FIXTURE_FIXTURES,
   STRUCTURE_FIXTURES,
   TERRAIN_FIXTURES,
@@ -33,6 +34,7 @@ import { parseDrape, textileParts, type TextileReading } from '../team/teams/tex
 import { fixtureParts, type FixtureReading } from '../team/teams/fixture';
 import { parseLattice, structureParts, type StructureReading } from '../team/teams/structure';
 import { terrainParts, type TerrainReading } from '../team/teams/terrain';
+import { applianceParts, type ApplianceReading } from '../team/teams/appliance';
 
 const FURNITURE_FIXTURES = [
   ...RECORDED,
@@ -42,6 +44,7 @@ const FURNITURE_FIXTURES = [
   ...FIXTURE_FIXTURES,
   ...STRUCTURE_FIXTURES,
   ...TERRAIN_FIXTURES,
+  ...APPLIANCE_FIXTURES,
 ];
 
 /** The tour outline of an object as the real path hands it: box fractions, box pixel aspect (pano 2:1). */
@@ -262,6 +265,21 @@ describe('part-plan teams (PQ-T89, PQ-T90)', () => {
     expect(terrainParts(t('tyre'), p).map((x) => x.concept)).toEqual(['wheel', undefined]);
     const [w, h] = partsBounds(terrainParts(t('stump'), p)).dims;
     expect(w / h).toBeCloseTo(1 / 0.4, 1);
+  });
+
+  it('builds an air unit from its slots, a hood on its canopy, a body with its details', () => {
+    const ap = (kind: string, own: object[], extra: object = {}) =>
+      read(own, { kind, ...extra } as never) as unknown as ApplianceReading;
+    const slots = { view: 'front', kind: 'slots', box: [0, 0, 1, 0.5], panes: [6, 2] };
+    const unit = applianceParts(ap('air_conditioner', [slots]), { w: 1, h: 0.25, d: 0.13 });
+    expect(unit.filter((x) => x.kind === 'grille')).toHaveLength(1 + 6 + 5);
+    const lines = { profile: [{ view: 'front', body: [0, 0, 1, 1], lines: { canopy: 0.4 } }] };
+    const h = applianceParts(ap('hood', [], lines), { w: 0.7, h: 1, d: 0.7 })[0]!;
+    expect(h.shape).toBe('lathe');
+    const handle = { view: 'front', kind: 'handle', box: [0.1, 0.1, 0.15, 0.3] };
+    const legs = [{ kind: 'plinth', view: 'front', box: [0, 0.9, 1, 1], count: 1 }];
+    const fridge = applianceParts(ap('fridge', [handle], { legs }), { w: 0.4, h: 1, d: 0.4 });
+    expect(fridge.map((x) => x.concept)).toEqual(['door', 'base', 'handle']);
   });
 
   it('cuts silhouette parts from the outline, boxes without one', async () => {

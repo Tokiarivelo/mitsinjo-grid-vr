@@ -11,6 +11,7 @@ import {
   type PartSpec,
   type TourSpec,
 } from './spec';
+import { airUnit } from '../furniture';
 
 /**
  * The studio rooms' objects (VS-T41), modelled on their photo (`public/tour/studio/*.jpg`).
@@ -18,42 +19,8 @@ import {
  * `make tour-mock` except `fixed` ones (lit bulbs, flames).
  */
 
-const WHITE = '#e9e9e6';
-const DARK = '#2a2a2a';
 const BULB = '#fff1c9';
 const GOLD = '#a8894f';
-
-/** A wall air unit: body, rows of staggered slots, a lower return grille (loft, hall). */
-function airUnit(w: number, h: number, rows: number, perRow: number): PartSpec[] {
-  const d = 0.22;
-  const parts: PartSpec[] = [
-    box([0, h / 2, 0], [w, h, d], WHITE, {
-      material: 'plastic',
-      kind: 'body',
-      concept: 'fan_guard',
-    }),
-    box([0, h * 0.08, d / 2 + 0.004], [w * 0.92, h * 0.1, 0.008], '#6d6d6b', {
-      material: 'plastic',
-      kind: 'grille',
-      concept: 'grille',
-    }),
-  ];
-  const slotW = (w * 0.9) / perRow;
-  for (let r = 0; r < rows; r++) {
-    const y = h * (0.86 - (r * 0.5) / rows);
-    const shift = r % 2 ? slotW / 2 : 0;
-    for (let i = 0; i < perRow - (r % 2); i++) {
-      const x = -w * 0.45 + slotW * (i + 0.5) + shift;
-      parts.push(
-        box([x, y, d / 2 + 0.003], [slotW * 0.62, h * 0.055, 0.006], DARK, {
-          material: 'plastic',
-          kind: 'grille',
-        })
-      );
-    }
-  }
-  return parts;
-}
 
 /** Five marquee letters « MARRY », traced on the photo: x0–x1 on a 0–10 grid, rings y down. */
 const LETTERS: Array<{
