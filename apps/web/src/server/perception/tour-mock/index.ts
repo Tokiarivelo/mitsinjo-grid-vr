@@ -121,7 +121,7 @@ async function facesInTime(id: string): Promise<ImaginedFaces | null> {
  * Version of the imagined look: bump it when the shader or the tile framing changes, so the
  * faces cached on disk are drawn again.
  */
-export const IMAGINED_LOOK = 1;
+export const IMAGINED_LOOK = 2;
 /** Where imagined faces are kept between runs (ignored by git, like every build cache). */
 const FACES_CACHE = join(process.cwd(), 'node_modules', '.cache', 'tour-imagined');
 

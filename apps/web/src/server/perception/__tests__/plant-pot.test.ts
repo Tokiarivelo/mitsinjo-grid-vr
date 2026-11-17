@@ -58,6 +58,14 @@ describe('potted plant (VS-T25)', () => {
     expect(out.plantScore.mean).toBeGreaterThan(0.6);
   }, 30_000);
 
+  it('a plant marked in the ground gets no pot, even over a pot-like foot (VS-T46: railings, dry twigs)', () => {
+    const aligned = alignedTree(POTTED);
+    const out = reconstructTree(aligned, buildPalette(aligned), 'potted plant', {
+      hints: { ground: true },
+    })!;
+    expect(out.recipe.plant!.pot).toBeUndefined();
+  }, 30_000);
+
   it('raisePlant maps the rows above the rim into the whole box', () => {
     const aligned = alignedTree(POTTED);
     const pot = findPot(aligned)!;

@@ -15,6 +15,7 @@ import {
   type TourMockEntry,
 } from '../tour-mock/generate';
 import { TOUR_SPECS } from '../tour-mock/specs';
+import { renderPlant } from '../tour-mock/plant-render';
 import { TOUR_MOCK_STOP, skinFromFront, skinWrap } from '../tour-mock';
 
 /**
@@ -120,14 +121,19 @@ describe.runIf(RUN)('tour mock (VS-T41)', () => {
         const aspect = (box.w * photo.width) / (box.h * photo.height);
         const cols = aspect >= 1 ? 160 : Math.max(16, Math.round(160 * aspect));
         const rws = aspect >= 1 ? Math.max(16, Math.round(160 / aspect)) : 160;
+        const plant = Boolean(entry.recipe.plant);
         const atPhoto = await tilePng(
-          renderAtPhoto(skin.recipe, cols, rws, entry.pitch, skin.paint),
+          plant
+            ? renderPlant(entry.recipe, cols, rws, { yaw: 0, pitch: 0 }, true)
+            : renderAtPhoto(skin.recipe, cols, rws, entry.pitch, skin.paint),
           cols,
           rws
         );
         const turn = (yaw: number, pitch: number) =>
           tilePng(
-            renderFlat(skin.recipe, 1, 160, 160, { yaw, pitch }, undefined, skin.paint),
+            plant
+              ? renderPlant(entry.recipe, 160, 160, { yaw, pitch })
+              : renderFlat(skin.recipe, 1, 160, 160, { yaw, pitch }, undefined, skin.paint),
             160,
             160
           );

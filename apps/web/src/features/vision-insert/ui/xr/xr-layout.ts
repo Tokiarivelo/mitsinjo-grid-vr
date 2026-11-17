@@ -9,7 +9,7 @@ export type Vec3 = [number, number, number];
 
 /**
  * Inside the wrist menu (`wrist-menu.ts`), relative to its centre (0.9 m ahead, below the eyes,
- * facing the viewer): scan button in the middle, guide under it, « Close » at its top right.
+ * facing the viewer): scan button in the middle, guide under it, then the help and inputs rows; « Close » right of the card.
  */
 export const MENU_SCAN_OFFSET: Vec3 = [0, 0.06, 0];
 export const MENU_GUIDE_OFFSET: Vec3 = [0, -0.25, 0];
@@ -35,12 +35,16 @@ export const AIR_BOB = 0.04;
  * even at the low end of the bob, so they never cover the « Targets acquired » pill or the title.
  */
 export const AIR_CRYSTAL_Y = Number((AIR_CARD.height / 2 + AIR_RINGS_RADIUS + 0.03).toFixed(3));
-/** « Close » the menu (VS-T32): above the scan card's top right (clear of its bob), right of the crystal. */
-export const MENU_CLOSE_SIZE = { width: 0.14, height: 0.07 } as const;
+/**
+ * « Close » the menu (VS-T47): right of the scan card, level with its top, in plain view and
+ * outside the scan button's ray radius (`AIR_BUTTON_RADIUS`). Above the card's top right (VS-T32)
+ * it sat out of view and inside that radius: a laser that missed it by a hair analysed the view.
+ */
+export const MENU_CLOSE_SIZE = { width: 0.16, height: 0.1 } as const;
 export const MENU_CLOSE_OFFSET: Vec3 = [
-  0.24,
-  Number((MENU_SCAN_OFFSET[1] + AIR_CARD.height / 2 + AIR_BOB + 0.055).toFixed(3)),
-  0.02,
+  Number((AIR_CARD.width / 2 + 0.03 + MENU_CLOSE_SIZE.width / 2).toFixed(3)),
+  Number((MENU_SCAN_OFFSET[1] + AIR_CARD.height / 2 - MENU_CLOSE_SIZE.height / 2).toFixed(3)),
+  0,
 ];
 /**
  * Event notice (VS-T32, replaces the telemetry HUD's event line): just under the line of sight

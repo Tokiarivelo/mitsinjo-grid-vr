@@ -9,7 +9,10 @@ import {
   fence,
   furnitureRecipe,
   glazing,
+  ironRailing,
+  latticeTower,
   railing,
+  sCurve,
   sofa,
   stool,
   table,
@@ -130,6 +133,38 @@ describe('furniture builders (PQ-T88)', () => {
     const parts = railing(4, 1, 12);
     check(parts, ['rail', 'pole']);
     expect(parts).toHaveLength(2 + 2 + 12);
+  });
+
+  it('iron railing (VS-T46): three rails, posts where asked, S balusters and scrolls, under the part cap', () => {
+    const parts = ironRailing(7, 1, 30, [0.01, 0.42, 0.72, 0.99]);
+    check(parts, ['rail', 'pole']);
+    expect(parts.filter((p) => p.concept === 'pole')).toHaveLength(4);
+    // Balusters are curved ribbons (extrudes), never rods; none sits on a post.
+    const ribbons = parts.filter((p) => p.shape === 'extrude');
+    expect(ribbons.length).toBeGreaterThan(20);
+    expect(parts.length).toBeLessThanOrEqual(96);
+  });
+
+  it('sCurve swings out one way low and the other way high', () => {
+    const pts = sCurve(0, 0, 1, 0.05);
+    const low = pts[Math.round(pts.length * 0.25)]![0];
+    const high = pts[Math.round(pts.length * 0.75)]![0];
+    expect(Math.sign(low)).toBe(-Math.sign(high));
+    expect(pts[0]![1]).toBe(0);
+    expect(pts[pts.length - 1]![1]).toBe(1);
+  });
+
+  it('lattice tower (VS-T46): four legs, braced panels front and back, cross arms, tapering', () => {
+    const parts = latticeTower(30, 6, 1.4, 9, [
+      [0.68, 3.4],
+      [0.88, 2.4],
+    ]);
+    const recipe = check(parts, ['pole', 'rail']);
+    expect(parts.length).toBe(2 * (2 + 9 * 3) + 2 * 3);
+    expect(parts.length).toBeLessThanOrEqual(96);
+    // Tall and slender, wider at the arms than at the head.
+    expect(recipe.proportions.h).toBe(1);
+    expect(recipe.proportions.w).toBeLessThan(0.35);
   });
 
   it('fence: boards on a rail, pillars and a base wall when asked', () => {

@@ -69,7 +69,7 @@ export function reconstructTree(
   const iou = plan.fronds ? scored(treeRecipe({ ...plan, fronds: undefined })).iou : own;
   // The plant the 3D views build (PQ-T82); the clumps above stay its parts for the parts views.
   const plant =
-    potted(aligned, label, hints, { fronds, sideIsFront }) ??
+    (hints.ground ? null : potted(aligned, label, hints, { fronds, sideIsFront })) ??
     buildPlant(plan, label, hints, seedOf(label));
   // A potted plant stands in the whole drawing, pot included (the tree's foot stops at its rim).
   const frame = plant.pot ? { W: aligned.W, H: aligned.H, D: aligned.D } : plan;

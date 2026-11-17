@@ -118,7 +118,7 @@ export interface Hotspot {
 /** Pick radius around a floor arrow (m). */
 const HOTSPOT_RADIUS = 0.38;
 
-type AimKind =
+export type AimKind =
   'wrist' | 'panel' | 'miniature' | 'button' | 'hotspot' | 'target' | 'screen' | 'none';
 interface Aim {
   kind: AimKind;
@@ -217,6 +217,17 @@ function createImpactRing(): THREE.Mesh {
   );
   mesh.visible = false;
   return mesh;
+}
+
+/**
+ * Whether the mouse's own cursor shows, and takes the hover, in the headset view (VS-T47): only on
+ * the interface (menu, its buttons, panels, the Menu button). Objects, miniatures and floor arrows
+ * belong to the lasers: in the emulator a mouse move also turns the controllers, so mouse and laser
+ * took the hover in turns and the outlined objects blinked; on a wall it drew a third ring.
+ * `locked` (pointer lock: the mouse turns the head) never shows it.
+ */
+export function mouseCursorShown(kind: AimKind, locked = false): boolean {
+  return !locked && (kind === 'panel' || kind === 'button' || kind === 'wrist');
 }
 
 /**
@@ -1136,20 +1147,21 @@ export const XRBlasterController = memo(function XRBlasterController({
           panels,
           photo,
         });
-        const usable = aim.kind !== 'none' && aim.kind !== 'screen';
-        if (usable) hovered = aim.id ?? hovered;
-        rays[2].update({
-          origin: _vOrigin,
-          direction: _vDirection,
-          end: _vEnd,
-          usable,
-          input: 'mouse',
-          pressed: dragsRef.current.has('mouse') || grabsRef.current.has('mouse'),
-          tint: beamColor(aim.kind),
-          surrounding: fx.probe(2, scene, _vOrigin, _vDirection, camera),
-          idle: BEAM_IDLE_OPACITY,
-          dt: delta,
-        });
+        if (mouseCursorShown(aim.kind, !!gl.domElement.ownerDocument?.pointerLockElement)) {
+          hovered = aim.id ?? hovered;
+          rays[2].update({
+            origin: _vOrigin,
+            direction: _vDirection,
+            end: _vEnd,
+            usable: true,
+            input: 'mouse',
+            pressed: dragsRef.current.has('mouse') || grabsRef.current.has('mouse'),
+            tint: beamColor(aim.kind),
+            surrounding: fx.probe(2, scene, _vOrigin, _vDirection, camera),
+            idle: BEAM_IDLE_OPACITY,
+            dt: delta,
+          });
+        } else rays[2].hide();
       } else rays[2].hide();
     } else if (camera) {
       hideBeam(1);

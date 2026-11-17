@@ -14,6 +14,11 @@ import { renderAtPhoto, type TourMockEntry } from './render';
 import { resolveSilhouettes, silhouettePlant } from './silhouette';
 import { compileSpec, type TourPartsSpec, type TourSpec } from './spec';
 import { SKIN_ERODE, SKIN_TILE, erodeMask, fillOutside, outlineFrame, type PanoRing } from './skin';
+import { cleanPlantFront, isSky } from './plant-clean';
+import { isFoliage } from '../tree/tree-fit';
+import { renderPlant } from './plant-render';
+import { PLANT_SLOTS } from '@/lib/plant-mesh';
+import type { PlantHints } from '../tree/plant-build';
 
 export { renderAtPhoto, type TourMockEntry };
 
@@ -86,10 +91,54 @@ export const OCCLUDER_RGB = 90;
 export const NEAR_SHARE = 0.5;
 
 /**
- * Each part's colour from the photo pixels it covers inside the outline: the part's base colour
- * scaled by photo / render medians per channel, so the shaded render matches the photo. Parts
- * hidden or too small keep their colour; `fixed` parts too.
+ * The colour of each group of pixels (a part, a plant slot) from the photo pixels it covers inside
+ * the outline: its base colour scaled by photo / render medians per channel, so the shaded render
+ * matches the photo. Groups hidden or too small keep their colour; `fixed` ones too. Occluders (a
+ * hedge before a wall, the sky through a crown) are dropped when most pixels sit near the median.
  */
+export function measureGroupColors(
+  colors: readonly string[],
+  render: Pick<FlatRender, 'part' | 'rgb'>,
+  crop: RgbGrid,
+  outline: Mask,
+  fixed: readonly boolean[],
+  accept?: (k: number, r: number, g: number, b: number) => boolean,
+  /** false: the photo median as it is (a plant: the photo's light is its look), not unshaded. */
+  unshade = true
+): string[] {
+  const n = colors.length;
+  const photo: number[][][] = Array.from({ length: n }, () => [[], [], []]);
+  const drawn: number[][][] = Array.from({ length: n }, () => [[], [], []]);
+  for (let i = 0; i < render.part.length; i++) {
+    const k = render.part[i]!;
+    if (k < 0 || k >= n || !outline.data[i]) continue;
+    if (accept && !accept(k, crop.rgb[i * 3]!, crop.rgb[i * 3 + 1]!, crop.rgb[i * 3 + 2]!))
+      continue;
+    for (let c = 0; c < 3; c++) {
+      photo[k]![c]!.push(crop.rgb[i * 3 + c]!);
+      drawn[k]![c]!.push(render.rgb[i * 3 + c]!);
+    }
+  }
+  return colors.map((color, k) => {
+    if (fixed[k] || photo[k]![0]!.length < MIN_PART_PIXELS) return color;
+    const base = [1, 3, 5].map((o) => parseInt(color.slice(o, o + 2), 16));
+    const [pr, pg, pb] = photo[k]!;
+    const mid = [median(pr!), median(pg!), median(pb!)];
+    const near = pr!.flatMap((r, i) =>
+      Math.hypot(r - mid[0]!, pg![i]! - mid[1]!, pb![i]! - mid[2]!) <= OCCLUDER_RGB ? [i] : []
+    );
+    const keep = near.length >= pr!.length * NEAR_SHARE ? near : pr!.map((_, i) => i);
+    const pick = (v: number[]) => keep.map((i) => v[i]!);
+    const rgb = base.map((b, c) => {
+      const d = median(pick(drawn[k]![c]!));
+      const ph = median(pick(photo[k]![c]!));
+      return unshade && d > 4 ? (b * ph) / d : ph;
+    });
+    return hex(rgb[0]!, rgb[1]!, rgb[2]!);
+  });
+}
+
+/** Each part's colour measured on the photo (`measureGroupColors`). */
 export function measurePartColors(
   recipe: ObjectRecipe,
   render: FlatRender,
@@ -97,38 +146,48 @@ export function measurePartColors(
   outline: Mask,
   fixed: readonly boolean[]
 ): ObjectRecipe {
-  const n = recipe.parts.length;
-  const photo: number[][][] = Array.from({ length: n }, () => [[], [], []]);
-  const drawn: number[][][] = Array.from({ length: n }, () => [[], [], []]);
-  for (let i = 0; i < render.part.length; i++) {
-    const k = render.part[i]!;
-    if (k < 0 || !outline.data[i]) continue;
-    for (let c = 0; c < 3; c++) {
-      photo[k]![c]!.push(crop.rgb[i * 3 + c]!);
-      drawn[k]![c]!.push(render.rgb[i * 3 + c]!);
-    }
-  }
+  const colors = measureGroupColors(
+    recipe.parts.map((p) => p.color),
+    render,
+    crop,
+    outline,
+    fixed
+  );
+  return { ...recipe, parts: recipe.parts.map((p, k) => ({ ...p, color: colors[k]! })) };
+}
+
+/**
+ * A plant's look measured on the photo (VS-T46): bark, both leaf greens and the flowers, from the
+ * pixels each slot of its mesh covers (`renderPlant`: `part` = slot). Pot and soil keep theirs.
+ */
+export function measurePlantLook(
+  recipe: ObjectRecipe,
+  render: FlatRender,
+  crop: RgbGrid,
+  outline: Mask
+): ObjectRecipe {
+  const plant = recipe.plant!;
+  const [bark, leaf, leafDark, flower] = measureGroupColors(
+    render.colors,
+    render,
+    crop,
+    outline,
+    PLANT_SLOTS.map((s) => s === 'pot' || s === 'soil' || (s === 'flower' && !plant.look.flower)),
+    // Leaves never read the sky seen through the crown; bark reads neither sky nor leaves.
+    (k, r, g, b) => !isSky(r, g, b) && (PLANT_SLOTS[k] !== 'bark' || !isFoliage(r, g, b)),
+    false
+  );
   return {
     ...recipe,
-    parts: recipe.parts.map((p, k) => {
-      if (fixed[k] || photo[k]![0]!.length < MIN_PART_PIXELS) return p;
-      const base = [1, 3, 5].map((o) => parseInt(p.color.slice(o, o + 2), 16));
-      // Occluders (a hedge before a wall, a tree before a house) are not the part: keep the
-      // pixels near the part's own photo median when they are most of it, else trust every pixel.
-      const [pr, pg, pb] = photo[k]!;
-      const mid = [median(pr!), median(pg!), median(pb!)];
-      const near = pr!.flatMap((r, i) =>
-        Math.hypot(r - mid[0]!, pg![i]! - mid[1]!, pb![i]! - mid[2]!) <= OCCLUDER_RGB ? [i] : []
-      );
-      const keep = near.length >= pr!.length * NEAR_SHARE ? near : pr!.map((_, i) => i);
-      const pick = (v: number[]) => keep.map((i) => v[i]!);
-      const rgb = base.map((b, c) => {
-        const d = median(pick(drawn[k]![c]!));
-        const ph = median(pick(photo[k]![c]!));
-        return d > 4 ? (b * ph) / d : ph;
-      });
-      return { ...p, color: hex(rgb[0]!, rgb[1]!, rgb[2]!) };
-    }),
+    plant: {
+      ...plant,
+      look: {
+        bark: bark!,
+        leaf: leaf!,
+        leafDark: leafDark!,
+        ...(plant.look.flower ? { flower } : {}),
+      },
+    },
   };
 }
 
@@ -142,7 +201,11 @@ export async function scoreOnPhoto(
   const { cols, rows } = fitGrid(aspect);
   const crop = await sampleObjectRgb(shot.photo, shot.box, cols, rows);
   const outline = ringsMask(shot.rings, shot.box, cols, rows);
-  const render = renderAtPhoto(recipe, cols, rows, pitch);
+  // A plant is scored as the viewer draws it (VS-T46), never on its clumps, and level: it was read
+  // as the front of its photo (a panorama keeps a tree's verticals however high it stands).
+  const render = recipe.plant
+    ? renderPlant(recipe, cols, rows, { yaw: recipe.yaw ?? 0, pitch: 0 }, true)
+    : renderAtPhoto(recipe, cols, rows, pitch);
   return { score: scoreModel(render, crop, outline), render, crop, outline };
 }
 
@@ -155,6 +218,18 @@ const PLANT_VIEW_PX = 320;
  * `px` = longest side (the photo `make tour-photo` hands to `make views-3d`, VS-T44).
  */
 export async function outlinedFront(shot: ObjectPhoto, px = PLANT_VIEW_PX): Promise<Buffer> {
+  return (await cutOut(shot, px))!;
+}
+
+/**
+ * The outlined photo of a plant with its crown gaps and trunk strays cleaned for the reader
+ * (`plant-clean.ts`, VS-T46), or null when the plant is not one to clean (a palm, a bare tree).
+ */
+export function cleanedFront(shot: ObjectPhoto, hints: PlantHints): Promise<Buffer | null> {
+  return cutOut(shot, PLANT_VIEW_PX, hints);
+}
+
+async function cutOut(shot: ObjectPhoto, px: number, clean?: PlantHints): Promise<Buffer | null> {
   const { photo, box } = shot;
   const left = Math.max(0, Math.floor(box.x * photo.width));
   const top = Math.max(0, Math.floor(box.y * photo.height));
@@ -170,6 +245,19 @@ export async function outlinedFront(shot: ObjectPhoto, px = PLANT_VIEW_PX): Prom
     .raw()
     .toBuffer({ resolveWithObject: true });
   const mask = ringsMask(shot.rings, box, w, h);
+  if (clean) {
+    const cleaned = cleanPlantFront(
+      {
+        rgb: new Uint8Array(data.buffer, data.byteOffset, data.length),
+        mask: mask.data,
+        width: w,
+        height: h,
+      },
+      clean
+    );
+    if (!cleaned) return null;
+    data.set(cleaned);
+  }
   for (let i = 0; i < w * h; i++) if (!mask.data[i]) data.fill(255, i * 3, i * 3 + 3);
   // A paper margin all round: the reader finds the object on its paper.
   const m = Math.round(Math.max(w, h) * 0.08);
@@ -201,9 +289,11 @@ async function finishEntry(
 ): Promise<TourMockEntry> {
   const pitch = -shot.elevation;
   let recipe = recipe0;
-  for (let pass = 0; pass < 2 && fixed.some((f) => !f); pass++) {
+  for (let pass = 0; pass < 2 && (recipe.plant || fixed.some((f) => !f)); pass++) {
     const s = await scoreOnPhoto(recipe, shot, pitch);
-    recipe = measurePartColors(recipe, s.render, s.crop, s.outline, fixed);
+    recipe = recipe.plant
+      ? measurePlantLook(recipe, s.render, s.crop, s.outline)
+      : measurePartColors(recipe, s.render, s.crop, s.outline, fixed);
   }
   const valid = ObjectRecipeSchema.safeParse(recipe);
   if (!valid.success)
@@ -240,7 +330,29 @@ export async function buildEntry(
   label: string
 ): Promise<TourMockEntry | null> {
   if (spec.kind === 'parts') return partsEntry(spec, shot, label);
-  const front = await decodeView(await outlinedFront(shot));
+  // The photo as it is, then (VS-T46) cleaned of the sky and the strays seen through the crown.
+  const read = await treeEntry(spec, shot, label, await outlinedFront(shot));
+  const cleaned = await cleanedFront(shot, spec.hints);
+  const tidy = cleaned ? await treeEntry(spec, shot, label, cleaned) : null;
+  const best = better(read, tidy);
+  if (best && best.score.iou >= PLANT_FALLBACK_IOU) return best;
+  const outline = silhouettePlant(shot.rings, shot.box, shot.photo.width / shot.photo.height);
+  const alt = outline ? await partsEntry(outline, shot, label) : null;
+  return better(best, alt);
+}
+
+/** The higher score of two entries (either may be missing). */
+const better = (a: TourMockEntry | null, b: TourMockEntry | null) =>
+  !a ? b : !b ? a : b.score.score > a.score.score ? b : a;
+
+/** A plant read by the tree reconstructor from one front view (PNG), or null. */
+async function treeEntry(
+  spec: Extract<TourSpec, { kind: 'plant' }>,
+  shot: ObjectPhoto,
+  label: string,
+  png: Buffer | null
+): Promise<TourMockEntry | null> {
+  const front = png ? await decodeView(png) : null;
   const reading = front ? readViews({ front, right: front }) : null;
   const tree = reading
     ? reconstructTree(reading.aligned, reading.palette, spec.label || label, {
@@ -248,23 +360,17 @@ export async function buildEntry(
         hints: spec.hints,
       })
     : null;
+  if (!tree) return null;
   // The reconstructor measured its colours on the same pixels: keep them.
-  const read = tree
-    ? await finishEntry(
-        tree.recipe,
-        tree.recipe.parts.map((p) =>
-          p.kind === 'trunk' ? 'tree_trunk' : p.kind === 'crown' ? 'foliage' : null
-        ),
-        tree.recipe.parts.map(() => true),
-        shot,
-        label
-      )
-    : null;
-  if (read && read.score.iou >= PLANT_FALLBACK_IOU) return read;
-  const outline = silhouettePlant(shot.rings, shot.box, shot.photo.width / shot.photo.height);
-  const alt = outline ? await partsEntry(outline, shot, label) : null;
-  if (!read) return alt;
-  return alt && alt.score.score > read.score.score ? alt : read;
+  return finishEntry(
+    tree.recipe,
+    tree.recipe.parts.map((p) =>
+      p.kind === 'trunk' ? 'tree_trunk' : p.kind === 'crown' ? 'foliage' : null
+    ),
+    tree.recipe.parts.map(() => true),
+    shot,
+    label
+  );
 }
 
 /** JPEG quality of a stored front face (VS-T43). */

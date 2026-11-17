@@ -175,7 +175,7 @@ En gras : spécialistes propres à une équipe. Les autres viennent de `team/sha
 
 - [ ] `TEXTILE_TEAM` (drape, finishes) + fixtures + test.
 - [ ] `FIXTURE_TEAM` (openings, finishes) + fixtures + test.
-- [ ] `STRUCTURE_TEAM` (lattice, finishes) + fixtures + test.
+- [ ] `STRUCTURE_TEAM` (lattice, finishes) + fixtures + test. — builders prêts (VS-T46) : `ironRailing` (barreaux en S, volutes, poteaux) et `latticeTower` (montants, croisillons, bras) dans `furniture/structure.ts`, testés ; reste l'équipe et la lecture.
 - [ ] `TERRAIN_TEAM` (profile, finishes) + fixtures + test.
 - [ ] `APPLIANCE_TEAM` (profile, controls, legs, finishes) pour cabinet / screen / fan / machine / tank + test.
 - [ ] `LIGHT_TEAM` (profile, lamp, finishes) pour lamp_post et luminaires intérieurs + test.
@@ -212,6 +212,12 @@ En gras : spécialistes propres à une équipe. Les autres viennent de `team/sha
 - `cyl` couché : la taille est la **boîte monde** → `[longueur, d, d]` avec `axis: 'x'`.
 - Mobilier ajouré (chaises, tabourets, étagères métal, garde-corps) : le contour plein compte le fond vu à
   travers, l'IoU sous-estime ; juger aussi les vues 3/4 et face des planches `test-results/tour-mock/`.
-- Rendu `renderFlat` des hulls : fines rayures blanches aux sommets de section (à corriger avant de juger ΔE).
+- Rendu `renderFlat` des hulls : vérifié (VS-T46), aucun trou dans le masque d'un hull ; les rayures blanches des
+  planches venaient de la peau photo (VS-T43), plus portée depuis les faces imaginées (VS-T44).
+- Plantes : le score de la visite juge le **maillage `plantMesh`** que montre la vue 3D (`tour-mock/plant-render.ts`),
+  pas les touffes des pièces ; `PlantHints.ground` (plante en pleine terre) coupe la recherche de pot : à faire
+  remplir par l'équipe plante (question « pot ou pleine terre » au pilote, `promptVersion` + 1).
+- Structures ajourées (garde-corps, pylône) : l'IoU contre le contour plein est sous-estimée (0,2–0,3 pour un treillis
+  fidèle) ; leurs couleurs sont fixées (`fixed`), la photo entre les barreaux est le fond.
 - Couronnes en silhouette = coussins : ne pas remplacer `reconstructTree` sauf lecture cassée (IoU < 0,45).
 - Temps : chaque spécialiste coûte un appel ; garder ≤ 5 spécialistes par équipe et les `ALWAYS` minimaux.

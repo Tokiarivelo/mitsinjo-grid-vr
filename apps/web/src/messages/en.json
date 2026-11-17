@@ -1027,6 +1027,7 @@
       "vrHudEventConnected": "+{watts} W · {name} connected",
       "vrHudEventDisconnected": "−{watts} W · {name} disconnected",
       "vrHudEventMaterialized": "{name} is in front of you: trigger connects it, grip turns it, « Put away » removes it",
+      "vrHudEventStaysInLab": "{name} stays in the 3D lab: « Back to the studio » reopens it",
       "vrHudEventNoObject": "No object detected at this spot",
       "vrMini": {
         "connected": "✓ On the village grid",

@@ -115,7 +115,7 @@ vi.mock('../xr-event-toast', () => ({
 }));
 vi.mock('../spatial-interaction-guide', () => ({ SpatialInteractionGuide: () => null }));
 vi.mock('../xr-wrist-menu', () => ({
-  WristMenuButton: () => null,
+  WristMenuButton: () => <div data-testid="wrist-menu-button" />,
   FollowGroup: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
   WristMenuPanel: ({ children }: { children?: React.ReactNode }) => (
     <div data-testid="wrist-menu-panel">{children}</div>
@@ -370,6 +370,25 @@ describe('VillageXRStudio — 3D extraction (VS-T18–T22)', () => {
     expect(onTriggerScan).toHaveBeenCalledOnce();
   });
 
+  it('has no menu in the studio: the open menu closes, no « Analyse the current view » (VS-T47)', () => {
+    const { rerender, view, queryByTestId } = setup(false, extractAt('idle', null));
+    const menu = blaster.props!.menu;
+    act(() => menu.toggle());
+    expect(queryByTestId('wrist-menu-panel')).toBeTruthy();
+    for (const stage of ['views', 'build', 'lab'] as const) {
+      rerender(view([fridge], false, extractAt(stage)));
+      expect(menu.open).toBe(false);
+      expect(queryByTestId('wrist-menu-button')).toBeNull();
+      expect(queryByTestId('wrist-menu-panel')).toBeNull();
+      // Before: a press on the wrist button reopened the menu over the lab panels.
+      act(() => menu.toggle());
+      expect(queryByTestId('wrist-menu-panel')).toBeNull();
+      act(() => menu.toggle());
+    }
+    rerender(view([fridge], false, extractAt('idle', null)));
+    expect(queryByTestId('wrist-menu-button')).toBeTruthy();
+  });
+
   it('« Leave the studio » leaves from any studio step; the lab keeps its object (VS-T26)', () => {
     const views = extractAt('views');
     const { rerender, view, getByRole } = setup(false, views);
@@ -409,12 +428,21 @@ describe('VillageXRStudio — 3D extraction (VS-T18–T22)', () => {
     expect(left.back).toHaveBeenCalledOnce();
   });
 
-  it('B / Y (back) in the lab leaves it, keeping the object as a miniature', () => {
-    const inLab = extractAt('lab');
-    const { rerender, view } = setup(false, inLab);
+  it('B / Y (back) in the lab leaves it, with no miniature in front of « Back to the studio » (VS-T47)', () => {
+    // A recipe model: no « outline only » notice over the one checked here.
+    const inLab = {
+      ...extractAt('lab'),
+      shape: { status: 'ready', shape: { mode: 'recipe' } },
+    } as unknown as XrExtract;
+    const { rerender, view, getByRole, getByTestId } = setup(false, inLab);
     rerender(view([fridge], false));
     act(() => controls.onAction!({ type: 'back' }));
     expect(inLab.exitLab).toHaveBeenCalledOnce();
+    expect(getByTestId('event-toast').textContent).toMatch(/stays in the 3D lab/);
+    // Before: the object came back as a miniature (and its card) right in front of the door.
+    rerender(view([fridge], false, { ...extractAt('idle', null), awayId: 'fridge' }));
+    expect(blaster.props!.miniatures).toEqual([]);
+    expect(getByRole('button', { name: 'Back to the studio · « Fridge »' })).toBeTruthy();
   });
 
   it('« Extract in 3D » opens the studio: views with the generation column, build, then lab', () => {

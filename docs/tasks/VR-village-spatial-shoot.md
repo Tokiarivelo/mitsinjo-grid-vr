@@ -468,3 +468,45 @@ Style : hologramme futuriste (cyan / ambre, lignes de balayage, coins lumineux, 
 - [x] `make vr-probe` : une carte par miniature ; la souris sur « Ranger » le survole malgré le laser posé sur
       la miniature, et le clic la range.
 - [ ] **Done when :** vu au casque (manettes et mains).
+
+### VS-T47 : Labo sans menu, « Fermer » du menu cliquable, pas de miniature au retour du labo
+
+> Retour 2026-11-17 (émulateur) : dans le labo, le menu cachait les panneaux et proposait « Analyser la vue
+> actuelle » ; « Fermer » ne se cliquait pas ; au retour du labo, la miniature et sa carte cachaient
+> « Revenir au studio », le laser visait l'objet derrière.
+
+- [x] Pas de menu dans le studio (vues 2D, construction, labo) : ni bouton poignet ni panneau ; un menu
+      ouvert se ferme en entrant.
+- [x] « Fermer » à droite de la carte de scan, dans le champ de vision et hors du rayon de visée du bouton de
+      scan (avant : au-dessus de la carte, hors champ, un tir à côté analysait la vue).
+- [x] Quitter le labo ne pose plus de miniature dans la vue 360° (l'objet est dans le labo) : un avis dit
+      que « Revenir au studio » le rouvre.
+- [x] Souris (émulateur) : curseur et survol seulement sur l'interface (menu, boutons, panneaux, Menu),
+      jamais sur les objets, miniatures ni flèches (réservés aux lasers), ni en Play mode (souris verrouillée).
+      Avant : après une analyse la souris allumait un autre objet que les lasers, les contours clignotaient,
+      et un 3ᵉ rond restait sur les murs.
+- [ ] **Done when :** vu au casque (manettes et mains).
+
+### VS-T46 : Visite 360° : extérieur plus fidèle (arbres, garde-corps, pylône) et toutes les faces générées
+
+> Demande 2026-11-17 : générer toutes les faces des objets mock et affiner les 3D restantes, surtout la visite
+> extérieure, pour des 3D fidèles à la photo en mode réaliste.
+
+- [x] Plantes jugées sur ce que montre la 3D : le score de la visite, ses planches et les faces imaginées d'une plante
+      rendent son maillage `plantMesh` (tronc, branches, feuillage en touffes, cartes de feuilles ; ton par carte,
+      cœur et dessous de couronne plus sombres) et plus ses touffes de pièces (`tour-mock/plant-render.ts`).
+- [x] Lecture des arbres : la photo détourée est aussi lue nettoyée (ciel vu à travers la couronne → vert voisin plus
+      sombre, couronne en contre-jour teintée, tronc sous la couronne sans herbe ni ciel ; `plant-clean.ts`, lecture
+      seulement, jamais posé sur le modèle) ; la meilleure des lectures est gardée. Couleurs de la plante mesurées sur
+      la photo sans le ciel.
+- [x] Plantes de l'extérieur en pleine terre (`PlantHints.ground`) : plus de pot inventé sous un cyprès ou un arbuste.
+- [x] `garden-tree-1` (tronc d'eucalyptus seul) en colonne d'écorce ; `garden-tree-2` (chêne nu) en tronc, branches
+      maîtresses et voile de rameaux ; garde-corps de la terrasse en fer forgé (`ironRailing` : barreaux en S,
+      volutes, poteaux) ; pylône en treillis (`latticeTower`) ; couleurs du fer et de l'acier fixées.
+- [x] Scores : plantes extérieures IoU moyen 0,69 → 0,77, ΔE 6,8 → 6,3, 1 → 9 à IoU ≥ 0,85 ; extérieur (73) IoU
+      0,72 → 0,75, ΔE ≤ 8 : 42 → 48 ; visite (159) IoU ≥ 0,85 : 55 → 62, ΔE ≤ 8 : 75 → 81. Garde-corps et pylône
+      plus bas en IoU (0,18 / 0,29) : le contour plein compte le ciel et la pelouse vus à travers le treillis.
+- [x] Toutes les faces imaginées générées dans le cache (`make tour-faces`, version de rendu 2).
+- [ ] Reste : ΔE des maisons blanches et des jardinières (15–30 : la couleur compensée de l'ombrage plafonne à 255),
+      cyprès et pins sombres (IoU 0,58–0,68), `woods-bridge` (0,28, ajouré), lampadaire fin (0,53).
+- [ ] **Done when :** vu à l'écran (V515–V520) et au casque.

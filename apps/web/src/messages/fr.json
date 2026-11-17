@@ -1027,6 +1027,7 @@
       "vrHudEventConnected": "+{watts} W · {name} raccordé",
       "vrHudEventDisconnected": "−{watts} W · {name} déconnecté",
       "vrHudEventMaterialized": "{name} est devant vous : gâchette pour le raccorder, grip pour le tourner, « Ranger » pour l'enlever",
+      "vrHudEventStaysInLab": "{name} reste dans le labo 3D : « Revenir au studio » le rouvre",
       "vrHudEventNoObject": "Aucun objet détecté à cet endroit",
       "vrMini": {
         "connected": "✓ Raccordé au réseau du village",
