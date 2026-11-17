@@ -62,10 +62,14 @@ describe('HoloDetectionTarget (VS-T4, outline VS-T18)', () => {
     expect(meshes).toHaveLength(0);
   });
 
-  it('drops the outline once materialized and keeps the label', () => {
+  it('drops the outline once materialized; its card shows only under the laser', () => {
+    // Regression (2026-11-17): the card stayed on once the miniature stood in front, over the
+    // miniature's own card (« Put away »).
     const { container } = renderTarget(true);
     expect(container.querySelector('lineLoop')).toBeNull();
-    expect(container.querySelector('[data-testid="mock-billboard"]')).toBeTruthy();
+    expect(container.querySelector('[data-testid="mock-billboard"]')).toBeNull();
+    const hovered = renderTarget(true, true);
+    expect(hovered.container.querySelector('[data-testid="mock-billboard"]')).toBeTruthy();
   });
 
   it('hides its label card under an open panel, keeps the outline', () => {

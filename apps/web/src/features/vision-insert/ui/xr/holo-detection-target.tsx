@@ -163,8 +163,10 @@ export const HoloDetectionTarget = memo(function HoloDetectionTarget({
         ))}
 
       {/* Under a dialog / the carousel the card would cover it (both draw without depth). The
-          analysed outlines stay bare: the name card shows only under the laser (VS-T42). */}
-      {!hideLabel && (hovered || isMaterialized) && (
+          analysed outlines stay bare: the name card shows only under the laser (VS-T42), also
+          once its miniature stands in front: that one wears its own card (« Put away »), and a
+          second card here landed on it (owner report 2026-11-17). */}
+      {!hideLabel && hovered && (
         <Billboard
           position={
             isMaterialized

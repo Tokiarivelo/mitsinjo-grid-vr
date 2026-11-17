@@ -438,11 +438,40 @@ try {
   check('connecting it shows a notice (no telemetry HUD)', (await shownN('xr-event-toast')) > 0);
   await shot('4-fridge-connected');
   check('one scan only (no double fire)', scans === 1);
-  const pressedAway = await press('holo:mini-dismiss-*');
+  // Owner report 2026-11-17: one card per miniature (the photo's own card no longer sits on it),
+  // and in the emulator the mouse brought onto « Put away » lights it up and clicks it while the
+  // controller laser still rests on the miniature.
+  check(
+    'one card over the miniature (the photo card shows only under the laser)',
+    (await page.evaluate(() => window.__VR_CONTROLS__?.shown('xr-miniature-label') ?? -1)) === 1
+  );
+  await rc('look_at', { device: 'controller-right', target: MINI_0 });
+  const awayAt = await panelAt('holo:mini-dismiss-*');
+  if (awayAt) await rc('look_at', { device: 'headset', target: awayAt });
+  await sleep(800);
+  const awayPx = awayAt
+    ? await page.evaluate((p) => window.__VR_CONTROLS__?.toScreen(p) ?? null, awayAt)
+    : null;
+  if (awayPx) {
+    await page.mouse.move(awayPx.x - 30, awayPx.y);
+    await page.mouse.move(awayPx.x, awayPx.y, { steps: 6 });
+    await sleep(500);
+  }
+  await shot('4a-mouse-on-put-away');
+  check(
+    'the mouse on « Put away » takes the hover from the laser resting on the miniature',
+    String((await tour())?.hovered ?? '').startsWith('holo:mini-dismiss-')
+  );
+  if (awayPx) {
+    await page.mouse.down();
+    await page.mouse.up();
+    await sleep(1500);
+  }
+  const pressedAway = !!awayPx;
   await sleep(500);
   await shot('4b-fridge-put-away');
   check(
-    '« Put away » removes the miniature',
+    'a mouse click on « Put away » removes the miniature',
     pressedAway && !(await panelAt('holo:mini-dismiss-*'))
   );
 

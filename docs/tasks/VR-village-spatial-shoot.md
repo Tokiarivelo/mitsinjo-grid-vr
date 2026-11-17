@@ -452,3 +452,18 @@ Style : hologramme futuriste (cyan / ambre, lignes de balayage, coins lumineux, 
 - [x] Plantes précalculées (couronne lente : `make tour-imagine`) ; les autres imaginées à la demande, gardées en cache
       disque (`node_modules/.cache/tour-imagined/`, `make tour-faces` les prépare toutes).
 - [ ] **Done when :** vu à l'écran (V502–V506) et au casque.
+
+### VS-T45 : Immersion : « Ranger » cliquable, une seule carte par miniature, laser bien visible
+
+> Retour 2026-11-17 (émulateur) : « Ranger » ne se cliquait pas, deux cartes se superposaient sur la miniature,
+> le menu laissait le survol à l'objet sous le laser, et le laser et son curseur se voyaient mal.
+
+- [x] Une carte par miniature : la carte de l'objet sur la photo ne s'affiche plus qu'au survol (avant : toujours
+      une fois la miniature posée, par-dessus la carte de la miniature).
+- [x] Survol : la souris bougée prend le survol aux lasers au repos (menu, boutons, « Ranger »), avec son
+      propre curseur dans la vue casque ; immobile 2,5 s, le laser le reprend.
+- [x] Laser plus visible : faisceau ~4 mm, curseur ~1° avec halo lumineux, s'illumine en mouvement, faisceau
+      à 35 % quand il ne vise rien (`xr-ray-visual.ts`).
+- [x] `make vr-probe` : une carte par miniature ; la souris sur « Ranger » le survole malgré le laser posé sur
+      la miniature, et le clic la range.
+- [ ] **Done when :** vu au casque (manettes et mains).

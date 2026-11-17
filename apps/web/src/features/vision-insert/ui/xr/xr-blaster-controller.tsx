@@ -152,6 +152,8 @@ const _vCurPos = new THREE.Vector3();
 const _mouse = new THREE.Vector2();
 const _FORWARD = new THREE.Vector3(0, 0, -1);
 const BEAM_LENGTH = 3;
+/** Beam and cursor opacity while the laser aims at nothing usable (owner request: always seen). */
+const BEAM_IDLE_OPACITY = 0.35;
 const TOUCH_COOLDOWN_MS = 750;
 /** Mouse travel (px) under which a press + release is a click, not a drag. */
 const CLICK_SLOP_PX = 6;
@@ -473,7 +475,8 @@ export const XRBlasterController = memo(function XRBlasterController({
   // Imperative Three objects, mutated in the frame loop without React renders.
   const fx = useMemo(
     () => ({
-      rays: [createRayVisual(), createRayVisual()] as const,
+      /** Both XR pointers, then the mouse's cursor in the headset view (emulator). */
+      rays: [createRayVisual(), createRayVisual(), createRayVisual()] as const,
       /** What surrounds each laser, so its colour contrasts with it (VS-T30). */
       probe: createSurroundingProbe(),
       projectile: createDot(0.035, BEAM_IDLE),
@@ -971,6 +974,8 @@ export const XRBlasterController = memo(function XRBlasterController({
       pressed,
       tint: beamColor(aim.kind),
       surrounding: fx.probe(index, scene, origin, direction, camera),
+      // A faint beam stays when it aims at nothing: you always see where it points.
+      idle: BEAM_IDLE_OPACITY,
       dt,
     });
     const out = aimOut?.pointers[index];
@@ -1095,33 +1100,49 @@ export const XRBlasterController = memo(function XRBlasterController({
         camera.getWorldDirection(_vGazeD);
         if (gazeHits(_vGazeO, _vGazeD, menu.button)) hovered = WRIST_BUTTON_ID;
       }
-      // Emulator mouse: hover what it points at (no beam), so buttons light up before a click.
-      // The lasers keep priority: a mouse left still never hides what a controller aims at.
+      // Emulator mouse: a cursor where it points, and the hover while it moves: the last thing
+      // moved wins, so a mouse brought onto the menu or a button lights that up, never the object
+      // the (still) controller laser rests on behind it.
       const ndc = mouseNdcRef.current;
-      if (!hovered && ndc && now - mouseAtRef.current < MOUSE_HOVER_MS) {
-        const eye = xrEyeAt(
-          (gl.xr as unknown as { getCamera?: () => THREE.ArrayCamera }).getCamera?.(),
-          ndc.x
-        );
-        if (eye) {
-          _mouse.set(eye.x, ndc.y);
-          _raycaster.setFromCamera(_mouse, eye.camera);
-          _vOrigin.copy(_raycaster.ray.origin);
-          _vDirection.copy(_raycaster.ray.direction);
-          const aim = aimAt(_vOrigin, _vDirection, _vEnd, {
-            targets,
-            menu,
-            miniatures,
-            surface,
-            hotspots,
-            panels,
-            photo,
-          });
-          if (aim.kind !== 'none' && aim.kind !== 'screen') hovered = aim.id ?? hovered;
-        }
-      }
+      const eye =
+        ndc && now - mouseAtRef.current < MOUSE_HOVER_MS
+          ? xrEyeAt(
+              (gl.xr as unknown as { getCamera?: () => THREE.ArrayCamera }).getCamera?.(),
+              ndc.x
+            )
+          : null;
+      if (ndc && eye) {
+        _mouse.set(eye.x, ndc.y);
+        _raycaster.setFromCamera(_mouse, eye.camera);
+        _vOrigin.copy(_raycaster.ray.origin);
+        _vDirection.copy(_raycaster.ray.direction);
+        const aim = aimAt(_vOrigin, _vDirection, _vEnd, {
+          targets,
+          menu,
+          miniatures,
+          surface,
+          hotspots,
+          panels,
+          photo,
+        });
+        const usable = aim.kind !== 'none' && aim.kind !== 'screen';
+        if (usable) hovered = aim.id ?? hovered;
+        rays[2].update({
+          origin: _vOrigin,
+          direction: _vDirection,
+          end: _vEnd,
+          usable,
+          input: 'mouse',
+          pressed: dragsRef.current.has('mouse') || grabsRef.current.has('mouse'),
+          tint: beamColor(aim.kind),
+          surrounding: fx.probe(2, scene, _vOrigin, _vDirection, camera),
+          idle: BEAM_IDLE_OPACITY,
+          dt: delta,
+        });
+      } else rays[2].hide();
     } else if (camera) {
       hideBeam(1);
+      rays[2].hide();
       if (mouseNdcRef.current) {
         _mouse.set(mouseNdcRef.current.x, mouseNdcRef.current.y);
         _raycaster.setFromCamera(_mouse, camera);
@@ -1145,6 +1166,7 @@ export const XRBlasterController = memo(function XRBlasterController({
     <group name="xr-blaster-controller-root">
       <primitive object={rays[0].group} />
       <primitive object={rays[1].group} />
+      <primitive object={rays[2].group} />
       <primitive object={projectile} />
       <primitive object={impact} />
     </group>

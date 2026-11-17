@@ -185,10 +185,15 @@ export function surroundingLuminance(
  * between), returns the last luminance in between.
  */
 export function createSurroundingProbe() {
-  const last: [number, number] = [RAY_CONTRAST.sky, RAY_CONTRAST.sky];
-  const frame: [number, number] = [0, Math.floor(RAY_CONTRAST.everyFrames / 2)];
+  // Two XR pointers and the emulator's mouse cursor, each probed on its own frames.
+  const last: [number, number, number] = [RAY_CONTRAST.sky, RAY_CONTRAST.sky, RAY_CONTRAST.sky];
+  const frame: [number, number, number] = [
+    0,
+    Math.floor(RAY_CONTRAST.everyFrames / 2),
+    Math.floor(RAY_CONTRAST.everyFrames / 4),
+  ];
   return (
-    index: 0 | 1,
+    index: 0 | 1 | 2,
     scene: THREE.Scene,
     origin: THREE.Vector3,
     direction: THREE.Vector3,
