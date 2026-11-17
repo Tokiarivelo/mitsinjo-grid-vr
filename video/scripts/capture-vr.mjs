@@ -126,31 +126,23 @@ const rc = async (method, params = {}) => {
 /** Hides the emulator chrome (DevUI, "Remote Control Active" pill and glow), the Next badge and Exit VR. */
 const cleanChrome = () =>
   page.evaluate(() => {
-    const css = document.getElementById('__vr_clean') || document.createElement('style');
-    css.id = '__vr_clean';
-    css.textContent = 'nextjs-portal,[data-xr-exit]{display:none!important}';
-    document.head.appendChild(css);
-    const c = window.__IWER_DEVICE__?.devui?.devUIContainer;
-    if (c) for (const k of c.children) if (k.tagName !== 'CANVAS') k.style.visibility = 'hidden';
-    for (const el of document.body.querySelectorAll('*')) {
-      const cs = getComputedStyle(el);
-      if (el.textContent?.trim() === 'Remote Control Active') {
-        let p = el;
-        while (
-          p.parentElement &&
-          getComputedStyle(p.parentElement).position !== 'fixed' &&
-          p !== document.body
-        )
-          p = p.parentElement;
-        (p.parentElement || p).style.display = 'none';
-      } else if (
-        cs.position === 'fixed' &&
-        cs.pointerEvents === 'none' &&
-        cs.boxShadow !== 'none' &&
-        !el.querySelector('canvas')
-      )
-        el.style.display = 'none';
-    }
+    const run = () => {
+      const css = document.getElementById('__vr_clean') || document.createElement('style');
+      css.id = '__vr_clean';
+      css.textContent = 'nextjs-portal,[data-xr-exit]{display:none!important}';
+      if (!css.isConnected) document.head.appendChild(css);
+      // Every fixed layer that does not hold the app's R3F canvas belongs to the emulator UI.
+      for (const el of document.body.querySelectorAll('body *')) {
+        if (el.dataset.vrHidden) continue;
+        if (getComputedStyle(el).position !== 'fixed') continue;
+        if (el.querySelector('canvas[data-engine]') || el.matches('canvas[data-engine]')) continue;
+        if (el.closest('[data-vr-keep]')) continue;
+        el.style.setProperty('display', 'none', 'important');
+        el.dataset.vrHidden = '1';
+      }
+    };
+    run();
+    if (!window.__vrCleanTimer) window.__vrCleanTimer = setInterval(run, 300);
   });
 const quatTo = (from, to) => {
   const dx = to.x - from.x;
@@ -208,11 +200,17 @@ const tapButton = async (index, device = 'controller-right') => {
   await sleep(500);
 };
 const enterVr = async (path, label) => {
-  await page.goto(`${baseUrl}${path}`, { waitUntil: 'networkidle', timeout: 240000 });
+  if (!page.url().includes(path))
+    await page.goto(`${baseUrl}${path}`, { waitUntil: 'networkidle', timeout: 240000 });
   const btn = page.getByRole('button', { name: label }).first();
   await btn.waitFor({ timeout: 240000 });
-  await btn.evaluate((el) => setTimeout(() => el.click(), 0));
-  return waitFor(async () => !!(await rc('get_session_status'))?.sessionActive, 60000);
+  for (let attempt = 0; attempt < 3; attempt++) {
+    await sleep(4000); // the dev emulator installs after the 3D view loads
+    await btn.evaluate((el) => setTimeout(() => el.click(), 0)).catch(() => {});
+    if (await waitFor(async () => !!(await rc('get_session_status'))?.sessionActive, 45000))
+      return true;
+  }
+  return false;
 };
 
 // /village window hooks (vr-village-probe.mjs)
@@ -245,125 +243,179 @@ const panelAt = (id) =>
 const press = async (id, opts) => {
   const at = await panelAt(id);
   if (!at) return (console.log(`  (no panel ${id})`), false);
-  await shoot(at, opts?.from, opts);
+  await shoot(at, opts?.from ?? { x: 0.12, y: 1.45, z: -0.05 }, opts);
   return true;
 };
+/** Types on the holo keyboard: aims each key's centre (layout of utils/xr-keyboard.ts, QWERTY). */
+const ROWS = ['1234567890', 'qwertyuiop', "asdfghjkl'", 'zxcvbnm,.?'];
+const keyWorld = (u, y) =>
+  page.evaluate(
+    ([u, y]) => {
+      const o = window.__VR_PANELS__?.objects.find(
+        (x) => x.userData.holoPanel?.id === 'holo:chat-keys'
+      );
+      if (!o) return null;
+      const g = o.geometry.parameters;
+      o.updateWorldMatrix(true, false);
+      const p = o.localToWorld(
+        new o.position.constructor((u - 0.5) * g.width, (0.5 - y) * g.height, 0)
+      );
+      return { x: p.x, y: p.y, z: p.z };
+    },
+    [u, y]
+  );
+async function typeText(text, from) {
+  for (const ch of text) {
+    let u;
+    let y;
+    if (ch === ' ') [u, y] = [0.4, 0.9];
+    else {
+      const r = ROWS.findIndex((row) => row.includes(ch));
+      if (r < 0) continue;
+      [u, y] = [ROWS[r].indexOf(ch) / 10 + 0.05, r / 5 + 0.1];
+    }
+    const at = await keyWorld(u, y);
+    if (at) await shoot(at, from, { dur: 0.35, hold: 350 });
+  }
+}
 
 try {
-  // ============================== /village ==============================
-  await page.goto(`${baseUrl}/village`, { waitUntil: 'networkidle', timeout: 240000 });
-  await startCast();
-  await sleep(2500);
-  mark('village-page');
-  const ok = await enterVr('/village', /View in VR immersion/i).catch(() => false);
-  if (!ok) throw new Error('VR session did not start on /village');
-  mark('village-vr-entered');
-  await rc('set_input_mode', { mode: 'controller' });
-  await rc('set_transform', {
-    device: 'controller-left',
-    position: { x: -0.25, y: 0.85, z: 0.05 },
-  });
-  await rc('set_transform', { device: 'controller-right', position: { x: 0.18, y: 1.3, z: -0.2 } });
-  await cleanChrome();
-  await sleep(1500);
-  const uF = (await tour())?.uFront ?? 0.8;
-  const fridge = panoPoint(...FRIDGE_UV, uF);
-  // Look around the loft first: left, then towards the kitchen.
-  await look(panoPoint(uF - 0.12, 0.5, uF), 2.2);
-  await look(panoPoint(uF + 0.02, 0.52, uF), 2.0);
-  mark('village-look-around');
-  await look(fridge, 1.6);
-  mark('village-scan');
-  await tapButton(3); // A: analyse the view
-  await waitFor(async () => ((await tour())?.targets?.length ?? 0) > 0, 120000);
-  await cleanChrome();
-  await sleep(2500);
-  mark('village-detected');
-  // Sweep the laser over a few outlines, then shoot the fridge.
-  const targets = ((await tour())?.targets ?? []).slice(0, 3);
-  for (const t of targets) {
-    const p = { x: t.at[0], y: t.at[1], z: t.at[2] };
-    const h = await pos('headset');
-    const from = { x: h.x + 0.14, y: h.y - 0.22, z: h.z - 0.12 };
-    await rc('animate_to', {
-      device: 'controller-right',
-      position: from,
-      orientation: quatTo(from, p),
-      duration: 0.8,
-    });
-    await sleep(1400);
-  }
-  mark('village-shoot');
-  await shoot(fridge);
-  if ((await extract())?.stage !== 'confirm') await shoot(fridge);
-  await sleep(1200);
-  mark('village-extract-dialog');
-  await press('holo:extract-yes');
-  mark('studio-enter');
-  await waitFor(async () => {
-    const x = await extract();
-    return x?.stage === 'views' && x.slides.length === 5 && x.canBuild;
-  }, 240000);
-  await cleanChrome();
-  mark('studio-views');
-  await sleep(1500);
-  await press('holo:views-next');
-  await sleep(1500);
-  await press('holo:views-next');
-  await sleep(1500);
-  mark('studio-chat');
-  const chatAt = await panelAt('holo:chat-keyboard');
-  if (chatAt) {
-    await look(chatAt, 1.2);
-    const left = { x: -0.25, y: 1.4, z: -0.05 };
-    await press('holo:chat-keyboard', { from: left });
-    for (let i = 0; i < 4; i++) await press('holo:chat-keys', { from: left, hold: 400 });
-    await press('holo:chat-send', { from: left });
-    mark('studio-chat-sent');
-    await waitFor(async () => {
-      const c = (await extract())?.chats?.side ?? [];
-      return c.at(-1) === 'done';
-    }, 240000);
-    await sleep(1500);
-    mark('studio-chat-done');
-  }
-  const build = await panelAt('holo:views-build');
-  if (build) await look(build, 1.2);
-  mark('studio-build');
-  await press('holo:views-build', { hold: 300 });
-  await waitFor(async () => (await extract())?.stage === 'lab', 240000);
-  mark('lab-open');
-  await waitFor(
-    async () => (await page.evaluate(() => window.__VR_LAB_MOTION__?.dissolve ?? 0)) >= 1,
-    20000
-  );
-  await sleep(3000);
-  mark('lab-edit');
-  await press('holo:lab-piece-*');
-  await sleep(800);
-  await press('holo:lab-bigger').catch(() => {});
-  await sleep(1500);
-  await press('holo:lab-turn').catch(() => {});
-  await sleep(2500);
-  mark('village-table');
-  const table = await panelAt('holo:village-map');
-  if (table) {
-    await look(table, 1.4);
-    const fromLeft = { x: -0.1, y: 1.4, z: -0.05 };
-    await shoot(table, fromLeft);
-    await sleep(2000);
-    mark('village-placed');
-    await press('holo:village-insert', { from: fromLeft });
+  const PART = process.env.PART || 'all';
+  if (PART !== 'sim') {
+    // ============================== /village ==============================
+    await page.goto(`${baseUrl}/village`, { waitUntil: 'networkidle', timeout: 240000 });
+    await startCast();
     await sleep(2500);
-    mark('village-inserted');
-    const sim = await panelAt('holo:village-simulation');
-    if (sim) await look(sim, 1.0);
-    await press('holo:village-simulation', { from: fromLeft });
+    mark('village-page');
+    const ok = await enterVr('/village', /View in VR immersion/i).catch(() => false);
+    if (!ok) throw new Error('VR session did not start on /village');
+    mark('village-vr-entered');
+    await rc('set_input_mode', { mode: 'controller' });
+    await rc('set_transform', {
+      device: 'controller-left',
+      position: { x: -0.25, y: 0.85, z: 0.05 },
+    });
+    await rc('set_transform', {
+      device: 'controller-right',
+      position: { x: 0.18, y: 1.3, z: -0.2 },
+    });
+    await cleanChrome();
+    await sleep(1500);
+    const uF = (await tour())?.uFront ?? 0.8;
+    const fridge = panoPoint(...FRIDGE_UV, uF);
+    // Look around the loft first: left, then towards the kitchen.
+    await look(panoPoint(uF - 0.12, 0.5, uF), 2.2);
+    await look(panoPoint(uF + 0.02, 0.52, uF), 2.0);
+    mark('village-look-around');
+    await look(fridge, 1.6);
+    mark('village-scan');
+    await tapButton(3); // A: analyse the view
+    await waitFor(async () => ((await tour())?.targets?.length ?? 0) > 0, 120000);
+    await cleanChrome();
+    await sleep(2500);
+    mark('village-detected');
+    // Sweep the laser over a few outlines, then shoot the fridge.
+    const targets = ((await tour())?.targets ?? []).slice(0, 3);
+    for (const t of targets) {
+      const p = { x: t.at[0], y: t.at[1], z: t.at[2] };
+      const h = await pos('headset');
+      const from = { x: h.x + 0.14, y: h.y - 0.22, z: h.z - 0.12 };
+      await rc('animate_to', {
+        device: 'controller-right',
+        position: from,
+        orientation: quatTo(from, p),
+        duration: 0.8,
+      });
+      await sleep(1400);
+    }
+    mark('village-shoot');
+    await shoot(fridge);
+    if ((await extract())?.stage !== 'confirm') await shoot(fridge);
+    await sleep(1200);
+    mark('village-extract-dialog');
+    await press('holo:extract-yes');
+    mark('studio-enter');
+    await waitFor(async () => {
+      const x = await extract();
+      return x?.stage === 'views' && x.slides.length === 5 && x.canBuild;
+    }, 240000);
+    await cleanChrome();
+    mark('studio-views');
+    await sleep(1500);
+    await press('holo:views-next');
+    await sleep(1500);
+    await press('holo:views-next');
+    await sleep(1500);
+    mark('studio-chat');
+    const chatAt = await panelAt('holo:chat-keyboard');
+    if (chatAt) {
+      await look(chatAt, 1.2);
+      const left = { x: -0.25, y: 1.4, z: -0.05 };
+      await press('holo:chat-keyboard', { from: left });
+      mark('studio-chat-typing');
+      await typeText('make it red', left);
+      await press('holo:chat-send', { from: left });
+      mark('studio-chat-sent');
+      await waitFor(async () => {
+        const all = Object.values((await extract())?.chats ?? {});
+        return all.some((c) => Array.isArray(c) && c.at(-1) === 'done');
+      }, 240000);
+      await sleep(1500);
+      mark('studio-chat-done');
+    }
+    const build = await panelAt('holo:views-build');
+    if (build) await look(build, 1.2);
+    mark('studio-build');
+    await press('holo:views-build', { hold: 300 });
+    await waitFor(async () => (await extract())?.stage === 'lab', 240000);
+    mark('lab-open');
+    await waitFor(
+      async () => (await page.evaluate(() => window.__VR_LAB_MOTION__?.dissolve ?? 0)) >= 1,
+      20000
+    );
+    await sleep(3000);
+    mark('lab-edit');
+    await press('holo:lab-piece-*');
+    await sleep(800);
+    await press('holo:lab-bigger').catch(() => {});
+    await sleep(1500);
+    await press('holo:lab-turn').catch(() => {});
+    await sleep(2500);
+    mark('village-table');
+    const table = await panelAt('holo:village-map');
+    if (table) {
+      await look(table, 1.4);
+      const fromLeft = { x: -0.1, y: 1.4, z: -0.05 };
+      await shoot(table, fromLeft);
+      await sleep(2000);
+      mark('village-placed');
+      await press('holo:village-insert', { from: fromLeft });
+      await sleep(2500);
+      mark('village-inserted');
+      const sim = await panelAt('holo:village-simulation');
+      if (sim) await look(sim, 1.0);
+      await press('holo:village-simulation', { from: fromLeft });
+    }
+    mark('handoff');
+    await waitFor(async () => page.url().includes('/simulation'), 60000);
+    await waitFor(async () => !!(await rc('get_session_status'))?.sessionActive, 120000);
+    save();
   }
-  mark('handoff');
-  await waitFor(async () => page.url().includes('/simulation'), 60000);
-  await waitFor(async () => !!(await rc('get_session_status'))?.sessionActive, 120000);
-  save();
+  if (PART === 'village') throw new Error('done (village only)');
+  if (PART === 'sim') {
+    await page.goto(`${baseUrl}/simulation`, { waitUntil: 'networkidle', timeout: 240000 });
+    await startCast();
+    await sleep(2500);
+    mark('sim-page');
+    // Run the day first, so every panel shows engine results (not 0 kW).
+    const run = page.getByRole('button', { name: /Run simulation/i }).first();
+    if (await run.isVisible().catch(() => false)) {
+      await run.click().catch(() => {});
+      await sleep(8000);
+    }
+    if (!(await enterVr('/simulation', /View in VR/i).catch(() => false)))
+      throw new Error('VR session did not start on /simulation');
+  }
 
   // ============================== /simulation ==============================
   const simFn = (fn, arg) =>
@@ -398,56 +450,41 @@ try {
   });
   await waitFor(async () => !!(await simFn((s) => s.head())), 60000);
   await cleanChrome();
-  await sleep(3000);
-  mark('sim-arrive');
-  await rc('look_at', { device: 'headset', target: { x: 0, y: 1.6, z: -2 } }).catch(() => {});
+  const stick = (device, x, y) =>
+    rc('set_gamepad_state', {
+      device,
+      axes: [
+        { index: 0, value: x },
+        { index: 1, value: y },
+      ],
+    });
+  const CONTROLLER_LABEL = [0, 4.4, 1];
+  // Face the village centre before the first frame we keep (a palm can stand right at the spawn).
+  const centre = await toOrigin(CONTROLLER_LABEL);
+  if (centre)
+    await rc('look_at', { device: 'headset', target: { x: centre.x, y: 1.5, z: centre.z } });
   await sleep(2500);
-  // Walk the central alley.
+  mark('sim-arrive');
+  await sleep(2500);
+  // Walk towards the dispatcher, then a snap turn.
   mark('sim-walk');
-  await rc('set_gamepad_state', {
-    device: 'controller-left',
-    axes: [
-      { index: 0, value: 0 },
-      { index: 1, value: -0.8 },
-    ],
-  });
-  await sleep(6000);
-  await rc('set_gamepad_state', {
-    device: 'controller-left',
-    axes: [
-      { index: 0, value: 0 },
-      { index: 1, value: 0 },
-    ],
-  });
-  await rc('set_gamepad_state', {
-    device: 'controller-right',
-    axes: [
-      { index: 0, value: -0.9 },
-      { index: 1, value: 0 },
-    ],
-  });
+  await stick('controller-left', 0, -0.8);
+  await sleep(5000);
+  await stick('controller-left', 0, 0);
+  await stick('controller-right', 0.9, 0);
   await sleep(700);
-  await rc('set_gamepad_state', {
-    device: 'controller-right',
-    axes: [
-      { index: 0, value: 0 },
-      { index: 1, value: 0 },
-    ],
-  });
+  await stick('controller-right', 0, 0);
   await sleep(2500);
   mark('sim-labels');
   if (!(await state())?.labels) await tapButton(3);
-  await sleep(3500);
+  await sleep(3000);
+  // Map → the households pin opens their power panel in front of you.
   mark('sim-map');
   await simPress('sim-xr-minimap-open');
   await sleep(3500);
-  await simPress('sim-xr-button-map-close');
-  await sleep(1000);
-  // Building panel → − step → enter the room.
-  const HOUSEHOLDS_LABEL = [-9, 4.2, 11];
-  await simLook(HOUSEHOLDS_LABEL);
   mark('sim-panel');
-  await simShoot(HOUSEHOLDS_LABEL);
+  await simPress('sim-xr-map-pin-households');
+  await waitFor(async () => (await state())?.panel === 'households', 20000);
   await sleep(2500);
   mark('sim-less');
   await simPress('sim-xr-button-less');
@@ -459,19 +496,18 @@ try {
   await waitFor(async () => (await state())?.inside === 'households', 60000);
   await sleep(1500);
   await rc('look_at', { device: 'headset', target: { x: 0.8, y: 1.4, z: -2 } }).catch(() => {});
-  await sleep(4000);
+  await sleep(3500);
   mark('sim-room');
-  await simPress('sim-xr-button-restore');
-  await sleep(2500);
   await simPress('sim-xr-button-exit');
   await waitFor(async () => (await state())?.inside === null, 60000);
   await sleep(2000);
-  // Dispatcher mixing desk.
-  const CONTROLLER_LABEL = [0, 4.4, 1];
-  await simLook(CONTROLLER_LABEL);
+  // Dispatcher mixing desk, from its map pin.
+  await simPress('sim-xr-minimap-open');
+  await sleep(2000);
   mark('sim-mixer');
-  await simShoot(CONTROLLER_LABEL);
-  await sleep(3000);
+  await simPress('sim-xr-map-pin-dispatcher');
+  await waitFor(async () => (await state())?.mixer === true, 20000);
+  await sleep(2500);
   await simPress('sim-xr-button-mixer-start').catch(() => {});
   await sleep(3000);
   mark('sim-mixer-cut');

@@ -191,8 +191,8 @@ Walls stop me, the ground follows my feet.
 
 28
 00:02:08,200 --> 00:02:13,800
-Labels, a live map, and my new object,
-drawing real simulated power.
+Labels, a live map, and every line
+carrying the engine's simulated power.
 
 29
 00:02:14,200 --> 00:02:19,000
