@@ -1,4 +1,4 @@
-import { compileSpec, partsBounds, type PartSpec } from '../../furniture';
+import { compileSpec, partsBounds, resolveSilhouettes, type PartSpec } from '../../furniture';
 import type { ObjectRecipe } from '@/lib/object-shape';
 import { skinOf } from '../../recipe-box';
 import { runTeam, type AskTeamTool, type SpecialistTeam, type TeamRef } from '../team';
@@ -7,6 +7,7 @@ import type { FurnitureBrief, FurnitureReading, FurnitureView } from './furnitur
 import { seatParts, SEAT_TEAM } from './seat';
 import { storageParts, STORAGE_TEAM } from './storage';
 import { tableParts, TABLE_TEAM } from './table';
+import { textileParts, TEXTILE_TEAM } from './textile';
 
 /**
  * The furniture teams (PQ-T89) and what each reading builds: the team, then its builder from the
@@ -25,6 +26,8 @@ export const FURNITURE_TEAMS = {
   table: { team: TABLE_TEAM, parts: tableParts },
   storage: { team: STORAGE_TEAM, parts: storageParts },
   bed: { team: BED_TEAM, parts: bedParts },
+  // PQ-T90.
+  textile: { team: TEXTILE_TEAM, parts: textileParts },
 } as const;
 
 export type FurnitureTeamId = keyof typeof FURNITURE_TEAMS;
@@ -89,18 +92,35 @@ export function furnitureParts(
 }
 
 /**
- * A reading → the model: the builder's parts as a recipe (largest side = 1), wearing `atlas` (the
- * validated drawings, `lib/face-atlas.ts` layout) on its named parts when given. Null when the
- * builder gives nothing.
+ * The object's outline for the builders' `silhouette` parts (a curtain, a rock, a log): the SAM
+ * contour's rings in fractions of the detection box (x right, y down, `silhouetteRings`) and the
+ * box's width over height in pixels. Its contour only, never its pixels.
+ */
+export interface PartsOutline {
+  rings: ReadonlyArray<ReadonlyArray<readonly [number, number]>>;
+  aspect: number;
+}
+
+const UNIT_BOX = { x: 0, y: 0, w: 1, h: 1 };
+
+/**
+ * A reading → the model: the builder's parts as a recipe (largest side = 1), its `silhouette`
+ * parts cut from `outline` when given (else left boxes), wearing `atlas` (the validated drawings,
+ * `lib/face-atlas.ts` layout) on its named parts when given. Null when the builder gives nothing.
  */
 export function furnitureModel(
   id: FurnitureTeamId,
   reading: FurnitureReading<unknown>,
   proportions: Proportions,
-  atlas?: string
+  atlas?: string,
+  outline?: PartsOutline
 ): ObjectRecipe | null {
-  const parts = furnitureParts(id, reading, proportions);
-  if (!parts.length) return null;
+  const built = furnitureParts(id, reading, proportions);
+  if (!built.length) return null;
+  const { parts } =
+    outline && outline.rings.length
+      ? resolveSilhouettes({ parts: built }, outline.rings, UNIT_BOX, outline.aspect)
+      : { parts: built };
   const { recipe, concepts } = compileSpec({ parts });
   return atlas ? { ...recipe, skin: skinOf(recipe, concepts, atlas) } : recipe;
 }

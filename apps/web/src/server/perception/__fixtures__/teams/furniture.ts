@@ -15,6 +15,8 @@ export interface FurnitureFixture {
   /** Least front and side IoU against the tour model; below 0.85 the limit is written in `limit`. */
   minIou: number;
   limit?: string;
+  /** Cut its `silhouette` parts from the tour outline (the SAM contour on the real path). */
+  outline?: boolean;
 }
 
 const j = (o: unknown) => o;

@@ -23,6 +23,8 @@ import {
   METAL,
   ironRailing,
   latticeTower,
+  rods,
+  rug,
   sofa,
   stool,
   table,
@@ -112,11 +114,6 @@ function rock(h: number, d: number, color: string): Spec {
     }),
   ]);
 }
-
-/** A flat lying textile or mat. */
-const rug = (w: number, d: number, color: string): PartSpec[] => [
-  box([0, 0.02, 0], [w, 0.04, d], color, { material: 'fabric', kind: 'body', concept: 'cushion' }),
-];
 
 /** A vase of cut flowers or dried grasses, read as a plant on its vase. */
 const bouquet = (species: string, habit: PlantHints['habit'] = 'shrub'): Spec =>
@@ -425,14 +422,7 @@ export const EXTRA_SPECS: Record<string, Spec> = {
   'bedroom-stool': parts(stool(0.75, 0.38, '#7b5a3c', METAL, true)),
   'bedroom-backdrop': parts([
     ...curtain(3.4, 2.4, '#141518', { band: [0.1, 1] }),
-    ...['#2e6f9e', '#b6382c', '#1c1c1c'].map((c, i) =>
-      cyl([0, 2.5 + 0.09 * (2 - i), 0.05 + 0.05 * i], [3.6, 0.09, 0.09], c, {
-        material: 'fabric',
-        kind: 'frame',
-        axis: 'x',
-        concept: 'rail',
-      })
-    ),
+    ...rods(3.6, 2.725, ['#2e6f9e', '#b6382c', '#1c1c1c'], 0.09),
   ]),
   'bedroom-chair-blue': parts(
     chair({

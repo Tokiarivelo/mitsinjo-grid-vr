@@ -154,13 +154,13 @@ En gras : spécialistes propres à une équipe. Les autres viennent de `team/sha
 - [x] `familyOf` → `parametric` pour les nouveaux ; libellés i18n en / fr / mg (`make check-i18n`).
 - [x] `docs/contracts.md` : liste des archétypes et types de lecture.
 
-### PQ-T88 — Builders de mobilier (réutilisés par la visite)
+### [x] PQ-T88 — Builders de mobilier (réutilisés par la visite)
 
 - [x] `server/perception/furniture/` : `sofa`, `chair`, `stool`, `bed`, `table`, `cabinet` (lecture → recette).
 - [x] Même dossier : `glazing`, `door`, `curtain`, `railing`, `fence`.
 - [x] Un test par builder (recette valide `ObjectRecipeSchema`, pièces nommées attendues).
 - [x] `tour-mock/specs-extra.ts` réimporte ces builders (aucune copie) ; `make tour-mock` sans régression de score. — vérifié par empreinte : les 157 objets de la visite compilent en recettes identiques avant / après (même entrée → mêmes scores) ; `make tour-mock` complet non relancé.
-- [ ] Pièce `silhouette` disponible au chemin réel (contour SAM, jamais les pixels) pour `textile` et `terrain`. — reste : `curtain` porte déjà `silhouette` (bande + section) dans le modèle de pièces partagé, mais le chemin réel ne passe pas encore le contour SAM au builder ; à brancher avec `TEXTILE_TEAM` / `TERRAIN_TEAM` (PQ-T90).
+- [x] Pièce `silhouette` disponible au chemin réel (contour SAM, jamais les pixels) pour `textile` et `terrain`. — `furniture/silhouette.ts` (partagé avec la visite) ; `recon/route.ts` passe `silhouetteRings(target)` à `furnitureModel` (PQ-T90).
 
 ### [x] PQ-T89 — Équipes assise, table, rangement, lit
 
@@ -173,7 +173,7 @@ En gras : spécialistes propres à une équipe. Les autres viennent de `team/sha
 
 ### PQ-T90 — Équipes textile, menuiserie, structure, terrain, appareil, luminaire
 
-- [ ] `TEXTILE_TEAM` (drape, finishes) + fixtures + test.
+- [x] `TEXTILE_TEAM` (drape, finishes) + fixtures + test. — 10 textiles de la visite rejoués sur leur contour : 9 ≥ 0,85 ; `loft-rug` vue de côté sous une cellule (limite écrite).
 - [ ] `FIXTURE_TEAM` (openings, finishes) + fixtures + test.
 - [ ] `STRUCTURE_TEAM` (lattice, finishes) + fixtures + test. — builders prêts (VS-T46) : `ironRailing` (barreaux en S, volutes, poteaux) et `latticeTower` (montants, croisillons, bras) dans `furniture/structure.ts`, testés ; reste l'équipe et la lecture.
 - [ ] `TERRAIN_TEAM` (profile, finishes) + fixtures + test.

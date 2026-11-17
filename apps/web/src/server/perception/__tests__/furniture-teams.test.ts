@@ -20,7 +20,27 @@ import tourMock from '../tour-mock/tour-mock.json';
 
 const TOUR = tourMock as unknown as Record<string, { recipe: ObjectRecipe }>;
 const ATLAS = 'data:image/jpeg;base64,AAAA';
-const FURNITURE_FIXTURES = [...RECORDED, ...SEAT_TOUR_FIXTURES, ...TABLE_STORAGE_TOUR_FIXTURES];
+import { TEXTILE_FIXTURES } from '../__fixtures__/teams/parts';
+import { TOUR_OUTLINES } from '@/features/vision-insert/ui/xr/tour/tour-outlines';
+import { outlineFrame } from '../tour-mock/skin';
+import type { PartsOutline } from '../team/teams';
+import { parseDrape, textileParts, type TextileReading } from '../team/teams/textile';
+
+const FURNITURE_FIXTURES = [
+  ...RECORDED,
+  ...SEAT_TOUR_FIXTURES,
+  ...TABLE_STORAGE_TOUR_FIXTURES,
+  ...TEXTILE_FIXTURES,
+];
+
+/** The tour outline of an object as the real path hands it: box fractions, box pixel aspect (pano 2:1). */
+function tourOutline(id: string): PartsOutline {
+  const { box, rings } = outlineFrame(TOUR_OUTLINES[id]!);
+  return {
+    rings: rings.map((r) => r.map(([x, y]) => [(x - box.x) / box.w, (y - box.y) / box.h] as const)),
+    aspect: (box.w * 2) / box.h,
+  };
+}
 
 /** The recorded answer of each tool, as the model would send it. */
 const replay =
@@ -43,11 +63,17 @@ async function build(id: string) {
     { label: fx.label, views: ['front', 'side'], images: ['front.png', 'side.png'] }
   );
   const target = TOUR[fx.id]!.recipe;
-  const model = furnitureModel(fx.team, reading as never, target.proportions, ATLAS);
+  const model = furnitureModel(
+    fx.team,
+    reading as never,
+    target.proportions,
+    ATLAS,
+    fx.outline ? tourOutline(fx.id) : undefined
+  );
   return { fx, reading, target, model };
 }
 
-describe('furniture teams (PQ-T89)', () => {
+describe('part-plan teams (PQ-T89, PQ-T90)', () => {
   it('are registered by their class', () => {
     for (const id of ['seat', 'table', 'storage', 'bed']) expect(isFurnitureTeam(id)).toBe(true);
     expect(isFurnitureTeam('car')).toBe(false);
@@ -142,6 +168,56 @@ describe('furniture teams (PQ-T89)', () => {
     expect(d / h).toBeCloseTo(p.d / p.h, 2);
   });
 
+  it('reads a drape, every field defaulted', () => {
+    expect(parseDrape(null)).toEqual({
+      hang: 'rod',
+      rods: 0,
+      folds: 'soft',
+      pool: false,
+      tied: false,
+    });
+    expect(parseDrape('{"drape":{"hang":"x","rods":9,"pool":true}}')).toMatchObject({
+      hang: 'rod',
+      rods: 4,
+      pool: true,
+    });
+  });
+
+  it('builds a curtain under its rolls, a sweep on the floor, a flat rug', () => {
+    const r = (kind: string, drape: object, finishes: object[] = []) =>
+      ({
+        ...read(parseDrape(JSON.stringify({ drape })), { kind, finishes } as never),
+      }) as never as TextileReading;
+    const p = { w: 1, h: 0.8, d: 0.05 };
+    const hung = textileParts(
+      r('backdrop', { hang: 'stand', rods: 2 }, [{ finish: 'roll', color: '#AA0000' }]),
+      p
+    );
+    expect(hung.map((x) => x.concept)).toEqual(['curtain', 'rail', 'rail']);
+    expect(hung[0]!.silhouette?.band?.[0]).toBeCloseTo(0.07);
+    expect(hung.slice(1).map((x) => x.color)).toEqual(['#aa0000', '#aa0000']);
+    const sweep = textileParts(r('backdrop', { hang: 'stand', rods: 0, pool: true }), p);
+    expect(sweep).toHaveLength(1);
+    expect(sweep[0]!.silhouette?.section).toHaveLength(6);
+    const flat = textileParts(r('rug', { hang: 'floor', rods: 0 }), { w: 1, h: 0.02, d: 0.7 });
+    expect(flat[0]!.size[1]).toBeCloseTo(0.04);
+    expect(flat[0]!.size[0] / flat[0]!.size[2]).toBeCloseTo(1 / 0.7);
+  });
+
+  it('cuts silhouette parts from the outline, boxes without one', async () => {
+    const { reading, target } = await build('loft-curtain');
+    const cut = furnitureModel(
+      'textile',
+      reading as never,
+      target.proportions,
+      undefined,
+      tourOutline('loft-curtain')
+    )!;
+    expect(cut.parts[0]!.shape).toBe('hull');
+    const plain = furnitureModel('textile', reading as never, target.proportions)!;
+    expect(plain.parts[0]!.shape).toBe('box');
+  });
+
   describe.each(FURNITURE_FIXTURES.map((f) => f.id))('%s', (id) => {
     it('builds a valid model of named parts wearing the drawings', async () => {
       const { fx, reading, model } = await build(id);
@@ -157,7 +233,7 @@ describe('furniture teams (PQ-T89)', () => {
       const { fx, model, target } = await build(id);
       const f = iou(front(model!), front(target));
       const s = iou(side(model!), side(target));
-      console.info(`[PQ-T89] ${id}: front ${f.toFixed(2)}, side ${s.toFixed(2)}`);
+      console.info(`[IOU] ${id}: front ${f.toFixed(2)}, side ${s.toFixed(2)}`);
       expect(Math.min(f, s)).toBeGreaterThanOrEqual(fx.minIou);
       if (fx.minIou < 0.85) expect(fx.limit).toBeTruthy();
     });

@@ -14,6 +14,7 @@ export * from './openings';
 export * from './soft';
 export * from './storage';
 export * from './structure';
+export * from './silhouette';
 
 /** A built piece as a recipe (proportions from its parts' bounds, largest side = 1). */
 export const furnitureRecipe = (parts: PartSpec[], yaw?: number): ObjectRecipe =>
