@@ -156,11 +156,11 @@ En gras : spécialistes propres à une équipe. Les autres viennent de `team/sha
 
 ### PQ-T88 — Builders de mobilier (réutilisés par la visite)
 
-- [ ] `server/perception/furniture/` : `sofa`, `chair`, `stool`, `bed`, `table`, `cabinet` (lecture → recette).
-- [ ] Même dossier : `glazing`, `door`, `curtain`, `railing`, `fence`.
-- [ ] Un test par builder (recette valide `ObjectRecipeSchema`, pièces nommées attendues).
-- [ ] `tour-mock/specs-extra.ts` réimporte ces builders (aucune copie) ; `make tour-mock` sans régression de score.
-- [ ] Pièce `silhouette` disponible au chemin réel (contour SAM, jamais les pixels) pour `textile` et `terrain`.
+- [x] `server/perception/furniture/` : `sofa`, `chair`, `stool`, `bed`, `table`, `cabinet` (lecture → recette).
+- [x] Même dossier : `glazing`, `door`, `curtain`, `railing`, `fence`.
+- [x] Un test par builder (recette valide `ObjectRecipeSchema`, pièces nommées attendues).
+- [x] `tour-mock/specs-extra.ts` réimporte ces builders (aucune copie) ; `make tour-mock` sans régression de score. — vérifié par empreinte : les 157 objets de la visite compilent en recettes identiques avant / après (même entrée → mêmes scores) ; `make tour-mock` complet non relancé.
+- [ ] Pièce `silhouette` disponible au chemin réel (contour SAM, jamais les pixels) pour `textile` et `terrain`. — reste : `curtain` porte déjà `silhouette` (bande + section) dans le modèle de pièces partagé, mais le chemin réel ne passe pas encore le contour SAM au builder ; à brancher avec `TEXTILE_TEAM` / `TERRAIN_TEAM` (PQ-T90).
 
 ### PQ-T89 — Équipes assise, table, rangement, lit
 
