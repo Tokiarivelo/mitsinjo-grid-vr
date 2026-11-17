@@ -1,5 +1,8 @@
 import { z } from 'zod';
 import { teamSpecs, type SpecialistTeam } from '../team/team';
+import { answerJson } from '../team/shared/common';
+import { finishesSpec, type FinishesConfig } from '../team/shared/finishes';
+import { openingsSpec, type OpeningsConfig } from '../team/shared/openings';
 import {
   HOUSE_FINISHES,
   HOUSE_HEADS,
@@ -29,7 +32,8 @@ import { parseHouseReading, type HouseReading } from './house-prompt';
  * by `fitHouse` like a single reading. Pure: prompts, schemas, parsers, the merge.
  */
 
-export const HOUSE_TOOLS_PROMPT_VERSION = 2;
+/** 3: openings and finishes from the shared specialists (PQ-T86). */
+export const HOUSE_TOOLS_PROMPT_VERSION = 3;
 
 export const HOUSE_TOOLS = ['massing', 'openings', 'structure', 'finishes'] as const;
 export type HouseTool = (typeof HOUSE_TOOLS)[number];
@@ -58,7 +62,6 @@ const FRAME = [
 
 const share = { type: 'number', minimum: 0, maximum: 1 } as const;
 const quad = { type: 'array', items: share, minItems: 4, maxItems: 4 } as const;
-const hex = { type: 'string', pattern: '^#[0-9a-fA-F]{6}$' } as const;
 const views = [...HOUSE_WALLS, 'top'] as const;
 
 // ---------------------------------------------------------------- pilot
@@ -138,22 +141,7 @@ const CallSchema = z.object({
   focus: z.string().optional().catch(undefined),
 });
 
-/** JSON of an answer, fenced or wrapped in prose; null when there is none. */
-export function answerJson(content: string): unknown {
-  const text = content.trim().replace(/^```(?:json)?\s*|\s*```$/g, '');
-  try {
-    return JSON.parse(text);
-  } catch {
-    const at = text.indexOf('{');
-    const end = text.lastIndexOf('}');
-    if (at < 0 || end <= at) return null;
-    try {
-      return JSON.parse(text.slice(at, end + 1));
-    } catch {
-      return null;
-    }
-  }
-}
+export { answerJson };
 
 /**
  * The pilot's answer as a brief: unknown tools dropped, one call per tool (notes joined), and the
@@ -228,31 +216,25 @@ const volumeItem = {
   required: ['kind', 'plan', 'eave', 'ridge', 'roof', 'ridgeAxis'],
 } as const;
 
-const OPENINGS_PROMPT = [
-  'You are the openings specialist of a 3D modelling team. On the orthographic drawings of ONE building, you list every window, door, glazed wall, garage door, arched opening and vent of every elevation.',
-  FRAME,
-  'One entry each (a row of 4 windows = 4 entries). view = the elevation it is on; box = [x0, y0, x1, y1] of its OUTER frame on that drawing, including an arched top; panes = [columns, rows] of glass panes.',
-  `head: ${HOUSE_HEADS.slice(0, 3).join(', ')} — "arch" when the top is a round arch, "segment" when it is a flat curve, else "flat".`,
-  'A glazed door, a French window or a sliding glass door is a "door" with its panes; a solid door has no panes. A tall glazed gable or a curtain wall is one window with many panes. Openings seen through an open veranda belong to the wall behind it: list them too.',
-  'Never put an opening on a roof: a window high in a gable belongs to the gable wall. Never list the bays between posts or piers as openings.',
-].join('\n');
-
-const openingItem = {
-  type: 'object',
-  properties: {
-    view: { type: 'string', enum: [...HOUSE_WALLS] },
-    kind: { type: 'string', enum: [...HOUSE_OPENINGS] },
-    box: quad,
-    panes: {
-      type: 'array',
-      items: { type: 'integer', minimum: 1, maximum: 8 },
-      minItems: 2,
-      maxItems: 2,
-    },
-    head: { type: 'string', enum: ['flat', 'arch', 'segment'] },
-  },
-  required: ['view', 'kind', 'box'],
-} as const;
+/** The openings specialist, shared (PQ-T86): boxes with panes and heads, on the elevations. */
+export const HOUSE_OPENINGS_CONFIG: OpeningsConfig = {
+  subject: 'ONE building',
+  frame: FRAME,
+  what: 'every window, door, glazed wall, garage door, arched opening and vent of every elevation',
+  key: 'openings',
+  kinds: HOUSE_OPENINGS,
+  views: HOUSE_WALLS,
+  shape: 'box',
+  panes: true,
+  heads: true,
+  notes: [
+    'A glazed door, a French window or a sliding glass door is a "door" with its panes; a solid door has no panes. A tall glazed gable or a curtain wall is one window with many panes. Openings seen through an open veranda belong to the wall behind it: list them too.',
+    'Never put an opening on a roof: a window high in a gable belongs to the gable wall. Never list the bays between posts or piers as openings.',
+  ],
+  schemaName: 'HouseOpenings',
+  task: 'List every opening of every elevation.',
+};
+export const HOUSE_OPENINGS_SPEC = openingsSpec(HOUSE_OPENINGS_CONFIG);
 
 const STRUCTURE_PROMPT = [
   'You are the structure specialist of a 3D modelling team. On the orthographic drawings of ONE building, you find the masonry piers and the chimneys.',
@@ -262,27 +244,36 @@ const STRUCTURE_PROMPT = [
   'Timber posts are not piers: leave them out.',
 ].join('\n');
 
-const FINISHES_PROMPT = [
-  'You are the materials specialist of a 3D modelling team. On the orthographic drawings of ONE building, you name each finish, its true colour as drawn, and where to sample it.',
-  FRAME,
-  `Finishes: wall (the main cladding of the walls), wall2 (a second cladding, if any), stone (masonry of piers, plinths, chimneys, if any), roof (the main roofing), roof2 (a second roofing, such as metal sheets next to shingles, if any), timber (posts, beams, brackets, trusses, if any). Materials: ${HOUSE_MATERIALS.join(', ')}.`,
-  'For each finish present: material, color (hex of its average colour in plain light, not in shadow), view (front, right, back, left or top for a roofing) and box = [x0, y0, x1, y1] of a sample on that drawing that shows ONLY this finish: no window, no frame, no post, no shadow, no edge, as large as possible (a roofing is best sampled on the view from above).',
-  'figured = true on the wall finish ONLY when the walls carry a large figure that a small sample cannot show: half-timbering (dark timber frame over light infill), a mural, panels of several colours. Plain brick, boards, plaster or stone are not figured.',
-  'Also: trim (frames, fascias), glass, door, base (the plinth or the deck at the foot of the walls: give it whenever its colour differs from the walls) as hex colours.',
-].join('\n');
-
-const lookItem = {
-  type: 'object',
-  properties: {
-    finish: { type: 'string', enum: [...HOUSE_FINISHES] },
-    material: { type: 'string', enum: [...HOUSE_MATERIALS] },
-    color: hex,
-    view: { type: 'string', enum: [...views] },
-    box: quad,
-    figured: { type: 'boolean' },
-  },
+/** The finishes specialist, shared (PQ-T86): the house's finishes, materials and plain colours. */
+export const HOUSE_FINISHES_CONFIG: FinishesConfig = {
+  subject: 'ONE building',
+  frame: FRAME,
+  finishes: [
+    ['wall', 'the main cladding of the walls'],
+    ['wall2', 'a second cladding, if any'],
+    ['stone', 'masonry of piers, plinths, chimneys, if any'],
+    ['roof', 'the main roofing'],
+    ['roof2', 'a second roofing, such as metal sheets next to shingles, if any'],
+    ['timber', 'posts, beams, brackets, trusses, if any'],
+  ] satisfies ReadonlyArray<readonly [(typeof HOUSE_FINISHES)[number], string]>,
+  materials: HOUSE_MATERIALS,
+  views,
   required: ['finish', 'material', 'color', 'view', 'box'],
-} as const;
+  notes: ['A roofing is best sampled on the view from above.'],
+  figured:
+    'figured = true on the wall finish ONLY when the walls carry a large figure that a small sample cannot show: half-timbering (dark timber frame over light infill), a mural, panels of several colours. Plain brick, boards, plaster or stone are not figured.',
+  colors: [
+    ['trim', 'frames, fascias'],
+    ['glass', 'the glazing'],
+    ['door', 'the doors'],
+    [
+      'base',
+      'the plinth or the deck at the foot of the walls: give it whenever its colour differs from the walls',
+    ],
+  ],
+  schemaName: 'HouseFinishes',
+};
+export const HOUSE_FINISHES_SPEC = finishesSpec(HOUSE_FINISHES_CONFIG);
 
 /** One specialist: its system prompt, its JSON schema and what it is asked. */
 export interface HouseToolSpec {
@@ -304,18 +295,7 @@ export const HOUSE_TOOL_SPECS: Readonly<Record<HouseTool, HouseToolSpec>> = {
     },
     task: 'Split it into blocks with their roofs.',
   },
-  openings: {
-    system: OPENINGS_PROMPT,
-    schema: {
-      name: 'HouseOpenings',
-      schema: {
-        type: 'object',
-        properties: { openings: { type: 'array', items: openingItem } },
-        required: ['openings'],
-      },
-    },
-    task: 'List every opening of every elevation.',
-  },
+  openings: HOUSE_OPENINGS_SPEC,
   structure: {
     system: STRUCTURE_PROMPT,
     schema: {
@@ -345,24 +325,7 @@ export const HOUSE_TOOL_SPECS: Readonly<Record<HouseTool, HouseToolSpec>> = {
     },
     task: 'Find its masonry piers and its chimneys.',
   },
-  finishes: {
-    system: FINISHES_PROMPT,
-    schema: {
-      name: 'HouseFinishes',
-      schema: {
-        type: 'object',
-        properties: {
-          finishes: { type: 'array', items: lookItem },
-          trim: hex,
-          glass: hex,
-          door: hex,
-          base: hex,
-        },
-        required: ['finishes'],
-      },
-    },
-    task: 'Name its finishes and where to sample each.',
-  },
+  finishes: HOUSE_FINISHES_SPEC,
 };
 
 /** Which image is which, as every call says it (the PQ-T72 wording). */

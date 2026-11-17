@@ -135,15 +135,15 @@ En gras : spécialistes propres à une équipe. Les autres viennent de `team/sha
 - [x] `object-shape.ts` : une fabrique `readWith(team)` au lieu de trois branches.
 - [x] Tests client / meta mis à jour ; `docs/copilot.md` (appels de l'étape `parts`).
 
-### PQ-T86 — Spécialistes partagés
+### [x] PQ-T86 — Spécialistes partagés
 
-- [ ] `team/shared/finishes.ts` : schéma commun maison + voiture, extensions par équipe.
-- [ ] `team/shared/openings.ts` : openings maison ∪ glazing voiture (grilles, arcs, portes).
-- [ ] `team/shared/legs.ts` : pieds, piètement, socle, roulettes.
-- [ ] `team/shared/profile.ts` : silhouette et proportions face / côté du corps principal.
-- [ ] Maison et voiture branchées sur `finishes` et `openings` partagés (promptVersion + 1).
-- [ ] Fixtures maison / voiture rejouées ; écarts listés dans `docs/copilot.md`.
-- [ ] Un test par spécialiste partagé (schéma, `answered`, parse).
+- [x] `team/shared/finishes.ts` : schéma commun maison + voiture, extensions par équipe.
+- [x] `team/shared/openings.ts` : openings maison ∪ glazing voiture (grilles, arcs, portes).
+- [x] `team/shared/legs.ts` : pieds, piètement, socle, roulettes.
+- [x] `team/shared/profile.ts` : silhouette et proportions face / côté du corps principal.
+- [x] Maison et voiture branchées sur `finishes` et `openings` partagés (promptVersion + 1).
+- [x] Fixtures maison / voiture rejouées ; écarts listés dans `docs/copilot.md`.
+- [x] Un test par spécialiste partagé (schéma, `answered`, parse).
 
 ### PQ-T87 — Registre et nouveaux archétypes
 
