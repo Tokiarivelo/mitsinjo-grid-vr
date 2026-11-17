@@ -1390,7 +1390,17 @@
         "tree_trunk": "Vatan-kazo",
         "wall": "Rindrina",
         "window_pane": "Fitaratra varavarankely",
-        "windshield": "Fitaratra aloha"
+        "windshield": "Fitaratra aloha",
+        "seat": "Fipetrahana",
+        "backrest": "Fiankinana",
+        "cushion": "Ondana",
+        "mattress": "Kidoro",
+        "curtain": "Ridao",
+        "pot": "Vilia",
+        "shelf": "Talantalana",
+        "rail": "Fefy vy",
+        "mirror": "Fitaratra",
+        "flower": "Voninkazo"
       },
       "model3dImprove": {
         "label": "Fandrosoan'ny fanatsarana ny modely",

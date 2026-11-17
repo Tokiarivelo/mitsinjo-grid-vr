@@ -404,3 +404,12 @@ Style : hologramme futuriste (cyan / ambre, lignes de balayage, coins lumineux, 
 - [x] Libellé corrigé : `loft-hood` = « Hotte de cuisine » (pas une suspension).
 - [ ] Scores sous l'arrêt (IoU ≥ 0,85 et ΔE ≤ 8) : 1/46 ok, IoU moyen 0,77, 14 IoU ≥ 0,85, 22 ΔE ≤ 8 ; plafonniers vus de dessous plafonnés en ΔE (ombrage plat des faces basses), plantes en IoU (couronnes en sphères).
 - [ ] **Done when :** vu à l'écran (L-scénarios VS-T41) et au casque.
+
+### VS-T42 : Visite 360° : tous les objets indexés, 3D générées, noms seulement sous le laser
+
+- [x] 113 objets ajoutés (159 au total) dans les 13 photos : meubles (canapés, lits, chaises, tabourets, tables, placards), plantes en pot et bouquets, rideaux, portes, fenêtres, miroirs, tapis ; dehors arbres, haies, clôtures, portail, garde-corps, pylône, rochers, troncs, pneus. Contours en coordonnées panorama (`outlines-src-2.mjs`).
+- [x] Les contours analysés restent nus : la carte du nom ne s'affiche que sous le laser (ou une fois matérialisé), `holo-detection-target.tsx`.
+- [x] 3D de chaque nouvel objet (`specs-extra.ts`) : pièces paramétriques (canapé, chaise, tabouret, lit, table, meuble, vitrage, porte, garde-corps, clôture).
+- [x] Générateur affiné : pièce `silhouette` (le contour tracé comme face avant d'un hull, coupé à une bande, section au choix ; jamais les pixels) pour rideaux, rochers, troncs, fonds photo, pylône ; repli des plantes sur leur contour (couronne + tronc) quand `reconstructTree` lit mal (IoU < 0,45) ; cylindres couchés corrigés (taille = boîte monde).
+- [x] Scores (159) : IoU moyen 0,76, 55 IoU ≥ 0,85, 75 ΔE ≤ 8. Sous 0,6 : surtout le mobilier ajouré (étagère métal, tabourets, chaises, pont, arches, garde-corps), dont le contour plein compte le fond vu à travers.
+- [ ] **Done when :** vu à l'écran (V484–V488) et au casque.

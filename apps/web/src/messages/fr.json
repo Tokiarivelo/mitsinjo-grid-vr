@@ -1390,7 +1390,17 @@
         "tree_trunk": "Troncs",
         "wall": "Murs",
         "window_pane": "Carreaux",
-        "windshield": "Pare-brise"
+        "windshield": "Pare-brise",
+        "seat": "Assises",
+        "backrest": "Dossiers",
+        "cushion": "Coussins",
+        "mattress": "Matelas",
+        "curtain": "Rideaux",
+        "pot": "Pots",
+        "shelf": "Étagères",
+        "rail": "Rambardes",
+        "mirror": "Miroirs",
+        "flower": "Fleurs"
       },
       "model3dImprove": {
         "label": "Progression de l'amélioration du modèle",

@@ -1,10 +1,12 @@
-// `make tour-outlines` (VS-T41): the hand outlines (`outlines-src.mjs`, traced on the `make tour-trace`
-// crops) → panorama rings in `src/features/vision-insert/ui/xr/tour/tour-outlines.ts`, and check sheets
+// `make tour-outlines` (VS-T41/T42): the hand outlines (`outlines-src.mjs`, `outlines-src-2.mjs`, traced
+// on the `make tour-trace` crops) → panorama rings in `src/features/vision-insert/ui/xr/tour/tour-outlines.ts`, and check sheets
 // (each outline drawn on its crop) in the trace directory. Usage: node outlines.mjs <traceDir>.
 import { createRequire } from 'node:module';
 import fs from 'node:fs';
 import path from 'node:path';
-import { SRC } from './outlines-src.mjs';
+import { SRC as SRC1 } from './outlines-src.mjs';
+import { SRC2 } from './outlines-src-2.mjs';
+const SRC = { ...SRC1, ...SRC2 };
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..', '..');
 const require = createRequire(path.join(ROOT, 'package.json'));
 const sharp = require('sharp');

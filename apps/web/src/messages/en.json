@@ -1390,7 +1390,17 @@
         "tree_trunk": "Tree trunks",
         "wall": "Walls",
         "window_pane": "Window panes",
-        "windshield": "Windshields"
+        "windshield": "Windshields",
+        "seat": "Seats",
+        "backrest": "Backrests",
+        "cushion": "Cushions",
+        "mattress": "Mattress",
+        "curtain": "Curtains",
+        "pot": "Pots",
+        "shelf": "Shelves",
+        "rail": "Rails",
+        "mirror": "Mirrors",
+        "flower": "Flowers"
       },
       "model3dImprove": {
         "label": "Model improvement progress",

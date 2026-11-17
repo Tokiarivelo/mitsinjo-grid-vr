@@ -1,25 +1,28 @@
 # HANDOFF — read first, overwrite at end of session (≤40 lines)
 
-**Updated:** 2026-11-16 · **By:** Claude Code · **Branch:** `feat/vs-t41-tour-mock-3d` (from `main` d3485390, VS-T41). Tasks in `docs/tasks/VR-village-spatial-shoot.md`.
+**Updated:** 2026-11-17 · **By:** Claude Code · **Branch:** `feat/vs-t41-tour-mock-3d` (VS-T41 + VS-T42, from `main` d3485390). Tasks in `docs/tasks/VR-village-spatial-shoot.md`.
 
 ## NEXT
 
-1. VS-T41 scores below the stop (IoU ≥ 0.85, ΔE ≤ 8): 1/46 ok, mean IoU 0.77, 14 IoU ≥ 0.85, 22 ΔE ≤ 8. Worst: plants (palm .56, pines .55–.58, forest-tree-1 .59), lounge-sconce-2 .58, softbox .64, chandelier .66 / ΔE 27, cars ΔE 20–22, ceiling lights ΔE 26–32.
-   Iterate specs in `server/perception/tour-mock/specs-*.ts`, `make tour-mock ONLY=<regex>`, look at `test-results/tour-mock/sheet-*.png`.
-2. Ceiling lights: `renderFlat` shades a face seen from below at ≈ 0.5, so a white disc can't reach the photo's white. Fix needs lit (`kind: 'light'`) parts unshaded in **both** `renderFlat` and the 3D viewer (`surface-look.ts`), or the score drifts from the viewer.
-3. Screen check V478–V483; headset later. Then previous NEXT: Vercel `vercel.json` (uncommitted on main side, owner's OK), headset S146–S161, V442–V477.
+1. User request (2026-11-17): generalise the specialist agents (facade, plant team, views…) to every kind of object and make some reusable; else add 3D specialists per object class and fill the gaps in the general generation agents. Survey `server/perception/` specialists first, then write a task (VS-T43 or a P-task).
+2. VS-T42 weak objects (IoU < 0.6): open furniture (bedroom-shelf .19, stools .26–.47, director chair .38, side tables .38, woods-bridge .28, arches .30, railings .38). Filled outline counts the background seen through: score with a part-aware mask or model the openings.
+3. Hull renders show thin white stripes at section vertices in `renderFlat` (rocks, silhouette crowns): check hull triangulation.
+4. Ceiling lights ΔE (flat shading from below), see VS-T41 note; screen check V478–V488; headset later.
 
-## Done this session (VS-T41)
+## Done this session (VS-T42)
 
-- 46 hand-traced outlines (`tour/tour-outlines.ts`; tools `apps/web/scripts/tour-mock/`, `make tour-trace` → edit `outlines-src.mjs` → `make tour-outlines`); boxes derived from them; scan detections carry the projected outline (`projectPanoRings`).
-- `server/perception/tour-mock/`: specs in metres (`spec.ts` helpers incl. `plate`/`rod`/`leaf`), `generate.ts` (pano rolled to the object, colours measured per part with occluder rejection, score), `render.ts`, `index.ts` (shape, part masks, coverage, face drawings), `tour-mock.json` (built by `make tour-mock`, ~4 min).
-- Wired in mock mode: `/api/vision/shape`, `/api/vision/views`, facade + faces (`mockFaceDrawing`).
-- `loft-hood` relabelled « Hotte de cuisine ».
+- 113 more tour objects (159): `tour-data.ts`, outlines in `scripts/tour-mock/outlines-src-2.mjs` (pano format) → `tour-outlines.ts`.
+- Name card only under the laser (`holo-detection-target.tsx` + test).
+- `tour-mock/specs-extra.ts` (furniture helpers: sofa, chair, stool, bed, table, glazing, door, curtain, cabinet, railing, fence, planter, tyre, rock).
+- Generator: `tour-mock/silhouette.ts` (outline as hull front, band clip, spike drop, plant fallback) + `generate.ts` (`partsEntry`/`finishEntry`, plant fallback under IoU 0.45) + test `tour-mock-silhouette.test.ts`.
+- 10 new `model3dPart` concepts (seat, backrest, cushion, mattress, curtain, pot, shelf, rail, mirror, flower), en/fr/mg.
+- Scores 159: mean IoU 0.76, 55 IoU ≥ 0.85, 75 ΔE ≤ 8.
 
 ## Decisions
 
-- Mock never pastes the photo: colours measured only; plant models from `reconstructTree` on the outlined photo (as the real path).
-- Real Meta path untouched (`perception.callsMeta` → normal pipeline).
+- Silhouette parts use the traced outline shape only, never photo pixels (rule: no photo on models).
+- Outline crowns read as cushions: the plant fallback only replaces clearly broken readings.
+- Cylinder `size` is the world box: a lying rod is `[len, d, d]` with `axis: 'x'`.
 - No Neon migration, no HF dataset change (mock answers, not bench).
 
 ## Open

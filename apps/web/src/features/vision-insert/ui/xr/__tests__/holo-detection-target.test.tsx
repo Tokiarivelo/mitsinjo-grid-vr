@@ -33,19 +33,26 @@ describe('HoloDetectionTarget (VS-T4, outline VS-T18)', () => {
   };
   const [target] = projectDetectionsTo3D([detection]);
 
-  const renderTarget = (isMaterialized: boolean) =>
+  const renderTarget = (isMaterialized: boolean, hovered = false) =>
     render(
       <I18nProvider>
-        <HoloDetectionTarget target={target!} hovered={false} isMaterialized={isMaterialized} />
+        <HoloDetectionTarget target={target!} hovered={hovered} isMaterialized={isMaterialized} />
       </I18nProvider>
     );
 
-  it('traces the outline on the view and labels it with name + brief description', () => {
-    const { container, getByTestId } = renderTarget(false);
+  it('traces the outline on the view and labels it with name + brief description under the laser', () => {
+    const { container, getByTestId } = renderTarget(false, true);
     const group = container.querySelector('[name="holo-target-target-fridge"]');
     expect(group?.querySelector('[name="holo-outline"] lineLoop')).toBeTruthy();
     expect(getByTestId('holo-card').textContent).toContain('Fridge');
     expect(getByTestId('holo-card').textContent).toContain('Tall white fridge with two doors');
+  });
+
+  it('shows no label card on an analysed outline until the laser hovers it (VS-T42)', () => {
+    // Regression: every analysed object kept its name card, the view was covered in labels.
+    const { container } = renderTarget(false);
+    expect(container.querySelector('lineLoop')).toBeTruthy();
+    expect(container.querySelector('[data-testid="mock-billboard"]')).toBeNull();
   });
 
   it('has no click collider of its own: XRBlasterController is the single input source', () => {
@@ -65,7 +72,7 @@ describe('HoloDetectionTarget (VS-T4, outline VS-T18)', () => {
     // Regression: the card drew over the « Extract in 3D? » dialog (both without depth).
     const { container } = render(
       <I18nProvider>
-        <HoloDetectionTarget target={target!} hovered={false} isMaterialized={false} hideLabel />
+        <HoloDetectionTarget target={target!} hovered isMaterialized={false} hideLabel />
       </I18nProvider>
     );
     expect(container.querySelector('[data-testid="mock-billboard"]')).toBeNull();

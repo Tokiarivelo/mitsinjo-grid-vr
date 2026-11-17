@@ -47,8 +47,8 @@ function ringGeometries(ring: [number, number, number][], uv: Array<[number, num
 
 /**
  * Object outlined on the scanned view (VS-T18), like the photo upload: its SAM outline (else its
- * box) traced in light on the 360° photo, a faint fill that brightens on hover, and a billboard
- * card above it with its name and the vision model's brief description. Hover and shots come from
+ * box) traced in light on the 360° photo, a faint fill that brightens on hover, and, only while the
+ * laser is on it (VS-T42), a billboard card above it with its name and the model's brief description. Hover and shots come from
  * `XRBlasterController` (image point under the laser), no collider of its own.
  */
 export const HoloDetectionTarget = memo(function HoloDetectionTarget({
@@ -162,8 +162,9 @@ export const HoloDetectionTarget = memo(function HoloDetectionTarget({
           </group>
         ))}
 
-      {/* Under a dialog / the carousel the card would cover it (both draw without depth). */}
-      {!hideLabel && (
+      {/* Under a dialog / the carousel the card would cover it (both draw without depth). The
+          analysed outlines stay bare: the name card shows only under the laser (VS-T42). */}
+      {!hideLabel && (hovered || isMaterialized) && (
         <Billboard
           position={
             isMaterialized

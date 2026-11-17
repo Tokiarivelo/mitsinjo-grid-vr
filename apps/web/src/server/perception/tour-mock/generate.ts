@@ -11,7 +11,8 @@ import { sampleObjectRgb } from '../shape-colors';
 import { fitGrid, ringsMask, type Mask } from '../silhouette-fit';
 import { reconstructTree } from '../tree/tree-recon';
 import { renderAtPhoto, type TourMockEntry } from './render';
-import { compileSpec, type TourSpec } from './spec';
+import { resolveSilhouettes, silhouettePlant } from './silhouette';
+import { compileSpec, type TourPartsSpec, type TourSpec } from './spec';
 
 export { renderAtPhoto, type TourMockEntry };
 
@@ -183,39 +184,28 @@ export async function outlinedFront(shot: ObjectPhoto): Promise<Buffer> {
     .toBuffer();
 }
 
-/** One tour object → its mock entry (colours measured, scored), or null when it cannot be built. */
-export async function buildEntry(
-  spec: TourSpec,
+/**
+ * IoU under which a reconstructed plant is compared with its outline model (VS-T42). Low on
+ * purpose: an outline crown reads as a cushion, so it only replaces readings that are clearly broken.
+ */
+export const PLANT_FALLBACK_IOU = 0.45;
+
+/** Parts → recipe, with `silhouette` parts cut from this photo's outline. */
+function compileOnPhoto(spec: TourPartsSpec, shot: ObjectPhoto) {
+  const aspect = shot.photo.width / shot.photo.height;
+  return compileSpec(resolveSilhouettes(spec, shot.rings, shot.box, aspect));
+}
+
+/** Colours measured (two passes: the second sees the shading of the first), validated, scored. */
+async function finishEntry(
+  recipe0: ObjectRecipe,
+  concepts: Array<string | null>,
+  fixed: boolean[],
   shot: ObjectPhoto,
   label: string
-): Promise<TourMockEntry | null> {
+): Promise<TourMockEntry> {
   const pitch = -shot.elevation;
-  let recipe: ObjectRecipe;
-  let concepts: Array<string | null>;
-  let fixed: boolean[];
-  if (spec.kind === 'plant') {
-    const front = await decodeView(await outlinedFront(shot));
-    const reading = front ? readViews({ front, right: front }) : null;
-    const tree = reading
-      ? reconstructTree(reading.aligned, reading.palette, spec.label || label, {
-          sideIsFront: true,
-          hints: spec.hints,
-        })
-      : null;
-    if (!tree) return null;
-    recipe = tree.recipe;
-    concepts = recipe.parts.map((p) =>
-      p.kind === 'trunk' ? 'tree_trunk' : p.kind === 'crown' ? 'foliage' : null
-    );
-    // The reconstructor measured its colours on the same pixels: keep them.
-    fixed = recipe.parts.map(() => true);
-  } else {
-    const c = compileSpec(spec);
-    recipe = c.recipe;
-    concepts = c.concepts.map((x) => x ?? null);
-    fixed = c.fixed;
-  }
-  // Two colour passes: the second sees the shading of the first.
+  let recipe = recipe0;
   for (let pass = 0; pass < 2 && fixed.some((f) => !f); pass++) {
     const s = await scoreOnPhoto(recipe, shot, pitch);
     recipe = measurePartColors(recipe, s.render, s.crop, s.outline, fixed);
@@ -230,4 +220,54 @@ export async function buildEntry(
     concepts,
     score: { iou: score.iou, edgeF1: score.edgeF1, deltaE: score.deltaE, score: score.score },
   };
+}
+
+/** A parts spec on its photo → its entry. */
+function partsEntry(spec: TourPartsSpec, shot: ObjectPhoto, label: string) {
+  const c = compileOnPhoto(spec, shot);
+  return finishEntry(
+    c.recipe,
+    c.concepts.map((x) => x ?? null),
+    c.fixed,
+    shot,
+    label
+  );
+}
+
+/**
+ * One tour object → its mock entry (colours measured, scored), or null when it cannot be built.
+ * A plant is read by the tree reconstructor; when that reading scores under `PLANT_FALLBACK_IOU`
+ * its outline model (crown + trunk bands) is built too and the better of the two kept.
+ */
+export async function buildEntry(
+  spec: TourSpec,
+  shot: ObjectPhoto,
+  label: string
+): Promise<TourMockEntry | null> {
+  if (spec.kind === 'parts') return partsEntry(spec, shot, label);
+  const front = await decodeView(await outlinedFront(shot));
+  const reading = front ? readViews({ front, right: front }) : null;
+  const tree = reading
+    ? reconstructTree(reading.aligned, reading.palette, spec.label || label, {
+        sideIsFront: true,
+        hints: spec.hints,
+      })
+    : null;
+  // The reconstructor measured its colours on the same pixels: keep them.
+  const read = tree
+    ? await finishEntry(
+        tree.recipe,
+        tree.recipe.parts.map((p) =>
+          p.kind === 'trunk' ? 'tree_trunk' : p.kind === 'crown' ? 'foliage' : null
+        ),
+        tree.recipe.parts.map(() => true),
+        shot,
+        label
+      )
+    : null;
+  if (read && read.score.iou >= PLANT_FALLBACK_IOU) return read;
+  const outline = silhouettePlant(shot.rings, shot.box, shot.photo.width / shot.photo.height);
+  const alt = outline ? await partsEntry(outline, shot, label) : null;
+  if (!read) return alt;
+  return alt && alt.score.score > read.score.score ? alt : read;
 }

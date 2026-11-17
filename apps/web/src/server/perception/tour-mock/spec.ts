@@ -19,6 +19,14 @@ export type PartSpec = Omit<RecipePart, 'at' | 'size'> & {
   concept?: string;
   /** Colour picked by hand (a lamp's lit bulb, a reflection): never re-measured. */
   fixed?: boolean;
+  /**
+   * Front ring = the traced outline (VS-T42), cut to `band` (shares of the object height from its
+   * top, default all): the part becomes a hull of that shape, `section` its side (default round).
+   */
+  silhouette?: {
+    band?: readonly [number, number];
+    section?: ReadonlyArray<readonly [number, number]>;
+  };
 };
 
 export interface TourPartsSpec {
@@ -62,6 +70,7 @@ export function compileSpec(spec: TourPartsSpec): {
     const rest: Partial<PartSpec> = { ...spec };
     delete rest.concept;
     delete rest.fixed;
+    delete rest.silhouette;
     return {
       ...rest,
       at: at.map((v, i) => r4((v - mid[i]!) / dims[i]!)) as unknown as RecipePart['at'],
