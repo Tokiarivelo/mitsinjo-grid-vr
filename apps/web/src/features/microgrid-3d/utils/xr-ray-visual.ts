@@ -10,6 +10,10 @@ import { darkness, RAY_CONTRAST, rayColors } from './xr-ray-contrast';
  *
  * VS-T30: the colours adapt to the surroundings (`xr-ray-contrast`): light beam and ring on dark
  * surroundings, dark ones on bright sky or walls, each with a thin halo of the opposite tone.
+ *
+ * Owner request 2026-11-17 (over bright 360° photos the spec beam and ring vanished): beam
+ * about 4 mm, cursor about 1°, a soft glow behind the cursor, and a highlight while the pointer
+ * moves (brighter halos, cursor swells), fading once still.
  */
 export const RAY_VISUAL = {
   /** Visible beam length (m): hands, controllers. */
@@ -17,12 +21,27 @@ export const RAY_VISUAL = {
   controllerLength: 0.35,
   /** Gap between the hand / controller and the beam's start (m). */
   gap: 0.1,
-  /** Beam radius at its start (m): about 1 mm wide, tapering to nothing. */
-  radius: 0.0009,
+  /**
+   * Beam radius at its start (m): about 4 mm wide, tapering to nothing. Meta draws 1 mm over its
+   * own dark Home; over a bright 360° photo that vanished (owner request 2026-11-17): thicker.
+   */
+  radius: 0.002,
   hover: '#ffffff',
   select: '#001e78',
-  /** Cursor ring radius per metre of distance (≈ 0.7° whatever the distance). */
-  cursorPerMetre: 0.012,
+  /** Cursor ring radius per metre of distance (≈ 1° whatever the distance; Meta's 0.7° read too small). */
+  cursorPerMetre: 0.018,
+  /** Soft glow disc behind the cursor: radius (share of the ring's) and opacity. */
+  glowScale: 2.2,
+  glowOpacity: 0.3,
+  /**
+   * Pointer turn speed (rad/s) from which the ray reads as moving: beam and cursor brighten and
+   * the cursor swells by `motionScale` while it moves, so the eye finds it (owner request).
+   */
+  motionSpeed: 0.35,
+  motionScale: 0.35,
+  /** Motion highlight: rise and fall (s). */
+  motionIn: 0.06,
+  motionOut: 0.45,
   /** Inner radius of the ring, share of its outer radius. */
   cursorInner: 0.62,
   /** Cursor size while select is held, share of its hover size. */
@@ -127,6 +146,19 @@ function beamGeometry(): THREE.BufferGeometry {
   return geo;
 }
 
+/** Glow disc behind the cursor: bright at its centre, fading to nothing at its rim. */
+function glowGeometry(): THREE.BufferGeometry {
+  const geo = new THREE.CircleGeometry(1, 28);
+  const pos = geo.attributes.position as THREE.BufferAttribute;
+  const colors = new Float32Array(pos.count * 3);
+  for (let i = 0; i < pos.count; i++) {
+    const k = Math.pow(1 - Math.min(1, Math.hypot(pos.getX(i), pos.getY(i))), 2);
+    colors.set([k, k, k], i * 3);
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  return geo;
+}
+
 /** One pointer's beam and cursor; `update` every frame, no allocation. */
 export function createRayVisual(): RayVisual {
   const group = new THREE.Group();
@@ -165,9 +197,23 @@ export function createRayVisual(): RayVisual {
   ringHalo.renderOrder = 10;
   const dotMat = ringMat.clone();
   const dot = new THREE.Mesh(new THREE.CircleGeometry(RAY_VISUAL.cursorInner * 0.45, 20), dotMat);
+  const glowMat = new THREE.MeshBasicMaterial({
+    color: RAY_VISUAL.hover,
+    transparent: true,
+    opacity: 0,
+    depthTest: false,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    vertexColors: true,
+    side: THREE.DoubleSide,
+    toneMapped: false,
+  });
+  const glow = new THREE.Mesh(glowGeometry(), glowMat);
+  glow.scale.setScalar(RAY_VISUAL.glowScale);
+  glow.renderOrder = 10;
   const cursor = new THREE.Group();
   // Halos last: existing child indexes stay (render order puts them behind).
-  cursor.add(ring, dot, ringHalo);
+  cursor.add(ring, dot, ringHalo, glow);
   cursor.renderOrder = 11;
   ring.renderOrder = 11;
   dot.renderOrder = 11;
@@ -178,6 +224,10 @@ export function createRayVisual(): RayVisual {
   let shown = 0;
   let press = 0;
   let dark = 0;
+  let moving = 0;
+  let hasLast = false;
+  /** This pointer's last direction (its turn speed). */
+  const lastDir = new THREE.Vector3();
 
   return {
     group,
@@ -189,6 +239,17 @@ export function createRayVisual(): RayVisual {
         usable ? RAY_VISUAL.fadeIn : RAY_VISUAL.fadeOut
       );
       press = approach(press, pressed ? 1 : 0, dt, pressed ? RAY_VISUAL.press : RAY_VISUAL.release);
+      // How fast the pointer turns: a moving ray lights up (and fades back once still).
+      const speed = hasLast && dt > 0 ? lastDir.angleTo(direction) / dt : 0;
+      lastDir.copy(direction);
+      hasLast = true;
+      const isMoving = speed > RAY_VISUAL.motionSpeed;
+      moving = approach(
+        moving,
+        isMoving ? 1 : 0,
+        dt,
+        isMoving ? RAY_VISUAL.motionIn : RAY_VISUAL.motionOut
+      );
       group.visible = shown > 0.001;
       if (!group.visible) return;
       dark = approach(dark, darkness(surrounding ?? 0), dt, RAY_CONTRAST.settle);
@@ -204,16 +265,16 @@ export function createRayVisual(): RayVisual {
         beam.position.copy(origin).addScaledVector(direction, span.start);
         beam.scale.set(r, span.length, r);
         beamMat.color.copy(_colors.core).lerp(_colors.select, press);
-        beamMat.opacity = shown * 0.9;
+        beamMat.opacity = Math.min(1, shown * (0.9 + 0.1 * moving));
         beamHalo.quaternion.copy(_q);
         beamHalo.position.copy(beam.position);
         beamHalo.scale.set(r * BEAM_HALO, span.length, r * BEAM_HALO);
         beamHaloMat.color.copy(_colors.halo);
-        beamHaloMat.opacity = shown * 0.35;
+        beamHaloMat.opacity = shown * (0.45 + 0.35 * moving);
       }
       beamHalo.visible = beam.visible;
       cursor.visible = usable || shown > 0.05;
-      const radius = cursorRadius(distance, press);
+      const radius = cursorRadius(distance, press) * (1 + RAY_VISUAL.motionScale * moving);
       // A hair in front of the surface, facing the ray.
       cursor.position.copy(end).addScaledVector(direction, -0.004);
       cursor.quaternion.setFromUnitVectors(_backward, _neg.copy(direction).negate());
@@ -221,13 +282,17 @@ export function createRayVisual(): RayVisual {
       ringMat.color.copy(_colors.core).lerp(_colors.select, press);
       ringMat.opacity = shown;
       ringHaloMat.color.copy(_colors.halo);
-      ringHaloMat.opacity = shown * 0.55;
+      ringHaloMat.opacity = shown * (0.65 + 0.3 * moving);
+      glowMat.color.copy(_colors.core);
+      glowMat.opacity = shown * RAY_VISUAL.glowOpacity * (1 + moving);
       dotMat.color.set(tint);
       dotMat.opacity = shown * 0.9;
     },
     hide() {
       shown = 0;
       press = 0;
+      moving = 0;
+      hasLast = false;
       group.visible = false;
     },
     dispose() {
@@ -240,6 +305,8 @@ export function createRayVisual(): RayVisual {
       ringMat.dispose();
       dot.geometry.dispose();
       dotMat.dispose();
+      glow.geometry.dispose();
+      glowMat.dispose();
     },
   };
 }

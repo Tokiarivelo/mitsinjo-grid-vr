@@ -272,21 +272,30 @@ describe('XRBlasterController (VS-T4)', () => {
     expect(onHoverTarget).toHaveBeenLastCalledWith('fridge');
   });
 
-  it('in the headset view the mouse hovers too, but never hides what a laser aims at', () => {
+  it('in the headset view the last thing moved has the hover: mouse or laser', () => {
+    // Owner report 2026-11-17: in the emulator the controller laser rests on an object, so the
+    // mouse brought onto the menu never lit it up: the object under the laser kept the focus.
     gl.xr.isPresenting = true;
     (gl.xr as unknown as { getCamera: () => unknown }).getCamera = () => ({ cameras: [camera] });
     menu.open = true; // the camera looks at the scan button
     const { onHoverTarget } = setup();
-    controller0.visible = false;
     controller1.visible = false;
+    aim(controller0, fridgeOnVideo);
+    act(() => frame?.({}, 0.016));
+    expect(onHoverTarget).toHaveBeenLastCalledWith('fridge');
+
     act(() => {
       fireEvent.pointerMove(gl.domElement, { clientX: 400, clientY: 300 });
     });
     act(() => frame?.({}, 0.016));
     expect(onHoverTarget).toHaveBeenLastCalledWith('spatial-air-button');
 
-    controller0.visible = true;
-    aim(controller0, fridgeOnVideo);
+    // The mouse resting there keeps it (no timer).
+    for (let k = 0; k < 5; k++) act(() => frame?.({}, 0.016));
+    expect(onHoverTarget).toHaveBeenLastCalledWith('spatial-air-button');
+
+    // Turning the controller takes the hover back: the last thing moved wins.
+    aim(controller0, fridgeOnVideo, EYE.clone().add(new THREE.Vector3(0.05, 0, 0)));
     act(() => frame?.({}, 0.016));
     expect(onHoverTarget).toHaveBeenLastCalledWith('fridge');
   });

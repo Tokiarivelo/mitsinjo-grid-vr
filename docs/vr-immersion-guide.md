@@ -338,8 +338,14 @@ Pilotage scripté (MCP IWER ou `remote.dispatch`) : voir [`vr-iwer-tools.md`](vr
    sont le vrai modèle (jamais les sphères) après analyses et changement de mode. Laser selon Meta « Ray casting » : rayon de visée long et
    invisible ; on voit un faisceau fin de 25 cm (main) / 35 cm (manette) qui part à 10 cm et s'efface vers son
    bout, et un **curseur anneau** à l'impact, de taille angulaire constante, blanc au survol, bleu nuit
-   (`#001E78`) et à 83 % quand on appuie ; le point central garde la couleur de ce qui est visé. Rien d'utilisable
-   sous le rayon → faisceau et curseur s'effacent (0,25 s).
+   (`#001E78`) et à 83 % quand on appuie ; le point central garde la couleur de ce qui est visé. Écart voulu au
+   spec (demande du 2026-11-17, sur une photo 360° claire on ne le voyait plus) : faisceau d'environ 4 mm avec un
+   halo plus fort, curseur d'environ 1° avec un halo lumineux derrière, et il **s'illumine quand on bouge** (halos
+   plus vifs, curseur grossi de 35 %) puis se calme à l'arrêt. Rien d'utilisable sous le rayon → faisceau et
+   curseur restent à 35 % (on voit toujours où l'on vise ; `/simulation` garde son propre réglage). Dans
+   l'émulateur, la souris a son curseur dans la vue casque, et **la dernière chose bougée a le survol** : la
+   souris amenée sur le menu ou un bouton l'allume et le garde tant qu'elle y reste, plus l'objet sur
+   lequel repose le laser de la manette ; tourner la manette le lui rend.
 
 ## 7. Confort visuel et prévention du vertige : Écran panoramique à focus plat (`/village`)
 

@@ -51,4 +51,67 @@ describe('ray visual (Meta ray casting spec)', () => {
     expect(v.group.visible).toBe(false);
     v.dispose();
   });
+
+  it('keeps a faint beam and cursor on nothing when asked (always seen where it points)', () => {
+    const v = createRayVisual();
+    const frame = {
+      origin: new THREE.Vector3(),
+      direction: new THREE.Vector3(0, 0, -1),
+      end: new THREE.Vector3(0, 0, -3),
+      usable: false,
+      input: 'controller' as const,
+      pressed: false,
+      tint: '#ffffff',
+      idle: 0.35,
+      dt: 1,
+    };
+    v.update(frame);
+    expect(v.group.visible).toBe(true);
+    v.dispose();
+  });
+
+  it('lights up while the pointer moves: the cursor swells, then settles once still', () => {
+    // Owner request 2026-11-17: the laser and its cursor were hard to find over a bright photo.
+    const v = createRayVisual();
+    const base = {
+      origin: new THREE.Vector3(),
+      end: new THREE.Vector3(0, 0, -2),
+      usable: true,
+      input: 'controller' as const,
+      pressed: false,
+      tint: '#ffffff',
+      dt: 0.016,
+    };
+    const cursor = () => v.group.children[1] as THREE.Group;
+    const still = new THREE.Vector3(0, 0, -1);
+    for (let i = 0; i < 60; i++) v.update({ ...base, direction: still });
+    const rest = cursor().scale.x;
+    expect(rest).toBeCloseTo(cursorRadius(2, 0));
+    // Turning ~1 rad/s.
+    const d = new THREE.Vector3();
+    for (let i = 1; i <= 10; i++)
+      v.update({ ...base, direction: d.set(Math.sin(i * 0.016), 0, -Math.cos(i * 0.016)) });
+    expect(cursor().scale.x).toBeGreaterThan(rest * (1 + RAY_VISUAL.motionScale * 0.9));
+    for (let i = 0; i < 60; i++) v.update({ ...base, direction: d });
+    expect(cursor().scale.x).toBeCloseTo(rest, 3);
+    v.dispose();
+  });
+
+  it('draws only a cursor for the mouse (no beam from the eye)', () => {
+    const v = createRayVisual();
+    v.update({
+      origin: new THREE.Vector3(),
+      direction: new THREE.Vector3(0, 0, -1),
+      end: new THREE.Vector3(0, 0, -2),
+      usable: true,
+      input: 'mouse',
+      pressed: false,
+      tint: '#ffffff',
+      dt: 1,
+    });
+    const [beam, cursor] = v.group.children as [THREE.Mesh, THREE.Group];
+    expect(beam.visible).toBe(false);
+    expect(cursor.visible).toBe(true);
+    v.dispose();
+  });
 });
