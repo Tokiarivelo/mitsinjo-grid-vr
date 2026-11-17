@@ -126,6 +126,10 @@ vr-sim-probe: ## /simulation VR check in the IWER emulator: /village controls, w
 	$(need_ws)
 	@$(PNPM) --filter $(WEB) exec node scripts/vr-sim-probe.mjs $(URL) $(CURDIR)/test-results/vr-sim-probe
 
+vr-hands-probe: ## Hands-only VR check in the IWER emulator (Meta VR Start « no controller »): /simulation and /village nav pad turn / step / help, label → panel → cut / restore / close, all by pinch (dev server must run)
+	$(need_ws)
+	@$(PNPM) --filter $(WEB) exec node scripts/vr-hands-probe.mjs $(URL) $(CURDIR)/test-results/vr-hands-probe
+
 vr-iwer-tools: ## Exercise every IWER emulator tool + the /village controls (A/B/X/Y, sticks, thumb gestures, legends, hints) (dev server must run)
 	$(need_ws)
 	@$(PNPM) --filter $(WEB) exec node scripts/vr-iwer-tools.mjs $(URL) $(CURDIR)/test-results/vr-iwer-tools

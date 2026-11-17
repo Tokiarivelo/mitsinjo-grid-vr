@@ -10,6 +10,11 @@ export const HOLO_ICONS = [
   'go',
   'back',
   'close',
+  'up',
+  'down',
+  'turnLeft',
+  'turnRight',
+  'help',
 ] as const;
 export type HoloIcon = (typeof HOLO_ICONS)[number];
 
@@ -100,6 +105,54 @@ const DRAW: Record<HoloIcon, (ctx: Ctx, s: number) => void> = {
     ctx.lineTo(0.16 * s, 0.5 * s);
     ctx.lineTo(0.44 * s, 0.76 * s);
     ctx.stroke();
+  },
+  up: (ctx, s) => {
+    ctx.beginPath();
+    ctx.moveTo(0.5 * s, 0.84 * s);
+    ctx.lineTo(0.5 * s, 0.18 * s);
+    ctx.moveTo(0.24 * s, 0.44 * s);
+    ctx.lineTo(0.5 * s, 0.16 * s);
+    ctx.lineTo(0.76 * s, 0.44 * s);
+    ctx.stroke();
+  },
+  down: (ctx, s) => {
+    ctx.beginPath();
+    ctx.moveTo(0.5 * s, 0.16 * s);
+    ctx.lineTo(0.5 * s, 0.82 * s);
+    ctx.moveTo(0.24 * s, 0.56 * s);
+    ctx.lineTo(0.5 * s, 0.84 * s);
+    ctx.lineTo(0.76 * s, 0.56 * s);
+    ctx.stroke();
+  },
+  // Snap turns: an open arc with its head at the turn's end.
+  turnLeft: (ctx, s) => {
+    ctx.beginPath();
+    ctx.arc(0.5 * s, 0.56 * s, 0.28 * s, -0.15 * Math.PI, -0.95 * Math.PI, true);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(0.1 * s, 0.38 * s);
+    ctx.lineTo(0.22 * s, 0.6 * s);
+    ctx.lineTo(0.38 * s, 0.42 * s);
+    ctx.stroke();
+  },
+  turnRight: (ctx, s) => {
+    ctx.beginPath();
+    ctx.arc(0.5 * s, 0.56 * s, 0.28 * s, -0.85 * Math.PI, -0.05 * Math.PI);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(0.9 * s, 0.38 * s);
+    ctx.lineTo(0.78 * s, 0.6 * s);
+    ctx.lineTo(0.62 * s, 0.42 * s);
+    ctx.stroke();
+  },
+  help: (ctx, s) => {
+    ctx.beginPath();
+    ctx.arc(0.5 * s, 0.36 * s, 0.17 * s, -Math.PI, 0.35 * Math.PI);
+    ctx.lineTo(0.5 * s, 0.62 * s);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(0.5 * s, 0.8 * s, 0.045 * s, 0, Math.PI * 2);
+    ctx.fill();
   },
 };
 

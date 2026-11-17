@@ -72,7 +72,7 @@ function toneOf(id: MapPinId, buildings: Record<SectorId, BuildingSceneModel>): 
  * village, VS-T33): still while you look around, re-centred when you turn away or walk off. Never
  * head-locked (Meta comfort). `tilt` leans it back toward the eyes.
  */
-function RigFollow({
+export function RigFollow({
   offset,
   tilt,
   name,

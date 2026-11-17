@@ -121,7 +121,14 @@ export const XrAimHint = memo(function XrAimHint({
 /** Legend lines of one input, as i18n keys of `vrControls` (title first). */
 export function legendKeys(kind: 'controller' | 'hand', handedness: XRHandedness): string[] {
   if (kind === 'hand') {
-    return ['legendTitleHand', 'legendPinch', 'legendThumbTurn', 'legendThumbTap', 'legendWrist'];
+    return [
+      'legendTitleHand',
+      'legendPinch',
+      'legendPad',
+      'legendThumbTurn',
+      'legendThumbTap',
+      'legendWrist',
+    ];
   }
   if (handedness === 'left') {
     return [

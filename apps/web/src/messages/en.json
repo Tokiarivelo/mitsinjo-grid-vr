@@ -367,7 +367,8 @@
         "legendPinch": "Pinch: select a label, building or button",
         "legendThumbTurn": "Thumb swipe ←/→: turn · ↑/↓: one step",
         "legendThumbTap": "Thumb tap: show / hide labels",
-        "legendStickHold": "Hold a stick 1 s: show / hide hands & controllers"
+        "legendStickHold": "Hold a stick 1 s: show / hide hands & controllers",
+        "legendPad": "Arrows under your view: turn · one step"
       },
       "vrMixer": {
         "title": "Dispatcher · mixing desk",
@@ -1703,7 +1704,14 @@
         "inputsHide": "Hide hands & controllers",
         "inputsShownEvent": "Hands & controllers shown",
         "inputsHiddenEvent": "Hands & controllers hidden (the lasers stay)",
-        "legendStickHold": "Hold a stick 1 s: show / hide hands & controllers"
+        "legendStickHold": "Hold a stick 1 s: show / hide hands & controllers",
+        "navTurnLeft": "Turn left 30°",
+        "navTurnRight": "Turn right 30°",
+        "navStepForward": "One step forward",
+        "navStepBack": "One step back",
+        "navHelp": "Show / hide the controls help",
+        "navTip": "Pinch: no controller or walking needed",
+        "legendPad": "Arrows under your view: turn · one step"
       },
       "vrStudio": {
         "viewsTitle": "Drawing the 2D views of « {name} »",

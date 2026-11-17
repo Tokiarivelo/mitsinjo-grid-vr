@@ -235,7 +235,7 @@ export function lampLevel(coveragePct: number | null, servedKw: number): number 
 /** Button legend lines of /simulation (i18n keys of `features.simulation.vrControls`, title first). */
 export function simLegendKeys(kind: 'controller' | 'hand', handedness: XRHandedness): string[] {
   if (kind === 'hand')
-    return ['legendTitleHand', 'legendPinch', 'legendThumbTurn', 'legendThumbTap'];
+    return ['legendTitleHand', 'legendPinch', 'legendPad', 'legendThumbTurn', 'legendThumbTap'];
   return handedness === 'left'
     ? [
         'legendTitleLeft',

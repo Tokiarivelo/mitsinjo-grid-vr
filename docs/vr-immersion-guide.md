@@ -165,16 +165,16 @@ Baladez-vous dans les différents quartiers du village pour comparer leur statut
 Mêmes boutons que `/village` (§ 6) ; seul A/X change de rôle (pas d'analyse ici). Les légendes s'affichent
 au-dessus de chaque manette 25 s à l'entrée, puis d'un clic de stick.
 
-| Action                               | Manettes Meta Quest                  | Mains                        | PC (clavier / souris)         |
-| :----------------------------------- | :----------------------------------- | :--------------------------- | :---------------------------- |
-| **Marcher**                          | Stick gauche                         | —                            | `Z Q S D` / `W A S D` / `↑ ↓` |
-| **Pivoter de 30°**                   | Stick droit ← / →                    | Pouce glissé ← / →           | `← →` (continu) ou souris     |
-| **Un pas de 0,8 m**                  | Stick droit ↑ / ↓                    | Pouce glissé avant / arrière | —                             |
-| **Sélectionner** (étiquette, bouton) | Gâchette                             | Pincer                       | Clic gauche                   |
-| **Étiquettes du village**            | A / X                                | Tap du pouce                 | Balise flottante à l'entrée   |
-| **Retour**                           | B / Y : ferme le panneau, sinon sort | —                            | « Fermer ✕ » / « Sortir »     |
-| **Aide (légendes)**                  | Clic sur un stick                    | —                            | —                             |
-| **Quitter la VR**                    | Bouton Meta                          | Geste système                | « Quitter la VR »             |
+| Action                               | Manettes Meta Quest                  | Mains                            | PC (clavier / souris)         |
+| :----------------------------------- | :----------------------------------- | :------------------------------- | :---------------------------- |
+| **Marcher**                          | Stick gauche                         | Pincer « un pas » (bandeau)      | `Z Q S D` / `W A S D` / `↑ ↓` |
+| **Pivoter de 30°**                   | Stick droit ← / →                    | Pincer ↺ / ↻ (bandeau)           | `← →` (continu) ou souris     |
+| **Un pas de 0,8 m**                  | Stick droit ↑ / ↓                    | Pincer ↑ / ↓ (bandeau)           | —                             |
+| **Sélectionner** (étiquette, bouton) | Gâchette                             | Pincer                           | Clic gauche                   |
+| **Étiquettes du village**            | A / X                                | Tap du pouce                     | Balise flottante à l'entrée   |
+| **Retour**                           | B / Y : ferme le panneau, sinon sort | Pincer « Fermer ✕ » / « Sortir » | « Fermer ✕ » / « Sortir »     |
+| **Aide (légendes)**                  | Clic sur un stick                    | Pincer « ? » (bandeau)           | —                             |
+| **Quitter la VR**                    | Bouton Meta                          | Geste système                    | « Quitter la VR »             |
 
 ### Piloter l'énergie d'un bâtiment (VSIM-T3/T4)
 
@@ -263,8 +263,15 @@ laisser rappeler l'aide depuis un menu, VS-T24).
 | **Tap du pouce** sur l'index                        | Analyser la vue                          |
 | **Regarder son poignet gauche** et pincer le bouton | Ouvrir le menu poignet                   |
 
-Les gestes de pouce (microgestes) n'existent que si le navigateur les expose (Quest Browser récent, IWER) ;
-sinon le pincement suffit pour tout (bouton « Analyser », flèches au sol, menu).
+Les gestes de pouce (microgestes) n'existent que si le navigateur les expose (IWER ; la doc Meta « WebXR
+Hands » ne garantit que le pincement) ; le pincement suffit pour tout.
+
+**Bandeau de navigation mains (hands-first, Meta VR Start)** : sous la vue (≈ 20° vers le bas, centré, dans un
+champ de vision étroit), cinq boutons à pincer suivent la vue sans y être collés : **pivoter ←** · **un pas en
+arrière** · **un pas en avant** · **pivoter →** · **aide**. Ils envoient les mêmes actions que les sticks
+(`xr-nav-pad.ts` → file lue par `XrControlsDriver`) : tout le parcours se fait assis, sans manette ni marche.
+Présent dans le studio, la visite 360° (hors dialogue, menu et labo) et `/simulation` (masqué pendant un
+panneau ou la grande carte). Survolé, un bouton affiche son nom. Vérification : `make vr-hands-probe`.
 
 ### 6.3 Navigateur PC (souris, clavier, émulateur IWER)
 

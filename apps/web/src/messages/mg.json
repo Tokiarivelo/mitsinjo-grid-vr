@@ -367,7 +367,8 @@
         "legendPinch": "Tsongoy : misafidy marika, trano, bokotra",
         "legendThumbTurn": "Ankihibe ←/→ : mihodina · ↑/↓ : dingana iray",
         "legendThumbTap": "Kitiho ny ankihibe : aseho / afenina ny marika",
-        "legendStickHold": "Tazomy 1 s ny stick: aseho / afeno ny tanana sy ny fitantanana"
+        "legendStickHold": "Tazomy 1 s ny stick: aseho / afeno ny tanana sy ny fitantanana",
+        "legendPad": "Zana-tsipika eo ambanin'ny fijery : mihodina · dingana iray"
       },
       "vrMixer": {
         "title": "Dispatcher · latabatra fampifangaroana",
@@ -1703,7 +1704,14 @@
         "inputsHide": "Afeno ny tanana sy ny fitantanana",
         "inputsShownEvent": "Aseho ny tanana sy ny fitantanana",
         "inputsHiddenEvent": "Miafina ny tanana sy ny fitantanana (mijanona ny laser)",
-        "legendStickHold": "Tazomy 1 s ny stick: aseho / afeno ny tanana sy ny fitantanana"
+        "legendStickHold": "Tazomy 1 s ny stick: aseho / afeno ny tanana sy ny fitantanana",
+        "navTurnLeft": "Mihodina 30° miankavia",
+        "navTurnRight": "Mihodina 30° miankavanana",
+        "navStepForward": "Dingana iray mandroso",
+        "navStepBack": "Dingana iray miverina",
+        "navHelp": "Asehoy / afeno ny fanampiana momba ny fifehezana",
+        "navTip": "Tsongoy : tsy ilaina ny manette na ny mandeha",
+        "legendPad": "Zana-tsipika eo ambanin'ny fijery : mihodina · dingana iray"
       },
       "vrStudio": {
         "viewsTitle": "Manao ny sary 2D an’i « {name} »",

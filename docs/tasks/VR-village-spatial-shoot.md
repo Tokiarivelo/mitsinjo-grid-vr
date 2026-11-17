@@ -510,3 +510,19 @@ Style : hologramme futuriste (cyan / ambre, lignes de balayage, coins lumineux, 
 - [ ] Reste : ΔE des maisons blanches et des jardinières (15–30 : la couleur compensée de l'ombrage plafonne à 255),
       cyprès et pins sombres (IoU 0,58–0,68), `woods-bridge` (0,28, ajouré), lampadaire fin (0,53).
 - [ ] **Done when :** vu à l'écran (V515–V520) et au casque.
+
+## VS-T48 — Hands-first et assis (Meta VR Start : « tout le parcours sans manette »)
+
+Doc Meta (MCP) : « WebXR Hands » — la main n'expose que le pincement (micro-gestes non garantis dans le
+navigateur, pincement de paume gauche réservé au système) ; « Locomotion input maps » — mains = téléportation,
+pivot 30°, pas de 80 cm, pas de glisse continue.
+
+- [x] Bandeau de navigation pinçable (`xr-nav-pad.ts`) : pivoter ← / →, un pas ↑ / ↓, aide ; file d'actions lue
+      par `XrControlsDriver`, donc mêmes effets que les sticks dans les deux mondes. Studio + visite
+      (`xr-nav-pad-3d.tsx`) et `/simulation` (`sim-xr-nav-pad.tsx`), centré ≈ 20° sous la vue (champ étroit).
+- [x] `HoloButton` (studio) `iconOnly` + `HoloButton` (simulation) `icon` ; icônes `up`, `down`, `turnLeft`,
+      `turnRight`, `help` ; légende mains « Flèches sous la vue ».
+- [x] `make vr-hands-probe` : /simulation en mode mains seul (pivot, pas, aide, étiquette → panneau → couper /
+      rétablir / fermer).
+- [ ] Studio /village vérifié en mode mains dans l'émulateur (V521) ; casque plus tard.
+- [ ] Suivant : transition labo ↔ village dans la même session (plus de coupure de l'immersion).
