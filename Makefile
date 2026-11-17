@@ -433,6 +433,9 @@ video-sfx: ## Generate click / whoosh / rise SFX with ffmpeg
 video-capture: ## Record app shots on the real screen at 1920x1080, no lock while running (PART=a|b, ONLY=A1,A2; DRY=1)
 	video/scripts/capture.sh --part $(or $(PART),a) $(if $(ONLY),--only $(ONLY)) $(if $(DRY),--dry)
 
+video-capture-vr: ## Record the VR showcase take headless in the IWER emulator (/village → /simulation) to video/captures/raw/vr (dev-mock must run; URL=, CHROMIUM_PATH=)
+	node video/scripts/capture-vr.mjs $(or $(URL),http://localhost:$(shell node apps/web/scripts/port.mjs)) video/captures/raw/vr
+
 video-canvas: ## Render the splash and outro canvas pages to PNG frames
 	node video/scripts/render-canvas.cjs video/canvas/00-splash.html video/frames/00-splash
 	node video/scripts/render-canvas.cjs video/canvas/10-outro.html video/frames/10-outro
