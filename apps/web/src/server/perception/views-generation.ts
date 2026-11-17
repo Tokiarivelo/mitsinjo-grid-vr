@@ -214,14 +214,27 @@ export async function generateImaginedViews(
   target: Pick<ShapeTarget, 'label' | 'category' | 'scenery'>,
   photoAspect = 1,
   size = 256,
-  paint?: FlatPaint
+  paint?: FlatPaint | ((view: FlatView) => FlatPaint)
 ): Promise<ImaginedAngleView[]> {
+  // A paint made for each camera (VS-T44 imagined looks: their light turns with the view).
+  const paintFor = (view: FlatView) =>
+    typeof paint === 'function' && paint.length === 1
+      ? (paint as (view: FlatView) => FlatPaint)(view)
+      : (paint as FlatPaint | undefined);
   const archetype = archetypeOf(target);
   const views: ImaginedAngleView[] = [];
 
   for (const angle of CANONICAL_ANGLES) {
     const config = CANONICAL_FLAT_VIEWS[angle];
-    const flat = renderFlat(recipe, photoAspect, size, size, config.view, undefined, paint);
+    const flat = renderFlat(
+      recipe,
+      photoAspect,
+      size,
+      size,
+      config.view,
+      undefined,
+      paintFor(config.view)
+    );
 
     // Composite flat render onto a sleek dark studio background:
     const bgR = 26;

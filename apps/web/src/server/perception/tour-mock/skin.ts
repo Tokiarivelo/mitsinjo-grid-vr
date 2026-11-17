@@ -6,10 +6,10 @@ import {
   atlasUv,
   faceSlot,
 } from '@/lib/face-atlas';
-import { skinSample, toCamera, type SkinBox, type SkinView } from '@/lib/face-skin';
-import type { ObjectRecipe } from '@/lib/object-shape';
+import { skinSample, type SkinBox, type SkinMode, type SkinView } from '@/lib/face-skin';
 import type { FlatPaint } from '../flat-render';
-import { applyTransform, partTransform, type Mask } from '../silhouette-fit';
+import { recipeBox } from '../recipe-box';
+import type { Mask } from '../silhouette-fit';
 
 /**
  * Faces of a 360° tour object (VS-T43, mock only, user exception 2026-11-17): the front face is
@@ -51,26 +51,7 @@ export function outlineFrame(outline: ReadonlyArray<PanoRing>) {
   };
 }
 
-/** Box of a recipe's parts (no yaw of its own) in the camera frame of `view`: their corners. */
-export function recipeBox(recipe: ObjectRecipe, view: SkinView = { yaw: 0, pitch: 0 }): SkinBox {
-  const flat = { ...recipe, yaw: undefined };
-  const lo = [Infinity, Infinity, Infinity];
-  const hi = [-Infinity, -Infinity, -Infinity];
-  for (const p of flat.parts) {
-    const t = partTransform(flat, p);
-    for (const x of [-0.5, 0.5])
-      for (const y of [-0.5, 0.5])
-        for (const z of [-0.5, 0.5]) {
-          const q = toCamera(applyTransform(t, [x, y, z]), view);
-          for (let k = 0; k < 3; k++) {
-            lo[k] = Math.min(lo[k]!, q[k]!);
-            hi[k] = Math.max(hi[k]!, q[k]!);
-          }
-        }
-  }
-  const r = (v: number) => Math.round(v * 1e4) / 1e4;
-  return [r(lo[0]!), r(lo[1]!), r(lo[2]!), r(hi[0]!), r(hi[1]!), r(hi[2]!)];
-}
+export { recipeBox };
 
 /** The mask pulled in by `r` pixels (a pixel stays when its whole square neighbourhood is in). */
 export function erodeMask(mask: Mask, r: number): Mask {
@@ -284,6 +265,14 @@ export function skinAtlas(
     top: meanFill(front, size),
     bottom: meanFill(front, size),
   };
+  return packAtlas(tiles, size);
+}
+
+/** Six canonical tiles (`size`², raw RGB) laid out as a face atlas (`lib/face-atlas.ts`). */
+export function packAtlas(
+  tiles: Readonly<Record<(typeof ATLAS_VIEWS)[number], Uint8Array>>,
+  size: number
+): SkinAtlas {
   const width = size * FACE_ATLAS_COLS;
   const height = size * FACE_ATLAS_ROWS;
   const rgb = new Uint8Array(width * height * 3);
@@ -298,10 +287,15 @@ export function skinAtlas(
 }
 
 /** The atlas as a paint of the flat renders: each point the colour of the tile it looks at. */
-export function skinPaint(atlas: SkinAtlas, box: SkinBox, view: SkinView): FlatPaint {
+export function skinPaint(
+  atlas: SkinAtlas,
+  box: SkinBox,
+  view: SkinView,
+  mode: SkinMode = 'photo'
+): FlatPaint {
   const { rgb, width, height } = atlas;
   return (p, n) => {
-    const hit = skinSample(p, n, box, view);
+    const hit = skinSample(p, n, box, view, mode);
     const [u, v] = atlasUv(faceSlot(hit.tile), hit.s, hit.t);
     const x = Math.min(width - 1, Math.max(0, u * width - 0.5));
     const y = Math.min(height - 1, Math.max(0, (1 - v) * height - 0.5));
