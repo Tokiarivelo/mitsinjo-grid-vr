@@ -28,6 +28,14 @@ export const ARCHETYPE_CLEARING_MARGIN: Record<KitArchetype, number> = {
   person: 0.4,
   animal: 0.4,
   water: 0.6,
+  seat: 0.4,
+  table: 0.5,
+  storage: 0.5,
+  bed: 0.5,
+  textile: 0.3,
+  fixture: 0.3,
+  structure: 0.6,
+  terrain: 0.5,
   other: 0.5,
 };
 

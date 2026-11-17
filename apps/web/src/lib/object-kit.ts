@@ -33,6 +33,15 @@ export const KIT_ARCHETYPES = [
   'person',
   'animal',
   'water', // river, pond, pool (flat)
+  // PQ-T87: classes with a specialist team of their own (furniture, textiles, fixtures…).
+  'seat', // sofa, armchair, chair, stool, pouf, bench
+  'table', // table, island, side table, trolley
+  'storage', // wardrobe, cupboard, sideboard, shelf, counter
+  'bed', // bed
+  'textile', // curtain, sheer, rug, photo backdrop
+  'fixture', // door, window, mirror, picture, frame
+  'structure', // fence, gate, railing, pylon, bridge, solar array
+  'terrain', // rock, fallen log, stump, tyre
   'other', // plain box
 ] as const;
 export type KitArchetype = (typeof KIT_ARCHETYPES)[number];
@@ -162,6 +171,14 @@ export const ANATOMY: Record<KitArchetype, readonly string[]> = {
   person: ['head', 'torso', 'arms', 'legs'],
   animal: ['head', 'body', 'legs', 'tail'],
   water: [],
+  seat: ['seat', 'backrest', 'armrests', 'cushions', 'legs'],
+  table: ['top', 'apron', 'legs'],
+  storage: ['body', 'doors', 'drawers', 'shelves', 'handles', 'plinth'],
+  bed: ['frame', 'mattress', 'headboard', 'pillows', 'blanket', 'legs'],
+  textile: ['rod', 'panel', 'folds', 'tieback'],
+  fixture: ['frame', 'panes', 'handle', 'arch'],
+  structure: ['posts', 'rails', 'bars', 'lattice', 'gate'],
+  terrain: ['body'],
   other: [],
 };
 
@@ -253,6 +270,13 @@ export const ARCHETYPE_SIZE_MM: Partial<
   building: { w: [5000, 40000], h: [3000, 20000], d: [5000, 30000] },
   tree: { w: [1000, 15000], h: [2000, 30000], d: [1000, 15000] },
   bush: { w: [300, 4000], h: [300, 3000], d: [300, 4000] },
+  seat: { w: [350, 2600], h: [350, 1200], d: [350, 1100] },
+  table: { w: [400, 3000], h: [350, 1100], d: [350, 1300] },
+  storage: { w: [300, 3000], h: [400, 2500], d: [250, 900] },
+  bed: { w: [800, 2200], h: [300, 1500], d: [1800, 2400] },
+  textile: { w: [300, 5000], h: [300, 3500], d: [5, 300] },
+  fixture: { w: [300, 3000], h: [300, 2800], d: [20, 300] },
+  terrain: { w: [200, 6000], h: [100, 3000], d: [200, 6000] },
 };
 
 /**
@@ -321,6 +345,187 @@ export function archetypeOf(target: {
   return picked ?? defaultArchetype(target.category, target.scenery, target.label);
 }
 
+/**
+ * Whole words in any script (« canapé », « étagère »: `\b` stops at an accent), each with an
+ * optional plural ending.
+ */
+const words = (list: ReadonlyArray<string>, notAfter: ReadonlyArray<string> = []) =>
+  new RegExp(
+    `(?<![\\p{L}\\p{N}_])${notAfter.length ? `(?<!(?:${notAfter.join('|')})\\s+)` : ''}(?:${list.join('|')})(?:s|x|es)?(?![\\p{L}\\p{N}_])`,
+    'iu'
+  );
+
+/** Labels of the classes with their own team (PQ-T87), en / fr / mg, checked in this order. */
+export const FURNITURE_LABELS: ReadonlyArray<readonly [KitArchetype, RegExp]> = [
+  // « flower bed », « river bed » are not beds.
+  [
+    'bed',
+    words(
+      ['bed', 'bunk', 'cot', 'crib', 'lit', 'berceau', 'fandriana', 'farafara'],
+      ['flower', 'garden', 'seed', 'river', 'sea', 'reed', 'plant', 'oyster']
+    ),
+  ],
+  [
+    'seat',
+    words([
+      'sofa',
+      'couch',
+      'settee',
+      'armchair',
+      'chair',
+      'stool',
+      'pouf',
+      'ottoman',
+      'bench',
+      'seat',
+      'canapé',
+      'canape',
+      'fauteuil',
+      'chaise',
+      'tabouret',
+      'banc',
+      'banquette',
+      'siège',
+      'siege',
+      'seza',
+      'fipetrahana',
+      'dabilio',
+    ]),
+  ],
+  [
+    'table',
+    words([
+      'table',
+      'desk',
+      'island',
+      'trolley',
+      'nightstand',
+      'guéridon',
+      'gueridon',
+      'bureau',
+      'desserte',
+      'îlot',
+      'ilot',
+      'latabatra',
+    ]),
+  ],
+  [
+    'storage',
+    words([
+      'wardrobe',
+      'cupboard',
+      'closet',
+      'sideboard',
+      'dresser',
+      'shelf',
+      'shelves',
+      'shelving',
+      'bookcase',
+      'counter',
+      'drawers',
+      'armoire',
+      'placard',
+      'buffet',
+      'commode',
+      'étagère',
+      'etagere',
+      'comptoir',
+      'bibliothèque',
+      'lalimoara',
+      'talantalana',
+      'vata',
+    ]),
+  ],
+  [
+    'textile',
+    words([
+      'curtain',
+      'drape',
+      'sheer',
+      'blind',
+      'rug',
+      'carpet',
+      'backdrop',
+      'rideau',
+      'voilage',
+      'tapis',
+      'ridao',
+      'lamba',
+      'tsihy',
+      'tapy',
+    ]),
+  ],
+  [
+    'fixture',
+    words([
+      'door',
+      'window',
+      'mirror',
+      'painting',
+      'picture',
+      'frame',
+      'poster',
+      'porte',
+      'fenêtre',
+      'fenetre',
+      'miroir',
+      'tableau',
+      'cadre',
+      'varavarana',
+      'varavarankely',
+      'fitaratra',
+      'sary',
+    ]),
+  ],
+  [
+    'structure',
+    words([
+      'fence',
+      'gate',
+      'railing',
+      'balustrade',
+      'pylon',
+      'bridge',
+      'pergola',
+      'trellis',
+      'clôture',
+      'cloture',
+      'portail',
+      'garde-corps',
+      'pylône',
+      'pont',
+      'treillis',
+      'fefy',
+      'vavahady',
+      'tetezana',
+    ]),
+  ],
+];
+
+/** Things lying on the ground (PQ-T87), checked after the houses (« stone house », « log cabin »). */
+export const GROUND_LABELS: ReadonlyArray<readonly [KitArchetype, RegExp]> = [
+  [
+    'terrain',
+    words([
+      'rock',
+      'boulder',
+      'stone',
+      'log',
+      'stump',
+      'tyre',
+      'tire',
+      'rocher',
+      'pierre',
+      'roche',
+      'souche',
+      'pneu',
+      'vato',
+      'kodiarana',
+      'fakan-kazo',
+    ]),
+  ],
+];
+
 /** Archetype the detection already implies (mock mode, and the hint sent to Spark). */
 export function defaultArchetype(
   category: ApplianceCategory,
@@ -350,6 +555,13 @@ export function defaultArchetype(
     ) {
       return 'vehicle';
     }
+    // A lamp before the furniture it stands on (« table lamp », « desk lamp »).
+    if (/\b(lamp|light|lantern|street_light|lamppost|lamp_post|jiro)\b/i.test(norm)) {
+      return 'lamp_post';
+    }
+    // PQ-T87: furniture, textiles and fixtures before the house words (« wall mirror », « shop shelf »).
+    const furniture = FURNITURE_LABELS.find(([, re]) => re.test(norm));
+    if (furniture) return furniture[0];
     if (
       /\b(house|cottage|building|roof|wall|barn|shed|cabin|hut|shop|maison|trano|batiment)\b/i.test(
         norm
@@ -357,6 +569,8 @@ export function defaultArchetype(
     ) {
       return 'house';
     }
+    const ground = GROUND_LABELS.find(([, re]) => re.test(norm));
+    if (ground) return ground[0];
     // PQ-T79: a tree is often named by its species only (« baobab », « acacia »).
     if (
       /\b(tree|trees|palm|palms|pine|conifer|willow|hazo|arbre|baobab|acacia|eucalyptus|oak|mango|coconut|cedar|cypress|banana|ravenala|jackfruit|avocado)\b/i.test(
@@ -367,9 +581,6 @@ export function defaultArchetype(
     }
     if (/\b(bush|plant|hedge|shrub|flower|flowers|grass|topiary)\b/i.test(norm)) {
       return 'bush';
-    }
-    if (/\b(lamp|light|lantern|street_light|lamppost|lamp_post|jiro)\b/i.test(norm)) {
-      return 'lamp_post';
     }
   }
   const byCategory: Record<ApplianceCategory, KitArchetype> = {
@@ -904,6 +1115,50 @@ export const TEMPLATES: Record<KitArchetype, Template> = {
     ),
   ],
   water: ({ colors: c }) => [part('cylinder', [0, 0, 0], [1, 1, 1], c.main, { front: true })],
+  // PQ-T87: plain stand-ins until a team's reading builds the piece (PQ-T88/T89).
+  seat: ({ colors: c, details: d }) => [
+    part('box', [0, -0.05, 0.05], [1, 0.22, 0.9], c.main, { front: true }),
+    part('box', [0, 0.3, -0.38], [1, 0.5, 0.18], c.main),
+    ...[-0.4, 0.4]
+      .flatMap((x) =>
+        [-0.38, 0.4].map((z) => part('box', [x, -0.33, z], [0.08, 0.34, 0.08], c.secondary))
+      )
+      .slice(0, Math.max(0, Math.min(4, d?.legs ?? 4))),
+  ],
+  table: ({ colors: c, details: d }) => [
+    part('box', [0, 0.46, 0], [1, 0.08, 1], c.main, { front: true }),
+    ...[-0.45, 0.45]
+      .flatMap((x) =>
+        [-0.42, 0.42].map((z) => part('box', [x, -0.04, z], [0.07, 0.92, 0.07], c.secondary))
+      )
+      .slice(0, Math.max(1, Math.min(4, d?.legs ?? 4))),
+  ],
+  storage: ({ colors: c, details: d }) => [
+    part('box', [0, 0.02, 0], [1, 0.96, 1], c.main, { front: true }),
+    part('box', [0, -0.49, 0.02], [0.96, 0.02, 0.94], c.secondary),
+    ...((d?.doors ?? 2) >= 2 ? [part('box', [0, 0.02, 0.5], [0.01, 0.9, 0.02], c.secondary)] : []),
+  ],
+  bed: ({ colors: c }) => [
+    part('box', [0, -0.28, 0.04], [1, 0.3, 0.92], c.secondary, { kind: 'frame' }),
+    part('box', [0, -0.03, 0.05], [0.96, 0.2, 0.88], c.main, { front: true }),
+    part('box', [0, 0.1, -0.46], [1, 0.8, 0.08], c.secondary),
+  ],
+  textile: ({ colors: c }) => [
+    part('cylinder', [0, 0.48, 0], [1, 0.04, 0.04], c.secondary, { axis: 'x' }),
+    part('box', [0, -0.02, 0], [0.98, 0.96, 0.6], c.main, { front: true }),
+  ],
+  fixture: ({ colors: c }) => [
+    part('box', [0, 0, 0], [1, 1, 0.6], c.secondary, { kind: 'frame' }),
+    part('box', [0, 0, 0.25], [0.84, 0.88, 0.2], c.accent, { front: true }),
+  ],
+  structure: ({ colors: c, details: d }) => [
+    ...spread(Math.max(2, Math.min(6, d?.legs ?? 4)), 0.94).map((x) =>
+      part('box', [x, 0, 0], [0.05, 1, 0.6], c.main)
+    ),
+    part('box', [0, 0.3, 0], [1, 0.05, 0.4], c.secondary, { front: true }),
+    part('box', [0, -0.3, 0], [1, 0.05, 0.4], c.secondary),
+  ],
+  terrain: ({ colors: c }) => [part('sphere', [0, 0, 0], [1, 1, 1], c.main, { front: true })],
   other: ({ colors: c }) => [part('box', [0, 0, 0], [1, 1, 1], c.main, { front: true })],
 };
 

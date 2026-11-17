@@ -56,10 +56,23 @@ export interface ImageRoute {
  * library, the living will grow procedurally (PQ-T50), people and animals go smooth (SDF, later),
  * the template-less rest is built from free parts (parametric).
  */
+/** The classes added with their own specialist team (PQ-T87). */
+export const PARAMETRIC_ARCHETYPES: ReadonlySet<KitArchetype> = new Set([
+  'seat',
+  'table',
+  'storage',
+  'bed',
+  'textile',
+  'fixture',
+  'structure',
+  'terrain',
+]);
+
 export function familyOf(archetype: KitArchetype): RepresentationFamily {
   if (archetype === 'tree' || archetype === 'bush') return 'procedural';
   if (archetype === 'person' || archetype === 'animal') return 'sdf';
-  if (archetype === 'other') return 'parametric';
+  // PQ-T87: furniture, textiles, fixtures, structures and terrain are built from parts.
+  if (archetype === 'other' || PARAMETRIC_ARCHETYPES.has(archetype)) return 'parametric';
   return 'library';
 }
 

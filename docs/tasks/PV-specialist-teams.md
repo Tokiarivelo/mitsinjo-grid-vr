@@ -145,14 +145,14 @@ En gras : spécialistes propres à une équipe. Les autres viennent de `team/sha
 - [x] Fixtures maison / voiture rejouées ; écarts listés dans `docs/copilot.md`.
 - [x] Un test par spécialiste partagé (schéma, `answered`, parse).
 
-### PQ-T87 — Registre et nouveaux archétypes
+### [x] PQ-T87 — Registre et nouveaux archétypes
 
-- [ ] `team/registry.ts` : `teamFor(archetype)` (null = chemin actuel) + test.
-- [ ] `recon/route.ts` : plus de `archetype === 'vehicle' | 'tree' | 'house'`, passage par `teamFor`.
-- [ ] `KIT_ARCHETYPES` + `seat`, `table`, `storage`, `bed`, `textile`, `fixture`, `structure`, `terrain`.
-- [ ] Détection par libellé en / fr / mg pour chacun (canapé, chaise, armoire, rideau, clôture, rocher…) + tests.
-- [ ] `familyOf` → `parametric` pour les nouveaux ; libellés i18n en / fr / mg (`make check-i18n`).
-- [ ] `docs/contracts.md` : liste des archétypes et types de lecture.
+- [x] `team/registry.ts` : `teamFor(archetype)` (null = chemin actuel) + test.
+- [x] `recon/route.ts` : plus de `archetype === 'vehicle' | 'tree' | 'house'`, passage par `teamFor`.
+- [x] `KIT_ARCHETYPES` + `seat`, `table`, `storage`, `bed`, `textile`, `fixture`, `structure`, `terrain`.
+- [x] Détection par libellé en / fr / mg pour chacun (canapé, chaise, armoire, rideau, clôture, rocher…) + tests.
+- [x] `familyOf` → `parametric` pour les nouveaux ; libellés i18n en / fr / mg (`make check-i18n`).
+- [x] `docs/contracts.md` : liste des archétypes et types de lecture.
 
 ### PQ-T88 — Builders de mobilier (réutilisés par la visite)
 

@@ -24,6 +24,14 @@ export const PART_CONCEPTS: Record<KitArchetype, ReadonlyArray<string>> = {
   person: [],
   animal: [],
   water: [],
+  seat: [],
+  table: [],
+  storage: [],
+  bed: [],
+  textile: [],
+  fixture: [],
+  structure: [],
+  terrain: [],
   other: [],
 };
 
