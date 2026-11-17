@@ -220,12 +220,14 @@ function createImpactRing(): THREE.Mesh {
 }
 
 /**
- * Whether the mouse's own cursor shows in the headset view (VS-T47): only on something it can
- * use (button, panel, object, arrow, Menu). Resting on a wall or the photo it drew a third ring
- * beside the two lasers' cursors, taken for a laser's focus.
+ * Whether the mouse's own cursor shows, and takes the hover, in the headset view (VS-T47): only on
+ * the interface (menu, its buttons, panels, the Menu button). Objects, miniatures and floor arrows
+ * belong to the lasers: in the emulator a mouse move also turns the controllers, so mouse and laser
+ * took the hover in turns and the outlined objects blinked; on a wall it drew a third ring.
+ * `locked` (pointer lock: the mouse turns the head) never shows it.
  */
-export function mouseCursorShown(kind: AimKind): boolean {
-  return kind !== 'none' && kind !== 'screen';
+export function mouseCursorShown(kind: AimKind, locked = false): boolean {
+  return !locked && (kind === 'panel' || kind === 'button' || kind === 'wrist');
 }
 
 /**
@@ -1145,7 +1147,7 @@ export const XRBlasterController = memo(function XRBlasterController({
           panels,
           photo,
         });
-        if (mouseCursorShown(aim.kind)) {
+        if (mouseCursorShown(aim.kind, !!gl.domElement.ownerDocument?.pointerLockElement)) {
           hovered = aim.id ?? hovered;
           rays[2].update({
             origin: _vOrigin,
