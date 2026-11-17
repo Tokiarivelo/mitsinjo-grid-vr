@@ -1,0 +1,174 @@
+1
+00:00:00,400 --> 00:00:03,611
+What if everything around
+you could become a 3D model?
+
+2
+00:00:03,800 --> 00:00:06,691
+Not in a studio. Right where you stand.
+
+3
+00:00:07,400 --> 00:00:11,102
+Put on a headset, and the
+world stops being a picture.
+
+4
+00:00:11,800 --> 00:00:15,496
+It becomes something you can
+point at, take, and build with.
+
+5
+00:00:16,400 --> 00:00:18,987
+See that car? Point at it.
+
+6
+00:00:21,000 --> 00:00:25,600
+The AI sees it, outlines it, and
+rebuilds it in three dimensions.
+
+7
+00:00:25,800 --> 00:00:29,250
+Now imagine doing that to
+power a whole village.
+
+8
+00:00:30,400 --> 00:00:35,524
+This is Mitsinjo Grid VR: a solar
+village twin for off-grid Madagascar,
+
+9
+00:00:35,394 --> 00:00:38,794
+running in the browser with
+Meta's WebXR emulator.
+
+10
+00:00:38,440 --> 00:00:42,816
+On the Village page, I enter
+VR immersion and walk around.
+
+11
+00:00:41,800 --> 00:00:46,086
+One trigger on the floating
+button analyses the current view.
+
+12
+00:00:46,600 --> 00:00:50,800
+Muse Spark detects every
+object, SAM outlines it.
+
+13
+00:00:51,200 --> 00:00:55,061
+Each detection becomes a
+hologram. I aim the laser…
+
+14
+00:00:55,800 --> 00:00:58,430
+…and shoot the object I want.
+
+15
+00:01:00,000 --> 00:01:03,657
+The app asks: extract it in 3D? Yes.
+
+16
+00:01:05,000 --> 00:01:09,800
+I step into the 3D studio.
+Muse Image draws its 2D views:
+
+17
+00:01:10,000 --> 00:01:12,578
+front, sides, back and top.
+
+18
+00:01:14,400 --> 00:01:19,749
+If one view is wrong, I just ask the AI chat,
+by voice or keyboard, and it redraws it.
+
+19
+00:01:19,800 --> 00:01:24,600
+I check every view and validate. Nothing
+is built until a human says yes.
+
+20
+00:01:25,000 --> 00:01:29,600
+From the validated views, the 3D
+model is built, piece by piece.
+
+21
+00:01:29,800 --> 00:01:34,522
+In the 3D lab I turn it, shoot a
+piece to select it, resize it.
+
+22
+00:01:35,400 --> 00:01:39,149
+Every edit goes live to the
+village and to the page.
+
+23
+00:01:41,000 --> 00:01:44,221
+Then I aim at the village
+table and place it.
+
+24
+00:01:45,800 --> 00:01:49,371
+A pole and a cable connect
+it to its feeder line.
+
+25
+00:01:51,400 --> 00:01:56,600
+Insert into simulation: the energy
+engine recomputes every strategy.
+
+26
+00:01:56,400 --> 00:02:00,708
+Go to the simulation. Now I
+am standing inside the grid.
+
+27
+00:02:01,000 --> 00:02:06,200
+I walk the village at human scale. Walls
+stop me, the ground follows my feet.
+
+28
+00:02:06,400 --> 00:02:11,841
+Labels, a live map, and every line
+carrying the engine's simulated power.
+
+29
+00:02:12,400 --> 00:02:17,200
+I aim at a building: a hologram panel
+shows what the engine serves it.
+
+30
+00:02:17,400 --> 00:02:21,444
+Minus half a kilowatt. The
+whole village sees the change.
+
+31
+00:02:22,400 --> 00:02:26,879
+I walk in: the lights inside glow
+with the power it really gets.
+
+32
+00:02:28,600 --> 00:02:33,094
+At the dispatcher, a mixing desk.
+Start the battery and dispatch.
+
+33
+00:02:33,400 --> 00:02:38,000
+One fader per sector. Slide, release,
+and the energy flows change.
+
+34
+00:02:38,200 --> 00:02:42,200
+Try to cut the clinic? Refused. The
+village constitution protects it.
+
+35
+00:02:41,940 --> 00:02:46,521
+Mitsinjo Grid VR. Point at the
+world. Build it. Power it.
+
+36
+00:02:46,800 --> 00:02:51,829
+Every number comes from the engine.
+Every action stays in human hands.

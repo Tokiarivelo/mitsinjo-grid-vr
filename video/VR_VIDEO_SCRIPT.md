@@ -514,3 +514,21 @@ video/
 - [ ] Sous-titres incrustés + `.srt` téléversé ; voix à −14 LUFS
 - [ ] Export 1440p H.264, faststart ; vérifié sur mobile
 - [ ] Crédits musique dans la vidéo et le README
+
+---
+
+## 11. Génération automatique (sans casque, sans écran)
+
+Toute la vidéo se régénère depuis le dépôt, dans un conteneur sans GPU :
+
+| Étape       | Commande                | Ce qu'elle fait                                                                                                       |
+| ----------- | ----------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| App         | `make dev-mock`         | App locale, perception simulée (`LLM_PROVIDER=meta` + clé pour de vrais appels Meta)                                  |
+| Tournage    | `make video-capture-vr` | `capture-vr.mjs` : émulateur IWER piloté, captures + marqueurs (`captures/raw/vr-village`, `vr-sim`)                  |
+| Intro/outro | `make video-canvas-vr`  | `canvas/vr-intro.html` (Three.js procédural : casque, voiture, laptop sans logo) et `vr-outro.html`, image par image  |
+| Voix        | `make video-voice-vr`   | `tts-srt.py` : une réplique Kokoro par sous-titre du § 3                                                              |
+| Montage     | `make video-build-vr`   | `build-vr.py` : découpe aux marqueurs, badge « TIME-LAPSE ×N », titres de section, fondus, voix, musique, `vr-en.srt` |
+
+Sortie : `video/output/mitsinjo-grid-vr-1440p.mp4` et `video/output/vr-chapters.json` (chapitres YouTube).
+Limites : sans GPU le village se rend à ≈ 1–8 i/s, d'où les accélérés lissés ; les captures en mode `mock`
+montrent des réponses IA scriptées (retourner avec une clé Meta avant la soumission).

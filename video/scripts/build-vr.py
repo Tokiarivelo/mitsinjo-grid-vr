@@ -44,8 +44,9 @@ SIM = [
     ("vr-sim", "sim-clinic", "sim-end", 5.0, "Clinic protected"),
 ]
 INTRO_S = 38.0
-OUTRO_S = 11.0
+OUTRO_S = 13.0
 XF = 0.8  # cross-fade between sections
+REUSE = bool(__import__('os').environ.get('REUSE'))  # keep encoded clips (caption or audio-only changes)
 
 
 def run(cmd: list[str]) -> None:
@@ -88,7 +89,7 @@ def clip(i: int, cap: str, a: str, b: str, dur: float, label: str | None, size: 
     s = int(h) / 1080
     if speed > 2.5:
         vf.append(
-            f"drawtext=fontfile={FONT}:text='⏩ ×{round(speed)}':x=w-tw-{int(48 * s)}:y={int(44 * s)}:"
+            f"drawtext=fontfile={FONT}:text='TIME-LAPSE ×{round(speed)}':x=w-tw-{int(48 * s)}:y={int(44 * s)}:"
             f"fontsize={int(30 * s)}:fontcolor=white@0.9:box=1:boxcolor=0x080d1a@0.6:boxborderw={int(14 * s)}"
         )
     if label:
@@ -103,6 +104,8 @@ def clip(i: int, cap: str, a: str, b: str, dur: float, label: str | None, size: 
             f"shadowcolor=black@0.7:shadowx=2:shadowy=2:box=1:boxcolor=0x080d1a@0.55:boxborderw={int(14 * s)}"
         )
     out = WORK / f"clip-{i:02d}.mp4"
+    if REUSE and out.exists():
+        return out
     ff("-f", "concat", "-safe", "0", "-i", str(lst), "-vf", ",".join(vf), "-t", f"{dur:.3f}", *enc(size), "-an", str(out))
     print(f"clip {i:02d} {a} → {b}: {t1 - t0:.1f}s → {dur}s (×{speed:.1f})")
     return out
@@ -110,6 +113,8 @@ def clip(i: int, cap: str, a: str, b: str, dur: float, label: str | None, size: 
 
 def frames_clip(name: str, dur: float, size: str) -> Path:
     out = WORK / f"{name}.mp4"
+    if REUSE and out.exists():
+        return out
     w, h = size.split("x")
     ff("-framerate", str(FPS), "-i", str(VIDEO / "frames" / name / "%05d.png"), "-t", f"{dur}",
        "-vf", f"scale={w}:{h}:flags=lanczos", *enc(size), "-an", str(out))
@@ -148,13 +153,33 @@ def main() -> None:
     o3 = o2 + s_dur - XF
     total = o3 + OUTRO_S
     print(f"village starts {o1:.1f}s, simulation {o2:.1f}s, outro {o3:.1f}s, total {total:.1f}s")
+    # Chapters (YouTube description, the review page): intro, each labelled clip, outro.
+    chapters = [{"t": 0.0, "part": "Intro", "title": "What if everything could be 3D?"}]
+    for part, start, clips in (("Village", o1, VILLAGE), ("Simulation", o2, SIM)):
+        at = start
+        for c in clips:
+            if c[4]:
+                chapters.append({"t": round(at, 1), "part": part, "title": c[4]})
+            at += c[3]
+    chapters.append({"t": round(o3, 1), "part": "Outro", "title": "Point at the world. Build it. Power it."})
+    (VIDEO / "output" / "vr-chapters.json").write_text(json.dumps(chapters, indent=1))
 
     # Voice: each cue at its script time, pushed later if the previous one is still speaking.
     cues = json.loads((VIDEO / "audio" / "voice" / "vr" / "cues.json").read_text())
     t = 0.0
     srt = []
+    # The script times (§ 3) assume sections at 0:38 / 1:58 / 2:44: shift each block to its real start.
+    def shift(n: int) -> float:
+        if n >= 35:
+            return o3 - 164.4
+        if n >= 26:
+            return o2 - 118.2
+        if n >= 10:
+            return o1 - 38.4
+        return 0.0
+
     for c in cues:
-        start = max(c["start"], t + 0.12)
+        start = max(c["start"] + shift(c["n"]), t + 0.12)
         c["at"] = start
         t = start + c["dur"]
         end = max(t + 0.25, min(start + c["end"] - c["start"], start + c["dur"] + 1.2))
@@ -204,7 +229,7 @@ def main() -> None:
     s = int(h) / 1080
     sub_style = (
         f"FontName=Inter Medium,FontSize={int(15)},PrimaryColour=&H00FFFFFF,OutlineColour=&H00101820,"
-        f"BackColour=&H80080D1A,BorderStyle=1,Outline=1.4,Shadow=0.6,MarginV=34,Alignment=2"
+        f"BackColour=&H40080D1A,BorderStyle=4,Outline=6,Shadow=0,MarginV=30,Alignment=2"
     )
     v_graph = (
         f"[0:v][1:v]xfade=transition=fade:duration={XF}:offset={o1:.3f}[a];"
