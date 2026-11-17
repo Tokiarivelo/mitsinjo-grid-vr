@@ -193,6 +193,13 @@ export function chair(c: ChairSpec): PartSpec[] {
 }
 
 /** A bar or wooden stool: round or square top, four legs, a ring or rails. */
+/**
+ * The stool's top for a measured overall width (metres): the inverse of `stool`'s outline, whose
+ * widest part is the foot ring (0.9 × the legs' 1.25 × top spread) or, on a wide top, the legs.
+ */
+export const stoolTopFor = (width: number): number =>
+  Math.max(0.1, Math.min(width / 1.125, (width + 0.085) / 1.25));
+
 export function stool(
   h: number,
   top: number,
@@ -257,14 +264,25 @@ export function bed(
   return out;
 }
 
-/** A table: round or square top on legs, or on a centre pedestal with feet. */
+/** A table: round or square top on legs, a centre pedestal with feet, waterfall ends or a closed base. */
 export function table(
   h: number,
   w: number,
   d: number,
   top: string,
   leg: string,
-  o: { round?: boolean; pedestal?: boolean; topT?: number; material?: PartSpec['material'] } = {}
+  o: {
+    round?: boolean;
+    pedestal?: boolean;
+    /** The top runs down both ends to the floor (waterfall island, slab desk). */
+    waterfall?: boolean;
+    /** A modesty panel between the ends or legs, set back toward one long side. */
+    panel?: string;
+    /** A closed base box under the top (a crate, a block table) instead of legs. */
+    plinth?: boolean;
+    topT?: number;
+    material?: PartSpec['material'];
+  } = {}
 ): PartSpec[] {
   const t = o.topT ?? 0.04;
   const mat = o.material ?? 'wood';
@@ -275,7 +293,33 @@ export function table(
       concept: 'table',
     }),
   ];
-  if (o.pedestal)
+  if (o.panel)
+    out.push(
+      box([0, (h - t) * 0.56, d / 3], [w * 0.95, (h - t) * 0.78, 0.03], o.panel, {
+        material: mat,
+        kind: 'body',
+        concept: 'frame',
+      })
+    );
+  if (o.plinth)
+    out.push(
+      box([0, (h - t) / 2, 0], [w * 0.98, h - t, d * 0.98], leg, {
+        material: mat,
+        kind: 'frame',
+        concept: 'frame',
+      })
+    );
+  else if (o.waterfall)
+    out.push(
+      ...[-1, 1].map((s) =>
+        box([s * (w / 2 - t / 2), (h - t) / 2, 0], [t, h - t, d], top, {
+          material: mat,
+          kind: 'frame',
+          concept: 'leg',
+        })
+      )
+    );
+  else if (o.pedestal)
     out.push(
       cyl([0, (h - t) / 2, 0], [0.07, h - t, 0.07], leg, {
         material: mat,

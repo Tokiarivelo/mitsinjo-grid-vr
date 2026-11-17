@@ -90,7 +90,7 @@ export const SHELVES_SPEC = {
 };
 
 /** 1: first version. */
-export const STORAGE_PROMPT_VERSION = 1;
+export const STORAGE_PROMPT_VERSION = 2;
 
 export const STORAGE_TEAM = furnitureTeam({
   id: 'storage',
@@ -104,6 +104,7 @@ export const STORAGE_TEAM = furnitureTeam({
     ['front', 'the doors and drawer fronts'],
     ['worktop', 'a worktop of another finish'],
     ['handle', 'handles and knobs'],
+    ['frame', 'the posts of an open rack'],
   ],
   materials: ['wood', 'metal', 'glass', 'stone', 'plastic'],
   own: {
@@ -139,6 +140,10 @@ const STORAGE_HEIGHT: Record<StorageKind, number> = {
 };
 
 /** A storage reading on its measured proportions (largest side = 1) → the cabinet or shelving parts. */
+/** An open rack on posts: the supports read as a frame of thin posts reaching the floor. */
+export const hasPosts = (r: StorageReading): boolean =>
+  r.legs.some((l) => l.kind === 'frame' && l.section !== 'flat' && l.box[3] >= 0.95);
+
 export function storageParts(
   r: StorageReading,
   p: { w: number; h: number; d: number }
@@ -149,7 +154,9 @@ export function storageParts(
   const color = finishColor(r, ['carcass', 'front'], WOOD);
   const front = r.own.fronts.filter((f) => f.view === 'front' && f.kind !== 'open_bay');
   if (r.own.open || (kind === 'shelf' && !front.length))
-    return shelving(w, h, d, color, Math.max(1, r.own.shelves));
+    return shelving(w, h, d, color, Math.max(1, r.own.shelves), {
+      ...(hasPosts(r) ? { posts: finishColor(r, ['frame'], '#2b2b2d') } : {}),
+    });
   // Doors side by side: the fronts in the upper half of the front drawing, at least one.
   const doors = Math.max(1, Math.min(8, front.filter((f) => (f.box?.[1] ?? 0) < 0.5).length));
   const top = r.finishes.find((f) => f.finish === 'worktop');
