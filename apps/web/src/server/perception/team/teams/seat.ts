@@ -1,4 +1,4 @@
-import { chair, cyl, sofa, stool, WOOD, type PartSpec } from '../../furniture';
+import { chair, cyl, sofa, stool, stoolTopFor, WOOD, type PartSpec } from '../../furniture';
 import {
   FURNITURE_FRAME,
   enumField,
@@ -135,10 +135,28 @@ const SEAT_HEIGHT: Record<SeatKind, number> = {
   pouf: 0.42,
 };
 
+/** Usual seat height (metres) of a chair or sofa and of a bar chair (seat above BAR_SEAT_SHARE). */
+const SEAT_LEVEL = 0.45;
+const BAR_SEAT = 0.75;
+const BAR_SEAT_SHARE = 0.58;
+/** Kinds whose height follows their read seat line. */
+const BY_SEAT_LINE: ReadonlySet<SeatKind> = new Set(['chair', 'armchair', 'sofa']);
+
+/**
+ * Full height of a seat (metres). A chair, armchair or sofa with a read seat line takes it from
+ * there: a usual seat height over the seat's share of the drawing (a high share on a chair = a bar
+ * chair), so legs, arms and frame keep their real thickness against the whole. Else: its usual height.
+ */
+export function seatHeight(r: SeatReading, kind: SeatKind): number {
+  const share = BY_SEAT_LINE.has(kind) ? lineHeight(r, 'seat', 1) : null;
+  if (share === null || share < 0.2 || share > 0.85) return SEAT_HEIGHT[kind];
+  return (kind === 'chair' && share > BAR_SEAT_SHARE ? BAR_SEAT : SEAT_LEVEL) / share;
+}
+
 /** A seat reading on its measured proportions (largest side = 1) → the seat builders' parts. */
 export function seatParts(r: SeatReading, p: { w: number; h: number; d: number }): PartSpec[] {
   const kind = enumField(r.kind, SEAT_KINDS, 'chair');
-  const h = SEAT_HEIGHT[kind];
+  const h = seatHeight(r, kind);
   const { w, d } = footprint(h, p);
   const u = r.own;
   const color = finishColor(r, ['upholstery', 'cushion'], '#8a8580');
@@ -155,8 +173,8 @@ export function seatParts(r: SeatReading, p: { w: number; h: number; d: number }
       cyl([0, h / 2, 0], [w, h, d], color, { material: 'fabric', kind: 'body', concept: 'seat' }),
     ];
   if (kind === 'stool')
-    // The stool's legs splay to 1.25 × its top: the top is the measured width over that.
-    return stool(h, Math.min(w, d) / 1.25, color, legColor, profileOn(r).top === 'rounded');
+    // The measured width is the stool's whole outline (its foot ring): the top is read back from it.
+    return stool(h, stoolTopFor(Math.min(w, d)), color, legColor, profileOn(r).top === 'rounded');
   if (kind === 'chair')
     return chair({
       w,

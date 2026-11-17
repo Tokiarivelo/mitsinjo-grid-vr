@@ -17,10 +17,19 @@ import {
 
 export const TABLE_KINDS = ['dining', 'coffee', 'side', 'desk', 'island', 'console'] as const;
 export type TableKind = (typeof TABLE_KINDS)[number];
-export const TABLE_PARTS = ['top', 'legs', 'pedestal', 'apron', 'shelf', 'drawer'] as const;
+export const TABLE_PARTS = [
+  'top',
+  'legs',
+  'pedestal',
+  'waterfall',
+  'modesty_panel',
+  'apron',
+  'shelf',
+  'drawer',
+] as const;
 
-/** 1: first version. */
-export const TABLE_PROMPT_VERSION = 1;
+/** 1: first version. 2: waterfall ends and modesty panel among the parts. */
+export const TABLE_PROMPT_VERSION = 2;
 
 export const TABLE_TEAM = furnitureTeam({
   id: 'table',
@@ -32,6 +41,7 @@ export const TABLE_TEAM = furnitureTeam({
   finishes: [
     ['top', 'the table top'],
     ['frame', 'legs, pedestal and apron'],
+    ['panel', 'a modesty panel between the ends'],
   ],
   materials: ['wood', 'stone', 'glass', 'metal', 'plastic'],
   own: {},
@@ -52,6 +62,16 @@ const TABLE_HEIGHT: Record<TableKind, number> = {
 
 const TOP_MATERIAL = ['wood', 'stone', 'glass', 'metal', 'plastic'] as const;
 
+/**
+ * The top runs down both ends to the floor: the pilot names a waterfall, or the supports are flat
+ * full-height slabs (a frame or plinth of flat section reaching the floor).
+ */
+export const isWaterfall = (r: TableReading): boolean =>
+  r.parts.includes('waterfall') ||
+  r.legs.some(
+    (l) => (l.kind === 'frame' || l.kind === 'plinth') && l.section === 'flat' && l.box[3] >= 0.95
+  );
+
 /** A table reading on its measured proportions (largest side = 1) → the table builder's parts. */
 export function tableParts(r: TableReading, p: { w: number; h: number; d: number }): PartSpec[] {
   const kind = enumField(r.kind, TABLE_KINDS, 'dining');
@@ -60,9 +80,13 @@ export function tableParts(r: TableReading, p: { w: number; h: number; d: number
   const under = lineHeight(r, 'top_under', h);
   const topT = under !== null ? Math.min(0.12, Math.max(0.02, h - under)) : 0.04;
   const top = r.finishes.find((f) => f.finish === 'top');
-  return table(h, w, d, finishColor(r, ['top'], WOOD), finishColor(r, ['frame', 'top'], WOOD), {
+  const frame = finishColor(r, ['frame', 'top'], WOOD);
+  return table(h, w, d, finishColor(r, ['top'], WOOD), frame, {
     round: profileOn(r).top === 'rounded' || profileOn(r, 'side').top === 'rounded',
     pedestal: r.legs.some((l) => l.kind === 'pedestal'),
+    waterfall: isWaterfall(r),
+    plinth: r.legs.some((l) => l.kind === 'plinth' && l.section !== 'flat'),
+    ...(r.parts.includes('modesty_panel') ? { panel: finishColor(r, ['panel'], frame) } : {}),
     topT,
     material: enumField(top?.material, TOP_MATERIAL, 'wood'),
   });

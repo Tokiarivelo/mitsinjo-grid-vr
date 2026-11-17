@@ -1,16 +1,26 @@
 import { describe, expect, it } from 'vitest';
 import { ObjectRecipeSchema, type ObjectRecipe } from '@/lib/object-shape';
-import { FURNITURE_FIXTURES } from '../__fixtures__/teams/furniture';
+import {
+  FURNITURE_FIXTURES as RECORDED,
+  SEAT_TOUR_FIXTURES,
+  TABLE_STORAGE_TOUR_FIXTURES,
+} from '../__fixtures__/teams/furniture';
 import { renderFlat } from '../flat-render';
 import { iou } from '../silhouette-fit';
 import { runTeam, type AskTeamTool } from '../team/team';
 import { FURNITURE_TEAMS, furnitureModel, isFurnitureTeam } from '../team/teams';
 import { parseUpholstery, SEAT_TEAM } from '../team/teams/seat';
-import { parseBedding } from '../team/teams/bed';
+import { bedFrameTop, parseBedding, type BedReading } from '../team/teams/bed';
+import { seatHeight, type SeatReading } from '../team/teams/seat';
+import { isWaterfall, type TableReading } from '../team/teams/table';
+import { hasPosts, type StorageReading } from '../team/teams/storage';
+import { partsBounds, stool, stoolTopFor } from '../furniture';
+import { furnitureParts } from '../team/teams';
 import tourMock from '../tour-mock/tour-mock.json';
 
 const TOUR = tourMock as unknown as Record<string, { recipe: ObjectRecipe }>;
 const ATLAS = 'data:image/jpeg;base64,AAAA';
+const FURNITURE_FIXTURES = [...RECORDED, ...SEAT_TOUR_FIXTURES, ...TABLE_STORAGE_TOUR_FIXTURES];
 
 /** The recorded answer of each tool, as the model would send it. */
 const replay =
@@ -59,6 +69,77 @@ describe('furniture teams (PQ-T89)', () => {
       { label: 'Sofa', views: ['front'], images: ['front.png'] }
     );
     expect(reading).toBeNull();
+  });
+
+  const read = <O>(o: O, extra: Partial<SeatReading> = {}) => ({
+    kind: 'chair',
+    parts: [] as string[],
+    profile: [{ view: 'front' as const, body: [0, 0, 1, 1] as [number, number, number, number] }],
+    legs: [],
+    finishes: [],
+    own: o,
+    ...extra,
+  });
+  const leg = (kind: string, section: string, y1 = 1) => ({
+    kind,
+    view: 'front' as const,
+    box: [0, 0.1, 0.05, y1] as [number, number, number, number],
+    count: 2,
+    section,
+  });
+
+  it('reads a stool top back from its outline', () => {
+    for (const top of [0.3, 0.38, 0.8]) {
+      const [w] = partsBounds(stool(0.75, top, '#000', '#000', true)).dims;
+      expect(stoolTopFor(w)).toBeCloseTo(top, 3);
+    }
+  });
+
+  it('sizes a chair from its seat line (bar chair above 58 %)', () => {
+    const r = (seat: number) =>
+      read(
+        {},
+        {
+          profile: [{ view: 'front', body: [0, 0, 1, 1], lines: { seat: 1 - seat } }],
+        }
+      ) as unknown as SeatReading;
+    expect(seatHeight(r(0.5), 'chair')).toBeCloseTo(0.9);
+    expect(seatHeight(r(0.65), 'chair')).toBeCloseTo(0.75 / 0.65);
+    expect(seatHeight(r(0.5), 'sofa')).toBeCloseTo(0.9);
+    expect(seatHeight(read({}) as unknown as SeatReading, 'stool')).toBe(0.7);
+  });
+
+  it('puts the bed frame under the mattress line, else under the pillows', () => {
+    const bed = (own: object, lines?: Record<string, number>) =>
+      read(own, {
+        profile: [{ view: 'front', body: [0, 0, 1, 1], ...(lines ? { lines } : {}) }],
+      }) as unknown as BedReading;
+    const b = { pillows: 2, headboard: false, blanket: true };
+    expect(bedFrameTop(bed(b, { mattress: 0.4 }), 1)).toBeCloseTo(0.6 - 0.22);
+    expect(bedFrameTop(bed(b), 0.9)).toBeCloseTo(0.9 - 0.62);
+    expect(bedFrameTop(bed({ ...b, headboard: true }), 1.2)).toBe(0.25);
+    expect(bedFrameTop(bed(b), 0.5)).toBe(0.12);
+  });
+
+  it('tells waterfall ends and rack posts from legs', () => {
+    const t = (legs: object[], parts: string[] = []) =>
+      read({}, { legs, parts } as never) as unknown as TableReading;
+    expect(isWaterfall(t([leg('frame', 'flat')]))).toBe(true);
+    expect(isWaterfall(t([leg('frame', 'flat', 0.8)]))).toBe(false);
+    expect(isWaterfall(t([leg('leg', 'round')], ['waterfall']))).toBe(true);
+    expect(isWaterfall(t([leg('leg', 'flat')]))).toBe(false);
+    const st = (legs: object[]) => read({}, { legs } as never) as unknown as StorageReading;
+    expect(hasPosts(st([leg('frame', 'square')]))).toBe(true);
+    expect(hasPosts(st([leg('frame', 'flat')]))).toBe(false);
+    expect(hasPosts(st([]))).toBe(false);
+  });
+
+  it('fits the built outline to the measured proportions', async () => {
+    const { reading, target } = await build('bedroom-chair-director');
+    const p = target.proportions;
+    const [w, h, d] = partsBounds(furnitureParts('seat', reading as never, p)).dims;
+    expect(w / h).toBeCloseTo(p.w / p.h, 2);
+    expect(d / h).toBeCloseTo(p.d / p.h, 2);
   });
 
   describe.each(FURNITURE_FIXTURES.map((f) => f.id))('%s', (id) => {

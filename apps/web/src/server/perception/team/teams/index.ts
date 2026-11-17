@@ -1,4 +1,4 @@
-import { compileSpec, type PartSpec } from '../../furniture';
+import { compileSpec, partsBounds, type PartSpec } from '../../furniture';
 import type { ObjectRecipe } from '@/lib/object-shape';
 import { skinOf } from '../../recipe-box';
 import { runTeam, type AskTeamTool, type SpecialistTeam, type TeamRef } from '../team';
@@ -55,14 +55,37 @@ export const liveReadFurniture =
     return reading;
   };
 
-/** The builder's parts of a reading (metres, named by concept). */
+/** Fit passes: a builder whose outline overruns the asked width or depth is rebuilt this many times. */
+const FIT_PASSES = 2;
+
+/**
+ * The builder's parts of a reading (metres, named by concept). Builders add arms, frames or feet
+ * outside the width and depth they are given: the built outline is measured and the asked
+ * proportions corrected by the overrun (width and depth over height), so the model's outline
+ * matches the measured one.
+ */
 export function furnitureParts(
   id: FurnitureTeamId,
   reading: FurnitureReading<unknown>,
   proportions: Proportions
 ): PartSpec[] {
   const build = FURNITURE_TEAMS[id].parts as (r: AnyReading, p: Proportions) => PartSpec[];
-  return build(reading as AnyReading, proportions);
+  let ask = proportions;
+  let parts = build(reading as AnyReading, ask);
+  for (let i = 0; i < FIT_PASSES && parts.length; i++) {
+    const [bw, bh, bd] = partsBounds(parts).dims;
+    const fix = (want: number, got: number, asked: number) =>
+      asked * ((want / proportions.h) * (bh / got));
+    const next = {
+      w: fix(proportions.w, bw, ask.w),
+      h: ask.h,
+      d: fix(proportions.d, bd, ask.d),
+    };
+    if (Math.abs(next.w - ask.w) < 1e-3 * ask.h && Math.abs(next.d - ask.d) < 1e-3 * ask.h) break;
+    ask = next;
+    parts = build(reading as AnyReading, ask);
+  }
+  return parts;
 }
 
 /**

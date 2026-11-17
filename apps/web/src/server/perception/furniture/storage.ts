@@ -61,21 +61,44 @@ export function shelving(
   d: number,
   color: string,
   shelves: number,
-  o: { material?: PartSpec['material']; t?: number } = {}
+  o: {
+    material?: PartSpec['material'];
+    t?: number;
+    /** Four corner posts of this colour (a metal rack) instead of the two side panels. */
+    posts?: string;
+  } = {}
 ): PartSpec[] {
-  const t = o.t ?? 0.025;
+  // Boards keep a visible share of a tall rack (1.8 % of its height, at least 25 mm).
+  const t = o.t ?? Math.max(0.025, 0.018 * h);
   const material = o.material ?? 'wood';
   const board = (y: number): PartSpec =>
     box([0, y, 0], [w - 2 * t, t, d], color, { material, kind: 'body', concept: 'shelf' });
   const n = Math.max(0, Math.round(shelves));
+  const post = 0.035;
+  const sides = o.posts
+    ? [-1, 1].flatMap((sx) =>
+        [-1, 1].map((sz) =>
+          box(
+            [sx * (w / 2 - post / 2), h / 2, sz * (d / 2 - post / 2)],
+            [post, h, post],
+            o.posts!,
+            {
+              material: 'metal',
+              kind: 'frame',
+              concept: 'frame',
+            }
+          )
+        )
+      )
+    : [-1, 1].map((sx) =>
+        box([sx * (w / 2 - t / 2), h / 2, 0], [t, h, d], color, {
+          material,
+          kind: 'frame',
+          concept: 'frame',
+        })
+      );
   return [
-    ...[-1, 1].map((sx) =>
-      box([sx * (w / 2 - t / 2), h / 2, 0], [t, h, d], color, {
-        material,
-        kind: 'frame',
-        concept: 'frame',
-      })
-    ),
+    ...sides,
     board(t / 2),
     board(h - t / 2),
     ...Array.from({ length: n }, (_, i) => board(((i + 1) * h) / (n + 1))),

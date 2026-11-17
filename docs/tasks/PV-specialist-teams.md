@@ -162,14 +162,14 @@ En gras : spécialistes propres à une équipe. Les autres viennent de `team/sha
 - [x] `tour-mock/specs-extra.ts` réimporte ces builders (aucune copie) ; `make tour-mock` sans régression de score. — vérifié par empreinte : les 157 objets de la visite compilent en recettes identiques avant / après (même entrée → mêmes scores) ; `make tour-mock` complet non relancé.
 - [ ] Pièce `silhouette` disponible au chemin réel (contour SAM, jamais les pixels) pour `textile` et `terrain`. — reste : `curtain` porte déjà `silhouette` (bande + section) dans le modèle de pièces partagé, mais le chemin réel ne passe pas encore le contour SAM au builder ; à brancher avec `TEXTILE_TEAM` / `TERRAIN_TEAM` (PQ-T90).
 
-### PQ-T89 — Équipes assise, table, rangement, lit
+### [x] PQ-T89 — Équipes assise, table, rangement, lit
 
-- [ ] `SEAT_TEAM` (profile, cushions, legs, finishes) + fixtures rejouées + test.
-- [ ] `TABLE_TEAM` (profile, legs, finishes) + fixtures + test.
-- [ ] `STORAGE_TEAM` (profile, openings, shelves, finishes) + fixtures + test.
-- [ ] `BED_TEAM` (profile, bedding, legs, finishes) + fixtures + test.
-- [ ] Branchées dans `registry.ts` ; objets de la visite de ces classes à IoU ≥ 0,85 (ou limite écrite).
-- [ ] Scénarios manuels `test-scenarios/06-village.md` (canapé, chaise, armoire, lit).
+- [x] `SEAT_TEAM` (profile, cushions, legs, finishes) + fixtures rejouées + test. — outil propre `upholstery` (coussins, accoudoirs, dossier, méridienne) ; hauteur prise de la ligne d'assise (chaise haute / chaise / canapé).
+- [x] `TABLE_TEAM` (profile, legs, finishes) + fixtures + test. — joues « waterfall », panneau de fond, socle plein (`promptVersion` 2).
+- [x] `STORAGE_TEAM` (profile, openings, shelves, finishes) + fixtures + test. — montants d'étagère métal (`promptVersion` 2).
+- [x] `BED_TEAM` (profile, bedding, legs, finishes) + fixtures + test. — cadre sous la ligne du matelas, sinon sous les oreillers.
+- [x] Branchées dans `registry.ts` ; objets de la visite de ces classes à IoU ≥ 0,85 (ou limite écrite). — 28 objets rejoués (toutes les assises, tables, rangements et lits de la visite) : 25 ≥ 0,85 face et côté ; limites écrites : `bath-side-table` (le modèle de la visite compte le vase posé dessus), `loft-shelf` et `bedroom-shelf` (étagères ajourées, planches d'une cellule, piège § 8). Passe de recalage des proportions (`furnitureParts`) pour les builders qui débordent (accoudoirs, montants).
+- [x] Scénarios manuels `test-scenarios/06-village.md` (canapé, chaise, armoire, lit). — V529–V532.
 
 ### PQ-T90 — Équipes textile, menuiserie, structure, terrain, appareil, luminaire
 

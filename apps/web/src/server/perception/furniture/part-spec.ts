@@ -34,20 +34,30 @@ export interface PartsSpec {
   yaw?: number;
 }
 
+/** The world box of a part list: low and high corners and its size on x, y, z (≥ 1 mm). */
+export function partsBounds(parts: ReadonlyArray<PartSpec>): {
+  lo: [number, number, number];
+  hi: [number, number, number];
+  dims: [number, number, number];
+} {
+  const lo: [number, number, number] = [Infinity, Infinity, Infinity];
+  const hi: [number, number, number] = [-Infinity, -Infinity, -Infinity];
+  for (const p of parts)
+    for (let i = 0; i < 3; i++) {
+      lo[i] = Math.min(lo[i]!, p.at[i]! - p.size[i]! / 2);
+      hi[i] = Math.max(hi[i]!, p.at[i]! + p.size[i]! / 2);
+    }
+  const dim = (i: number) => Math.max(1e-3, hi[i]! - lo[i]!);
+  return { lo, hi, dims: [dim(0), dim(1), dim(2)] };
+}
+
 /** Hand-built part list → recipe (proportions from the parts' bounds), concepts and fixed flags by part. */
 export function compileSpec(spec: PartsSpec & { kind?: 'parts' }): {
   recipe: ObjectRecipe;
   concepts: Array<string | undefined>;
   fixed: boolean[];
 } {
-  const lo = [Infinity, Infinity, Infinity];
-  const hi = [-Infinity, -Infinity, -Infinity];
-  for (const p of spec.parts)
-    for (let i = 0; i < 3; i++) {
-      lo[i] = Math.min(lo[i]!, p.at[i]! - p.size[i]! / 2);
-      hi[i] = Math.max(hi[i]!, p.at[i]! + p.size[i]! / 2);
-    }
-  const dims = lo.map((l, i) => Math.max(1e-3, hi[i]! - l));
+  const { lo, hi, dims } = partsBounds(spec.parts);
   const mid = lo.map((l, i) => (l + hi[i]!) / 2);
   const long = Math.max(...dims);
   const r4 = (n: number) => Math.round(n * 1e4) / 1e4;

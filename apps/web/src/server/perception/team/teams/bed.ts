@@ -6,6 +6,7 @@ import {
   furnitureTeam,
   intField,
   legHeight,
+  lineHeight,
   ownObject,
   profileOn,
   type FurnitureReading,
@@ -110,6 +111,29 @@ export type BedReading = FurnitureReading<Bedding>;
 /** Height of the frame top of a bed (metres) when the drawings give no legs. */
 const BED_FRAME = 0.25;
 
+/** Mattress thickness and upright pillow height of the bed builder (metres). */
+const MATTRESS = 0.22;
+const PILLOW = 0.4;
+
+/**
+ * Top of the bed frame (metres): from the mattress line when read (mattress top − its thickness),
+ * else from the legs, else, without a headboard, the pillows' top is the full measured height;
+ * last, the usual frame. Clamped to 0.12–0.45 m.
+ */
+export function bedFrameTop(r: BedReading, h: number): number {
+  const mattress = lineHeight(r, 'mattress', h);
+  const legs = legHeight(r, h);
+  const top =
+    mattress !== null
+      ? mattress - MATTRESS
+      : legs > 0
+        ? legs + 0.1
+        : !r.own.headboard && r.own.pillows > 0
+          ? h - MATTRESS - PILLOW
+          : BED_FRAME;
+  return Math.max(0.12, Math.min(0.45, top));
+}
+
 /** A bed reading on its measured proportions (largest side = 1) → the bed builder's parts. */
 export function bedParts(r: BedReading, p: { w: number; h: number; d: number }): PartSpec[] {
   const b = r.own;
@@ -119,7 +143,7 @@ export function bedParts(r: BedReading, p: { w: number; h: number; d: number }):
   const { w, d } = footprint(h, p);
   // The bed runs along the longer side: the builder lays it along z.
   const [bw, bl] = p.d >= p.w ? [w, d] : [d, w];
-  const frameTop = Math.max(0.12, Math.min(0.45, legHeight(r, h) + 0.1 || BED_FRAME));
+  const frameTop = bedFrameTop(r, h);
   const frameColor = finishColor(r, ['frame'], WOOD);
   const pillow = finishColor(r, ['pillow', 'sheet'], '#e6e1d8');
   // `bed` builds [frame, mattress, blanket, ...pillows]: no blanket read → none drawn.
