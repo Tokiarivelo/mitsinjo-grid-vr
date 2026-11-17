@@ -323,3 +323,93 @@ export const FIXTURE_FIXTURES: FurnitureFixture[] = [
     ['sign']
   ),
 ];
+
+const latticeFx = (
+  id: string,
+  label: string,
+  kind: string,
+  lattice: object,
+  finishes: Finish[],
+  concepts: string[],
+  more: Partial<Parameters<typeof partsFixture>[0]> = {}
+) =>
+  partsFixture({
+    id,
+    team: 'structure',
+    label,
+    kind,
+    own: { lattice: { lattice } },
+    finishes,
+    concepts,
+    ...more,
+  });
+
+export const STRUCTURE_FIXTURES: FurnitureFixture[] = [
+  latticeFx(
+    'terrace-railing-1',
+    'Railing',
+    'railing',
+    { pattern: 'scroll', bars: 30, posts: [0.01, 0.42, 0.72, 0.99] },
+    [['frame', 'metal', '#2c2e33']],
+    ['rail', 'pole']
+  ),
+  latticeFx(
+    'terrace-railing-2',
+    'Railing',
+    'railing',
+    { pattern: 'scroll', bars: 28, posts: [0.01, 0.5, 0.99] },
+    [['frame', 'metal', '#2c2e33']],
+    ['rail', 'pole']
+  ),
+  latticeFx(
+    'terrace-pylon',
+    'Power pylon',
+    'pylon',
+    {
+      pattern: 'lattice',
+      bars: 0,
+      levels: 9,
+      top: 0.233,
+      foot: 0.882,
+      arms: [
+        [0.32, 1],
+        [0.12, 0.706],
+      ],
+    },
+    [['frame', 'metal', '#8d939a']],
+    ['pole', 'rail']
+  ),
+  latticeFx(
+    'street-fence',
+    'Fence',
+    'fence',
+    { pattern: 'boards', bars: 35, pillars: 3 },
+    [
+      ['frame', 'wood', '#6a5545'],
+      ['pillar', 'stone', '#9c8670'],
+    ],
+    ['timber_beam', 'rail', 'stone_foundation']
+  ),
+  latticeFx(
+    'street-gate',
+    'Gate',
+    'gate',
+    { pattern: 'boards', bars: 4, pillars: 2 },
+    [
+      ['frame', 'wood', '#5d4a3c'],
+      ['pillar', 'stone', '#9c8670'],
+    ],
+    ['timber_beam', 'stone_foundation']
+  ),
+  latticeFx(
+    'street-fence-2',
+    'Fence',
+    'fence',
+    { pattern: 'boards', bars: 30, base: true },
+    [
+      ['frame', 'wood', '#ecedee'],
+      ['base', 'stone', '#9a8b78'],
+    ],
+    ['timber_beam', 'stone_foundation']
+  ),
+];

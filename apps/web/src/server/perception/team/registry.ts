@@ -8,6 +8,7 @@ import { STORAGE_TEAM } from './teams/storage';
 import { TABLE_TEAM } from './teams/table';
 import { TEXTILE_TEAM } from './teams/textile';
 import { FIXTURE_TEAM } from './teams/fixture';
+import { STRUCTURE_TEAM } from './teams/structure';
 
 /**
  * Which specialist team reads which class of object (PQ-T87). A class without a team keeps its
@@ -27,6 +28,7 @@ export const TEAM_BY_ARCHETYPE = {
   // PQ-T90: the other part-plan classes.
   textile: TEXTILE_TEAM,
   fixture: FIXTURE_TEAM,
+  structure: STRUCTURE_TEAM,
 } as const satisfies Partial<Record<KitArchetype, { id: string }>>;
 
 export type RegisteredTeam = (typeof TEAM_BY_ARCHETYPE)[keyof typeof TEAM_BY_ARCHETYPE];

@@ -12,6 +12,7 @@ import { STORAGE_TEAM } from '../team/teams/storage';
 import { BED_TEAM } from '../team/teams/bed';
 import { TEXTILE_TEAM } from '../team/teams/textile';
 import { FIXTURE_TEAM } from '../team/teams/fixture';
+import { STRUCTURE_TEAM } from '../team/teams/structure';
 
 const NEW = [
   'seat',
@@ -41,7 +42,8 @@ describe('teamFor (PQ-T87)', () => {
     // PQ-T90.
     expect(teamFor('textile')).toBe(TEXTILE_TEAM);
     expect(teamFor('fixture')).toBe(FIXTURE_TEAM);
-    for (const a of ['cabinet', 'person', 'water', 'other', ...NEW.slice(6)] as KitArchetype[])
+    expect(teamFor('structure')).toBe(STRUCTURE_TEAM);
+    for (const a of ['cabinet', 'person', 'water', 'other', ...NEW.slice(7)] as KitArchetype[])
       expect(teamFor(a), a).toBeNull();
   });
 });

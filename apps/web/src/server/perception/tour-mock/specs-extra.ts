@@ -18,6 +18,7 @@ import {
   curtain,
   door,
   fence,
+  gate,
   glazing,
   legs,
   METAL,
@@ -795,19 +796,7 @@ export const EXTRA_SPECS: Record<string, Spec> = {
 
   // ── Street ────────────────────────────────────────────────────────────────────────────────
   'street-fence': parts(fence(14, 1.3, '#6a5545', 3)),
-  'street-gate': parts([
-    ...fence(1.6, 1.6, '#5d4a3c', 0),
-    box([-0.95, 0.85, 0], [0.4, 1.7, 0.4], '#9c8670', {
-      material: 'stone',
-      kind: 'frame',
-      concept: 'stone_foundation',
-    }),
-    box([0.95, 0.85, 0], [0.4, 1.7, 0.4], '#9c8670', {
-      material: 'stone',
-      kind: 'frame',
-      concept: 'stone_foundation',
-    }),
-  ]),
+  'street-gate': parts(gate(2.3, 1.6, '#5d4a3c')),
   'street-hedge': plant('elder shrub', { habit: 'shrub', leaf: 'broad', species: 'elder hedge' }),
   'street-house-5': parts(houseLite(11, 7, 6.5, '#e6e6e8', '#6c6d76', 4.2), -0.35),
   'street-fence-2': parts(fence(12, 1.1, '#ecedee', 0, '#9a8b78'), 0.1),

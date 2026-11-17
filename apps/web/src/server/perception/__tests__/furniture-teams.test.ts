@@ -20,12 +20,17 @@ import tourMock from '../tour-mock/tour-mock.json';
 
 const TOUR = tourMock as unknown as Record<string, { recipe: ObjectRecipe }>;
 const ATLAS = 'data:image/jpeg;base64,AAAA';
-import { FIXTURE_FIXTURES, TEXTILE_FIXTURES } from '../__fixtures__/teams/parts';
+import {
+  FIXTURE_FIXTURES,
+  STRUCTURE_FIXTURES,
+  TEXTILE_FIXTURES,
+} from '../__fixtures__/teams/parts';
 import { TOUR_OUTLINES } from '@/features/vision-insert/ui/xr/tour/tour-outlines';
 import { outlineFrame } from '../tour-mock/skin';
 import type { PartsOutline } from '../team/teams';
 import { parseDrape, textileParts, type TextileReading } from '../team/teams/textile';
 import { fixtureParts, type FixtureReading } from '../team/teams/fixture';
+import { parseLattice, structureParts, type StructureReading } from '../team/teams/structure';
 
 const FURNITURE_FIXTURES = [
   ...RECORDED,
@@ -33,6 +38,7 @@ const FURNITURE_FIXTURES = [
   ...TABLE_STORAGE_TOUR_FIXTURES,
   ...TEXTILE_FIXTURES,
   ...FIXTURE_FIXTURES,
+  ...STRUCTURE_FIXTURES,
 ];
 
 /** The tour outline of an object as the real path hands it: box fractions, box pixel aspect (pano 2:1). */
@@ -220,6 +226,29 @@ describe('part-plan teams (PQ-T89, PQ-T90)', () => {
       const [, h, z] = partsBounds(fixtureParts(fx('window', []), { w: 0.6, h: 1, d })).dims;
       expect(z / h).toBeCloseTo(d, 2);
     }
+  });
+
+  it('reads a lattice, scales a fence by its boards, fixes open colours', () => {
+    expect(parseLattice(null).posts).toEqual([0, 1]);
+    expect(
+      parseLattice(
+        '{"lattice":{"pattern":"x","bars":200,"posts":[-1,0.5,"a"],"arms":[[0.2,2],[1]]}}'
+      )
+    ).toMatchObject({ pattern: 'bars', bars: 80, posts: [0, 0.5], arms: [[0.2, 1]] });
+    const st = (kind: string, lattice: object) =>
+      read(parseLattice(JSON.stringify({ lattice })), {
+        kind,
+      } as never) as unknown as StructureReading;
+    const [w] = partsBounds(
+      structureParts(st('fence', { pattern: 'boards', bars: 10 }), { w: 1, h: 0.3, d: 0.01 })
+    ).dims;
+    expect(w).toBeCloseTo(4, 1);
+    const rail = structureParts(st('railing', { pattern: 'scroll', bars: 8 }), {
+      w: 1,
+      h: 0.2,
+      d: 0.01,
+    });
+    expect(rail.every((x) => x.fixed)).toBe(true);
   });
 
   it('cuts silhouette parts from the outline, boxes without one', async () => {
