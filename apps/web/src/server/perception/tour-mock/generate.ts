@@ -152,14 +152,15 @@ const PLANT_VIEW_PX = 320;
 /**
  * The outlined photo as a front view: the box on white paper, everything outside the outline
  * painted paper (what a cut-out drawing looks like to `readViews`). Measured, never projected.
+ * `px` = longest side (the photo `make tour-photo` hands to `make views-3d`, VS-T44).
  */
-export async function outlinedFront(shot: ObjectPhoto): Promise<Buffer> {
+export async function outlinedFront(shot: ObjectPhoto, px = PLANT_VIEW_PX): Promise<Buffer> {
   const { photo, box } = shot;
   const left = Math.max(0, Math.floor(box.x * photo.width));
   const top = Math.max(0, Math.floor(box.y * photo.height));
   const width = Math.max(1, Math.min(photo.width - left, Math.ceil(box.w * photo.width)));
   const height = Math.max(1, Math.min(photo.height - top, Math.ceil(box.h * photo.height)));
-  const scale = PLANT_VIEW_PX / Math.max(width, height);
+  const scale = px / Math.max(width, height);
   const w = Math.max(8, Math.round(width * scale));
   const h = Math.max(8, Math.round(height * scale));
   const { data } = await sharp(photo.buffer)

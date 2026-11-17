@@ -107,26 +107,31 @@ describe('tour mock (VS-T41)', () => {
     });
   });
 
-  it('answers the whole shape for a tour object and nothing for another id', async () => {
-    const target = {
-      id: 'loft-fridge',
-      label: 'Fridge',
-      category: 'fridge' as const,
-      box: { x: 0.45, y: 0.3, w: 0.02, h: 0.1 },
-      outline: 'M0.45 0.3L0.47 0.3L0.47 0.4Z',
-    };
-    const shape = await tourMockShape(target, { width: 2048, height: 1280 });
-    expect(shape).toMatchObject({ detectionId: 'loft-fridge', mode: 'recipe', source: 'mock' });
-    expect(shape!.imaginedViews).toHaveLength(6);
-    expect(shape!.outline).toBe(target.outline);
-    // VS-T43: its parts wear the faces cut from its photo, one layer per named part.
-    expect(ObjectRecipeSchema.safeParse(shape!.recipe!).success).toBe(true);
-    expect(shape!.recipe!.yaw).toBeUndefined();
-    expect(shape!.recipe!.skin?.atlas).toMatch(/^data:image\/jpeg;base64,/);
-    expect(shape!.recipe!.skin?.pieces).toHaveLength(shape!.recipe!.parts.length);
-    expect(shape!.recipe!.skin?.pieces).toContain('handle');
-    expect(await tourMockShape({ ...target, id: 'det-1' }, null)).toBeNull();
-  });
+  it(
+    'answers the whole shape for a tour object and nothing for another id',
+    { timeout: 60_000 },
+    async () => {
+      const target = {
+        id: 'loft-fridge',
+        label: 'Fridge',
+        category: 'fridge' as const,
+        box: { x: 0.45, y: 0.3, w: 0.02, h: 0.1 },
+        outline: 'M0.45 0.3L0.47 0.3L0.47 0.4Z',
+      };
+      const shape = await tourMockShape(target, { width: 2048, height: 1280 });
+      expect(shape).toMatchObject({ detectionId: 'loft-fridge', mode: 'recipe', source: 'mock' });
+      expect(shape!.imaginedViews).toHaveLength(6);
+      expect(shape!.outline).toBe(target.outline);
+      // VS-T44: its parts wear its imagined faces (every side, no photo), one layer per named part.
+      expect(ObjectRecipeSchema.safeParse(shape!.recipe!).success).toBe(true);
+      expect(shape!.recipe!.yaw).toBeUndefined();
+      expect(shape!.recipe!.skin?.atlas).toMatch(/^data:image\/jpeg;base64,/);
+      expect(shape!.recipe!.skin?.mode).toBe('box');
+      expect(shape!.recipe!.skin?.pieces).toHaveLength(shape!.recipe!.parts.length);
+      expect(shape!.recipe!.skin?.pieces).toContain('handle');
+      expect(await tourMockShape({ ...target, id: 'det-1' }, null)).toBeNull();
+    }
+  );
 
   it('turns the camera to each face; a car shows its profile first', () => {
     const car = tourMockEntry('street-car-white')!.recipe;
@@ -164,10 +169,53 @@ describe('tour mock (VS-T41)', () => {
     expect((await sharp(side!).metadata()).width).toBe(512);
   });
 
-  it('draws a face as a white-paper PNG', async () => {
+  it('draws a face as a white-paper PNG', { timeout: 60_000 }, async () => {
     const png = await tourMockDrawing({ id: 'loft-hood' }, 'main');
     const meta = await sharp(png!).metadata();
     expect([meta.width, meta.height]).toEqual([512, 512]);
     expect(await tourMockDrawing({ id: 'nope' }, 'main')).toBeNull();
+  });
+
+  // VS-T44: a car imagined on every face, then built from its drawings like a real capture.
+  it('answers an imagined car with its car plan wearing its drawings, turned to its photo', async () => {
+    const target = {
+      id: 'terrace-car',
+      label: 'Car',
+      category: 'other' as const,
+      scenery: 'vehicle' as const,
+      box: { x: 0.4, y: 0.4, w: 0.05, h: 0.03 },
+    };
+    const shape = (await tourMockShape(target, { width: 2048, height: 1280 }))!;
+    expect(ObjectRecipeSchema.safeParse(shape.recipe).success).toBe(true);
+    expect(shape.recipe!.car?.body).toBeDefined();
+    expect(shape.recipe!.car?.wheels).toHaveLength(2);
+    expect(shape.recipe!.faces?.views).toEqual(
+      expect.arrayContaining(['front', 'right', 'back', 'top'])
+    );
+    expect(shape.recipe!.skin).toBeUndefined();
+    expect(shape.fit?.iou).toBeGreaterThanOrEqual(0.85);
+    expect(shape.imaginedViews!.map((v) => v.angle)).toEqual([
+      'front',
+      'back',
+      'left',
+      'right',
+      'top',
+    ]);
+  });
+
+  it('draws an imagined car face from its drawing, never the photo (regression: the main view was the photo cut-out)', async () => {
+    const main = await sharp(
+      (await tourMockDrawing({ id: 'terrace-car', scenery: 'vehicle' }, 'main'))!
+    )
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    // The profile: twice as wide as tall, white paper at the corners.
+    expect(main.info.width).toBe(2 * main.info.height);
+    expect(main.data[0]).toBe(255);
+    for (const face of ['front', 'back', 'left', 'top'] as const)
+      expect(
+        await tourMockDrawing({ id: 'terrace-car', scenery: 'vehicle' }, face),
+        face
+      ).not.toBeNull();
   });
 });

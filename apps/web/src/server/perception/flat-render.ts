@@ -33,11 +33,14 @@ export const PAINT_AMBIENT = 0.72;
  * Colour of a surface point (VS-T43 skinned parts): object-space point and normal (before any
  * view turn) and the recipe part index → unshaded sRGB, or null for the part's own colour.
  */
-export type FlatPaint = (
+export type FlatPaint = ((
   p: readonly [number, number, number],
   n: readonly [number, number, number],
   part: number
-) => readonly [number, number, number] | null;
+) => readonly [number, number, number] | null) & {
+  /** Set when the paint returns lit colours (its own shader, VS-T44): drawn as they are. */
+  lit?: boolean;
+};
 
 /** A view-space vector back in object space: the inverse of the view turn (pitch, then yaw). */
 export function unturn([X, Y, Z]: Readonly<V3>, { yaw, pitch }: FlatView): V3 {
@@ -654,7 +657,7 @@ export function renderFlat(
             })()
           : null;
         if (painted) {
-          const ps = PAINT_AMBIENT + (1 - PAINT_AMBIENT) * lit;
+          const ps = paint!.lit ? 1 : PAINT_AMBIENT + (1 - PAINT_AMBIENT) * lit;
           mask.data[i] = 1;
           part[i] = k;
           rgb[i * 3] = painted[0] * ps;

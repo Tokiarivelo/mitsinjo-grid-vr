@@ -1,4 +1,4 @@
-import { atlasUv, faceSlot, type FaceView } from './face-atlas';
+import { atlasUv, faceSlot, type AtlasTile, type FaceView } from './face-atlas';
 
 /**
  * Skinned parts (tour mock, VS-T43): a parts model wearing its 2D faces. Points and normals are
@@ -39,9 +39,16 @@ export function toCamera([x, y, z]: V3, { yaw, pitch }: SkinView): [number, numb
   return [x1, y * cp - z1 * sp, y * sp + z1 * cp];
 }
 
+/**
+ * How the faces are read: `photo` (VS-T43) = one photographed front, tops read above its edge;
+ * `box` (VS-T44) = six imagined faces, every surface reads the tile it faces (top and underside
+ * included: columns on x, rows back → front).
+ */
+export type SkinMode = 'photo' | 'box';
+
 /** Where a point of the model reads its colour: a face tile and its canonical [s, t] (t top → bottom). */
 export interface SkinHit {
-  tile: FaceView;
+  tile: AtlasTile;
   s: number;
   t: number;
 }
@@ -49,7 +56,17 @@ export interface SkinHit {
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
 
 /** How a surface reads its tile: straight on the front (`seen`), as a wall, or as a top / underside. */
-type Read = { tile: FaceView; mode: 'seen' | 'wall' | 'top' | 'under' };
+type Read =
+  | { tile: FaceView; mode: 'seen' | 'wall' | 'top' | 'under' }
+  | { tile: 'top' | 'bottom'; mode: 'plan' };
+
+/** The tile a surface with camera-frame normal `n` reads among six imagined faces (`box` mode). */
+export function boxRead(n: V3): Read {
+  const [ax, ay, az] = [Math.abs(n[0]), Math.abs(n[1]), Math.abs(n[2])];
+  if (ay >= ax && ay >= az) return { tile: n[1] > 0 ? 'top' : 'bottom', mode: 'plan' };
+  if (az >= ax) return { tile: n[2] >= 0 ? 'front' : 'back', mode: 'wall' };
+  return { tile: n[0] >= 0 ? 'right' : 'left', mode: 'wall' };
+}
 
 /** The tile a surface with camera-frame normal `n` at camera-frame depth `z` reads. */
 export function skinRead(n: V3, z: number, box: SkinBox): Read {
@@ -71,6 +88,11 @@ export const topReach = (box: SkinBox) =>
 /** Canonical tile coordinates of camera-frame point `p` read as `read`. */
 export function skinCoords(p: V3, read: Read, box: SkinBox): [number, number] {
   const [x0, y0, z0, x1, y1, z1] = box;
+  if (read.mode === 'plan')
+    return [
+      clamp01((p[0] - x0) / Math.max(1e-6, x1 - x0)),
+      clamp01((p[2] - z0) / Math.max(1e-6, z1 - z0)),
+    ];
   const H = Math.max(1e-6, y1 - y0);
   let t = (y1 - p[1]) / H;
   if (read.mode === 'top') {
@@ -86,9 +108,16 @@ export function skinCoords(p: V3, read: Read, box: SkinBox): [number, number] {
 }
 
 /** The tile and coordinates model point `p` with normal `n` reads (both in the model's frame). */
-export function skinSample(p: V3, n: V3, box: SkinBox, view: SkinView = STRAIGHT): SkinHit {
+export function skinSample(
+  p: V3,
+  n: V3,
+  box: SkinBox,
+  view: SkinView = STRAIGHT,
+  mode: SkinMode = 'photo'
+): SkinHit {
   const cp = toCamera(p, view);
-  const read = skinRead(toCamera(n, view), cp[2], box);
+  const cn = toCamera(n, view);
+  const read = mode === 'box' ? boxRead(cn) : skinRead(cn, cp[2], box);
   const [s, t] = skinCoords(cp, read, box);
   return { tile: read.tile, s, t };
 }
@@ -102,7 +131,8 @@ export function skinUvs(
   position: ArrayLike<number>,
   normal: ArrayLike<number>,
   box: SkinBox,
-  view: SkinView = STRAIGHT
+  view: SkinView = STRAIGHT,
+  mode: SkinMode = 'photo'
 ): Float32Array {
   const uv = new Float32Array((position.length / 3) * 2);
   for (let t = 0; t + 9 <= position.length; t += 9) {
@@ -117,7 +147,8 @@ export function skinUvs(
       pts.push(p);
       cz += p[2] / 3;
     }
-    const read = skinRead(toCamera(n, view), cz, box);
+    const cn = toCamera(n, view);
+    const read = mode === 'box' ? boxRead(cn) : skinRead(cn, cz, box);
     pts.forEach((p, k) => {
       const [s, tt] = skinCoords(p, read, box);
       const [u, v] = atlasUv(faceSlot(read.tile), s, tt);

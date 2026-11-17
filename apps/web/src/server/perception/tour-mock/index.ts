@@ -1,4 +1,7 @@
 import 'server-only';
+import { createHash } from 'node:crypto';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 
 import sharp from 'sharp';
 import {
@@ -15,7 +18,13 @@ import type { SkinBox, SkinView } from '@/lib/face-skin';
 import { renderFlat, type FlatPaint, type FlatView } from '../flat-render';
 import { cropRectForShape } from '../shape-crop';
 import { ringsMask, type Mask } from '../silhouette-fit';
-import { generateImaginedViews } from '../views-generation';
+import { CANONICAL_FLAT_VIEWS, generateImaginedViews, getAngleAnatomy } from '../views-generation';
+import { archetypeOf } from '@/lib/object-kit';
+import { CANONICAL_ANGLES, type ImaginedAngleView } from '@/lib/object-shape';
+import type { TourImagined } from './imagine';
+import { imagineFaces, imaginedDrawing, type ImaginedFaces } from './imagine-faces';
+import { imaginedPaint } from './imagined-shader';
+import { skinOf } from '../recipe-box';
 import { renderAtPhoto, type TourMockEntry } from './render';
 import {
   outlineFrame,
@@ -46,6 +55,117 @@ const ENTRIES = DATA as unknown as Readonly<Record<string, TourMockEntry>>;
 /** The built entry of a tour object, or null for any other id. */
 export function tourMockEntry(id: string): TourMockEntry | null {
   return Object.hasOwn(ENTRIES, id) ? ENTRIES[id]! : null;
+}
+
+let IMAGINED: Promise<Readonly<Record<string, TourImagined>>> | null = null;
+
+/**
+ * A tour object built from its imagined drawings (VS-T44, `make tour-imagine`), or null: then its
+ * hand-built model wearing its photo faces answers (VS-T43).
+ */
+export async function tourImagined(id: string): Promise<TourImagined | null> {
+  IMAGINED ??= import('./tour-imagined.json').then(
+    (m) => m.default as unknown as Record<string, TourImagined>
+  );
+  const all = await IMAGINED;
+  return Object.hasOwn(all, id) ? all[id]! : null;
+}
+
+/** The six angles of an imagined object: its own drawings (an angle not drawn is left out). */
+export function imaginedAngles(
+  imagined: { views: Partial<Record<string, string>> },
+  target: Pick<ShapeTarget, 'label' | 'category' | 'scenery'>
+): ImaginedAngleView[] {
+  const archetype = archetypeOf(target);
+  return CANONICAL_ANGLES.flatMap((angle) => {
+    const imageUrl = imagined.views[angle];
+    if (!imageUrl) return [];
+    const { labelKey, deg } = CANONICAL_FLAT_VIEWS[angle];
+    return [{ angle, labelKey, angleDeg: deg, imageUrl, ...getAngleAnatomy(archetype, angle) }];
+  });
+}
+
+/** The stored drawing of a face of an imagined object (a car's main view is its profile), or null. */
+export async function storedDrawing(
+  imagined: { views: Partial<Record<string, string>> },
+  face: FaceName | 'main',
+  vehicle: boolean
+): Promise<Buffer | null> {
+  const key = face === 'main' ? (vehicle ? 'right' : 'front') : face === 'side' ? 'right' : face;
+  const url = key ? imagined.views[key] : null;
+  if (!url) return null;
+  return sharp(Buffer.from(url.slice(url.indexOf(',') + 1), 'base64'))
+    .png()
+    .toBuffer();
+}
+
+const FACES = new Map<string, Promise<ImaginedFaces | null>>();
+/**
+ * How long an answer waits for an object being imagined for the first time (ms): past it, the
+ * object answers with the faces cut from its photo (VS-T43) and the imagining goes on, cached for
+ * the next look (a tree's crown takes minutes; `make tour-faces` prepares them all).
+ */
+export const IMAGINE_WAIT_MS = 20_000;
+
+/** The imagined faces of `id` if they are ready within `IMAGINE_WAIT_MS`, else null. */
+async function facesInTime(id: string): Promise<ImaginedFaces | null> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<null>((done) => {
+    timer = setTimeout(() => done(null), IMAGINE_WAIT_MS);
+  });
+  const faces = await Promise.race([tourFaces(id), late]);
+  clearTimeout(timer);
+  return faces;
+}
+/**
+ * Version of the imagined look: bump it when the shader or the tile framing changes, so the
+ * faces cached on disk are drawn again.
+ */
+export const IMAGINED_LOOK = 1;
+/** Where imagined faces are kept between runs (ignored by git, like every build cache). */
+const FACES_CACHE = join(process.cwd(), 'node_modules', '.cache', 'tour-imagined');
+
+/** The cache file of an object: named by its model and the look, stale when either changes. */
+function facesCachePath(entry: TourMockEntry, id: string): string {
+  const key = createHash('sha1')
+    .update(JSON.stringify([IMAGINED_LOOK, entry.recipe, entry.concepts]))
+    .digest('hex')
+    .slice(0, 12);
+  return join(FACES_CACHE, `${id}-${key}.json`);
+}
+
+async function loadOrImagine(entry: TourMockEntry, id: string): Promise<ImaginedFaces> {
+  const path = facesCachePath(entry, id);
+  const cached = await readFile(path, 'utf8').catch(() => null);
+  if (cached) return JSON.parse(cached) as ImaginedFaces;
+  const faces = await imagineFaces(entry.recipe, entry.concepts);
+  // A cache that cannot be written (read-only deploy) only costs the next run a render.
+  await mkdir(FACES_CACHE, { recursive: true })
+    .then(() => writeFile(path, JSON.stringify(faces)))
+    .catch(() => undefined);
+  return faces;
+}
+
+/**
+ * A tour object imagined on its six faces on demand (VS-T44: no photo), cached in memory and on
+ * disk: the model wearing them and what its drawings are rendered from. Null for any other id.
+ */
+export function tourFaces(id: string): Promise<ImaginedFaces | null> {
+  let faces = FACES.get(id);
+  if (!faces) {
+    const entry = tourMockEntry(id);
+    faces = entry
+      ? loadOrImagine(entry, id).catch((err) => {
+          console.warn(
+            `[tour-mock] ${id}: not imagined:`,
+            err instanceof Error ? err.message : err
+          );
+          return null;
+        })
+      : Promise.resolve(null);
+    FACES.set(id, faces);
+  }
+  return faces;
 }
 
 /** JPEG quality of the face atlas sent with a tour model. */
@@ -147,14 +267,6 @@ export function skinWrap(entry: Pick<TourMockEntry, 'recipe' | 'concepts'>): Ski
     : 'fold';
 }
 
-/**
- * Piece (layer) name of each part of a skinned model: its part concept (`model3dPart` key: seat,
- * leg, cushion…), else its material: all legs are one piece, every glass pane another.
- */
-export function skinPieces(entry: Pick<TourMockEntry, 'recipe' | 'concepts'>): string[] {
-  return entry.recipe.parts.map((p, k) => entry.concepts[k] || p.material || 'painted');
-}
-
 /** The recipe a tour object is answered with: its parts wearing their faces (a plant its front). */
 export function skinnedRecipe(entry: TourMockEntry, skin: TourSkin | null): ObjectRecipe {
   if (!skin) return entry.recipe;
@@ -162,12 +274,7 @@ export function skinnedRecipe(entry: TourMockEntry, skin: TourSkin | null): Obje
     return { ...skin.recipe, plant: { ...skin.recipe.plant, skin: skin.frontUrl } };
   return {
     ...skin.recipe,
-    skin: {
-      atlas: skin.atlasUrl,
-      view: { ...skin.view },
-      box: [...skin.box],
-      pieces: skinPieces(entry),
-    },
+    skin: skinOf(skin.recipe, entry.concepts, skin.atlasUrl, skin.view),
   };
 }
 
@@ -238,8 +345,54 @@ export async function tourMockShape(
   const entry = tourMockEntry(target.id);
   if (!entry) return null;
   const partMasks = photo ? tourPartMasks(entry, target.box, photo) : [];
+  const masks = partMasks.length ? { partMasks, coverage: tourCoverage(entry, partMasks) } : {};
+  const answer = {
+    detectionId: target.id,
+    mode: 'recipe' as const,
+    source: 'mock' as const,
+    model: TOUR_MOCK_MODEL,
+    ...(target.outline ? { outline: target.outline } : {}),
+  };
+  // VS-T44: imagined on every face first. The cars are precomputed (built from their drawings
+  // like a real capture); every other object is imagined here once and cached.
+  const imagined = await tourImagined(target.id);
+  if (imagined)
+    return {
+      ...answer,
+      recipe: imagined.recipe,
+      family: 'parametric',
+      fit: { iou: imagined.iou },
+      imaginedViews: imaginedAngles(imagined, target),
+    };
+  const faces = await facesInTime(target.id);
+  if (faces?.views)
+    return {
+      ...answer,
+      recipe: faces.recipe,
+      family: 'procedural',
+      fit: { iou: entry.score.iou },
+      ...masks,
+      imaginedViews: imaginedAngles({ views: faces.views }, target),
+    };
+  if (faces) {
+    const imaginedViews = await generateImaginedViews(
+      faces.base,
+      target,
+      1,
+      256,
+      (view: FlatView) => imaginedPaint(faces.base, view, faces.box)
+    ).catch(() => []);
+    return {
+      ...answer,
+      recipe: faces.recipe,
+      family: entry.recipe.plant ? 'procedural' : 'parametric',
+      fit: { iou: entry.score.iou },
+      ...masks,
+      ...(imaginedViews.length ? { imaginedViews } : {}),
+    };
+  }
+  // Not imagined (a render failed): its parts wearing faces cut from its photo (VS-T43).
   const skin = await tourSkin(target.id);
-  const recipe = skinnedRecipe(entry, skin);
   const imaginedViews = await generateImaginedViews(
     skin?.recipe ?? entry.recipe,
     target,
@@ -248,15 +401,11 @@ export async function tourMockShape(
     skin?.paint
   ).catch(() => []);
   return {
-    detectionId: target.id,
-    mode: 'recipe',
-    recipe,
-    source: 'mock',
-    model: TOUR_MOCK_MODEL,
+    ...answer,
+    recipe: skinnedRecipe(entry, skin),
     family: entry.recipe.plant ? 'procedural' : 'parametric',
     fit: { iou: entry.score.iou },
-    ...(target.outline ? { outline: target.outline } : {}),
-    ...(partMasks.length ? { partMasks, coverage: tourCoverage(entry, partMasks) } : {}),
+    ...masks,
     ...(imaginedViews.length ? { imaginedViews } : {}),
   };
 }
@@ -354,9 +503,17 @@ export async function tourMockDrawing(
 ): Promise<Buffer | null> {
   const entry = tourMockEntry(target.id);
   if (!entry) return null;
+  const vehicle = target.scenery === 'vehicle';
+  // VS-T44: every face is imagined, never the photo.
+  const imagined = await tourImagined(target.id);
+  const stored = imagined ? await storedDrawing(imagined, face, vehicle) : null;
+  if (stored) return stored;
+  const faces = await facesInTime(target.id);
+  const kept = faces?.views ? await storedDrawing({ views: faces.views }, face, vehicle) : null;
+  if (kept) return kept;
+  if (faces) return imaginedDrawing(faces, faceView(face, faces.base, vehicle), DRAWING_PX);
   const skin = await tourSkin(target.id);
   const recipe: ObjectRecipe = skin?.recipe ?? { ...entry.recipe, yaw: undefined };
-  const vehicle = target.scenery === 'vehicle';
   // The photo shows the front (a car: its profile, its main view).
   if (skin && (face === 'main' || (!vehicle && face === 'front') || (vehicle && face === 'side')))
     return frontCutout(skin);

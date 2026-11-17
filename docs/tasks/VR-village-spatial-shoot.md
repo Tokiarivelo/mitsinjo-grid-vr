@@ -425,3 +425,30 @@ Style : hologramme futuriste (cyan / ambre, lignes de balayage, coins lumineux, 
 - [x] Calques = pièces nommées (assise, pied, coussin…) dans le Studio 3D ; village et export Blender suivent.
 - [x] Faces 2D : avant = la découpe photo sur papier blanc, autres faces et 6 angles imaginés = le modèle habillé rendu sous chaque angle.
 - [ ] **Done when :** vu à l'écran (V496–V501) et au casque.
+
+### VS-T44 : Visite 360° : faces imaginées sur toutes les faces, puis pièces 3D et assemblage (voitures d'abord)
+
+> Demande 2026-11-17 : la voiture de la visite montrait la photo découpée en 2D et une caisse habillée de la photo en 3D.
+> Chaque objet passe par les vues 2D imaginées de **toutes** ses faces, puis la génération des pièces 3D et leur assemblage,
+> un objet à la fois, aussi réaliste qu'un rendu de jeu vidéo ou de film d'animation. Dessins faits **sans Muse** (demande).
+
+- [x] Dessins imaginés de chaque face d'une voiture : profil, avant, arrière, dessus, gauche (profil retourné), papier bleu
+      pour la lecture et blanc pour l'opérateur ; peinture laquée (ciel au-dessus de l'épaule, sol en dessous, reflet),
+      vitres teintées avec reflets et sièges, jantes alliage et étriers, feux avec lentilles, rails de toit, chromes
+      (`tour-mock/car-art.ts`, `make tour-car-art`).
+- [x] Construites hors ligne par la chaîne réelle (lecture des vues → plan de voiture → pièces et assemblage habillés des
+      dessins, `reconstructObject` sans appel Meta), tournées sur la photo (meilleur IoU du contour), stockées dans
+      `tour-imagined.json` (`make tour-imagine`) ; `make tour-photo` sort la photo détourée d'un objet.
+- [x] Voitures : `terrace-car` (citadine 5 portes, IoU 0,86 vs 0,75 à la main), `street-car-white` (break, 0,83 vs 0,79),
+      `street-car-black` (monospace, 0,83 vs 0,75).
+- [x] Réponse mock : la 3D = le plan de voiture habillé des dessins ; faces 2D et angles imaginés = les dessins (plus la photo).
+- [x] Tous les autres objets de la visite (mobilier, plantes, maisons, rochers, lampadaires…) : chaque face imaginée
+      (avant, droite, arrière, gauche, dessus, dessous) par un rendu « jeu vidéo / animation » de ses pièces, sans photo
+      ni Muse (`tour-mock/imagined-shader.ts` : grain du bois, tissage, métal brossé, verre reflétant le ciel, feuillage,
+      pierre, brique, tuiles ; lumière principale, ciel / sol, reflet, contre-jour, ombre de contact, tons filmiques ;
+      contours encrés). Les six dessins cadrés sur la boîte du modèle font l'atlas que portent ses pièces
+      (`skin.mode: 'box'` : chaque surface lit la face vers laquelle elle regarde, dessus et dessous compris) ; une plante
+      porte sa face avant imaginée. Faces 2D et 6 angles = les mêmes rendus sur papier blanc (`imagine-faces.ts`).
+- [x] Plantes précalculées (couronne lente : `make tour-imagine`) ; les autres imaginées à la demande, gardées en cache
+      disque (`node_modules/.cache/tour-imagined/`, `make tour-faces` les prépare toutes).
+- [ ] **Done when :** vu à l'écran (V502–V506) et au casque.

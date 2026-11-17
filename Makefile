@@ -237,6 +237,25 @@ tour-skins: ## Tour mock (VS-T43): keep the built models, only re-cut each objec
 	TOUR_MOCK=1 TOUR_MOCK_KEEP=1 $(if $(ONLY),TOUR_MOCK_ONLY="$(ONLY)") TOUR_MOCK_DIR=$(CURDIR)/test-results/tour-mock $(PNPM) --filter $(WEB) exec vitest run src/server/perception/__tests__/tour-mock-report.test.ts
 	cd apps/web && npx prettier --write src/server/perception/tour-mock/tour-mock.json src/server/perception/tour-mock/tour-skins.json >/dev/null
 
+tour-faces: ## Every other tour object (plants too) imagined on its six faces into the disk cache (VS-T44, no Meta call; node_modules/.cache/tour-imagined) so the immersion view never waits [IDS=loft-sofa]
+	$(need_ws)
+	TOUR_FACES=1 $(if $(IDS),TOUR_FACES_IDS="$(IDS)") $(PNPM) --filter $(WEB) exec vitest run src/server/perception/__tests__/tour-faces-warm.test.ts
+
+tour-imagine: ## Imagined tour cars (VS-T44, no Meta call): every face drawn (tour-mock/car-art.ts), built offline from the drawings, turned to the photo; kept unless FORCE=1 [IDS=terrace-car] → tour-mock/tour-imagined.json
+	$(need_ws)
+	TOUR_IMAGINE=1 $(if $(IDS),TOUR_IMAGINE_IDS="$(IDS)") $(if $(FORCE),TOUR_IMAGINE_FORCE=1) $(PNPM) --filter $(WEB) exec vitest run src/server/perception/__tests__/tour-imagine.test.ts
+	@echo "→ apps/web/src/server/perception/tour-mock/tour-imagined.json"
+
+tour-car-art: ## The imagined drawings of the tour cars as PNGs (VS-T44) OUT=dir [IDS=terrace-car] → <OUT>/<id>/view-{right,front,back,top}.png
+	$(need_ws)
+	@test -n "$(OUT)" || { echo "Usage: make tour-car-art OUT=dir [IDS=…]"; exit 1; }
+	TOUR_CAR_ART_OUT="$(abspath $(OUT))" $(if $(IDS),TOUR_CAR_ART_IDS="$(IDS)") $(PNPM) --filter $(WEB) exec vitest run src/server/perception/__tests__/tour-car-art.test.ts
+
+tour-photo: ## A 360° tour object's photo cut to its outline (VS-T44): IDS=terrace-car,street-car-white [OUT=test-results/tour-photo] → <OUT>/<id>/photo.png, the PHOTO= of make views-3d
+	$(need_ws)
+	@test -n "$(IDS)" || { echo "Usage: make tour-photo IDS=terrace-car[,…] [OUT=dir]"; exit 1; }
+	TOUR_PHOTO_IDS="$(IDS)" $(if $(OUT),TOUR_PHOTO_OUT="$(abspath $(OUT))") $(PNPM) --filter $(WEB) exec vitest run src/server/perception/__tests__/tour-photo.test.ts
+
 test-watch: ## Run engine tests in watch mode
 	$(need_ws)
 	$(PNPM) --filter $(ENGINE) exec vitest

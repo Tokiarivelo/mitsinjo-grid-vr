@@ -730,6 +730,8 @@ export const ObjectRecipeSchema = z.object({
       }),
       box: z.tuple([z.number(), z.number(), z.number(), z.number(), z.number(), z.number()]),
       pieces: z.array(z.string().min(1).max(40)).max(MAX_VIEW_PARTS),
+      /** `box` (VS-T44): six imagined faces, each surface reads the one it faces; absent = `photo`. */
+      mode: z.enum(['photo', 'box']).optional(),
     })
     .optional(),
   /**

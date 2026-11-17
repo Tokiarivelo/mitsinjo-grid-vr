@@ -47,7 +47,10 @@ export function skinGeometry(recipe: SkinRecipe): THREE.BufferGeometry {
   const normal = soup.getAttribute('normal').array;
   soup.setAttribute(
     'uv',
-    new THREE.BufferAttribute(skinUvs(position, normal, recipe.skin.box, recipe.skin.view), 2)
+    new THREE.BufferAttribute(
+      skinUvs(position, normal, recipe.skin.box, recipe.skin.view, recipe.skin.mode),
+      2
+    )
   );
   soup.setAttribute(
     'color',
