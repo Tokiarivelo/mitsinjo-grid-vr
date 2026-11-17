@@ -26,6 +26,26 @@ type V3 = [number, number, number];
 export const FLAT_LIGHT: Readonly<V3> = normalize([-0.35, 0.6, 0.72]);
 /** Share of the colour kept on faces turned away from the light. */
 export const FLAT_AMBIENT = 0.4;
+/** Share kept away from the light on a painted surface: its paint (a photo, a drawing) is already lit. */
+export const PAINT_AMBIENT = 0.72;
+
+/**
+ * Colour of a surface point (VS-T43 skinned parts): object-space point and normal (before any
+ * view turn) and the recipe part index → unshaded sRGB, or null for the part's own colour.
+ */
+export type FlatPaint = (
+  p: readonly [number, number, number],
+  n: readonly [number, number, number],
+  part: number
+) => readonly [number, number, number] | null;
+
+/** A view-space vector back in object space: the inverse of the view turn (pitch, then yaw). */
+export function unturn([X, Y, Z]: Readonly<V3>, { yaw, pitch }: FlatView): V3 {
+  const [cy, sy, cp, sp] = [Math.cos(yaw), Math.sin(yaw), Math.cos(pitch), Math.sin(pitch)];
+  const y = Y * cp + Z * sp;
+  const z1 = -Y * sp + Z * cp;
+  return [X * cy - z1 * sy, y, X * sy + z1 * cy];
+}
 
 export interface FlatRender {
   /** 1 = the model covers the pixel. */
@@ -543,6 +563,7 @@ function inHole(local: V3, wall: RecipePart, holes: ReadonlyArray<WallHole>, dim
  * The recipe drawn on a `cols` × `rows` grid. Default: at the photo view (`aspect` = box width / height in
  * pixels, same frame as `renderRecipe`). With `view`: turned around the model and framed on its bounds
  * (contact sheet, 10 % margin), `aspect` unused; `frameOf` replaces that framing (elevation renders, PG-T1).
+ * With `paint`, each hit point takes its colour (skinned parts, VS-T43), lightly shaded.
  */
 export function renderFlat(
   recipe: ObjectRecipe,
@@ -550,7 +571,8 @@ export function renderFlat(
   cols: number,
   rows: number,
   view?: FlatView,
-  frameOf?: (bounds: ViewBounds) => ViewFrame
+  frameOf?: (bounds: ViewBounds) => ViewFrame,
+  paint?: FlatPaint
 ): FlatRender {
   const n = cols * rows;
   const mask = emptyMask(cols, rows);
@@ -619,7 +641,28 @@ export function renderFlat(
           inv[1]! * nx + inv[4]! * ny + inv[7]! * nz,
           inv[2]! * nx + inv[5]! * ny + inv[8]! * nz,
         ]);
-        const shade = FLAT_AMBIENT + (1 - FLAT_AMBIENT) * Math.max(0, dot(nv, FLAT_LIGHT));
+        const lit = Math.max(0, dot(nv, FLAT_LIGHT));
+        const painted = paint
+          ? (() => {
+              const local: V3 = [
+                o[0] + d[0] * hit.tin,
+                o[1] + d[1] * hit.tin,
+                o[2] + d[2] * hit.tin,
+              ];
+              const vp = applyTransform(tf, local);
+              return paint(view ? unturn(vp, view) : vp, view ? unturn(nv, view) : nv, k);
+            })()
+          : null;
+        if (painted) {
+          const ps = PAINT_AMBIENT + (1 - PAINT_AMBIENT) * lit;
+          mask.data[i] = 1;
+          part[i] = k;
+          rgb[i * 3] = painted[0] * ps;
+          rgb[i * 3 + 1] = painted[1] * ps;
+          rgb[i * 3 + 2] = painted[2] * ps;
+          continue;
+        }
+        const shade = FLAT_AMBIENT + (1 - FLAT_AMBIENT) * lit;
         // Measured wall tints (PQ-T44 remedy 4): same face rule as the 3D view.
         const tint = wallTintFor(p, recipe.wallTints, hit.n!);
         let rr = cr;

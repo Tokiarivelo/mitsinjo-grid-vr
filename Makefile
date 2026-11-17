@@ -227,9 +227,15 @@ tour-outlines: ## Tour mock (VS-T41): hand outlines (scripts/tour-mock/outlines-
 	$(need_ws)
 	cd apps/web && node scripts/tour-mock/outlines.mjs $(CURDIR)/test-results/tour-trace && npx prettier --write src/features/vision-insert/ui/xr/tour/tour-outlines.ts >/dev/null
 
-tour-mock: ## Tour mock (VS-T41): build every 360° tour object's mock 3D answer on its photo (colours measured, scored) → tour-mock.json + sheets in test-results/tour-mock/ [ONLY=regex]
+tour-mock: ## Tour mock (VS-T41/T43): build every 360° tour object's mock 3D answer on its photo (colours measured, scored) + its front face cut from the photo → tour-mock.json, tour-skins.json + sheets in test-results/tour-mock/ [ONLY=regex]
 	$(need_ws)
 	TOUR_MOCK=1 $(if $(ONLY),TOUR_MOCK_ONLY="$(ONLY)") TOUR_MOCK_DIR=$(CURDIR)/test-results/tour-mock $(PNPM) --filter $(WEB) exec vitest run src/server/perception/__tests__/tour-mock-report.test.ts
+	cd apps/web && npx prettier --write src/server/perception/tour-mock/tour-mock.json src/server/perception/tour-mock/tour-skins.json >/dev/null
+
+tour-skins: ## Tour mock (VS-T43): keep the built models, only re-cut each object's front face from its photo → tour-skins.json + sheets (model wearing its faces) [ONLY=regex]
+	$(need_ws)
+	TOUR_MOCK=1 TOUR_MOCK_KEEP=1 $(if $(ONLY),TOUR_MOCK_ONLY="$(ONLY)") TOUR_MOCK_DIR=$(CURDIR)/test-results/tour-mock $(PNPM) --filter $(WEB) exec vitest run src/server/perception/__tests__/tour-mock-report.test.ts
+	cd apps/web && npx prettier --write src/server/perception/tour-mock/tour-mock.json src/server/perception/tour-mock/tour-skins.json >/dev/null
 
 test-watch: ## Run engine tests in watch mode
 	$(need_ws)

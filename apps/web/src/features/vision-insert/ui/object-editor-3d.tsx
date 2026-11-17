@@ -29,6 +29,7 @@ import { HULL_SURFACES, type HullSurface } from '@/lib/face-hull';
 import { faceMaterials, facesMesh } from '../utils/face-projection';
 import { carGeometry, carMaterials } from '../utils/car-projection';
 import { plantGeometry, plantMaterials } from '../utils/plant-projection';
+import { skinGeometry, skinMaterials } from '../utils/skin-projection';
 import { houseGeometry, houseMaterials } from '../utils/house-projection';
 import { recipeMesh, silhouetteDepth, silhouetteMesh } from '../utils/object-geometry';
 import { surfaceMaterial, SURFACES } from '../utils/surface-look';
@@ -167,9 +168,20 @@ export function ObjectModel({
     () => (plantPlan && activeRecipe ? { ...activeRecipe, plant: plantPlan } : null),
     [plantPlan, activeRecipe]
   );
+  // Parts wearing their 2D faces (VS-T43, tour mock): one piece per part name.
+  const skinned = useMemo(
+    () =>
+      activeRecipe?.skin && !activeRecipe.plant && !house && !car
+        ? { ...activeRecipe, skin: activeRecipe.skin }
+        : null,
+    [activeRecipe, house, car]
+  );
   const pickable = Boolean(faces || house || car || plant);
+  // The piece picked in the Studio glows on a skinned model.
+  const studioSelected = studio?.selected ?? null;
   const mesh = useMemo(() => {
     if (house?.house) return houseGeometry({ ...house, house: house.house });
+    if (skinned) return skinGeometry(skinned);
     const carMesh = car ? carGeometry(car) : null;
     if (carMesh) return carMesh;
     if (plant) return plantGeometry(plant);
@@ -183,7 +195,7 @@ export function ObjectModel({
             photoAspect,
             silhouetteDepth(detection)
           );
-  }, [activeRecipe, faces, house, car, plant, detection, photoAspect]);
+  }, [activeRecipe, faces, house, car, plant, skinned, detection, photoAspect]);
   useEffect(() => () => mesh.dispose(), [mesh]);
   const invalidate = useThree((s) => s.invalidate);
   const vertexColors = Boolean(activeRecipe);
@@ -209,6 +221,12 @@ export function ObjectModel({
         selected: selectedSurface
           ? { surface: selectedSurface, color: TOKEN_HEX.energyCyan }
           : null,
+        onLoad: invalidate,
+      });
+    if (skinned)
+      return skinMaterials(skinned, {
+        tint,
+        selected: studioSelected ? { surface: studioSelected, color: TOKEN_HEX.energyCyan } : null,
         onLoad: invalidate,
       });
     if (plant)
@@ -241,7 +259,20 @@ export function ObjectModel({
         ...(map ? { map } : {}),
       });
     });
-  }, [mesh, vertexColors, swatches, tint, invalidate, faces, house, car, plant, selectedSurface]);
+  }, [
+    mesh,
+    vertexColors,
+    swatches,
+    tint,
+    invalidate,
+    faces,
+    house,
+    car,
+    plant,
+    skinned,
+    selectedSurface,
+    studioSelected,
+  ]);
   useEffect(() => () => surfaces.forEach((m) => m.dispose()), [surfaces]);
   // Plain silhouette material, memo'd like the surfaces (so the print wipe can clip it too).
   const silhouetteMaterial = useMemo(
@@ -263,7 +294,7 @@ export function ObjectModel({
   const edits = editedRecipe?.pieces;
   const byPiece = Boolean(vertexColors && (studio || (edits && Object.keys(edits).length)));
   const names = useMemo(
-    () => (activeRecipe ? pieceNames(modelKind(activeRecipe)) : []),
+    () => (activeRecipe ? pieceNames(modelKind(activeRecipe), activeRecipe) : []),
     [activeRecipe]
   );
   /** The model is still being streamed: fresh geometry wipes in like print layers. */

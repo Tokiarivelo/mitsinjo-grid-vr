@@ -13,6 +13,7 @@ import { reconstructTree } from '../tree/tree-recon';
 import { renderAtPhoto, type TourMockEntry } from './render';
 import { resolveSilhouettes, silhouettePlant } from './silhouette';
 import { compileSpec, type TourPartsSpec, type TourSpec } from './spec';
+import { SKIN_ERODE, SKIN_TILE, erodeMask, fillOutside, outlineFrame, type PanoRing } from './skin';
 
 export { renderAtPhoto, type TourMockEntry };
 
@@ -24,7 +25,7 @@ export { renderAtPhoto, type TourMockEntry };
  * photo's colours inside the hand outline, and scored like every model (`scoreModel`).
  */
 
-export type PanoRing = ReadonlyArray<readonly [number, number]>;
+export type { PanoRing };
 
 /** The object on its photo: the panorama turned so the object faces the camera. */
 export interface ObjectPhoto {
@@ -36,18 +37,12 @@ export interface ObjectPhoto {
   elevation: number;
 }
 
-const nearU = (u: number, ref: number) => u + Math.round(ref - u);
-
 /** The panorama turned to put the outline's centre straight ahead (u = 0.5), with box and rings. */
 export async function objectPhoto(
   pano: { data: Buffer; width: number; height: number },
   outline: ReadonlyArray<PanoRing>
 ): Promise<ObjectPhoto> {
-  const ref = outline[0]![0]![0];
-  const us = outline.flatMap((r) => r.map(([u]) => nearU(u, ref)));
-  const vs = outline.flatMap((r) => r.map(([, v]) => v));
-  const [u0, u1, v0, v1] = [Math.min(...us), Math.max(...us), Math.min(...vs), Math.max(...vs)];
-  const uc = (u0 + u1) / 2;
+  const { uc, box, rings, elevation } = outlineFrame(outline);
   const { width: W, height: H, data } = pano;
   // Roll the rows so column uc lands at W / 2.
   const shift = Math.round((0.5 - (uc - Math.floor(uc))) * W);
@@ -62,12 +57,11 @@ export async function objectPhoto(
   const buffer = await sharp(rolled, { raw: { width: W, height: H, channels: 3 } })
     .png({ compressionLevel: 1 })
     .toBuffer();
-  const toX = (u: number) => nearU(u, ref) - uc + 0.5;
   return {
     photo: { buffer, width: W, height: H },
-    box: { x: toX(u0), y: v0, w: u1 - u0, h: v1 - v0 },
-    rings: outline.map((r) => r.map(([u, v]) => [toX(u), v] as const)),
-    elevation: (0.5 - (v0 + v1) / 2) * Math.PI,
+    box,
+    rings: rings.map((r) => [...r]),
+    elevation,
   };
 }
 
@@ -270,4 +264,85 @@ export async function buildEntry(
   const alt = outline ? await partsEntry(outline, shot, label) : null;
   if (!read) return alt;
   return alt && alt.score.score > read.score.score ? alt : read;
+}
+
+/** JPEG quality of a stored front face (VS-T43). */
+export const SKIN_JPEG_QUALITY = 84;
+
+/** RGB distance from a part's render past which a photo pixel is what shows through or in front. */
+export const SKIN_GATE_RGB = 70;
+/** Share of a part's pixels near its render needed to call it plain (then the others are dropped). */
+export const SKIN_GATE_SHARE = 0.6;
+
+/**
+ * Photo pixels that are the model (VS-T43): inside the outline, covered by a part, and, on a plain
+ * part (most of its pixels near its own measured colour), near that colour: the drape seen between
+ * the legs of a chair, the sky through a tree are dropped, a patterned blanket keeps its pattern.
+ * Pure: `photo` and `render` RGB on the same grid as `outline`.
+ */
+export function gateSkin(photo: Uint8Array, render: FlatRender, outline: Mask): Mask {
+  const n = outline.cols * outline.rows;
+  const near = new Map<number, [number, number]>();
+  const dist = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const k = render.part[i]!;
+    if (!outline.data[i] || k < 0) continue;
+    const d = Math.hypot(
+      photo[i * 3]! - render.rgb[i * 3]!,
+      photo[i * 3 + 1]! - render.rgb[i * 3 + 1]!,
+      photo[i * 3 + 2]! - render.rgb[i * 3 + 2]!
+    );
+    dist[i] = d;
+    const c = near.get(k) ?? [0, 0];
+    c[1]++;
+    if (d <= SKIN_GATE_RGB) c[0]++;
+    near.set(k, c);
+  }
+  const data = new Uint8Array(n);
+  for (let i = 0; i < n; i++) {
+    const k = render.part[i]!;
+    if (!outline.data[i] || k < 0) continue;
+    const [ok, all] = near.get(k)!;
+    data[i] = ok >= SKIN_GATE_SHARE * all && dist[i]! > SKIN_GATE_RGB ? 0 : 1;
+  }
+  return { cols: outline.cols, rows: outline.rows, data };
+}
+
+/**
+ * The front face of a tour object (VS-T43): its photo box cut from the panorama, stretched to one
+ * `SKIN_TILE`² atlas tile (columns and rows span the model box), the outline pulled in by
+ * `SKIN_ERODE`, the pixels that are not the model dropped (`gateSkin`, made things only) and
+ * everything left filled with the nearest object colours. JPEG.
+ */
+export async function frontSkinTile(
+  shot: ObjectPhoto,
+  entry?: Pick<TourMockEntry, 'recipe' | 'pitch'>,
+  gate = true
+): Promise<Buffer> {
+  const { photo, box } = shot;
+  const left = Math.max(0, Math.floor(box.x * photo.width));
+  const top = Math.max(0, Math.floor(box.y * photo.height));
+  const width = Math.max(1, Math.min(photo.width - left, Math.ceil(box.w * photo.width)));
+  const height = Math.max(1, Math.min(photo.height - top, Math.ceil(box.h * photo.height)));
+  const { data } = await sharp(photo.buffer)
+    .extract({ left, top, width, height })
+    .resize(SKIN_TILE, SKIN_TILE, { fit: 'fill', kernel: 'lanczos3' })
+    .removeAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  const rgb = new Uint8Array(data.buffer, data.byteOffset, data.length);
+  let mask = erodeMask(ringsMask(shot.rings, box, SKIN_TILE, SKIN_TILE), SKIN_ERODE);
+  if (entry && gate) {
+    const gated = gateSkin(
+      rgb,
+      renderAtPhoto(entry.recipe, SKIN_TILE, SKIN_TILE, entry.pitch),
+      mask
+    );
+    // Never drop the whole object (a part read wrong): keep the outline then.
+    if (gated.data.some((v) => v)) mask = gated;
+  }
+  fillOutside(rgb, mask);
+  return sharp(Buffer.from(rgb), { raw: { width: SKIN_TILE, height: SKIN_TILE, channels: 3 } })
+    .jpeg({ quality: SKIN_JPEG_QUALITY, mozjpeg: true })
+    .toBuffer();
 }

@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { faceMaterials, facesMesh } from '@/features/vision-insert/utils/face-projection';
 import { carGeometry, carMaterials } from '@/features/vision-insert/utils/car-projection';
 import { plantGeometry, plantMaterials } from '@/features/vision-insert/utils/plant-projection';
+import { skinGeometry, skinMaterials } from '@/features/vision-insert/utils/skin-projection';
 import { houseGeometry, houseMaterials } from '@/features/vision-insert/utils/house-projection';
 import { withPieceEdits } from '@/features/vision-insert/utils/model-pieces';
 import { PLACED_NIGHT_DIM, type PlacedDrawnModel } from '../utils/placed-models-geometry';
@@ -23,7 +24,7 @@ export function drawnTint(model: Pick<PlacedDrawnModel, 'state' | 'dim'>): strin
 }
 
 /**
- * A placed model wearing its validated drawings (PQ-T71), or built from its house plan (PQ-T72), its car plan (PQ-T76) or its plant plan (PQ-T82), with the operator's surface looks: the
+ * A placed model wearing its validated drawings (PQ-T71), or built from its house plan (PQ-T72), its car plan (PQ-T76), its plant plan (PQ-T82) or its parts wearing their faces (VS-T43), with the operator's surface looks: the
  * same hull and materials as the 3D object view (`facesMesh`, `faceMaterials`). One draw call per
  * surface kind in use; the atlas texture is shared with the object view (cached by URL).
  */
@@ -43,7 +44,9 @@ export const PlacedDrawnModelMesh = memo(function PlacedDrawnModelMesh({
           : ((recipe.car?.body ? carGeometry({ ...recipe, car: recipe.car }) : null) ??
               (recipe.plant
                 ? plantGeometry({ ...recipe, plant: recipe.plant })
-                : facesMesh({ proportions: recipe.proportions, faces: recipe.faces! }))),
+                : recipe.skin
+                  ? skinGeometry({ ...recipe, skin: recipe.skin })
+                  : facesMesh({ proportions: recipe.proportions, faces: recipe.faces! }))),
         recipe
       ),
     [recipe]
@@ -57,7 +60,9 @@ export const PlacedDrawnModelMesh = memo(function PlacedDrawnModelMesh({
         ? carMaterials({ ...recipe, car: recipe.car }, options)
         : recipe.plant
           ? plantMaterials({ ...recipe, plant: recipe.plant }, options)
-          : faceMaterials(recipe.faces!, options);
+          : recipe.skin
+            ? skinMaterials({ ...recipe, skin: recipe.skin }, options)
+            : faceMaterials(recipe.faces!, options);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the tint reads state and dim only
   }, [recipe, model.state, model.dim, invalidate]);
   useEffect(() => () => materials.forEach((m) => m.dispose()), [materials]);

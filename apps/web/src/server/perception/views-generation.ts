@@ -4,7 +4,7 @@ import sharp from 'sharp';
 import type { ObjectRecipe, ShapeTarget } from '@/lib/object-shape';
 import { CANONICAL_ANGLES, type CanonicalAngle, type ImaginedAngleView } from '@/lib/object-shape';
 import { archetypeOf } from '@/lib/object-kit';
-import { renderFlat, type FlatView } from './flat-render';
+import { renderFlat, type FlatPaint, type FlatView } from './flat-render';
 
 /** Canonical views for the 6 angles of 2D imagination. */
 export const CANONICAL_FLAT_VIEWS: Record<
@@ -207,19 +207,21 @@ export function getAngleAnatomy(
 /**
  * Generates the 6 canonical 2D imagined views (front, left, back, right, top, 3/4)
  * rendered from the 3D recipe with studio lighting and anatomical feature callouts.
+ * With `paint` the model wears its faces (VS-T43 tour mock): each view shows them.
  */
 export async function generateImaginedViews(
   recipe: ObjectRecipe,
   target: Pick<ShapeTarget, 'label' | 'category' | 'scenery'>,
   photoAspect = 1,
-  size = 256
+  size = 256,
+  paint?: FlatPaint
 ): Promise<ImaginedAngleView[]> {
   const archetype = archetypeOf(target);
   const views: ImaginedAngleView[] = [];
 
   for (const angle of CANONICAL_ANGLES) {
     const config = CANONICAL_FLAT_VIEWS[angle];
-    const flat = renderFlat(recipe, photoAspect, size, size, config.view);
+    const flat = renderFlat(recipe, photoAspect, size, size, config.view, undefined, paint);
 
     // Composite flat render onto a sleek dark studio background:
     const bgR = 26;

@@ -1,5 +1,11 @@
 import type { ObjectRecipe } from '@/lib/object-shape';
-import { renderFlat, type FlatRender, type ViewBounds, type ViewFrame } from '../flat-render';
+import {
+  renderFlat,
+  type FlatPaint,
+  type FlatRender,
+  type ViewBounds,
+  type ViewFrame,
+} from '../flat-render';
 import type { ModelScore } from '../model-score';
 
 /** One tour object's shipped mock answer (VS-T41), written by `make tour-mock` into `tour-mock.json`. */
@@ -20,12 +26,13 @@ const fill = (b: ViewBounds): ViewFrame => ({
   fh: Math.max(1e-6, b.y1 - b.y0),
 });
 
-/** The recipe at the photo's view: seen from the eye, below a ceiling light, above a rock. */
+/** The recipe at the photo's view: seen from the eye, below a ceiling light, above a rock (`paint`: wearing its faces). */
 export function renderAtPhoto(
   recipe: ObjectRecipe,
   cols: number,
   rows: number,
-  pitch: number
+  pitch: number,
+  paint?: FlatPaint
 ): FlatRender {
-  return renderFlat(recipe, cols / rows, cols, rows, { yaw: 0, pitch }, fill);
+  return renderFlat(recipe, cols / rows, cols, rows, { yaw: 0, pitch }, fill, paint);
 }

@@ -6,7 +6,14 @@ import { cpuMs } from '@/test/cpu-time';
 import { kitToRecipe } from '@/lib/object-kit';
 import { type ObjectRecipe, type RecipePart } from '@/lib/object-shape';
 import { hexToRgb } from '../color-measure';
-import { FLAT_AMBIENT, FLAT_LIGHT, renderFlat, THREE_QUARTER } from '../flat-render';
+import {
+  FLAT_AMBIENT,
+  FLAT_LIGHT,
+  PAINT_AMBIENT,
+  renderFlat,
+  THREE_QUARTER,
+  unturn,
+} from '../flat-render';
 import { SDF_BALL, SDF_PERSON, sdfPart } from '@/test/sdf-blobs';
 import { iou, renderRecipe } from '../silhouette-fit';
 import { GOLDEN_SHAPES } from '../__fixtures__/shape';
@@ -543,5 +550,22 @@ describe('assembly details (PQ-T3): the judge sees what the viewer shows', () =>
     const p1 = pixel(tinted, 16, 16, 32);
     expect(p1[0]!).toBeGreaterThan(p1[1]!);
     expect(p1).not.toEqual(p0);
+  });
+
+  it('paints each hit with its object-space point and normal (VS-T43 skins)', () => {
+    const recipe: ObjectRecipe = {
+      proportions: { w: 1, h: 1, d: 1 },
+      parts: [{ shape: 'box', at: [0, 0, 0], size: [1, 1, 1], color: '#000000' }],
+    };
+    const seen: Array<readonly [number, number, number]> = [];
+    const flat = renderFlat(recipe, 1, 8, 8, { yaw: Math.PI / 2, pitch: 0 }, undefined, (p, n) => {
+      seen.push(n);
+      return p[0] > 0 ? [200, 200, 200] : [100, 100, 100];
+    });
+    // Turned a quarter, the camera sees the model's +x or −x face, never its front.
+    expect(seen.every((n) => Math.abs(Math.abs(n[0]) - 1) < 1e-6)).toBe(true);
+    const lit = Math.max(...Array.from(flat.rgb));
+    expect(lit).toBeGreaterThanOrEqual(Math.floor(100 * PAINT_AMBIENT));
+    expect(unturn([0, 0, 1], { yaw: 0.4, pitch: 0.2 })[1]).toBeCloseTo(Math.sin(0.2));
   });
 });

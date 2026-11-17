@@ -712,6 +712,27 @@ export const ObjectRecipeSchema = z.object({
     })
     .optional(),
   /**
+   * The parts wearing their 2D faces (VS-T43, 360° tour mock): `atlas` holds the face tiles
+   * (`lib/face-atlas.ts` layout), `view` the camera turn of the front face (the photo's yaw and
+   * pitch, rad), `box` the model box they span in that camera's frame ([x0, y0, z0, x1, y1, z1]),
+   * `pieces` the piece (layer) name of each recipe part. Each surface reads the tile it looks at
+   * (`lib/face-skin.ts`); the 3D view draws the parts, one piece per name.
+   */
+  skin: z
+    .object({
+      atlas: z.string().startsWith('data:image/').max(FACE_ATLAS_MAX_CHARS),
+      view: z.object({
+        yaw: z.number().min(-Math.PI).max(Math.PI),
+        pitch: z
+          .number()
+          .min(-Math.PI / 2)
+          .max(Math.PI / 2),
+      }),
+      box: z.tuple([z.number(), z.number(), z.number(), z.number(), z.number(), z.number()]),
+      pieces: z.array(z.string().min(1).max(40)).max(MAX_VIEW_PARTS),
+    })
+    .optional(),
+  /**
    * Measured wall tints per face (PQ-T44 remedy 4): medians on the photo's wall regions,
    * yawed views only (straight views keep the role colour). Absent faces fall back to the
    * part colour; the rear mirrors the front. The 3D view and the flat render tint by face
