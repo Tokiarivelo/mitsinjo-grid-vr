@@ -481,4 +481,6 @@ Style : hologramme futuriste (cyan / ambre, lignes de balayage, coins lumineux, 
       scan (avant : au-dessus de la carte, hors champ, un tir à côté analysait la vue).
 - [x] Quitter le labo ne pose plus de miniature dans la vue 360° (l'objet est dans le labo) : un avis dit
       que « Revenir au studio » le rouvre.
+- [x] Curseur de la souris (émulateur) seulement sur ce qu'elle peut utiliser (bouton, panneau, objet,
+      flèche, Menu) : posé sur un mur ou la photo, il faisait un 3ᵉ rond à côté des curseurs des lasers.
 - [ ] **Done when :** vu au casque (manettes et mains).

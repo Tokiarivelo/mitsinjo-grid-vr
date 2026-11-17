@@ -7,6 +7,7 @@ import { screenPoint } from '../webcam-screen';
 import { miniatureSlot } from '../xr-layout';
 import { createWristMenu, type WristMenu } from '../wrist-menu';
 import {
+  mouseCursorShown,
   mouseTarget,
   XRBlasterController,
   xrEyeAt,
@@ -453,6 +454,13 @@ describe('XRBlasterController (VS-T4)', () => {
 });
 
 describe('mouse helpers (VS-T24)', () => {
+  it('mouseCursorShown: a mouse cursor only on what it can use, never on a wall (VS-T47)', () => {
+    // Owner report 2026-11-17: a third ring rested on the wall beside the two lasers' cursors.
+    expect(mouseCursorShown('none')).toBe(false);
+    expect(mouseCursorShown('screen')).toBe(false);
+    for (const kind of ['wrist', 'panel', 'miniature', 'button', 'hotspot', 'target'] as const)
+      expect(mouseCursorShown(kind)).toBe(true);
+  });
   it('mouseTarget: our canvas always, a canvas over it only in the headset view', () => {
     const dom = document.createElement('canvas');
     const other = document.createElement('canvas');
