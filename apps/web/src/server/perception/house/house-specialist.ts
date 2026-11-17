@@ -14,21 +14,17 @@ import type { HouseReadResult } from '../schemas';
 import type { AlignedViews, GridView, ViewFrame, ViewName } from '../recon/views';
 import { cleanSwatch, fitHouse, housePatches, swatchOblique, type HousePatch } from './house-fit';
 import { buildHouseQuestion, type HouseReading } from './house-prompt';
+import { runTeam } from '../team/team';
 import {
-  HOUSE_TOOL_SPECS,
-  HOUSE_TOOLS_ALWAYS,
-  HOUSE_TOOLS_REQUIRED,
-  mergeToolAnswers,
+  HOUSE_TEAM,
+  HOUSE_TOOL_TIMEOUT_MS,
   patchReading,
-  parseBrief,
-  PILOT_JSON_SCHEMA,
-  PILOT_SYSTEM_PROMPT,
-  pilotQuestion,
-  toolAnswered,
-  toolQuestion,
   type HouseBrief,
   type HouseTool,
+  type HouseView,
 } from './house-tools';
+
+export { HOUSE_TOOL_TIMEOUT_MS };
 
 /**
  * The house specialist (PQ-T72), the part that talks to the model: each validated drawing cut to
@@ -71,20 +67,13 @@ export const houseToolAsk =
   };
 
 /**
- * Longest wait for one pilot or specialist call (PQ-T73). The stream has no timer of its own
- * (`longFetch`): a call the provider leaves hanging would hold the whole house; the slowest
- * specialist seen answered in ~6 min. Past this, its answer counts as none.
- */
-export const HOUSE_TOOL_TIMEOUT_MS = 12 * 60_000;
-
-/**
  * The piloted reading (PQ-T73): the pilot's brief, then the specialists it calls, in parallel,
  * merged. Null when the massing specialist gives nothing usable (the caller falls back).
  */
 export async function readHouseParts(
   rawAsk: AskHouseTool,
   label: string,
-  order: ReadonlyArray<'front' | 'right' | 'back' | 'left' | 'top'>,
+  order: ReadonlyArray<HouseView>,
   images: ReadonlyArray<string>,
   signal?: AbortSignal,
   timeoutMs = HOUSE_TOOL_TIMEOUT_MS
@@ -94,102 +83,14 @@ export async function readHouseParts(
   /** The specialists' raw answers (PQ-T74: they complete the single reading that takes over). */
   answers?: Partial<Record<HouseTool, string | null>>;
 }> {
-  // Each call ends with the request or at its own deadline, whichever comes first.
-  const ask: AskHouseTool = (tool, system, schema, img, question, refs, outer) => {
-    const deadline = AbortSignal.timeout(timeoutMs);
-    const both = outer ? AbortSignal.any([outer, deadline]) : deadline;
-    return new Promise<string | null>((resolve, reject) => {
-      const stop = () =>
-        reject(new Error(`${tool}: no answer in ${Math.round(timeoutMs / 1000)} s`));
-      if (both.aborted) return stop();
-      both.addEventListener('abort', stop, { once: true });
-      rawAsk(tool, system, schema, img, question, refs, both).then(resolve, reject);
-    });
-  };
-  const tag = `[vision] house pilot for "${label}"`;
-  const [main, ...refs] = images;
-  if (!main) return { reading: null, brief: null };
-  const safe = async (p: Promise<string | null>) => {
-    try {
-      return await p;
-    } catch (err) {
-      console.warn(`${tag}: a call failed:`, err instanceof Error ? err.message : err);
-      return null;
-    }
-  };
-  const briefText = await safe(
-    ask(
-      'pilot',
-      PILOT_SYSTEM_PROMPT,
-      PILOT_JSON_SCHEMA,
-      main,
-      pilotQuestion(label, order),
-      refs,
-      signal
-    )
-  );
-  const brief = briefText ? parseBrief(briefText) : null;
-  const tools: HouseTool[] = brief
-    ? brief.calls.map((c) => c.tool)
-    : [...HOUSE_TOOLS_ALWAYS, 'structure'];
-  console.info(
-    `${tag}: ${
-      brief
-        ? `${brief.type}, parts ${
-            Object.keys(brief.parts)
-              .filter((k) => brief.parts[k as keyof typeof brief.parts])
-              .join(', ') || 'none'
-          }`
-        : 'no brief'
-    } → ${tools.join(', ')}`
-  );
-  const answers = await Promise.all(
-    tools.map(async (tool) => {
-      const spec = HOUSE_TOOL_SPECS[tool];
-      return [
-        tool,
-        await safe(
-          ask(
-            tool,
-            spec.system,
-            spec.schema,
-            main,
-            toolQuestion(tool, label, order, brief),
-            refs,
-            signal
-          )
-        ),
-      ] as const;
-    })
-  );
-  const byTool: Partial<Record<HouseTool, string | null>> = Object.fromEntries(answers);
-  // A call cut by the network (or answering nothing usable) is asked once more, alone.
-  for (const tool of tools) {
-    if (toolAnswered(tool, byTool[tool]) || signal?.aborted) continue;
-    console.info(`${tag}: ${tool} unusable, asked again`);
-    const spec = HOUSE_TOOL_SPECS[tool];
-    byTool[tool] = await safe(
-      ask(
-        tool,
-        spec.system,
-        spec.schema,
-        main,
-        toolQuestion(tool, label, order, brief),
-        refs,
-        signal
-      )
-    );
-  }
-  const missing = HOUSE_TOOLS_REQUIRED.filter((t) => !toolAnswered(t, byTool[t]));
-  if (missing.length) {
-    console.info(`${tag}: no ${missing.join(', ')} after a retry: the single reading takes over`);
-    return { reading: null, brief, answers: byTool };
-  }
-  const reading = mergeToolAnswers(byTool, brief);
-  console.info(
-    `${tag}: ${reading ? `${reading.volumes.length} volumes, ${reading.openings.length} openings, ${reading.piers?.length ?? 0} piers, ${reading.chimneys.length} chimneys, finishes ${reading.finishes?.map((f) => f.finish).join(', ') || 'none'}` : 'no usable massing'}`
-  );
-  return { reading, brief };
+  const out = await runTeam(HOUSE_TEAM, rawAsk, {
+    label,
+    views: order,
+    images,
+    signal,
+    timeoutMs,
+  });
+  return out.reading ? { reading: out.reading, brief: out.brief } : out;
 }
 
 /** A drawing cut to its object box, as drawn (not mirrored), JPEG data URL; null when it fails. */

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { teamSpecs, type SpecialistTeam } from '../team/team';
 import {
   HOUSE_FINISHES,
   HOUSE_HEADS,
@@ -505,3 +506,42 @@ export function patchReading(
     base: merged.base ?? single.base,
   };
 }
+
+// ---------------------------------------------------------------- team
+
+/**
+ * Longest wait for one pilot or specialist call (PQ-T73). The stream has no timer of its own
+ * (`longFetch`): a call the provider leaves hanging would hold the whole house; the slowest
+ * specialist seen answered in ~6 min. Past this, its answer counts as none.
+ */
+export const HOUSE_TOOL_TIMEOUT_MS = 12 * 60_000;
+
+export type HouseView = 'front' | 'right' | 'back' | 'left' | 'top';
+
+/** The house team as a `SpecialistTeam` (PQ-T84): the pilot picks the specialists it calls. */
+export const HOUSE_TEAM: SpecialistTeam<HouseTool, HouseBrief, HouseReading, HouseView> = {
+  id: 'house',
+  promptVersion: HOUSE_TOOLS_PROMPT_VERSION,
+  tools: HOUSE_TOOLS,
+  required: HOUSE_TOOLS_REQUIRED,
+  timeoutMs: HOUSE_TOOL_TIMEOUT_MS,
+  pilot: {
+    system: PILOT_SYSTEM_PROMPT,
+    schema: PILOT_JSON_SCHEMA,
+    question: pilotQuestion,
+    parse: parseBrief,
+  },
+  specs: teamSpecs(HOUSE_TOOLS, (t) => HOUSE_TOOL_SPECS[t], toolQuestion),
+  toolsFor: (brief) =>
+    brief ? brief.calls.map((c) => c.tool) : [...HOUSE_TOOLS_ALWAYS, 'structure'],
+  answered: toolAnswered,
+  merge: mergeToolAnswers,
+  briefSummary: (b) =>
+    `${b.type}, parts ${
+      Object.keys(b.parts)
+        .filter((k) => b.parts[k as keyof typeof b.parts])
+        .join(', ') || 'none'
+    }`,
+  summary: (r) =>
+    `${r.volumes.length} volumes, ${r.openings.length} openings, ${r.piers?.length ?? 0} piers, ${r.chimneys.length} chimneys, finishes ${r.finishes?.map((f) => f.finish).join(', ') || 'none'}`,
+};

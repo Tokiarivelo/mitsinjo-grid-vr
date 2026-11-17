@@ -2,23 +2,18 @@ import 'server-only';
 
 import type { PerceptionClient } from '../client';
 import { cropToObject } from '../house/house-specialist';
-import { askSpecialists, callWithDeadline } from '../team-call';
+import { runTeam } from '../team/team';
 import type { AlignedViews, ViewFrame, ViewName } from '../recon/views';
 import {
-  CAR_PILOT_JSON_SCHEMA,
-  CAR_PILOT_SYSTEM_PROMPT,
-  CAR_TOOL_SPECS,
-  CAR_TOOLS_REQUIRED,
-  carPilotQuestion,
-  carToolAnswered,
-  carToolQuestion,
-  mergeCarAnswers,
-  parseCarBrief,
+  CAR_TEAM,
+  CAR_TOOL_TIMEOUT_MS,
   type CarBrief,
   type CarReading,
   type CarTool,
   type CarView,
 } from './car-tools';
+
+export { CAR_TOOL_TIMEOUT_MS };
 
 /**
  * The car team at work (PQ-T76), the part that talks to the model: each validated drawing cut to
@@ -54,9 +49,6 @@ export const carToolAsk =
     return r.source === 'meta' ? r.content : null;
   };
 
-/** Longest wait for one call: a car is smaller than a house, the slowest specialist still minutes. */
-export const CAR_TOOL_TIMEOUT_MS = 8 * 60_000;
-
 /** The team's reading; null when the body or the glazing is missing after its retry. */
 export async function readCarParts(
   rawAsk: AskCarTool,
@@ -66,46 +58,13 @@ export async function readCarParts(
   signal?: AbortSignal,
   timeoutMs = CAR_TOOL_TIMEOUT_MS
 ): Promise<{ reading: CarReading | null; brief: CarBrief | null }> {
-  const tag = `[vision] car team for "${label}"`;
-  const [main, ...refs] = images;
-  if (!main) return { reading: null, brief: null };
-  const ask = (
-    tool: CarTool | 'pilot',
-    system: string,
-    schema: { name: string; schema: object },
-    question: string
-  ) =>
-    callWithDeadline(tag, tool, timeoutMs, signal, (both) =>
-      rawAsk(tool, system, schema, main, question, refs, both)
-    );
-  const briefText = await ask(
-    'pilot',
-    CAR_PILOT_SYSTEM_PROMPT,
-    CAR_PILOT_JSON_SCHEMA,
-    carPilotQuestion(label, order)
-  );
-  const brief = briefText ? parseCarBrief(briefText) : null;
-  console.info(
-    `${tag}: ${brief ? `${brief.kind}${brief.doors ? `, ${brief.doors} doors` : ''}, parts ${Object.keys(brief.parts).join(', ') || 'none'}` : 'no brief'}`
-  );
-  const tools = Object.keys(CAR_TOOL_SPECS) as CarTool[];
-  const askTool = (tool: CarTool) =>
-    ask(
-      tool,
-      CAR_TOOL_SPECS[tool].system,
-      CAR_TOOL_SPECS[tool].schema,
-      carToolQuestion(tool, label, order, brief)
-    );
-  const answers = await askSpecialists(tag, tools, askTool, carToolAnswered, signal);
-  const missing = CAR_TOOLS_REQUIRED.filter((t) => !carToolAnswered(t, answers[t]));
-  if (missing.length) {
-    console.info(`${tag}: no ${missing.join(', ')} after a retry: no reading`);
-    return { reading: null, brief };
-  }
-  const reading = mergeCarAnswers(answers, brief);
-  console.info(
-    `${tag}: ${reading ? `${reading.windows.length} windows, ${reading.details.length} details, finishes ${reading.finishes.map((f) => f.finish).join(', ') || 'none'}` : 'no usable body'}`
-  );
+  const { reading, brief } = await runTeam(CAR_TEAM, rawAsk, {
+    label,
+    views: order,
+    images,
+    signal,
+    timeoutMs,
+  });
   return { reading, brief };
 }
 

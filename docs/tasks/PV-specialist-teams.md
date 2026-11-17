@@ -117,15 +117,15 @@ En gras : spécialistes propres à une équipe. Les autres viennent de `team/sha
 - [x] Test : signal annulé / délai dépassé → null, sans lever.
 - [x] `docs/architecture.md` : dossier `server/perception/team/`.
 
-### PQ-T84 — Plante, voiture, maison sur `runTeam` (comportement constant)
+### [x] PQ-T84 — Plante, voiture, maison sur `runTeam` (comportement constant)
 
-- [ ] `PLANT_TEAM` dans `tree/plant-tools.ts` ; `readPlantParts` = `runTeam(PLANT_TEAM, …)`.
-- [ ] `CAR_TEAM` dans `car/car-tools.ts` ; `readCarParts` = `runTeam(CAR_TEAM, …)`.
-- [ ] `HOUSE_TEAM` dans `house/house-tools.ts` ; `readHouseParts` = `runTeam(HOUSE_TEAM, …)`.
-- [ ] Tests existants plante / voiture / maison verts **sans changer leurs attentes**.
-- [ ] Prompts et `*_PROMPT_VERSION` inchangés (diff vide sur les prompts).
-- [ ] `make house-regress` identique avant / après (sortie jointe au commit).
-- [ ] Boucles pilote → spécialistes → fusion supprimées des trois `*-specialist.ts` (zéro duplication).
+- [x] `PLANT_TEAM` dans `tree/plant-tools.ts` ; `readPlantParts` = `runTeam(PLANT_TEAM, …)`.
+- [x] `CAR_TEAM` dans `car/car-tools.ts` ; `readCarParts` = `runTeam(CAR_TEAM, …)`.
+- [x] `HOUSE_TEAM` dans `house/house-tools.ts` ; `readHouseParts` = `runTeam(HOUSE_TEAM, …)`.
+- [x] Tests existants plante / voiture / maison verts **sans changer leurs attentes**.
+- [x] Prompts et `*_PROMPT_VERSION` inchangés (diff vide sur les prompts).
+- [x] `make house-regress` identique avant / après (sortie jointe au commit).
+- [x] Boucles pilote → spécialistes → fusion supprimées des trois `*-specialist.ts` (zéro duplication).
 
 ### PQ-T85 — Un seul appel Meta d'équipe
 
