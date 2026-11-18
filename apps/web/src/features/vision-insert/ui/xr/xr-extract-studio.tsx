@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, Suspense, useMemo, useRef } from 'react';
+import { memo, Suspense, useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
 import { SHAPE_STEPS, type ShapeStep } from '@/lib/object-shape';
@@ -12,6 +12,15 @@ import { HoloButton, HoloFrame, HoloText, useHoloImage, useHoloImageMaterial } f
 import { HOLO } from './holo-style';
 import { useSlideText } from './holo-views-carousel';
 import { STUDIO_COLUMN_POSITION, STUDIO_COLUMN_YAW } from './xr-layout';
+import {
+  buildLabRoom,
+  drawContactShadow,
+  drawPegboard,
+  LAB_COLORS,
+  LAB_ROOM,
+  LAB_SIGN_SHADOW,
+  type LabMaterialKey,
+} from '../../utils/lab-room';
 
 /** Pedestal top under the panel anchor (m), shared by the build stage and the lab. */
 export const PEDESTAL_DROP = 0.25;
@@ -19,18 +28,156 @@ export const STUDIO_CANCEL_ID = 'holo:studio-cancel';
 export const STUDIO_TO_LAB_ID = 'holo:studio-to-lab';
 
 /**
- * The 3D studio room (VS-T24): dark dome, grid floor, studio lights. Shown as soon as the viewer
- * says « Extract in 3D » and kept through the views, the build and the lab, so the extraction
- * happens in one place. Static, one material each (cheap on Quest).
+ * The 3D studio room (VS-T24, VS-T50): a real maker lab around the viewer — white walls, a bench with
+ * resin printers and machines, a fume-extraction arm, a pegboard with tools, shelves, a steel sink, and
+ * the lab's name on the wall. Shown from « Extract in 3D » through the views, the build and the lab.
+ * Static and merged per material (`buildLabRoom`): about ten draw calls; matte Lambert surfaces under one
+ * hemisphere light, so only the built model uses PBR (Quest fill rate).
  */
+/** Share of the studio environment light on the room (the model keeps the full light: it stays the hero). */
+const LAB_ENV = 0.42;
+
 export const StudioRoom = memo(function StudioRoom() {
+  const t = useTranslations('features.visionInsert.vrLab');
+  const room = useMemo(() => buildLabRoom(), []);
+  const pegboard = useMemo(() => {
+    if (typeof document === 'undefined') return null;
+    const c = document.createElement('canvas');
+    c.width = c.height = 512;
+    const ctx = c.getContext('2d');
+    if (!ctx) return null;
+    drawPegboard(ctx, 512);
+    const tex = new THREE.CanvasTexture(c);
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(3, 1.4);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+  }, []);
+  const shadowTex = useMemo(() => {
+    if (typeof document === 'undefined') return null;
+    const c = document.createElement('canvas');
+    c.width = c.height = 128;
+    const ctx = c.getContext('2d');
+    if (!ctx) return null;
+    drawContactShadow(ctx, 128);
+    return new THREE.CanvasTexture(c);
+  }, []);
+  const sign = t('sign');
+  const signTex = useMemo(() => {
+    if (typeof document === 'undefined') return null;
+    const c = document.createElement('canvas');
+    c.width = 1024;
+    c.height = 384;
+    const ctx = c.getContext('2d');
+    if (!ctx) return null;
+    ctx.font = '300 300px Inter, system-ui, sans-serif';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = LAB_SIGN_SHADOW;
+    ctx.fillText(sign, 26, 206);
+    ctx.fillStyle = LAB_COLORS.pegboard;
+    ctx.fillText(sign, 16, 192);
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+  }, [sign]);
+  useEffect(
+    () => () => {
+      Object.values(room).forEach((g) => g?.dispose());
+      pegboard?.dispose();
+      signTex?.dispose();
+      shadowTex?.dispose();
+    },
+    [room, pegboard, signTex, shadowTex]
+  );
+  // Matte PBR lit by the studio environment map (no extra light): depth and soft reflections, ~10 draws.
+  const mat = (key: LabMaterialKey) => {
+    switch (key) {
+      case 'orange':
+        return (
+          <meshStandardMaterial
+            color={LAB_COLORS.orange}
+            roughness={0.25}
+            transparent
+            opacity={0.85}
+          />
+        );
+      case 'glass':
+        return (
+          <meshStandardMaterial
+            color={LAB_COLORS.glass}
+            roughness={0.05}
+            transparent
+            opacity={0.3}
+            side={THREE.DoubleSide}
+            depthWrite={false}
+          />
+        );
+      case 'lamp':
+        return <meshBasicMaterial color={LAB_COLORS.lamp} toneMapped={false} />;
+      case 'shadow':
+        return (
+          <meshBasicMaterial
+            color={LAB_COLORS.shadow}
+            alphaMap={shadowTex ?? undefined}
+            transparent
+            depthWrite={false}
+          />
+        );
+      case 'pegboard':
+        return (
+          <meshStandardMaterial
+            map={pegboard ?? undefined}
+            roughness={0.85}
+            envMapIntensity={LAB_ENV}
+          />
+        );
+      case 'steel':
+        return <meshStandardMaterial color={LAB_COLORS.steel} metalness={0.9} roughness={0.32} />;
+      case 'dark':
+        return (
+          <meshStandardMaterial
+            color={LAB_COLORS.dark}
+            roughness={0.45}
+            envMapIntensity={LAB_ENV}
+          />
+        );
+      case 'floor':
+        return (
+          <meshStandardMaterial
+            color={LAB_COLORS.floor}
+            roughness={0.35}
+            envMapIntensity={LAB_ENV}
+          />
+        );
+      default:
+        return (
+          <meshStandardMaterial
+            color={LAB_COLORS[key]}
+            roughness={key === 'counter' ? 0.5 : 0.85}
+            envMapIntensity={key === 'wall' ? LAB_ENV * 0.8 : LAB_ENV}
+            side={key === 'wall' ? THREE.DoubleSide : THREE.FrontSide}
+          />
+        );
+    }
+  };
   return (
     <group name="xr-studio-room">
-      <mesh renderOrder={-1}>
-        <sphereGeometry args={[7, 32, 16]} />
-        <meshBasicMaterial color={HOLO.dome} side={THREE.BackSide} depthWrite={false} />
-      </mesh>
-      <gridHelper args={[14, 56, HOLO.cyan, HOLO.gridDim]} position={[0, 0.001, 0]} />
+      {(Object.keys(room) as LabMaterialKey[]).map((key) => (
+        <mesh
+          key={key}
+          geometry={room[key]}
+          name={`xr-lab-${key}`}
+          renderOrder={key === 'glass' ? 3 : key === 'shadow' ? 1 : 0}
+        >
+          {mat(key)}
+        </mesh>
+      ))}
+      {signTex && (
+        <mesh position={[-2.9, 2.0, -LAB_ROOM.halfDepth + 0.04]} name="xr-lab-sign">
+          <planeGeometry args={[1.2, 0.45]} />
+          <meshBasicMaterial map={signTex} transparent depthWrite={false} />
+        </mesh>
+      )}
       <Suspense fallback={null}>
         <StudioEnvironment />
       </Suspense>

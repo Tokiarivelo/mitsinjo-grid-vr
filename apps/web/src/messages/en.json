@@ -1653,6 +1653,7 @@
         "goSimulationTip": "Open the simulation in VR, next to this object"
       },
       "vrLab": {
+        "sign": "Lab",
         "title": "3D lab · {name}",
         "hint": "Drag the model to turn it · shoot a piece to select it",
         "selected": "Selected: {piece}",

@@ -1653,6 +1653,7 @@
         "goSimulationTip": "Ouvrir la simulation en VR, à côté de cet objet"
       },
       "vrLab": {
+        "sign": "Labo",
         "title": "Labo 3D · {name}",
         "hint": "Glissez le modèle pour le tourner · tirez sur une pièce pour la choisir",
         "selected": "Pièce : {piece}",

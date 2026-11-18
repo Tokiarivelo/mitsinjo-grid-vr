@@ -541,3 +541,16 @@ les deux sens, et un bouton de retour au labo. Doc Meta (MCP) : pas de navigatio
 - [x] Labo suspendu, pas démonté : son état (cibles, miniatures, objet, place dans la visite) survit à l'aller-retour.
 - [x] `CameraController` rend la caméra en cas de démontage en pleine session.
 - [x] `make vr-world-probe` (IWER, mains) ; casque plus tard.
+
+## VS-T50 — Le studio / labo 3D devient un vrai labo (360°)
+
+Demande (2026-11-18) : remplacer le dôme sombre et la grille par un décor de labo réaliste, d'après une photo
+de référence (labo de fabrication : murs blancs, établi, imprimantes à capot orange, bras d'aspiration,
+panneau perforé, étagères, évier), visible tout autour de l'utilisateur.
+
+- [x] `utils/lab-room.ts` : pièce 8,4 × 8,4 × 3 m construite une fois et fusionnée par matériau (≈ 11 draw
+      calls) ; rien à moins de 2,4 m de l'utilisateur sous 2 m de haut (panneaux du studio libres) ; test.
+- [x] `StudioRoom` (`xr-extract-studio.tsx`) : PBR mat éclairé par l'environnement du studio (part réduite,
+      le modèle reste la vedette), ombres de contact, panneau perforé et enseigne en textures canvas
+      (enseigne traduite : `vrLab.sign`).
+- [ ] Casque : vérifier 72 Hz et le nombre de draw calls (`?perf=1`).
