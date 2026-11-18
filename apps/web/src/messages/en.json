@@ -1653,6 +1653,9 @@
         "goSimulationTip": "Open the simulation in VR, next to this object"
       },
       "vrLab": {
+        "libraryShow": "Realistic library model",
+        "libraryHide": "Back to the generated model",
+        "libraryCredit": "Library model: {credit} · {license}",
         "sign": "Lab",
         "title": "3D lab · {name}",
         "hint": "Drag the model to turn it · shoot a piece to select it",

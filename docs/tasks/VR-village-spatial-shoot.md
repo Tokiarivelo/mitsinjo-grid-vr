@@ -554,3 +554,14 @@ panneau perforé, étagères, évier), visible tout autour de l'utilisateur.
       le modèle reste la vedette), ombres de contact, panneau perforé et enseigne en textures canvas
       (enseigne traduite : `vrLab.sign`).
 - [ ] Casque : vérifier 72 Hz et le nombre de draw calls (`?perf=1`).
+
+## VS-T51 — Modèle réaliste de bibliothèque dans le labo
+
+Demande (2026-11-18) : montrer des modèles 3D réalistes. Un modèle généré ne peut pas égaler un modèle d'artiste ;
+l'app propose donc, quand l'objet reconnu en a un, un modèle réaliste sous licence, présenté comme tel.
+
+- [x] `lib/model-library.ts` : catalogue (canapé « Glam Velvet Sofa » © Wayfair, voiture « Car Concept »
+      © Darmstadt Graphics Group, CC BY 4.0, Khronos glTF Sample Assets), correspondance EN/FR/MG ; test.
+- [x] Labo VR : bouton « Realistic library model » ↔ « Back to the generated model » sous le socle, crédit et
+      licence affichés avec le modèle (`library-model-3d.tsx`, `vrLab.library*`).
+- [ ] Vues 2D rendues depuis le modèle de bibliothèque ; insertion du modèle de bibliothèque dans le village.
