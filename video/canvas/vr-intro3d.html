@@ -1,0 +1,658 @@
+<!doctype html>
+<!--
+  VR showcase intro, 3D scenes (video/VR_VIDEO_SCRIPT.md § 4, v8). Three seekable segments, chosen with ?seg=:
+  headset — a detailed standalone-headset model and its two ring controllers turning in a white studio, then the
+            camera dives into the left lens (white flash);
+  car     — the street photo of the red sports car is swept by a scan line and becomes a 3D coupe (procedural,
+            car paint clearcoat, no badge) that rises and spins on a hologram pedestal;
+  laptop  — a dark aluminium laptop (no logo, notch) opens; its screen navigates the app (overview → village editor,
+            a cursor clicks), then the camera flies into the screen (ends on the village page).
+  Query: ?seg=…&three=<three dir URL>&street=<photo URL>&s1=&s2= (screens). window.__seek(ms) renders that instant.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>VR intro 3D</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: #000;
+      }
+      canvas {
+        display: block;
+      }
+      #flash {
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        background: #fff;
+        opacity: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="flash"></div>
+    <script>
+      const q = new URLSearchParams(location.search);
+      const base = (q.get('three') || '../../apps/web/node_modules/three').replace(/\/$/, '');
+      document.write(
+        '<script type="importmap">' +
+          JSON.stringify({
+            imports: {
+              three: base + '/build/three.module.js',
+              'three/addons/': base + '/examples/jsm/',
+            },
+          }) +
+          '<\/script>'
+      );
+    </script>
+    <script type="module">
+      import * as THREE from 'three';
+      import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+      import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+      import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+      import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+      import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+      import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+      import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+      import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+
+      const SEG = q.get('seg') || 'headset';
+      const DUR = { headset: 11000, car: 9000, laptop: 10000 }[SEG];
+      const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+      const seg = (t, a, b) => clamp((t - a) / (b - a));
+      const eio = (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
+      const eout = (x) => 1 - Math.pow(1 - x, 3);
+      const lerp = (a, b, x) => a + (b - a) * x;
+      const v3 = (x, y, z) => new THREE.Vector3(x, y, z);
+      const CYAN = 0x4dd8e8;
+
+      const W = innerWidth;
+      const H = innerHeight;
+      const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+      renderer.setPixelRatio(1);
+      renderer.setSize(W, H);
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      document.body.prepend(renderer.domElement);
+      const pmrem = new THREE.PMREMGenerator(renderer);
+      const env = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+      const camera = new THREE.PerspectiveCamera(32, W / H, 0.005, 200);
+      const scene = new THREE.Scene();
+      scene.environment = env;
+      const overlay = new THREE.Scene();
+      const ocam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+      const composer = new EffectComposer(renderer);
+      composer.addPass(new RenderPass(scene, camera));
+      const opass = new RenderPass(overlay, ocam);
+      opass.clear = false;
+      composer.addPass(opass);
+      const bloom = new UnrealBloomPass(new THREE.Vector2(W, H), 0.25, 0.5, 0.92);
+      composer.addPass(bloom);
+      composer.addPass(new OutputPass());
+      const flash = document.getElementById('flash');
+      const glow = (color, opacity = 1) =>
+        new THREE.MeshBasicMaterial({
+          color,
+          transparent: true,
+          opacity,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+        });
+      const loadTex = (url) =>
+        new Promise((res) =>
+          url
+            ? new THREE.TextureLoader().load(
+                url,
+                (t) => ((t.colorSpace = THREE.SRGBColorSpace), res(t)),
+                undefined,
+                () => res(null)
+              )
+            : res(null)
+        );
+      function studioFloor(color, size = 30) {
+        const m = new THREE.Mesh(
+          new THREE.PlaneGeometry(size, size),
+          new THREE.ShadowMaterial({ opacity: 0.22 })
+        );
+        m.rotation.x = -Math.PI / 2;
+        m.receiveShadow = true;
+        scene.add(m);
+        const bg = new THREE.Mesh(
+          new THREE.SphereGeometry(60, 32, 16),
+          new THREE.ShaderMaterial({
+            side: THREE.BackSide,
+            depthWrite: false,
+            uniforms: {
+              a: { value: new THREE.Color(color[0]) },
+              b: { value: new THREE.Color(color[1]) },
+            },
+            vertexShader:
+              'varying vec3 p; void main(){ p = normalize(position); gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.); }',
+            fragmentShader:
+              'uniform vec3 a; uniform vec3 b; varying vec3 p; void main(){ gl_FragColor = vec4(mix(b, a, smoothstep(-0.2, 0.6, p.y)), 1.); }',
+          })
+        );
+        scene.add(bg);
+      }
+      function keyLights(intensity = 2.4) {
+        const k = new THREE.DirectionalLight(0xffffff, intensity);
+        k.position.set(2.5, 4, 3);
+        k.castShadow = true;
+        k.shadow.mapSize.set(2048, 2048);
+        k.shadow.radius = 6;
+        Object.assign(k.shadow.camera, {
+          left: -3,
+          right: 3,
+          top: 3,
+          bottom: -3,
+          near: 0.5,
+          far: 15,
+        });
+        scene.add(k);
+        const r = new THREE.DirectionalLight(0xbfe8ff, 1.2);
+        r.position.set(-3, 2, -3);
+        scene.add(r);
+        scene.add(new THREE.AmbientLight(0xffffff, 0.25));
+      }
+
+      let render = () => {};
+      const ready = [];
+
+      // =================================================================================================
+      if (SEG === 'headset') {
+        studioFloor([0xffffff, 0xdde2e8]);
+        keyLights(2.2);
+        const white = new THREE.MeshPhysicalMaterial({
+          color: 0xf3f4f5,
+          roughness: 0.42,
+          clearcoat: 0.35,
+          clearcoatRoughness: 0.4,
+        });
+        const black = new THREE.MeshPhysicalMaterial({
+          color: 0x0b0d10,
+          roughness: 0.12,
+          clearcoat: 1,
+          clearcoatRoughness: 0.05,
+        });
+        const fabric = new THREE.MeshStandardMaterial({ color: 0x2a2d33, roughness: 1 });
+        const grey = new THREE.MeshStandardMaterial({ color: 0xb8bcc2, roughness: 0.8 });
+        const hs = new THREE.Group();
+        scene.add(hs);
+        const add = (geo, mat, x = 0, y = 0, z = 0, parent = hs) => {
+          const m = new THREE.Mesh(geo, mat);
+          m.position.set(x, y, z);
+          m.castShadow = true;
+          parent.add(m);
+          return m;
+        };
+        // Visor and its slightly bulged front.
+        add(new RoundedBoxGeometry(0.19, 0.1, 0.07, 10, 0.034), white);
+        const front = add(new RoundedBoxGeometry(0.182, 0.092, 0.02, 10, 0.009), white, 0, 0, 0.03);
+        front.scale.set(1, 1, 1.2);
+        // Three vertical sensor pills on the front, two small sensors under.
+        for (const [x, s] of [
+          [-0.052, 1],
+          [0, 1.15],
+          [0.052, 1],
+        ]) {
+          const pill = add(
+            new THREE.CapsuleGeometry(0.0085 * s, 0.026 * s, 8, 16),
+            black,
+            x,
+            0.004,
+            0.041
+          );
+          pill.scale.z = 0.5;
+        }
+        for (const x of [-0.075, 0.075])
+          add(new THREE.SphereGeometry(0.006, 16, 12), black, x, -0.034, 0.038);
+        // Facial interface, lenses, nose gap.
+        add(new RoundedBoxGeometry(0.176, 0.09, 0.04, 8, 0.02), fabric, 0, -0.002, -0.05);
+        const lensMat = new THREE.MeshPhysicalMaterial({
+          color: 0x0c1520,
+          roughness: 0.02,
+          clearcoat: 1,
+          emissive: new THREE.Color(0x9fd8ff),
+          emissiveIntensity: 0.05,
+        });
+        const lenses = [];
+        for (const x of [-0.032, 0.032]) {
+          add(new THREE.TorusGeometry(0.022, 0.003, 12, 48), black, x, 0.004, -0.0705);
+          const l = add(new THREE.CircleGeometry(0.022, 48), lensMat, x, 0.004, -0.0702);
+          l.rotation.y = Math.PI;
+          lenses.push(l);
+        }
+        // Side arms, rear ring and top strap.
+        for (const x of [-0.1, 0.1]) {
+          const arm = add(
+            new RoundedBoxGeometry(0.016, 0.026, 0.09, 4, 0.007),
+            white,
+            x,
+            0.0,
+            -0.06
+          );
+          arm.rotation.y = x > 0 ? 0.08 : -0.08;
+        }
+        const ring = add(
+          new THREE.TorusGeometry(0.105, 0.012, 16, 80, Math.PI),
+          white,
+          0,
+          0.0,
+          -0.105
+        );
+        ring.rotation.x = -Math.PI / 2;
+        ring.scale.y = 1.45;
+        const top = add(
+          new THREE.TorusGeometry(0.1, 0.009, 10, 60, Math.PI * 0.9),
+          grey,
+          0,
+          0.0,
+          -0.12
+        );
+        top.rotation.set(0, Math.PI / 2, 0.08);
+        top.scale.set(0.9, 0.85, 1);
+        // Two ring controllers.
+        const ctrls = [];
+        for (const side of [-1, 1]) {
+          const c = new THREE.Group();
+          add(new THREE.TorusGeometry(0.038, 0.007, 14, 48), white, 0, 0.03, 0, c).rotation.x =
+            Math.PI / 2.4;
+          const grip = add(
+            new THREE.CapsuleGeometry(0.016, 0.06, 8, 16),
+            white,
+            0,
+            -0.025,
+            -0.012,
+            c
+          );
+          grip.rotation.x = 0.35;
+          add(
+            new THREE.CylinderGeometry(0.02, 0.02, 0.006, 32),
+            black,
+            0,
+            0.022,
+            0.01,
+            c
+          ).rotation.x = Math.PI / 2.4;
+          add(new THREE.SphereGeometry(0.0055, 12, 10), grey, 0.008 * side, 0.03, 0.022, c);
+          c.position.set(0.17 * side, 0.02, 0.09);
+          c.rotation.y = -0.4 * side;
+          scene.add(c);
+          ctrls.push(c);
+        }
+        hs.position.y = 0.16;
+        render = (t) => {
+          // Turntable (the controllers float beside), then the dive into the left lens.
+          const spin = lerp(-0.6, 0.5, eio(seg(t, 0, 6.5)));
+          const turn = eio(seg(t, 6.2, 8.4));
+          hs.rotation.y = lerp(spin, Math.PI, turn);
+          hs.position.y = 0.16 + Math.sin(t * 1.1) * 0.004;
+          ctrls.forEach((c, i) => {
+            c.position.y = 0.06 + Math.sin(t * 1.3 + i) * 0.01;
+            c.visible = turn < 0.6;
+          });
+          const dive = eio(seg(t, 7.4, 10.4));
+          const start = v3(0.0, 0.3, 0.75);
+          const lensP = v3(-0.032, 0.164, -0.071).applyAxisAngle(v3(0, 1, 0), hs.rotation.y);
+          const end = lensP
+            .clone()
+            .add(v3(0, 0, -0.02).applyAxisAngle(v3(0, 1, 0), hs.rotation.y + Math.PI));
+          camera.position.copy(start).lerp(end.setY(lerp(0.3, 0.164, dive)), dive);
+          camera.lookAt(lerp(0, lensP.x, dive), lerp(0.16, lensP.y, dive), lerp(0, lensP.z, dive));
+          camera.fov = lerp(32, 55, dive);
+          lensMat.emissiveIntensity = 0.05 + Math.pow(dive, 3) * 9;
+          bloom.strength = 0.2 + dive * 1.4;
+          bloom.threshold = 0.9 - dive * 0.6;
+          flash.style.opacity = Math.pow(seg(t, 9.8, 10.8), 2);
+        };
+      }
+
+      // =================================================================================================
+      if (SEG === 'car') {
+        scene.background = new THREE.Color(0x05080f);
+        keyLights(2.2);
+        const floor = new THREE.Mesh(
+          new THREE.CircleGeometry(14, 64),
+          new THREE.MeshStandardMaterial({ color: 0x0b111c, roughness: 0.3, metalness: 0.35 })
+        );
+        floor.rotation.x = -Math.PI / 2;
+        floor.receiveShadow = true;
+        scene.add(floor);
+        // A detailed car model (Ferrari 458 Italia by vicent091036, as in three.js' car materials example), with
+        // the same car-paint, chrome and glass materials and its baked ground shadow.
+        const car = new THREE.Group();
+        scene.add(car);
+        const paint = new THREE.MeshPhysicalMaterial({
+          color: 0xd0100b,
+          metalness: 1.0,
+          roughness: 0.45,
+          clearcoat: 1.0,
+          clearcoatRoughness: 0.03,
+        });
+        const details = new THREE.MeshStandardMaterial({
+          color: 0x3a3d42,
+          metalness: 1.0,
+          roughness: 0.35,
+        });
+        const glassM = new THREE.MeshPhysicalMaterial({
+          color: 0x15181c,
+          metalness: 0.4,
+          roughness: 0.02,
+          transparent: true,
+          opacity: 0.55,
+        });
+        let wf = null;
+        const dir = q.get('models');
+        ready.push(
+          new Promise((res) => {
+            const draco = new DRACOLoader();
+            draco.setDecoderPath(base + '/examples/jsm/libs/draco/gltf/');
+            const loader = new GLTFLoader();
+            loader.setDRACOLoader(draco);
+            loader.load(
+              dir + '/ferrari.glb',
+              (gltf) => {
+                const m = gltf.scene.children[0];
+                const set = (name, mat) => {
+                  const o = m.getObjectByName(name);
+                  if (o) o.material = mat;
+                };
+                set('body', paint);
+                ['rim_fl', 'rim_fr', 'rim_rr', 'rim_rl', 'trim'].forEach((n) => set(n, details));
+                set('glass', glassM);
+                m.traverse((o) => o.isMesh && (o.castShadow = true));
+                const body = m.getObjectByName('body');
+                if (body) {
+                  wf = new THREE.LineSegments(
+                    new THREE.WireframeGeometry(body.geometry),
+                    new THREE.LineBasicMaterial({
+                      color: CYAN,
+                      transparent: true,
+                      opacity: 0,
+                      blending: THREE.AdditiveBlending,
+                    })
+                  );
+                  body.add(wf);
+                }
+                const ao = new THREE.Mesh(
+                  new THREE.PlaneGeometry(0.655 * 4, 1.3 * 4),
+                  new THREE.MeshBasicMaterial({
+                    map: new THREE.TextureLoader().load(dir + '/ferrari_ao.png'),
+                    blending: THREE.MultiplyBlending,
+                    toneMapped: false,
+                    transparent: true,
+                    premultipliedAlpha: true,
+                  })
+                );
+                ao.rotation.x = -Math.PI / 2;
+                ao.renderOrder = 2;
+                m.add(ao);
+                car.add(m);
+                res();
+              },
+              undefined,
+              () => res()
+            );
+          })
+        );
+        // Hologram pedestal.
+        const ped = new THREE.Group();
+        const pr = new THREE.Mesh(new THREE.RingGeometry(2.7, 2.8, 128), glow(CYAN, 0));
+        pr.rotation.x = -Math.PI / 2;
+        const pr2 = new THREE.Mesh(new THREE.RingGeometry(3.05, 3.08, 128), glow(CYAN, 0));
+        pr2.rotation.x = -Math.PI / 2;
+        ped.add(pr, pr2);
+        ped.position.y = 0.01;
+        scene.add(ped);
+        // The street photo on top, revealed away by a scan line (overlay pass).
+        const photoMat = new THREE.ShaderMaterial({
+          transparent: true,
+          depthTest: false,
+          uniforms: {
+            map: { value: null },
+            sweep: { value: 0 },
+            aspect: { value: 1 },
+            screen: { value: W / H },
+          },
+          vertexShader:
+            'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0., 1.); }',
+          fragmentShader: `uniform sampler2D map; uniform float sweep; uniform float aspect; uniform float screen; varying vec2 vUv;
+            void main(){
+              vec2 uv = vUv; float r = screen / aspect;
+              if (r > 1.) uv.y = (uv.y - .5) / r + .5; else uv.x = (uv.x - .5) * r + .5;
+              vec4 c = texture2D(map, uv);
+              float edge = vUv.x - (1.15 - sweep * 1.3);
+              float a = smoothstep(0.0, 0.02, edge);
+              float line = exp(-pow(edge * 60., 2.)) * step(0.001, sweep) * step(sweep, 0.999);
+              vec3 col = mix(c.rgb, vec3(0.3, 0.85, 0.91), line);
+              gl_FragColor = vec4(col + vec3(0.3,0.85,0.91) * line, max(1. - a, line));
+            }`,
+        });
+        const photo = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), photoMat);
+        overlay.add(photo);
+        ready.push(
+          loadTex(q.get('street')).then((t) => {
+            photoMat.uniforms.map.value = t;
+            if (t) photoMat.uniforms.aspect.value = t.image.width / t.image.height;
+          })
+        );
+        render = (t) => {
+          const sweep = seg(t, 0.6, 3.6);
+          photoMat.uniforms.sweep.value = sweep;
+          photo.visible = sweep < 1;
+          // The model where the photo's car was (3/4 front), then it rises and spins on the pedestal.
+          const lift = eio(seg(t, 3.8, 5.6));
+          car.position.y = lift * 0.45;
+          car.rotation.y =
+            Number(q.get('yaw') ?? 1.5) + (t > 4.2 ? Math.pow(t - 4.2, 1.6) * 0.32 : 0);
+          if (wf) wf.material.opacity = Math.sin(seg(t, 0.6, 4.2) * Math.PI) * 0.35;
+          const po = eout(seg(t, 3.8, 5));
+          pr.material.opacity = po * 0.9;
+          pr2.material.opacity = po * (0.5 + 0.2 * Math.sin(t * 4));
+          ped.rotation.y = t * 0.4;
+          const k = eio(seg(t, 3.6, 9));
+          camera.position.set(lerp(-3.6, -5.4, k), lerp(1.1, 1.9, k), lerp(5.2, 6.4, k));
+          camera.lookAt(0, lerp(0.5, 0.8, lift), 0);
+          camera.fov = 34;
+          bloom.strength = 0.3;
+          bloom.threshold = 0.85;
+          flash.style.opacity = 1 - seg(t, 0, 0.5);
+        };
+      }
+
+      // =================================================================================================
+      if (SEG === 'laptop') {
+        studioFloor([0x2a2f38, 0x0d1016]);
+        keyLights(2.0);
+        const alu = new THREE.MeshPhysicalMaterial({
+          color: 0x2c3138,
+          metalness: 0.85,
+          roughness: 0.32,
+          clearcoat: 0.3,
+        });
+        const dark = new THREE.MeshStandardMaterial({ color: 0x07080a, roughness: 0.4 });
+        const keyM = new THREE.MeshStandardMaterial({ color: 0x0c0d10, roughness: 0.55 });
+        const LW = 0.34;
+        const LD = 0.235;
+        const lap = new THREE.Group();
+        scene.add(lap);
+        const base = new THREE.Mesh(new RoundedBoxGeometry(LW, 0.012, LD, 6, 0.006), alu);
+        base.position.y = 0.006;
+        base.castShadow = true;
+        lap.add(base);
+        const well = new THREE.Mesh(
+          new RoundedBoxGeometry(LW - 0.03, 0.002, 0.118, 3, 0.001),
+          dark
+        );
+        well.position.set(0, 0.0125, -0.035);
+        lap.add(well);
+        const keys = new THREE.InstancedMesh(
+          new RoundedBoxGeometry(0.0165, 0.003, 0.0165, 2, 0.0015),
+          keyM,
+          84
+        );
+        const m4 = new THREE.Matrix4();
+        let k = 0;
+        for (let r = 0; r < 6; r++)
+          for (let c = 0; c < 14; c++)
+            keys.setMatrixAt(
+              k++,
+              m4.makeTranslation(-0.1365 + c * 0.021, 0.0138, -0.088 + r * 0.0205)
+            );
+        lap.add(keys);
+        const pad = new THREE.Mesh(
+          new RoundedBoxGeometry(0.13, 0.001, 0.08, 3, 0.0005),
+          new THREE.MeshPhysicalMaterial({
+            color: 0x353a42,
+            metalness: 0.5,
+            roughness: 0.25,
+            clearcoat: 0.6,
+          })
+        );
+        pad.position.set(0, 0.0122, 0.07);
+        lap.add(pad);
+        const lid = new THREE.Group();
+        lid.position.set(0, 0.012, -LD / 2);
+        lap.add(lid);
+        const shell = new THREE.Mesh(new RoundedBoxGeometry(LW, 0.006, LD, 6, 0.003), alu);
+        shell.position.set(0, 0.003, LD / 2);
+        shell.castShadow = true;
+        lid.add(shell);
+        const bezel = new THREE.Mesh(
+          new THREE.PlaneGeometry(LW - 0.006, LD - 0.006),
+          new THREE.MeshStandardMaterial({ color: 0x030304, roughness: 0.15 })
+        );
+        bezel.rotation.x = Math.PI / 2;
+        bezel.position.set(0, -0.0002, LD / 2);
+        lid.add(bezel);
+        const notch = new THREE.Mesh(
+          new THREE.PlaneGeometry(0.03, 0.006),
+          new THREE.MeshBasicMaterial({ color: 0x000000 })
+        );
+        notch.rotation.x = Math.PI / 2;
+        notch.position.set(0, -0.0004, LD - 0.0035 - 0.003);
+        lid.add(notch);
+        const SW = 0.324;
+        const SH = (SW * 9) / 16;
+        const sc = document.createElement('canvas');
+        sc.width = 1920;
+        sc.height = 1080;
+        const sg = sc.getContext('2d');
+        const stex = new THREE.CanvasTexture(sc);
+        stex.colorSpace = THREE.SRGBColorSpace;
+        const screen = new THREE.Mesh(
+          new THREE.PlaneGeometry(SW, SH),
+          new THREE.MeshBasicMaterial({ map: stex, toneMapped: false })
+        );
+        screen.rotation.x = Math.PI / 2;
+        screen.position.set(0, -0.0005, LD / 2 + 0.004);
+        lid.add(screen);
+        const imgs = {};
+        const loadImg = (k2, url) =>
+          new Promise((res) => {
+            if (!url) return res();
+            const im = new Image();
+            im.onload = () => ((imgs[k2] = im), res());
+            im.onerror = () => res();
+            im.src = url;
+          });
+        ready.push(loadImg('a', q.get('s1')), loadImg('b', q.get('s2')));
+        const cursor = (x, y, down) => {
+          sg.save();
+          sg.translate(x, y);
+          sg.scale(down ? 2.6 : 3, down ? 2.6 : 3);
+          sg.beginPath();
+          sg.moveTo(0, 0);
+          sg.lineTo(15, 8.5);
+          sg.lineTo(8.4, 10.1);
+          sg.lineTo(12.3, 17);
+          sg.lineTo(9.7, 18.5);
+          sg.lineTo(5.8, 11.6);
+          sg.lineTo(1, 16.6);
+          sg.closePath();
+          sg.fillStyle = '#fff';
+          sg.strokeStyle = '#0b1220';
+          sg.lineWidth = 1.4;
+          sg.fill();
+          sg.stroke();
+          sg.restore();
+        };
+        const drawScreen = (t) => {
+          sg.fillStyle = '#080d1a';
+          sg.fillRect(0, 0, 1920, 1080);
+          const on = seg(t, 1.6, 2.2);
+          const slide = eio(seg(t, 4.6, 5.4));
+          if (imgs.a) sg.drawImage(imgs.a, -slide * 1920, 0, 1920, 1080);
+          if (imgs.b && slide > 0) sg.drawImage(imgs.b, (1 - slide) * 1920, 0, 1920, 1080);
+          // The cursor: to the sidebar's « Village editor », click; then rest on the page.
+          const c0 = [1400, 700];
+          const c1 = [120, 302];
+          const m = eio(seg(t, 2.6, 4.2));
+          const cx = lerp(c0[0], c1[0], m);
+          const cy = lerp(c0[1], c1[1], m);
+          const down = t > 4.25 && t < 4.5;
+          if (t > 2.3)
+            cursor(
+              t < 5.4 ? cx : lerp(c1[0], 1250, eio(seg(t, 5.4, 6.4))),
+              t < 5.4 ? cy : lerp(c1[1], 134, eio(seg(t, 5.4, 6.4))),
+              down
+            );
+          if (down) {
+            sg.strokeStyle = 'rgba(77,216,232,0.9)';
+            sg.lineWidth = 6;
+            sg.beginPath();
+            sg.arc(c1[0], c1[1], 26 + (t - 4.25) * 120, 0, Math.PI * 2);
+            sg.stroke();
+          }
+          sg.globalAlpha = 1 - on;
+          sg.fillStyle = '#000';
+          sg.fillRect(0, 0, 1920, 1080);
+          sg.globalAlpha = 1;
+          stex.needsUpdate = true;
+        };
+        render = (t) => {
+          lid.rotation.x = lerp(0, -1.9, eio(seg(t, 0.2, 1.8)));
+          drawScreen(t);
+          screen.updateWorldMatrix(true, false);
+          const scP = screen.getWorldPosition(v3());
+          const sn = v3(0, 0, 1)
+            .applyQuaternion(screen.getWorldQuaternion(new THREE.Quaternion()))
+            .normalize();
+          camera.fov = 36;
+          const fill = SH / 2 / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+          const wide = v3(0.36, 0.32, 0.7);
+          const fly = eio(seg(t, 6.6, 9.6));
+          const end = scP.clone().add(sn.multiplyScalar(fill));
+          camera.position.copy(wide).lerp(end, fly);
+          camera.up.set(0, 1, 0);
+          camera.lookAt(v3(0, 0.1, -0.05).lerp(scP, Math.min(1, fly * 1.3 + 0.3)));
+          if (fly > 0.999) {
+            camera.position.copy(end);
+            camera.lookAt(scP);
+          }
+          bloom.strength = 0.15;
+          bloom.threshold = 0.95;
+          flash.style.opacity = 0;
+        };
+      }
+
+      window.__duration = DUR;
+      window.__seek = (ms) => {
+        render(ms / 1000);
+        camera.aspect = W / H;
+        camera.updateProjectionMatrix();
+        composer.render();
+      };
+      Promise.all(ready).then(() => {
+        window.__seek(0);
+        window.__ready = true;
+      });
+    </script>
+  </body>
+</html>
