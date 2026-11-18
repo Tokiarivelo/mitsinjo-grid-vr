@@ -297,7 +297,7 @@ describe('ObjectShapePanel (PV-T10)', () => {
     expect(screen.queryByText('Parts seen on the photo:')).toBeNull();
   });
 
-  it('silhouette: outline badge, why, and a retry button', async () => {
+  it('silhouette: outline badge, why, and « Retry the 3D? » Yes / No', async () => {
     const onRetry = vi.fn();
     renderPanel({ shape: shape('silhouette'), onRetry });
     expect(screen.getByText('Outline shape')).toBeTruthy();
@@ -305,8 +305,14 @@ describe('ObjectShapePanel (PV-T10)', () => {
       screen.getByText("The AI shape could not be built: shown from the object's outline.")
     ).toBeTruthy();
     expect((await screen.findByText('viewer')).getAttribute('data-mode')).toBe('silhouette');
-    fireEvent.click(screen.getByRole('button', { name: 'Try the AI shape again' }));
+    expect(screen.getByRole('alert').textContent).toMatch(/Retry the 3D\?/);
+    fireEvent.click(screen.getByRole('button', { name: 'Yes, retry' }));
     expect(onRetry).toHaveBeenCalledTimes(1);
+    // « No » keeps the outline; a plain retry button stays.
+    fireEvent.click(screen.getByRole('button', { name: 'No' }));
+    expect(screen.queryByRole('alert')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Try the AI shape again' }));
+    expect(onRetry).toHaveBeenCalledTimes(2);
   });
 
   it('each fallback says its own cause; recipe mode has no retry', () => {
