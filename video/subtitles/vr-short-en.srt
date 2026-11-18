@@ -8,7 +8,7 @@ you could become 3D?
 Point at it, and it's rebuilt.
 
 3
-00:00:32,400 --> 00:00:35,092
+00:00:34,200 --> 00:00:36,892
 This is Mitsinjo Grid VR.
 
 4
@@ -36,58 +36,62 @@ The AI draws its views…
 Now, let's go outside.
 
 10
-00:01:25,600 --> 00:01:27,591
+00:01:24,600 --> 00:01:26,591
 We analyse the street.
 
 11
-00:01:29,700 --> 00:01:31,411
+00:01:28,700 --> 00:01:30,411
 We take the car.
 
 12
-00:01:39,700 --> 00:01:41,877
+00:01:38,700 --> 00:01:40,877
 There it is, in 3D.
 
 13
-00:01:44,300 --> 00:01:46,582
+00:01:43,300 --> 00:01:45,582
 Into the village simulation.
 
 14
-00:01:53,000 --> 00:01:55,165
+00:01:52,000 --> 00:01:54,165
 Same headset, no loading.
 
 15
-00:01:56,800 --> 00:01:58,216
-Here we are.
+00:01:58,700 --> 00:02:00,372
+Here's the village.
 
 16
-00:02:00,200 --> 00:02:02,436
-A little walk around the village.
+00:02:05,400 --> 00:02:07,839
+And here's a map, to find our way.
 
 17
-00:02:10,900 --> 00:02:13,844
-Evening. I cut the power to the houses…
+00:02:10,500 --> 00:02:12,632
+Fast forward to the evening.
 
 18
-00:02:14,900 --> 00:02:16,589
-…the lights fade.
+00:02:13,900 --> 00:02:16,296
+I cut the power to the houses…
 
 19
-00:02:19,700 --> 00:02:21,189
-And back on.
+00:02:17,900 --> 00:02:19,589
+…the lights fade.
 
 20
-00:02:28,300 --> 00:02:30,595
-The dispatcher's mixing desk.
+00:02:22,700 --> 00:02:24,189
+And back on.
 
 21
-00:02:33,200 --> 00:02:35,182
-The clinic? Never cut.
+00:02:30,800 --> 00:02:33,095
+The dispatcher's mixing desk.
 
 22
-00:02:37,200 --> 00:02:38,820
-Back to the lab.
+00:02:35,200 --> 00:02:37,182
+The clinic? Never cut.
 
 23
-00:02:40,100 --> 00:02:44,730
+00:02:39,200 --> 00:02:40,820
+Back to the lab.
+
+24
+00:02:42,100 --> 00:02:46,730
 Mitsinjo Grid VR. Point at the
 world. Build it. Power it.
