@@ -25,7 +25,7 @@ import { useHoloPanel, type PanelRegistry } from './holo-panel';
 import { HoloButton, HoloFrame, HoloText } from './holo-ui';
 import { HOLO } from './holo-style';
 import { AnchoredPanel, usePanelAnchor } from './holo-extract-panels';
-import { PEDESTAL_DROP, StudioPedestal } from './xr-extract-studio';
+import { LabStageLights, PEDESTAL_DROP, StudioPedestal } from './xr-extract-studio';
 import { LAB_TO_VIEWS, type PanelAnchor } from './xr-layout';
 import { HoloVillageTable } from './holo-village-table';
 import { LabDissolve } from './lab-dissolve-3d';
@@ -253,6 +253,7 @@ export const XrObjectLab = memo(function XrObjectLab({
 
         {/* Pedestal + model */}
         <group position={[0, -PEDESTAL_DROP, 0]}>
+          <LabStageLights />
           <StudioPedestal />
           <group ref={turn}>
             <group ref={modelRef} position={[0, LAB_MODEL_SCALE * 0.5, 0]}>

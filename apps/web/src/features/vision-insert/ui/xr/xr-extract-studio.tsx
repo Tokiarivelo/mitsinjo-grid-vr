@@ -185,10 +185,58 @@ export const StudioRoom = memo(function StudioRoom() {
   );
 });
 
+/**
+ * Photo-studio light on the model in the lab (VS-T50): a warm key from the front right and a cool rim
+ * from behind, like the 2D editor's two lights, so a model reads as a solid object, not a flat drawing.
+ * Point lights without shadows (two lights, no extra pass), placed around the pedestal.
+ */
+export function LabStageLights() {
+  return (
+    <group name="xr-lab-stage-lights">
+      <pointLight
+        position={[0.7, 0.9, 0.8]}
+        intensity={2.2}
+        distance={3}
+        decay={1.4}
+        color={LAB_COLORS.lamp}
+      />
+      <pointLight
+        position={[-0.4, 0.8, -0.9]}
+        intensity={1.6}
+        distance={3}
+        decay={1.4}
+        color={LAB_COLORS.glass}
+      />
+    </group>
+  );
+}
+
 /** Glowing pedestal (top at the group origin). */
 export function StudioPedestal({ radius = 0.3 }: { radius?: number }) {
+  // Soft contact shadow on the plate (same gradient as the room's): grounds the model.
+  const shadowTex = useMemo(() => {
+    if (typeof document === 'undefined') return null;
+    const c = document.createElement('canvas');
+    c.width = c.height = 128;
+    const ctx = c.getContext('2d');
+    if (!ctx) return null;
+    drawContactShadow(ctx, 128);
+    return new THREE.CanvasTexture(c);
+  }, []);
+  useEffect(() => () => shadowTex?.dispose(), [shadowTex]);
   return (
     <group name="xr-studio-pedestal">
+      {shadowTex && (
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.003, 0]} renderOrder={1}>
+          <circleGeometry args={[radius * 0.85, 48]} />
+          <meshBasicMaterial
+            color={LAB_COLORS.shadow}
+            alphaMap={shadowTex}
+            transparent
+            depthWrite={false}
+          />
+        </mesh>
+      )}
       <mesh position={[0, -0.04, 0]}>
         <cylinderGeometry args={[radius, radius * 1.13, 0.08, 48]} />
         <meshStandardMaterial color={HOLO.pedestal} metalness={0.6} roughness={0.35} />
