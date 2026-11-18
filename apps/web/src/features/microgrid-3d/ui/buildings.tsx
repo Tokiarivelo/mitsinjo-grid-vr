@@ -6,7 +6,9 @@ import { SECTOR_IDS, type Priority, type SectorId } from '@mitsinjo/engine';
 import { SECTOR_ICON_BG_CLASS, SectorIcon } from '@/components/ui/sector-icon';
 import { fmtPct } from '@/lib/format';
 import type { BuildingSceneModel } from '../types';
-import { STATUS_HEX, TOKEN_HEX, duskDarkness, glowFromIntensity } from '../utils/scene-palette';
+import { useEasedLevels } from '../hooks/use-eased-levels';
+import { buildingLightLevel } from '../utils/light-level';
+import { STATUS_HEX, TOKEN_HEX, duskDarkness } from '../utils/scene-palette';
 import { BODY_LAYOUT, BuildingBody } from './building-bodies';
 import { badgeY, SceneBadge } from './scene-badge';
 
@@ -144,21 +146,20 @@ export function VillageBuildings({
 }: VillageBuildingsProps) {
   // Only start glowing when it begins to get dark (zero in broad daylight).
   const darkness = duskDarkness(lampGlow);
+  // Lights follow the engine's coverage and move there gradually (a cap dims a house over ~1 s).
+  const levels = useEasedLevels(
+    Object.fromEntries(SECTOR_IDS.map((id) => [id, buildingLightLevel(buildings[id])])) as Record<
+      SectorId,
+      number
+    >
+  );
 
   return (
     <group name="village-buildings">
       {SECTOR_IDS.map((id) => {
         const model = buildings[id];
         const isSelected = selectedSector === id;
-        const hasPower =
-          model.connected &&
-          model.servedKw > 0.05 &&
-          model.status !== 'unserved' &&
-          model.status !== 'disconnected' &&
-          (model.coveragePct === null || model.coveragePct > 0) &&
-          !model.onFire;
-        const powerFactor = hasPower ? Math.max(0.65, glowFromIntensity(model.intensity)) : 0;
-        const glow = darkness * powerFactor;
+        const glow = darkness * levels[id];
 
         return (
           <BuildingFrame

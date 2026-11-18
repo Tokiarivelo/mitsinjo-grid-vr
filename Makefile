@@ -433,6 +433,20 @@ video-sfx: ## Generate click / whoosh / rise SFX with ffmpeg
 video-capture: ## Record app shots on the real screen at 1920x1080, no lock while running (PART=a|b, ONLY=A1,A2; DRY=1)
 	video/scripts/capture.sh --part $(or $(PART),a) $(if $(ONLY),--only $(ONLY)) $(if $(DRY),--dry)
 
+video-capture-vr: ## Record the VR showcase take headless in the IWER emulator (/village → /simulation) to video/captures/raw/vr (dev-mock must run; URL=, CHROMIUM_PATH=)
+	PART=village node video/scripts/capture-vr.mjs $(or $(URL),http://localhost:$(shell node apps/web/scripts/port.mjs)) video/captures/raw/vr-village
+	VIDEO_W=1280 PART=sim node video/scripts/capture-vr.mjs $(or $(URL),http://localhost:$(shell node apps/web/scripts/port.mjs)) video/captures/raw/vr-sim
+
+video-canvas-vr: ## Render the VR showcase intro (3D headset → car → laptop) and outro pages to PNG frames (CHROMIUM_PATH=)
+	CANVAS_W=1920 node video/scripts/render-canvas.cjs "video/canvas/vr-intro.html?three=$$(node -e "console.log(encodeURIComponent(require('url').pathToFileURL('apps/web/node_modules/three').href))")&screen=$$(node -e "console.log(encodeURIComponent(require('url').pathToFileURL('video/captures/raw/vr-village/frames/000000.jpg').href))")" video/frames/vr-intro
+	CANVAS_W=1920 node video/scripts/render-canvas.cjs video/canvas/vr-outro.html video/frames/vr-outro
+
+video-voice-vr: ## Render the VR showcase voice-over, one clip per caption of VR_VIDEO_SCRIPT.md § 3 (Kokoro, VOICE=am_puck)
+	video/.venv-tts/bin/python video/scripts/tts-srt.py --voice $(or $(VOICE),am_puck) --speed 1.05
+
+video-build-vr: ## Assemble the VR showcase (intro + captures + outro, voice, captions, music) → video/output/mitsinjo-grid-vr-1440p.mp4 (SIZE=2560x1440)
+	python3 video/scripts/build-vr.py --size $(or $(SIZE),2560x1440)
+
 video-canvas: ## Render the splash and outro canvas pages to PNG frames
 	node video/scripts/render-canvas.cjs video/canvas/00-splash.html video/frames/00-splash
 	node video/scripts/render-canvas.cjs video/canvas/10-outro.html video/frames/10-outro

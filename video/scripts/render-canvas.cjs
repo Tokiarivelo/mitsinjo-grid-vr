@@ -13,10 +13,24 @@ const { chromium } = req('@playwright/test');
   const url = pathToFileURL(path.resolve(file)).href + (query ? '?' + query : '');
   fs.rmSync(out, { recursive: true, force: true });
   fs.mkdirSync(out, { recursive: true });
-  const b = await chromium.launch();
-  const p = await b.newPage({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1.5 });
+  const b = await chromium.launch({
+    ...(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {}),
+    args: [
+      '--use-angle=swiftshader',
+      '--enable-unsafe-swiftshader',
+      '--ignore-gpu-blocklist',
+      '--allow-file-access-from-files',
+    ],
+  });
+  // CANVAS_W renders at that width, scale 1 (WebGL pages); default 1280 × 720 at 1.5.
+  const cw = Number(process.env.CANVAS_W || 0);
+  const p = await b.newPage(
+    cw
+      ? { viewport: { width: cw, height: Math.round((cw * 9) / 16) }, deviceScaleFactor: 1 }
+      : { viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1.5 }
+  );
   await p.goto(url);
-  await p.waitForFunction(() => window.__ready);
+  await p.waitForFunction(() => window.__ready, null, { timeout: 180000 });
   const dur = await p.evaluate(() => window.__duration);
   const n = Math.round((dur / 1000) * 30);
   for (let i = 0; i < n; i++) {

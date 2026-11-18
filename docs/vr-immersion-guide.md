@@ -183,6 +183,9 @@ au-dessus de chaque manette 25 s à l'entrée, puis d'un clic de stick.
 2. **« − 0,5 kW » / « + 0,5 kW »** : limite la puissance entrante de l'heure affichée à minuit ;
    **« Couper tout »** : 0 kW ; **« Rétablir »** : plus de limite ; **« Annuler »** : défait le dernier changement.
    Chaque action relance le moteur (limite de secteur, `sectorCaps`) : tout le village le voit.
+   Les fenêtres, lampes et pièces suivent la couverture (moitié de la demande servie = moitié de
+   l'éclat) et y glissent en ≈ 1 s ; les électrons du câble pâlissent de même (`useEasedLevels`,
+   `easeToward`). Mouvement réduit : changement immédiat.
    La **clinique n'est jamais coupée** (constitution du village) : « Refusé ».
 3. **« Aller à la porte »** : vous place devant l'entrée. **« Entrer »** : vous êtes dans la pièce (maison,
    classe, salle de soins, local pompe, étal, atelier) ; les lampes et appareils brillent selon la couverture,

@@ -1,0 +1,163 @@
+<!doctype html>
+<!-- VR showcase outro (video/VR_VIDEO_SCRIPT.md § 6): logo, tagline, URL, Meta models, credits. Seekable (timeline.js). -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>VR outro</title>
+    <link rel="stylesheet" href="shared.css" />
+    <style>
+      body {
+        margin: 0;
+        overflow: hidden;
+        background: radial-gradient(ellipse at 50% 38%, #12203a 0%, #080d1a 62%);
+        width: 100vw;
+        height: 100vh;
+        font-family: 'Inter', sans-serif;
+        color: var(--text);
+      }
+      .ring {
+        position: absolute;
+        left: 50%;
+        top: 40%;
+        border-radius: 50%;
+        border: 2px solid var(--cyan);
+        transform: translate(-50%, -50%);
+        opacity: 0;
+      }
+      .stage {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+      }
+      .logo {
+        width: 8vw;
+        height: 8vw;
+        filter: drop-shadow(0 0 2.4vw rgba(77, 216, 232, 0.45));
+      }
+      h1 {
+        margin: 2vw 0 0;
+        font-family: 'Grotesk', 'Inter', sans-serif;
+        font-size: 4.8vw;
+        letter-spacing: -0.02em;
+      }
+      h1 span {
+        color: var(--cyan);
+      }
+      .tag {
+        margin-top: 1vw;
+        font-size: 2vw;
+        font-weight: 600;
+      }
+      .tag b:nth-child(1) {
+        color: var(--cyan);
+      }
+      .tag b:nth-child(2) {
+        color: var(--solar);
+      }
+      .tag b:nth-child(3) {
+        color: var(--battery);
+      }
+      .url {
+        margin-top: 2.2vw;
+        font-family: 'Mono', monospace;
+        font-size: 1.3vw;
+        padding: 0.7vw 1.6vw;
+        border: 1px solid rgba(77, 216, 232, 0.5);
+        border-radius: 99px;
+        color: var(--cyan);
+      }
+      .meta {
+        position: absolute;
+        bottom: 6vh;
+        left: 0;
+        right: 0;
+        text-align: center;
+        font-size: 1vw;
+        color: var(--muted);
+        line-height: 1.8;
+      }
+      .meta .sim {
+        font-family: 'Mono', monospace;
+        letter-spacing: 0.24em;
+        color: var(--solar);
+      }
+    </style>
+  </head>
+  <body data-duration="13000">
+    <div class="ring" id="r1" style="width: 30vw; height: 30vw"></div>
+    <div class="ring" id="r2" style="width: 46vw; height: 46vw; border-color: var(--ai)"></div>
+    <div class="stage">
+      <img class="logo" id="logo" src="../brand/icon-512.png" alt="" />
+      <h1 id="name">Mitsinjo Grid <span>VR</span></h1>
+      <div class="tag" id="tag"><b>Point at the world.</b> <b>Build it.</b> <b>Power it.</b></div>
+      <div class="url" id="url">mitsinjo-grid-vr.vercel.app</div>
+    </div>
+    <div class="meta" id="meta">
+      Built with Meta Muse Spark · Muse Image · SAM 3.1 · WebXR in Meta's Immersive Web Emulator<br />
+      Music: “Passion” — Luke Bergs &amp; AgusAlvarez (Free To Use) ·
+      <span class="sim">SIMULATED DATA</span>
+    </div>
+    <script src="timeline.js"></script>
+    <script>
+      const pulse = (id, start) =>
+        anim(
+          id,
+          [
+            { opacity: 0, transform: 'translate(-50%,-50%) scale(.6)' },
+            { opacity: 0.55, transform: 'translate(-50%,-50%) scale(1)', offset: 0.4 },
+            { opacity: 0, transform: 'translate(-50%,-50%) scale(1.25)' },
+          ],
+          start,
+          2600
+        );
+      pulse('#r1', 200);
+      pulse('#r2', 700);
+      pulse('#r1', 5200);
+      anim(
+        '#logo',
+        [
+          { opacity: 0, transform: 'scale(.7) rotate(-20deg)' },
+          { opacity: 1, transform: 'none' },
+        ],
+        200,
+        900,
+        'cubic-bezier(.22,1.4,.36,1)'
+      );
+      anim(
+        '#name',
+        [
+          { opacity: 0, transform: 'translateY(30px)' },
+          { opacity: 1, transform: 'none' },
+        ],
+        600,
+        700
+      );
+      document.querySelectorAll('#tag b').forEach((b, i) =>
+        anim(
+          b,
+          [
+            { opacity: 0, filter: 'blur(8px)' },
+            { opacity: 1, filter: 'blur(0)' },
+          ],
+          1400 + i * 650,
+          600
+        )
+      );
+      anim(
+        '#url',
+        [
+          { opacity: 0, transform: 'translateY(16px)' },
+          { opacity: 1, transform: 'none' },
+        ],
+        3600,
+        600
+      );
+      anim('#meta', [{ opacity: 0 }, { opacity: 1 }], 4200, 800);
+      anim('body', [{ opacity: 1 }, { opacity: 0 }], 12300, 700, 'ease-in');
+    </script>
+  </body>
+</html>

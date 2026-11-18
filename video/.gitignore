@@ -10,3 +10,7 @@ reference/
 # Local TTS (make video-tts-setup) and the dev probe output
 .venv-tts/
 tts/
+audio/voice/vr*/
+scripts/__pycache__/
+.venv-vc/
+vc/
