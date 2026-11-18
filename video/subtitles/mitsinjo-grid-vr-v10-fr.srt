@@ -1,0 +1,107 @@
+1
+00:00:00,600 --> 00:00:03,354
+Et si tout ce qui vous entoure pouvait devenir 3D ?
+
+2
+00:00:06,200 --> 00:00:08,371
+Mettez le casque… et regardez !
+
+3
+00:00:15,550 --> 00:00:18,908
+Une voiture. Je la vise, et l'IA en trace le contour…
+
+4
+00:00:23,550 --> 00:00:25,299
+…la dessine sous tous les angles…
+
+5
+00:00:32,900 --> 00:00:34,590
+…et la voici, en 3D !
+
+6
+00:00:38,250 --> 00:00:40,272
+Voici Mitsinjo Grid VR.
+
+7
+00:00:50,850 --> 00:00:53,535
+Commençons par la cuisine. Je scanne la pièce…
+
+8
+00:00:56,850 --> 00:00:58,770
+Prenons le réfrigérateur, par exemple.
+
+9
+00:00:59,600 --> 00:01:02,784
+D'abord, l'IA le dessine en 2D, sous tous les angles.
+
+10
+00:01:03,150 --> 00:01:05,920
+Une vue ne va pas ? Je demande simplement une correction.
+
+11
+00:01:07,200 --> 00:01:11,161
+Maintenant je valide… et le modèle 3D se construit, pièce par pièce.
+
+12
+00:01:18,117 --> 00:01:21,851
+Ensuite, le canapé du salon. Même chose : les vues 2D…
+
+13
+00:01:28,233 --> 00:01:31,169
+…puis la 3D. Regardez ce velours capitonné !
+
+14
+00:01:36,800 --> 00:01:39,281
+Sur la terrasse… pourquoi pas la maison entière ?
+
+15
+00:01:42,200 --> 00:01:45,228
+Sa façade en 2D… et la maison en 3D.
+
+16
+00:01:55,150 --> 00:01:57,055
+Et dans la rue, cette voiture blanche.
+
+17
+00:02:00,550 --> 00:02:03,204
+De son profil… à un modèle 3D complet.
+
+18
+00:02:13,000 --> 00:02:23,266
+Sous le capot, l'app utilise des modèles Meta : SAM 3.1 pour les contours, Muse Image pour les dessins, et Muse Spark, avec des skill cards et des agents spécialisés, pour la 3D.
+
+19
+00:02:22,950 --> 00:02:28,199
+Mais ce n'est pas qu'une génération 3D. Je peux l'insérer dans un village… et me promener autour, librement.
+
+20
+00:02:33,250 --> 00:02:35,373
+Voilà ma voiture, garée dans le village !
+
+21
+00:02:39,800 --> 00:02:42,917
+Voici le village. Et voici une carte, pour m'orienter.
+
+22
+00:02:50,500 --> 00:02:56,315
+Maintenant, avançons un peu, jusqu'à 19 h. Pendant ce temps, on traverse le village… en accéléré !
+
+23
+00:02:58,050 --> 00:03:00,209
+Nous y voici, au contrôleur de dispatch.
+
+24
+00:03:02,233 --> 00:03:06,914
+Contrôlons l'électricité des foyers du village. Je coupe… et regardez, les lumières baissent.
+
+25
+00:03:10,483 --> 00:03:11,672
+Et on rallume !
+
+26
+00:03:14,333 --> 00:03:19,713
+Maintenant le centre de santé. J'essaie de le couper… refusé ! Le centre de santé garde toujours son courant.
+
+27
+00:03:22,583 --> 00:03:27,344
+Mitsinjo Grid VR. Visez le monde. Construisez-le. Alimentez-le.
