@@ -40,7 +40,9 @@
     "strategies": "Strategy Lab",
     "scenarios": "Scenarios",
     "copilot": "AI Copilot",
-    "village": "Village editor"
+    "village": "Village editor",
+    "vrImmersion": "Enter VR",
+    "vrImmersionHint": "Photo → 3D model, in the headset"
   },
   "routes": {
     "overview": {

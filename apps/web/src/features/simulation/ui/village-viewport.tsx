@@ -29,6 +29,7 @@ import { FireAlertBanner, ReportFireControl, useActiveFires } from '@/features/f
 import type { SectorId, SimulationInput, SimulationResult, WeatherId } from '@mitsinjo/engine';
 import { WEATHER_VISUALS } from '../utils/weather';
 import { cn } from '@/lib/utils';
+import { buttonVariants } from '@/components/ui/button';
 import { fmtHour, fmtKw, fmtPct } from '@/lib/format';
 import { SectorIcon } from '@/components/ui/sector-icon';
 import { ViewModeToggle } from '@/components/ui/view-mode-toggle';
@@ -671,13 +672,14 @@ function VRButton({
       aria-label={error ?? label}
       title={error ?? label}
       className={cn(
-        'p-1 rounded-control-sm transition-colors cursor-pointer',
+        'inline-flex items-center gap-1 px-2 py-1 rounded-control-sm text-[11px] font-semibold transition-colors cursor-pointer',
         active
-          ? 'bg-energy-cyan/20 text-energy-cyan'
-          : 'text-text-muted hover:text-text-primary hover:bg-surface'
+          ? 'bg-energy-cyan/20 text-energy-cyan ring-1 ring-energy-cyan/60'
+          : buttonVariants({ variant: 'vr', size: 'sm', className: 'h-auto px-2 py-1 text-[11px]' })
       )}
     >
-      <Glasses className="h-3 w-3" aria-hidden="true" />
+      <Glasses className="h-3.5 w-3.5" aria-hidden="true" />
+      <span className="hidden sm:inline">{label}</span>
     </button>
   );
 }

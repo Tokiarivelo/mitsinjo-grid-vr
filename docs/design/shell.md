@@ -24,6 +24,8 @@ Zones: Sidebar | Header over Workspace | optional CopilotPanel. Tokens: see toke
 | Scenarios       | /scenarios  |
 | AI Copilot      | /copilot    |
 
+- VR quick entry (the showcase) above the nav: full-width `vr` button (filled energy-cyan, glow) « Enter VR » +
+  hint « Photo → 3D model, in the headset » → `/village?immersion=vr`; icon only on the folded rail; hidden on /village.
 - Active item: brighter surface (surface-hover), 2px energy-cyan left edge, text-primary.
 - Footer: sim status (StatusBadge), `SIMULATED DATA` badge, Settings and Docs links.
 - Fold (xl+): « Collapse sidebar » button (panel icon, 44 px) in the brand row → 64 px icon rail: brand and footer hidden
@@ -33,7 +35,7 @@ Zones: Sidebar | Header over Workspace | optional CopilotPanel. Tokens: see toke
 ## Header (68px, canvas-raised, border-bottom; "instrument panel")
 
 - Left: page title (display), breadcrumb if useful, context subtitle.
-- Right, in order: ScenarioSelector, sim status StatusBadge, Reset button (secondary), copilot toggle (icon button, aria-label "Toggle AI copilot", violet when open), profile only if auth exists.
+- Right, in order: « Enter VR » (`VrQuickLink`, `vr` button variant, icon only under `sm`, 40 px; hidden on /village), ScenarioSelector, sim status StatusBadge, Reset button (secondary), copilot toggle (icon button, aria-label "Toggle AI copilot", violet when open), profile only if auth exists.
 - Status values (from sim status):
 
 | status   | Label               |
