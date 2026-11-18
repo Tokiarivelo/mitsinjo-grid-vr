@@ -24,6 +24,8 @@ export interface UseXrExtractOptions {
   /** The page's model state (`useObjectShape`), and its calls. */
   shape: Pick<ObjectShapeState, 'status' | 'shape' | 'step' | 'startedAt'>;
   requestShape: (imageUrl: string, request: ShapeRequest) => unknown;
+  /** Asks the last model again, cache skipped (`useObjectShape().retry`). */
+  retryShape?: () => void;
   editPieces: (pieces: PieceEdits) => void;
   /** Selects the object on the page (its model, its 2D view). */
   select: (id: string) => void;
@@ -54,6 +56,10 @@ export interface XrExtract {
   slides: ViewSlide[];
   canBuild: boolean;
   redraw: (slide: ViewSlide['id']) => void;
+  /** Stops a view being drawn, or answers « No » to « Retry? » after a failed drawing. */
+  stopView: (slide: ViewSlide['id']) => void;
+  /** « Retry the 3D? » → Yes: the model is asked again, the build step shows its progress. */
+  retryShape: () => void;
   toggleValidated: (slide: ViewSlide['id']) => void;
   /** Chat history of one view of this object (VS-T27). */
   chatOf: (slide: ViewSlide['id'] | undefined) => ChatMessage[];
@@ -77,6 +83,7 @@ export function useXrExtract({
   target,
   shape,
   requestShape,
+  retryShape: retryLastShape,
   editPieces,
   select,
   scope,
@@ -174,6 +181,21 @@ export function useXrExtract({
     [retry, faces]
   );
 
+  const { cancel: cancelMain } = facade;
+  const { cancel: cancelFace } = faces;
+  const stopView = useCallback(
+    (slide: ViewSlide['id']) => {
+      if (slide === 'main') cancelMain();
+      else cancelFace(slide as FaceName);
+    },
+    [cancelMain, cancelFace]
+  );
+  const retryShape = useCallback(() => {
+    if (!retryLastShape) return;
+    retryLastShape();
+    dispatch({ type: 'rebuild' });
+  }, [retryLastShape]);
+
   // Per-view chat (VS-T27): a request redraws that view with it, the bot line follows the drawing.
   const [chat, chatDispatch] = useReducer(faceChatReducer, FACE_CHAT_EMPTY);
   const chatId = state.id;
@@ -219,6 +241,8 @@ export function useXrExtract({
     slides,
     canBuild: buildable,
     redraw,
+    stopView,
+    retryShape,
     toggleValidated,
     chatOf: historyOf,
     sendChat,

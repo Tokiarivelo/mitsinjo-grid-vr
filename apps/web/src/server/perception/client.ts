@@ -3,6 +3,7 @@ import 'server-only';
 import { env } from '@/lib/env';
 import type { StepModelsSelection } from '@/lib/step-models';
 import { errorWithCause, isTransientProviderError } from '@/server/copilot/providers/transient';
+import { withRetry } from '@/server/retry';
 import { spendGuard, type SpendGuard } from '@/server/spend';
 import type {
   CriticOptions,
@@ -89,17 +90,11 @@ export class PerceptionClient {
       return { ...out.result, source: 'meta', model: out.model } as T & PerceptionSource;
     };
     try {
-      try {
-        return await attempt();
-      } catch (firstErr) {
-        // A dropped connection or a 429/5xx often passes: one more try before the mock.
-        if (!isTransientProviderError(firstErr)) throw firstErr;
-        console.warn(
-          `[perception] ${kind}: transient Meta error, retrying once:`,
-          errorWithCause(firstErr)
-        );
-        return await attempt();
-      }
+      // A dropped connection or a 429/5xx often passes: up to `SERVER_RETRIES` more tries before the mock.
+      return await withRetry(attempt, {
+        retryable: isTransientProviderError,
+        label: `perception ${kind}`,
+      });
     } catch (err) {
       const failure = failureOf(err);
       console.warn(

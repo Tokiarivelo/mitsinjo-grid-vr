@@ -564,7 +564,9 @@ try {
     if (await stopBtn.isVisible().catch(() => false)) await stopBtn.click().catch(() => {});
     const HOUR = Number(process.env.HOUR ?? 12);
     await page.evaluate((h) => {
-      const r = [...document.querySelectorAll('input[type=range]')].find((x) => Number(x.max) === 23);
+      const r = [...document.querySelectorAll('input[type=range]')].find(
+        (x) => Number(x.max) === 23
+      );
       if (!r) return;
       const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
       set.call(r, String(h));
@@ -670,7 +672,12 @@ try {
     const h = await pos('headset');
     if (!o) return;
     const q = (await rc('get_transform', { device: 'headset' }))?.orientation;
-    await rc('animate_to', { device: 'headset', position: { x: o.x, y: h.y, z: o.z }, ...(q ? { orientation: q } : {}), duration: seconds });
+    await rc('animate_to', {
+      device: 'headset',
+      position: { x: o.x, y: h.y, z: o.z },
+      ...(q ? { orientation: q } : {}),
+      duration: seconds,
+    });
     await sleep(seconds * 1000 + 500);
   };
   await sleep(1500);
@@ -711,7 +718,8 @@ try {
       const h = await pos('headset');
       await rc('set_transform', { device: 'headset', position: { x: spot.x, y: h.y, z: spot.z } });
       const car = await toOrigin([placed.x, 0.5, placed.z]);
-      if (car) await rc('look_at', { device: 'headset', target: { x: car.x, y: h.y - 0.25, z: car.z } });
+      if (car)
+        await rc('look_at', { device: 'headset', target: { x: car.x, y: h.y - 0.25, z: car.z } });
     }
     await sleep(1500);
     mark('sim-view');
@@ -747,7 +755,11 @@ try {
     await simPress('sim-xr-button-map-close');
     await sleep(1500);
     mark('sim-ff-walk');
-    for (const [c, r] of [[[-4, 0, 6], 3], [[6, 0, 4], 3], [[3, 0, -3], 3]]) {
+    for (const [c, r] of [
+      [[-4, 0, 6], 3],
+      [[6, 0, 4], 3],
+      [[3, 0, -3], 3],
+    ]) {
       const p = await freeSpot(c, r, [0, 0]);
       if (p) await glide(p, 5);
       await simLookSlow([c[0] * 1.6, 1.2, c[2] * 1.6], 1.5);
@@ -761,7 +773,8 @@ try {
     const CONTROLLER = [0, 0, 1];
     const CLINIC = [12.5, 1.5, -0.5];
     // an open spot north of the controller: the houses on one side, the clinic on the other
-    const spot = (await freeSpot([2, 0, 7], 1.5, [0, 1])) ?? (await freeSpot(CONTROLLER, 6, [2, 9]));
+    const spot =
+      (await freeSpot([2, 0, 7], 1.5, [0, 1])) ?? (await freeSpot(CONTROLLER, 6, [2, 9]));
     if (spot) await glide(spot, 3);
     await simLookSlow([0, 1.2, 1], 2);
     await sleep(2000);

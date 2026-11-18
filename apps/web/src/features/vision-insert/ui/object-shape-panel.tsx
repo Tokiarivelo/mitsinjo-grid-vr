@@ -44,6 +44,7 @@ import type { HullSurface } from '@/lib/face-hull';
 import { VEHICLE_FACES, type FaceSurface } from '@/lib/object-shape';
 import { Facade2dPanel } from './facade-2d-panel';
 import { FacadeFacesPanel } from './facade-faces-panel';
+import { RetryPrompt } from './retry-prompt';
 import { BlenderExportButton } from './blender-export-button';
 import { StepModelsGear } from './step-models-gear';
 import { useFacade2d, validatedFacade, type ValidatedFacade } from '../hooks/use-facade-2d';
@@ -235,6 +236,8 @@ export function ObjectShapePanel({
   const t = useTranslations('features.visionInsert');
   const webgl = useWebGLAvailable();
   const [studioOpen, setStudioOpen] = useState(false);
+  /** Outline shape whose « Retry? » got « No »: a plain retry button stays for it. */
+  const [retryDismissed, setRetryDismissed] = useState<ObjectShape | null>(null);
   const facade = useFacade2d(imageUrl ?? null, detection, sessionId, scope);
   const ready = status === 'ready' && shape?.detectionId === detection.id;
   const materials = ready && shape?.recipe ? recipeMaterials(shape.recipe) : [];
@@ -363,6 +366,7 @@ export function ObjectShapePanel({
               onGenerate={() => facade.generate()}
               onRetry={(prompt) => facade.retry(prompt)}
               onDelete={() => facade.deleteFacade()}
+              onCancel={facade.cancel}
               onValidate={() => {
                 facade.validate();
                 setTab('model');
@@ -379,6 +383,7 @@ export function ObjectShapePanel({
                   onDetailsChange={faceViews.setUserPrompt}
                   onValidate={faceViews.validate}
                   onValidateAll={faceViews.validateAll}
+                  onCancel={faceViews.cancel}
                   disabled={loading}
                 />
               }
@@ -473,16 +478,24 @@ export function ObjectShapePanel({
                   </span>
                 )}
               </p>
-              {(onRetry ?? onRegenerate) && (
-                <button
-                  type="button"
-                  onClick={onRetry ?? onRegenerate}
-                  className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-border bg-surface-elevated px-3 text-xs font-medium text-text-primary hover:bg-surface-hover cursor-pointer"
-                >
-                  <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
-                  {t('model3dRetry')}
-                </button>
-              )}
+              {(onRetry ?? onRegenerate) &&
+                (retryDismissed === shape ? (
+                  <button
+                    type="button"
+                    onClick={onRetry ?? onRegenerate}
+                    className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-border bg-surface-elevated px-3 text-xs font-medium text-text-primary hover:bg-surface-hover cursor-pointer"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+                    {t('model3dRetry')}
+                  </button>
+                ) : (
+                  <RetryPrompt
+                    className="w-full"
+                    message={t('model3dRetryAsk')}
+                    onYes={() => (onRetry ?? onRegenerate)?.()}
+                    onNo={() => setRetryDismissed(shape)}
+                  />
+                ))}
             </div>
           )}
           {shape.mode === 'recipe' && (onRegenerate ?? onRetry) && (

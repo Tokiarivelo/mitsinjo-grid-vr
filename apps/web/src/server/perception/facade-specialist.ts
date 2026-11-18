@@ -6,6 +6,8 @@ import type { FaceName, ShapeTarget } from '@/lib/object-shape';
 import { env } from '@/lib/env';
 import { isR2Configured, uploadBufferToR2 } from '@/server/storage/r2';
 import { DEFAULT_META_BASE_URL } from '@/server/copilot/providers/meta';
+import { isTransientProviderError } from '@/server/copilot/providers/transient';
+import { withRetry } from '@/server/retry';
 import type { PhotoForRegions } from './region';
 import { cropForShape } from './shape-crop';
 import { tourMockDrawing } from './tour-mock';
@@ -205,22 +207,40 @@ export async function museImage(
             ],
           },
         ];
-  const res = await fetch(`${baseUrl}/responses`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${env.META_API_KEY}` },
-    body: JSON.stringify({ model: env.META_IMAGE_MODEL, input }),
-    signal,
-  });
-  if (!res.ok) {
-    const errorText = await res.text().catch(() => '');
-    throw new Error(`Meta Image API error (${res.status}): ${errorText.slice(0, 200)}`);
-  }
-  const data = (await res.json()) as { output?: Array<{ type: string; result?: string }> };
-  const base64 = data.output?.findLast(
-    (o) => o.type === 'image_generation_call' && o.result
-  )?.result;
-  if (!base64) throw new Error('Meta Image API did not return image data');
+  // A network drop, a 429/5xx or an empty answer is tried again `SERVER_RETRIES` times; a 4xx is not.
+  const base64 = await withRetry(
+    async () => {
+      const res = await fetch(`${baseUrl}/responses`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${env.META_API_KEY}`,
+        },
+        body: JSON.stringify({ model: env.META_IMAGE_MODEL, input }),
+        signal,
+      });
+      if (!res.ok) {
+        const errorText = await res.text().catch(() => '');
+        throw new Error(`Meta Image API error (${res.status}): ${errorText.slice(0, 200)}`);
+      }
+      const data = (await res.json()) as { output?: Array<{ type: string; result?: string }> };
+      const out = data.output?.findLast(
+        (o) => o.type === 'image_generation_call' && o.result
+      )?.result;
+      if (!out) throw new Error('Meta Image API did not return image data');
+      return out;
+    },
+    { signal, label: 'muse-image', retryable: museImageRetryable }
+  );
   return sharp(Buffer.from(base64, 'base64')).png().toBuffer();
+}
+
+/** Muse Image errors worth another try: transient ones and an answer without the image. */
+export function museImageRetryable(err: unknown): boolean {
+  return (
+    isTransientProviderError(err) ||
+    (err instanceof Error && err.message === 'Meta Image API did not return image data')
+  );
 }
 
 /** True when Muse Image can be called (Meta provider with a key). */

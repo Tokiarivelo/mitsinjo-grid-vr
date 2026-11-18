@@ -1602,7 +1602,10 @@
         "enterLab": "Midira ao amin’ny labo 3D",
         "later": "Avy eo",
         "leaveStudio": "Hiala amin’ny studio",
-        "backToStudio": "Miverena any amin’ny studio · « {name} »"
+        "backToStudio": "Miverena any amin’ny studio · « {name} »",
+        "retry3dAsk": "Tsy nahomby ny endrika 3D IA (sisiny no aseho). Andramana indray ve ny 3D?",
+        "retryYes": "Eny, andramo indray",
+        "retryNo": "Tsia, tazony ny sisiny"
       },
       "vrViews": {
         "title": "Sary 2D hamarinina",
@@ -1615,7 +1618,11 @@
         "toCheck": "Hojerena",
         "mainValidated": "Sary fototra: ampiasaina amin’ny 3D",
         "build": "Hamafiso ary atsangano ny 3D",
-        "imageError": "Vita ny sary, saingy tsy azo aseho amin’ny VR"
+        "imageError": "Vita ny sary, saingy tsy azo aseho amin’ny VR",
+        "errorAsk": "Tsy nahomby ny sary. Andramana indray ve?",
+        "stop": "Ajanony",
+        "yes": "Eny, andramo indray",
+        "no": "Tsia"
       },
       "vrChat": {
         "title": "Resaka AI · {view}",
@@ -1730,7 +1737,15 @@
       },
       "cancelAnalysis": "Ajanony ny famakafakana",
       "analysisCancelled": "Najanona ny famakafakana.",
-      "retryAnalysis": "Avereno ny famakafakana"
+      "retryAnalysis": "Avereno ny famakafakana",
+      "retryPrompt": {
+        "yes": "Eny, andramo indray",
+        "no": "Tsia",
+        "cancel": "Ajanony"
+      },
+      "facesErrorAsk": "Tsy voasary ity lafiny ity (efa nandramana in-3 indray). Andramana indray ve?",
+      "facade2dErrorAsk": "Tsy voasary ny sary 2D (efa nandramana in-3 indray). Andramana indray ve?",
+      "model3dRetryAsk": "Tsy nahomby ny endrika 3D IA: endrika sisiny no aseho. Andramana indray ve ny 3D?"
     },
     "dispatch": {
       "modeLabel": "Fomba fandefasana",

@@ -1602,7 +1602,10 @@
         "enterLab": "Enter the 3D lab",
         "later": "Later",
         "leaveStudio": "Leave the studio",
-        "backToStudio": "Back to the studio · « {name} »"
+        "backToStudio": "Back to the studio · « {name} »",
+        "retry3dAsk": "AI 3D shape failed (outline shown). Retry the 3D?",
+        "retryYes": "Yes, retry",
+        "retryNo": "No, keep the outline"
       },
       "vrViews": {
         "title": "2D views to validate",
@@ -1615,7 +1618,11 @@
         "toCheck": "To check",
         "mainValidated": "Main view: used for the 3D",
         "build": "Validate & build the 3D",
-        "imageError": "Drawn, but it cannot be shown in VR"
+        "imageError": "Drawn, but it cannot be shown in VR",
+        "errorAsk": "Drawing failed. Retry?",
+        "stop": "Stop",
+        "yes": "Yes, retry",
+        "no": "No"
       },
       "vrChat": {
         "title": "AI chat · {view}",
@@ -1730,7 +1737,15 @@
       },
       "cancelAnalysis": "Cancel the analysis",
       "analysisCancelled": "Analysis cancelled.",
-      "retryAnalysis": "Retry the analysis"
+      "retryAnalysis": "Retry the analysis",
+      "retryPrompt": {
+        "yes": "Yes, retry",
+        "no": "No",
+        "cancel": "Cancel"
+      },
+      "facesErrorAsk": "This face could not be drawn (tried 3 more times). Retry?",
+      "facade2dErrorAsk": "The 2D view could not be drawn (tried 3 more times). Retry?",
+      "model3dRetryAsk": "The AI 3D shape failed: outline shape shown. Retry the 3D?"
     },
     "dispatch": {
       "modeLabel": "Dispatch mode",

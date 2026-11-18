@@ -124,17 +124,10 @@ export async function generateFaceImage(options: GenerateFaceOptions): Promise<F
     console.info(
       `[facade-faces] Muse Image ${face} of "${target.label}" from ${references.length} view(s)`
     );
-    try {
-      png = await museImage(prompt, references, signal);
-      source = 'meta';
-    } catch (err) {
-      if (signal?.aborted) throw err;
-      console.warn(
-        '[facade-faces] Muse Image failed, placeholder:',
-        err instanceof Error ? err.message : err
-      );
-      png = await mockFaceDrawing(target, archetype, face);
-    }
+    // `museImage` already retried `SERVER_RETRIES` times: a failure is reported (the lab offers a
+    // retry), never hidden behind a placeholder drawing.
+    png = await museImage(prompt, references, signal);
+    source = 'meta';
   } else {
     png = await mockFaceDrawing(target, archetype, face);
   }

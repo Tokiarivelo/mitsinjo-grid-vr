@@ -2,7 +2,12 @@ import 'server-only';
 
 import { randomUUID } from 'node:crypto';
 import { type NextRequest } from 'next/server';
-import { ShapeTargetSchema } from '@/lib/object-shape';
+import {
+  SHAPE_FUNCTION_MS,
+  STAGE_SLICE_MARGIN_MS,
+  ShapeTargetSchema,
+  type ObjectShape,
+} from '@/lib/object-shape';
 import { getShapeStepModels } from '@/server/db/neon';
 import { getPerceptionClient } from '@/server/perception';
 import { shapeWithCritic } from '@/server/perception/spark-critic';
@@ -29,6 +34,12 @@ import {
  */
 /** Vercel request limit (s) = `SHAPE_FUNCTION_MS`. */
 export const maxDuration = 300;
+/**
+ * The pipeline's own deadline, `STAGE_SLICE_MARGIN_MS` before Vercel's kill: a Meta call still
+ * waiting then is aborted, so the request ends with an answer (outline shape, `timeout`) the lab
+ * can offer to retry, never « Task timed out after 300 seconds » with nothing sent (live 2026-11-18).
+ */
+export const SHAPE_DEADLINE_MS = SHAPE_FUNCTION_MS - STAGE_SLICE_MARGIN_MS;
 
 export async function POST(req: NextRequest) {
   const read = await readVisionRequest(req);
@@ -49,13 +60,29 @@ export async function POST(req: NextRequest) {
       return;
     }
     const jobId = randomUUID();
-    const shape = await shapeWithCritic(perception, size, fullUrl, target, {
-      signal: req.signal,
-      onStep: (step) => send('shape_step', { step }),
-      onTiming: (phase, ms) => send('shape_timing', { phase, ms }),
-      onStage: (e) => send('shape_stage', { ...e, jobId }),
-      withViews: true,
-    });
+    const deadline = AbortSignal.timeout(SHAPE_DEADLINE_MS);
+    let shape: ObjectShape;
+    try {
+      shape = await shapeWithCritic(perception, size, fullUrl, target, {
+        signal: AbortSignal.any([req.signal, deadline]),
+        onStep: (step) => send('shape_step', { step }),
+        onTiming: (phase, ms) => send('shape_timing', { phase, ms }),
+        onStage: (e) => send('shape_stage', { ...e, jobId }),
+        withViews: true,
+      });
+    } catch (err) {
+      console.warn('[vision] 3D shape failed:', err instanceof Error ? err.message : err);
+      shape = {
+        detectionId: target.id,
+        mode: 'silhouette',
+        reason: deadline.aborted ? 'timeout' : 'provider_error',
+        source: 'mock',
+        model: 'none',
+      };
+    }
+    // Past the deadline the shape is the outline: say why, so the lab offers a retry.
+    if (deadline.aborted && shape.mode !== 'recipe' && !shape.detail)
+      shape = { ...shape, reason: 'timeout', detail: 'timeout' };
     send('shape_result', { shape });
   });
 }

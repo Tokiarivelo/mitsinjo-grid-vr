@@ -54,6 +54,8 @@ export const LAB_IDS = {
   piece: (name: string) => `holo:lab-piece-${name}`,
   view: (mode: ViewMode) => `holo:lab-view-${mode}`,
   library: 'holo:lab-library',
+  retryYes: 'holo:lab-retry-yes',
+  retryNo: 'holo:lab-retry-no',
 } as const;
 
 /** Largest side of the model on the lab pedestal (m): a table-top object, held at arm's length. */
@@ -85,6 +87,8 @@ export interface XrObjectLabProps {
   aim?: AimReadout;
   /** The drawn main view (build hologram): it crumbles into the plate as the model rises. */
   cardUrl?: string;
+  /** An outline shape (the AI 3D failed) asks « Retry the 3D? »: Yes calls this; no question without it. */
+  onRetryShape?: () => void;
 }
 
 /**
@@ -108,6 +112,7 @@ export const XrObjectLab = memo(function XrObjectLab({
   photo,
   aim,
   cardUrl,
+  onRetryShape,
 }: XrObjectLabProps) {
   const t = useTranslations('features.visionInsert');
   const pieceLabel = usePieceLabel();
@@ -124,6 +129,9 @@ export const XrObjectLab = memo(function XrObjectLab({
     [label, shape.modelUrl]
   );
   const [showLibrary, setShowLibrary] = useState(false);
+  /** Outline shape whose « Retry the 3D? » got « No ». */
+  const [retryDismissed, setRetryDismissed] = useState<ObjectShape | null>(null);
+  const askRetry = Boolean(onRetryShape) && shape.mode !== 'recipe' && retryDismissed !== shape;
   const [names, setNames] = useState<string[]>([]);
   /** List scroll (rows): live in a ref while dragged, settled in state (arrows) on release. */
   const [scroll, setScroll] = useState(0);
@@ -263,6 +271,40 @@ export const XrObjectLab = memo(function XrObjectLab({
       {/* The room (dome, grid, lights) is the studio's: `StudioRoom`, drawn by the studio. */}
       <AnchoredPanel anchor={anchor} name="xr-lab-panels">
         <HoloText spec={header} width={0.9} height={0.13} position={[0, 0.36, 0]} />
+
+        {/* « Retry the 3D? » above the header when the AI shape failed (outline shown) */}
+        {askRetry && (
+          <group position={[0, 0.52, 0]}>
+            <HoloText
+              spec={{
+                glass: false,
+                lines: [
+                  { text: t('vrExtract.retry3dAsk'), size: 40, weight: 700, color: HOLO.amber },
+                ],
+              }}
+              width={0.9}
+              height={0.07}
+              position={[0, 0.06, 0]}
+            />
+            <HoloButton
+              {...btn(LAB_IDS.retryYes)}
+              label={t('vrExtract.retryYes')}
+              width={0.26}
+              height={0.075}
+              position={[-0.15, -0.02, 0.01]}
+              color={HOLO.green}
+              onSelect={() => onRetryShape?.()}
+            />
+            <HoloButton
+              {...btn(LAB_IDS.retryNo)}
+              label={t('vrExtract.retryNo')}
+              width={0.3}
+              height={0.075}
+              position={[0.16, -0.02, 0.01]}
+              onSelect={() => setRetryDismissed(shape)}
+            />
+          </group>
+        )}
 
         {/* Pedestal + model */}
         <group position={[0, -PEDESTAL_DROP, 0]}>
