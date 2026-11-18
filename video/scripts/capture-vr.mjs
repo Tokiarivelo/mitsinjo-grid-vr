@@ -131,6 +131,9 @@ const cleanChrome = () =>
       css.id = '__vr_clean';
       css.textContent = 'nextjs-portal,[data-xr-exit]{display:none!important}';
       if (!css.isConnected) document.head.appendChild(css);
+      // The emulator's own UI (panels and its gizmo canvas): hidden whole.
+      const dev = window.__IWER_DEVICE__?.devui?.devUIContainer;
+      if (dev) dev.style.setProperty('display', 'none', 'important');
       // Every fixed layer that does not hold the app's R3F canvas belongs to the emulator UI.
       for (const el of document.body.querySelectorAll('body *')) {
         if (el.dataset.vrHidden) continue;
@@ -243,7 +246,14 @@ const panelAt = (id) =>
 const press = async (id, opts) => {
   const at = await panelAt(id);
   if (!at) return (console.log(`  (no panel ${id})`), false);
-  await shoot(at, opts?.from ?? { x: 0.12, y: 1.45, z: -0.05 }, opts);
+  // From a point between the head and the button: no other panel can stand in the ray's way.
+  const h = await pos('headset');
+  const from = opts?.from ?? {
+    x: h.x + (at.x - h.x) * 0.45 + 0.08,
+    y: h.y + (at.y - h.y) * 0.45 - 0.12,
+    z: h.z + (at.z - h.z) * 0.45,
+  };
+  await shoot(at, from, opts);
   return true;
 };
 /** Types on the holo keyboard: aims each key's centre (layout of utils/xr-keyboard.ts, QWERTY). */
@@ -287,9 +297,9 @@ try {
     await startCast();
     await sleep(2500);
     mark('village-page');
-    // Evening (fixed hour): the windows are lit, so dimming a house shows; the clock does not run.
-    const evening = page.getByRole('button', { name: /19:00/ }).first();
-    if (await evening.isVisible().catch(() => false)) await evening.click().catch(() => {});
+    // Midday (fixed hour) for the village tour; the clock jumps to the evening later (setHour).
+    const noon = page.getByRole('button', { name: /12:00/ }).first();
+    if (await noon.isVisible().catch(() => false)) await noon.click().catch(() => {});
     await sleep(2000);
     const ok = await enterVr('/village', /View in VR immersion/i).catch(() => false);
     if (!ok) throw new Error('VR session did not start on /village');
@@ -364,10 +374,27 @@ try {
           await sleep(5000);
         }
       }
-      const build = await panelAt('holo:views-build');
-      if (build) await look(build, 1.8);
       mark(`${tag}-build`);
-      await press('holo:views-build', { hold: 300 });
+      // « Validate & build the 3D »: if the ray caught « Leave the studio » instead, come back and retry.
+      for (let tries = 0; tries < 3; tries++) {
+        const build = await panelAt('holo:views-build');
+        if (build) await look(build, 1.8);
+        await press(
+          'holo:views-build',
+          tries === 0 ? { hold: 300 } : { from: { x: 0.12, y: 1.45, z: -0.05 }, hold: 300 }
+        );
+        const ok = await waitFor(async () => {
+          const st = (await extract())?.stage;
+          return !!st && st !== 'views' && st !== 'idle' && st !== 'confirm';
+        }, 9000);
+        if (ok) break;
+        console.log(`  build not started (try ${tries + 1}), stage ${(await extract())?.stage}`);
+        if ((await extract())?.stage === 'idle') {
+          await press('holo:studio-door');
+          await waitFor(async () => (await extract())?.stage === 'views', 30000);
+          await sleep(1500);
+        }
+      }
       await waitFor(async () => (await extract())?.stage === 'lab', 240000);
       mark(`${tag}-lab`);
       await waitFor(
@@ -555,7 +582,7 @@ try {
     if (c0) await rc('look_at', { device: 'headset', target: { x: c0.x, y: 1.5, z: c0.z } });
   }
   await sleep(4500);
-  // A little tour: look across the village, then walk toward the houses, the head panning.
+  // Daytime tour: the village, then the map to find your way.
   mark('sim-walk');
   await simLookSlow(CONTROLLER_LABEL, 4);
   await simLookSlow([12.5, 2, -0.5], 4); // the clinic
@@ -567,9 +594,24 @@ try {
   await sleep(2500);
   mark('sim-map');
   await simPress('sim-xr-minimap-open');
-  await sleep(3500);
+  await sleep(6000);
   await simPress('sim-xr-button-map-close');
-  await sleep(1000);
+  await sleep(1500);
+  // Fast forward to the evening: « Start the battery & dispatch » plays the day in the headset.
+  mark('sim-night');
+  await simPress('sim-xr-minimap-open');
+  await sleep(1500);
+  await simPress('sim-xr-map-pin-dispatcher');
+  await waitFor(async () => (await state())?.mixer === true, 20000);
+  await simPress('sim-xr-button-mixer-start');
+  mark('sim-ff');
+  const hour = () =>
+    page.evaluate(() => Number((document.body.innerText.match(/\b(\d\d):00\b/) ?? [])[1] ?? -1));
+  await waitFor(async () => (await hour()) >= 19, 240000);
+  console.log(`  clock at ${await hour()}:00`);
+  await simPress('sim-xr-button-mixer-close');
+  await sleep(1500);
+  mark('sim-night-done');
   // Evening houses: cut their power, the windows and the feeder's electrons fade; restore, they come back.
   const openHouses = async () => {
     if ((await state())?.panel === 'households') return;

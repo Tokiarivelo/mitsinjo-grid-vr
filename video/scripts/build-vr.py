@@ -21,7 +21,7 @@ FPS = 30
 
 # (capture, from marker, to marker, seconds on screen, section label shown at the clip start or None)
 # (capture, from marker, to marker, seconds on screen, section label or None, clip id for CUES)
-CAP = "vr-v4"
+CAP = "vr-v7"
 VILLAGE = [
     (CAP, "village-page", "village-vr-entered", 4.5, "Village · VR immersion", "v0"),
     (CAP, "village-vr-entered", "village-scan", 3.0, None, "v1"),
@@ -32,7 +32,7 @@ VILLAGE = [
     (CAP, "fridge-chat", "fridge-build", 4.5, "AI chat · redraw a view", "v6"),
     (CAP, "fridge-build", "fridge-3d", 6.0, "Validate · build the 3D", "v7"),
     (CAP, "fridge-3d", "walk-hall", 3.0, None, "v8"),
-    (CAP, "walk-hall", "car-scan", 10.0, "Walk outside", "v9"),
+    (CAP, "walk-hall", "car-scan", 9.0, "Walk outside", "v9"),
     (CAP, "car-scan", "car-detected", 4.0, "Scan the street", "v10"),
     (CAP, "car-detected", "car-studio", 5.0, "The car · Extract in 3D", "v11"),
     (CAP, "car-studio", "car-build", 4.0, None, "v12"),
@@ -41,16 +41,20 @@ VILLAGE = [
     (CAP, "village-inserted", "handoff", 2.5, None, "v15"),
 ]
 # The holo shell is real footage (VS-T49: same VR session), so it opens the simulation part.
+# Day tour from this take; the evening part from the v4 take (19:00 set before VR: the village world's
+# clock does not run inside the session). The two are joined by an edited fast forward (FF).
+NIGHT = "vr-v4"
 SIM = [
     (CAP, "handoff", "sim-arrive", 4.0, "Same session · to the simulation", "s0"),
-    (CAP, "sim-arrive", "sim-walk", 3.0, None, "s1"),
-    (CAP, "sim-walk", "sim-labels", 6.0, "A walk through the village", "s2"),
-    (CAP, "sim-labels", "sim-panel", 5.0, "Labels · live map", "s3"),
-    (CAP, "sim-panel", "sim-restore", 9.0, "Evening · limit a house", "s4"),
-    (CAP, "sim-restore", "sim-enter", 3.0, None, "s5"),
-    (CAP, "sim-enter", "sim-mixer", 5.5, "Step inside", "s6"),
-    (CAP, "sim-mixer", "sim-clinic", 5.0, "Dispatcher · mixing desk", "s7"),
-    (CAP, "sim-clinic", "sim-end", 4.0, "Clinic protected", "s8"),
+    (CAP, "sim-arrive", "sim-walk", 2.5, None, "s1"),
+    (CAP, "sim-walk", "sim-labels", 6.5, "Daytime · the village", "s2"),
+    (CAP, "sim-labels", "sim-night", 6.0, "The map · find your way", "s3"),
+    ("FF", f"{CAP}:sim-night", f"{NIGHT}:sim-panel", 3.0, "Fast forward · to the evening", "s3b"),
+    (NIGHT, "sim-panel", "sim-restore", 9.0, "Evening · cut a house", "s4"),
+    (NIGHT, "sim-restore", "sim-enter", 3.0, None, "s5"),
+    (NIGHT, "sim-enter", "sim-mixer", 5.0, "Step inside", "s6"),
+    (NIGHT, "sim-mixer", "sim-clinic", 4.5, "Dispatcher · mixing desk", "s7"),
+    (NIGHT, "sim-clinic", "sim-end", 4.0, "Clinic protected", "s8"),
     (CAP, "back-to-lab", "lab-again", 3.0, "Back to the lab", "s9"),
 ]
 # Voice cue n → (clip id or "intro" / "outro", seconds after its start). Pushed later if the line before still speaks.
@@ -66,11 +70,12 @@ CUES = {
 }
 # Short, spoken voice-over (subtitles/vr-short-script.srt): few lines, the demo talks.
 CUES_SHORT = {
-    1: ("intro", 0.6), 2: ("intro", 16.6), 3: ("intro", 32.4),
+    1: ("intro", 0.6), 2: ("intro", 16.6), 3: ("intro", 34.2),
     4: ("v0", 0.4), 5: ("v2", 0.4), 6: ("v4", 0.4), 7: ("v5", 0.8), 8: ("v7", 2.5),
     9: ("v9", 0.8), 10: ("v10", 0.4), 11: ("v11", 0.5), 12: ("v13", 1.5), 13: ("v14", 0.6),
-    14: ("s0", 0.6), 15: ("s1", 0.4), 16: ("s2", 0.8), 17: ("s4", 0.5), 18: ("s4", 4.5),
-    19: ("s5", 0.3), 20: ("s7", 0.4), 21: ("s8", 0.3), 22: ("s9", 0.3), 23: ("outro", 1.0),
+    14: ("s0", 0.6), 15: ("s2", 0.8), 16: ("s3", 1.0), 17: ("s3b", 0.1), 18: ("s4", 0.5),
+    19: ("s4", 4.5), 20: ("s5", 0.3), 21: ("s7", 0.4), 22: ("s8", 0.3), 23: ("s9", 0.3),
+    24: ("outro", 1.0),
 }
 INTRO_S = 38.0
 OUTRO_S = 13.0
@@ -140,6 +145,39 @@ def clip(i: int, cap: str, a: str, b: str, dur: float, label: str | None, _id: s
     return out
 
 
+def frame_at(spec: str) -> Path:
+    """`take:marker` → the capture frame shown at that marker."""
+    cap, marker = spec.split(":")
+    tl = json.loads((VIDEO / "captures" / "raw" / cap / "timeline.json").read_text())
+    t = next(m["t"] for m in tl["markers"] if m["name"] == marker)
+    f = min(tl["frames"], key=lambda x: abs(x["t"] - t))
+    return VIDEO / "captures" / "raw" / cap / "frames" / f["f"]
+
+
+def ff_clip(i: int, a: str, b: str, dur: float, label: str | None, size: str) -> Path:
+    """Edited fast forward: noon frame → evening frame, the clock running 12:00 → 19:00 over a dissolve."""
+    w, h = size.split("x")
+    s = int(h) / 1080
+    out = WORK / f"clip-{i:02d}.mp4"
+    if REUSE and out.exists():
+        return out
+    clock = (
+        f"drawtext=fontfile={FONT}:text='%{{eif\\:12+min(7\\,floor(t*7/{dur * 0.85:.2f}))\\:d}}\\:00':"
+        f"x=(w-tw)/2:y=h*0.42:fontsize={int(150 * s)}:fontcolor=white:shadowcolor=black@0.6:shadowx=4:shadowy=4,"
+        f"drawtext=fontfile={FONT}:text='FAST FORWARD':x=(w-tw)/2:y=h*0.42+{int(170 * s)}:fontsize={int(34 * s)}:fontcolor=0x4dd8e8"
+    )
+    ff(
+        "-loop", "1", "-t", f"{dur}", "-i", str(frame_at(a)),
+        "-loop", "1", "-t", f"{dur}", "-i", str(frame_at(b)),
+        "-filter_complex",
+        f"[0]scale={w}:{h},zoompan=z='1+0.04*on/{int(dur * FPS)}':d=1:s={w}x{h}:fps={FPS}[a];"
+        f"[1]scale={w}:{h},fps={FPS}[b];[a][b]xfade=transition=fade:duration={dur * 0.7:.2f}:offset={dur * 0.15:.2f},{clock}",
+        "-t", f"{dur}", *enc(size), "-an", str(out),
+    )
+    print(f"clip {i:02d} fast forward {a} → {b}: {dur}s")
+    return out
+
+
 def frames_clip(name: str, dur: float, size: str) -> Path:
     out = WORK / f"{name}.mp4"
     if REUSE and out.exists():
@@ -174,6 +212,8 @@ def main() -> None:
     # Skip clips whose markers the take does not have (e.g. a step that failed in the emulator).
     global VILLAGE, SIM
     def has(c):
+        if c[0] == "FF":
+            return True
         names = {m["name"] for m in json.loads((VIDEO / "captures" / "raw" / c[0] / "timeline.json").read_text())["markers"]}
         ok = c[1] in names and c[2] in names
         if not ok:
@@ -187,7 +227,7 @@ def main() -> None:
 
     intro = frames_clip("vr-intro", INTRO_S, size)
     village = concat([clip(i, *c, size) for i, c in enumerate(VILLAGE)], "village")
-    sim = concat([clip(20 + i, *c, size) for i, c in enumerate(SIM)], "sim")
+    sim = concat([(ff_clip(20 + i, c[1], c[2], c[3], c[4], size) if c[0] == "FF" else clip(20 + i, *c, size)) for i, c in enumerate(SIM)], "sim")
     outro = frames_clip("vr-outro", OUTRO_S, size)
     v_dur = sum(c[3] for c in VILLAGE)
     s_dur = sum(c[3] for c in SIM)
