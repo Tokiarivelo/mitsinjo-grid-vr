@@ -25,4 +25,6 @@
 
 ## Checks
 
-- tsc clean; XR tests 243/243 (`microgrid-3d/utils`, `vision-insert/ui/xr`). Emulator check pending (NEXT 1).
+- tsc clean; XR tests 243/243 (`microgrid-3d/utils`, `vision-insert/ui/xr`).
+- `make vr-probe` (2026-11-18, IWSDK code live on :3001): 13 PASS (menu, tour, scan, « Extract to 3D? », studio, 2D slides), then `page.screenshot: Timeout 30000ms` at `scripts/vr-village-probe.mjs:282` (2D views step) — the controllers + hands checks after it never ran. Rerun alone; if it times out again, check whether IWSDK slows the frame (GPU) before blaming the probe.
+- IWER MCP: once connected it saw the session (Quest 3, `immersive-vr`, `hand-tracking` on), then dropped (« Connection closed »). Reconnect with `/mcp`; if `EADDRINUSE 127.0.0.1:8723`, another bridge holds the port (`make iwer-bridge-stop`, ask first).
