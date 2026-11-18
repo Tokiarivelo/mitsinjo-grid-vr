@@ -120,6 +120,8 @@ export interface HoloVillageTableProps {
   photo: string;
   /** The model as edited in the lab: it goes to the village with the line. */
   recipe: ObjectRecipe | null;
+  /** Prepared glTF model of the object (VS-T52, offline mock): goes to the village with the line. */
+  modelUrl?: string | null;
   /** Live pointer aim: the cursor ring on the table. */
   aim?: AimReadout;
 }
@@ -138,6 +140,7 @@ export const HoloVillageTable = memo(function HoloVillageTable({
   name,
   photo,
   recipe,
+  modelUrl,
   aim,
 }: HoloVillageTableProps) {
   const t = useTranslations('features.visionInsert');
@@ -149,6 +152,7 @@ export const HoloVillageTable = memo(function HoloVillageTable({
     name,
     photo,
     recipe,
+    modelUrl: modelUrl ?? null,
   });
   const [added, setAdded] = useState(false);
   const pos = draft.draft.position;

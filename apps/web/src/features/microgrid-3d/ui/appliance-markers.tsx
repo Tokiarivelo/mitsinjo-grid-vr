@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, type RefObject } from 'react';
+import { Suspense, useEffect, useMemo, type RefObject } from 'react';
 import { Instance, Instances, Line } from '@react-three/drei';
 import type { ThreeEvent } from '@react-three/fiber';
 import * as THREE from 'three';
@@ -13,6 +13,7 @@ import type { ApplianceMarkerSceneModel } from '../types';
 import { MARKER_PLINTH_HEX, STATUS_HEX, TOKEN_HEX, duskDarkness } from '../utils/scene-palette';
 import { BADGE_DISTANCE_FACTOR, badgeY, beaconY, SceneBadge } from './scene-badge';
 import { PlacedDrawnModelMesh } from './placed-drawn-model';
+import { GltfModel3D } from '@/features/vision-insert/ui/gltf-model-3d';
 import { ImmersionTag, SECTOR_TAG_ACCENT } from './immersion-labels';
 import {
   buildPlacedModelsGeometry,
@@ -153,6 +154,7 @@ export function ApplianceMarkers({
           scale: p.scale,
           yaw: p.yaw,
           archetype: p.archetype,
+          ...(p.modelUrl ? { modelUrl: p.modelUrl } : {}),
         };
       }),
     [modeledMarkers, placedModels]
@@ -161,7 +163,7 @@ export function ApplianceMarkers({
   // Rebuild the merged mesh only when what it draws changes (not on every scene-model refresh).
   const darkness = duskDarkness(lampGlow);
   const geometryKey = placedGeometryKey(placedItems, sectorStatuses, tier, darkness);
-  const { modelsGeometry, plinths, modelBounds, drawn } = useMemo(
+  const { modelsGeometry, plinths, modelBounds, drawn, gltf } = useMemo(
     () => buildPlacedModelsGeometry(placedItems, sectorStatuses, tier, darkness),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- geometryKey covers every input
     [geometryKey]
@@ -214,6 +216,15 @@ export function ApplianceMarkers({
       {/* Models that wear their drawings (PQ-T71): one mesh each, capped (`PLACED_DRAWN_MAX`) */}
       {drawn.map((model) => (
         <PlacedDrawnModelMesh key={model.id} model={model} />
+      ))}
+
+      {/* Prepared glTF models (VS-T52, offline mock): one each, loaded on demand */}
+      {gltf.map((model) => (
+        <group key={model.id} position={model.position} rotation={[0, model.yaw, 0]}>
+          <Suspense fallback={null}>
+            <GltfModel3D url={model.url} height={model.height} name={`placed-gltf-${model.id}`} />
+          </Suspense>
+        </group>
       ))}
 
       {/* Plinths under models on sloped ground: one instanced draw call */}

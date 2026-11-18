@@ -15,3 +15,5 @@ scripts/__pycache__/
 .venv-vc/
 vc/
 images/intro/
+.venv-blender
+__pycache__/

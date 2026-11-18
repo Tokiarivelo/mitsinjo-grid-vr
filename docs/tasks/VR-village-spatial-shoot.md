@@ -565,3 +565,17 @@ l'app propose donc, quand l'objet reconnu en a un, un modèle réaliste sous lic
 - [x] Labo VR : bouton « Realistic library model » ↔ « Back to the generated model » sous le socle, crédit et
       licence affichés avec le modèle (`library-model-3d.tsx`, `vrLab.library*`).
 - [ ] Vues 2D rendues depuis le modèle de bibliothèque ; insertion du modèle de bibliothèque dans le village.
+
+## VS-T52 — Réponses préparées réalistes (mode simulé) pour le canapé, la voiture et la maison
+
+Demande (2026-11-18) : en démo hors ligne, les vues 2D et la 3D du canapé, de la voiture et de la maison doivent
+ressembler aux objets de la photo 360°. Sans modèle Meta, ces trois objets répondent avec des dessins et un
+modèle glTF faits dans Blender d'après la photo (réponses simulées, comme le reste du mode `mock`).
+
+- [x] `video/blender/` (`make prepared-models`) : canapé baroque capitonné, break blanc, maison jaune aux portes
+      bleues ; vues orthographiques sur le fond bleu pâle des dessins + GLB allégé → `public/models/prepared/<id>/`.
+- [x] `tour-mock/prepared.ts` : dessins et `ObjectShape.modelUrl` de `hall-sofa`, `street-car-white`,
+      `terrace-house` (mode simulé seulement, jamais d'une réponse Meta) ; test.
+- [x] Labo VR et village : `GltfModel3D` affiche le modèle préparé (`PlacedModel.modelUrl`, palier haut ;
+      le palier bas garde la recette) ; test.
+- [ ] Outils de pièces du labo (sélection, taille, rayons X) sur un modèle préparé.

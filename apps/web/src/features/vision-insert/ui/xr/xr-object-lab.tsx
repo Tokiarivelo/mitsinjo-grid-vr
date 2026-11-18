@@ -27,6 +27,7 @@ import { HOLO } from './holo-style';
 import { AnchoredPanel, usePanelAnchor } from './holo-extract-panels';
 import { LabStageLights, PEDESTAL_DROP, StudioPedestal } from './xr-extract-studio';
 import { LibraryModel3D } from './library-model-3d';
+import { GltfModel3D } from '../gltf-model-3d';
 import { matchLibraryModel } from '@/lib/model-library';
 import { LAB_TO_VIEWS, type PanelAnchor } from './xr-layout';
 import { HoloVillageTable } from './holo-village-table';
@@ -269,6 +270,13 @@ export const XrObjectLab = memo(function XrObjectLab({
                 <Suspense fallback={null}>
                   {showLibrary && library ? (
                     <LibraryModel3D entry={library} size={LAB_MODEL_SCALE} />
+                  ) : shape.modelUrl ? (
+                    // VS-T52: the offline mock's prepared model of this tour object
+                    <GltfModel3D
+                      url={shape.modelUrl}
+                      size={LAB_MODEL_SCALE}
+                      name="xr-prepared-model"
+                    />
                   ) : (
                     <ObjectModel
                       shape={shown}
@@ -519,6 +527,7 @@ export const XrObjectLab = memo(function XrObjectLab({
             name={label}
             photo={photo}
             recipe={shown.mode === 'recipe' ? (shown.recipe ?? null) : null}
+            modelUrl={shape.modelUrl ?? null}
             {...(aim ? { aim } : {})}
           />
         )}

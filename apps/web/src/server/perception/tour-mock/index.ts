@@ -35,6 +35,7 @@ import {
   type SkinWrap,
 } from './skin';
 import DATA from './tour-mock.json';
+import { preparedDrawing, preparedModelUrl } from './prepared';
 
 /**
  * Mock answers of the 360° tour objects (VS-T41): with no Meta model, a tour object selected in
@@ -346,12 +347,15 @@ export async function tourMockShape(
   if (!entry) return null;
   const partMasks = photo ? tourPartMasks(entry, target.box, photo) : [];
   const masks = partMasks.length ? { partMasks, coverage: tourCoverage(entry, partMasks) } : {};
+  const modelUrl = preparedModelUrl(target.id);
   const answer = {
     detectionId: target.id,
     mode: 'recipe' as const,
     source: 'mock' as const,
     model: TOUR_MOCK_MODEL,
     ...(target.outline ? { outline: target.outline } : {}),
+    // VS-T52: its prepared glTF model is what the lab and the village show.
+    ...(modelUrl ? { modelUrl } : {}),
   };
   // VS-T44: imagined on every face first. The cars are precomputed (built from their drawings
   // like a real capture); every other object is imagined here once and cached.
@@ -504,6 +508,9 @@ export async function tourMockDrawing(
   const entry = tourMockEntry(target.id);
   if (!entry) return null;
   const vehicle = target.scenery === 'vehicle';
+  // VS-T52: a prepared object answers with its realistic drawings.
+  const prepared = await preparedDrawing(target.id, face, vehicle);
+  if (prepared) return prepared;
   // VS-T44: every face is imagined, never the photo.
   const imagined = await tourImagined(target.id);
   const stored = imagined ? await storedDrawing(imagined, face, vehicle) : null;
