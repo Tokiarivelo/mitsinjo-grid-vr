@@ -1,27 +1,28 @@
 # HANDOFF — read first, overwrite at end of session (≤40 lines)
 
-**Updated:** 2026-11-18 · **By:** Claude Code · **Branch:** `fix/vercel-icon-retry` (from `main` a1f15844), merged into `main`.
+**Updated:** 2026-11-18 · **By:** Claude Code · **Branch:** `feat/iwsdk-integration` (from `main` 16c129b5, PR #44 merged). Task file: `docs/tasks/VR-iwsdk-integration.md`.
 
-## NEXT
+## NEXT (do in this order)
 
-1. Check on the Vercel deploy: sidebar logo (animated GIF), and a 3D generation that used to hit « Task timed out after 300 seconds » (scenarios V545, T42).
-2. Screen check of the end of phase on `/village`, live Meta (contributor model): V533–V544.
-3. Repair `make gen-evals` / `make hf-dataset`: `jiti` not installed in the workspace.
+1. **IW-T1 verify**: dev server on :3001 (`make dev-mock` if down). In Chromium, reload the `/village` tab and accept IWE, then IWER MCP: `xr_get_session_status` → `xr_accept_session` → `browser_screenshot` in controller mode and in hand mode (`xr_set_input_mode`). Check IWSDK hands and controllers show, **no second IWSDK laser / cursor**, one select per press. Also run `make vr-probe` (result of the last run below, if any).
+2. Same check on `/simulation` (scaled rig, VS-T33): hands at the right size.
+3. Commit IW-T1 (`feat(vr): IWSDK hands and controllers (IW-T1)`), push, PR, merge when green.
+4. **IW-T2**: `@iwsdk/locomotor` (slide + arc teleport) replacing `studio-walk.tsx` / tour steps — plan in the task file.
+5. Then IW-T3 (pointers, evaluate only) and the « Fin » items of the task file (skill rule, architecture doc, scenarios).
+6. Older items: screen check V533–V545 / T42 on Vercel; `make gen-evals` needs `jiti`.
 
-## Done (this session)
+## Done (uncommitted on the branch, typecheck clean, tests green)
 
-- Logo: the sun wears a VR headset (all icon sizes, favicons). Sidebar shows `public/logo-vr.gif` (headset appears / vanishes with sparkles), static `icon-192.png` under reduced motion. The broken icon came from `next/image` on `/icon.png`, which is the `app/icon.png` metadata route: Vercel's optimizer answered 404.
-- Server retry: `server/retry.ts` `withRetry` (3 retries, 1/2/4 s backoff, stops on abort). Used by `PerceptionClient.run` (transient errors) and `museImage` (transient + empty answer).
-- Faces: after the retries a Muse Image failure is a 500 (no silent placeholder). Face route `maxDuration` 300.
-- Shape route: own deadline `SHAPE_DEADLINE_MS` (280 s) aborts stalled Meta calls, sends an outline `timeout` result.
-- Lab (web): `RetryPrompt` (« Retry? » Yes / No) + `CancelGenerationButton` on the main 2D view, each face and the 3D outline fallback. Hooks: `useFacade2d().cancel`, `useFacadeFaces().cancel(face)`.
-- VR: carousel Yes / No on a failed view, « Stop » while drawing; lab asks « Retry the 3D? » (reducer event `rebuild` lab → build). `useXrExtract` gains `stopView`, `retryShape`.
+- Deps `@iwsdk/xr-input` 1.1.0, `@iwsdk/locomotor` 1.1.0, `three-mesh-bvh` 0.9.1 (`apps/web/package.json`, lockfile).
+- `microgrid-3d/utils/iwsdk-input.ts` (runtime per renderer, pointers off, tick once per XRFrame, rig parent stack) + shim `iwsdk-xr-input.{js,d.ts}` (IWSDK typings pull `@pmndrs/pointer-events`, which breaks three's `Object3D` types).
+- `xr-input-models.ts` rewritten on IWSDK (`attachInputModels(gl, i, slots, { scene, camera, parent? })` → `tick/handLoaded/gripLoaded/dispose`); callers `xr-hands.ts` and `xr-blaster-controller.tsx` tick it each frame. Removed `three-xr-factories.*`, the custom hand skin and their tests; new `xr-input-models.test.ts`.
 
 ## Decisions
 
-- Logo sources were made with a one-off sharp script (SVG headset over the old PNG), not kept as a make target.
-- Golden / recon tests time out under the full parallel run but pass alone (pre-existing).
+- Progressive IWSDK (user choice): standalone packages inside R3F, no IWSDK `World`. Our `readControls` stays (pure, tested): `StatefulGamepad` adds nothing.
+- IWSDK hand look (Quest outline) replaces our skin + rim.
+- The `vr-immersion` skill still says « no IWSDK migration »: update it (task file, « Fin »).
 
 ## Checks
 
-- tsc clean, eslint clean on touched files, `make check-i18n` green, targeted tests 60/60, the 9 flaky suites 71/71 alone.
+- tsc clean; XR tests 243/243 (`microgrid-3d/utils`, `vision-insert/ui/xr`). Emulator check pending (NEXT 1).

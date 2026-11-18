@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { attachInputModels } from './xr-input-models';
+import { attachInputModels, NO_INPUT_MODELS, type InputModels } from './xr-input-models';
 import { putOnInputLayer } from './xr-inputs-shown';
 import { createSurroundingProbe } from './xr-ray-contrast';
 import { createRayVisual, type RayVisual } from './xr-ray-visual';
@@ -294,7 +294,7 @@ export function setupXRHandsAndControllers(
 
   const hands: HandData[] = [];
   const rays: RayData[] = [];
-  const models: Array<{ gripLoaded: () => boolean; dispose: () => void }> = [];
+  const models: InputModels[] = [];
   const modelRefs: ModelRef[] = [];
   const selectListeners: Array<{
     controller: THREE.XRTargetRaySpace;
@@ -415,11 +415,16 @@ export function setupXRHandsAndControllers(
     }
 
     // 4. Real hand and controller models; the simple ones stay until they load (offline: always).
-    const real = attachInputModels(gl, i, {
-      hand: handGroup,
-      ...(controllerGrip ? { grip: controllerGrip } : {}),
-      ...(gripModel ? { gripFallback: gripModel } : {}),
-    });
+    // IWSDK needs the scene and its camera; without them the simple models stay.
+    const real =
+      scene && camera
+        ? attachInputModels(
+            gl,
+            i,
+            { ...(gripModel ? { gripFallback: gripModel } : {}) },
+            { scene, camera, parent: rig }
+          )
+        : NO_INPUT_MODELS;
     models.push(real);
     hands.push({ group: handGroup, mesh: handMesh, real: real.handLoaded });
   }
@@ -432,6 +437,7 @@ export function setupXRHandsAndControllers(
     const now = performance.now();
     const dt = Math.min(0.1, (now - last) / 1000);
     last = now;
+    models[0]?.tick(); // IWSDK hands and controllers (once per frame)
     for (const h of hands) {
       updateHandMesh(h.group, h.mesh);
       if (h.real()) h.mesh.visible = false;

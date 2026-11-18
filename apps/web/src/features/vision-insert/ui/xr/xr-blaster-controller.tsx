@@ -813,21 +813,14 @@ export const XRBlasterController = memo(function XRBlasterController({
   // again whenever the targets change (each analysis), and re-attaching there reloaded the model
   // each time, showing the dark stand-in meanwhile (or for good when the reload missed the input).
   useEffect(() => {
-    const xr = gl?.xr as
-      (THREE.WebXRManager & { getControllerGrip?: (i: number) => THREE.Group }) | undefined;
-    if (!xr?.getController) return;
-    const attached = ([0, 1] as const).map((i) =>
-      attachInputModels(gl, i, {
-        ...(typeof xr.getHand === 'function' ? { hand: xr.getHand(i) } : {}),
-        ...(typeof xr.getControllerGrip === 'function' ? { grip: xr.getControllerGrip(i) } : {}),
-      })
-    );
+    if (!gl?.xr?.getController || !scene) return;
+    const attached = ([0, 1] as const).map((i) => attachInputModels(gl, i, {}, { scene, camera }));
     inputModelsRef.current = attached;
     return () => {
       inputModelsRef.current = [];
       for (const m of attached) m.dispose();
     };
-  }, [gl]);
+  }, [gl, scene, camera]);
 
   // Mouse: aim on move, shoot on left click (desktop preview and IWER emulator).
   // Listened on the document: in the emulator the IWER DevUI draws its own full-screen canvas
@@ -1039,6 +1032,9 @@ export const XRBlasterController = memo(function XRBlasterController({
     const presenting = !!gl.xr?.isPresenting;
     const now = performance.now();
     let hovered: string | null = null;
+
+    // 0. IWSDK hands and controllers (IW-T1): poses and animation, once per frame.
+    inputModelsRef.current[0]?.tick();
 
     // 1. Hands: joints mesh + fingertip press on the wrist button (other hand) and,
     //    menu open, on the scan button.
