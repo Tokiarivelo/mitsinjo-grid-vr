@@ -18,7 +18,13 @@ et casse tout le typage → import via le shim `microgrid-3d/utils/iwsdk-xr-inpu
       manette grise) jusqu'au chargement ; modèles sur le calque « entrées » (VS-T30).
 - [x] Tests `xr-input-models.test.ts` (faux manager : un par renderer, pointeurs coupés, rig, tick unique,
       chargement par côté, calque).
-- [ ] Vérif émulateur : `make vr-probe` + MCP IWER (Chromium, recharger l'onglet puis accepter IWE) —
+- [x] Contour de main IWSDK cyan 3 mm (`IWSDK_HAND_OUTLINE`) : le blanc 1,2 mm par défaut disparaissait
+      sur la photo claire de /village ; côté main lu sur l'événement `connected` de three (l'extension
+      IWE garde les manettes listées en mode mains).
+- [x] Vérif émulateur (2026-11-18) : manettes IWSDK, aucun second laser (MCP IWER) ; mains IWSDK
+      visibles, sphères masquées (capture headless). Les sphères vues dans Chromium avec l'extension
+      IWE sont celles de l'extension elle-même, pas les nôtres.
+- [ ] `make vr-probe` complet (expire à l'étape vues 2D, `scripts/vr-village-probe.mjs:282`) ; Vérif émulateur : `make vr-probe` + MCP IWER (Chromium, recharger l'onglet puis accepter IWE) —
       mains et manettes IWSDK visibles, **pas de second laser / curseur IWSDK**, sélection toujours unique.
       Si un rayon IWSDK s'affiche malgré `toggleSubPointer(false)` : masquer `xrOrigin.raySpaces.*` enfants
       non-modèles dans `tickIwsdkInput`.

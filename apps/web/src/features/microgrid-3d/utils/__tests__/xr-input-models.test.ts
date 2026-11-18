@@ -32,11 +32,22 @@ vi.mock('../iwsdk-xr-input', async () => {
       this.updates++;
     }
   }
-  return { XRInputManager, made };
+  const outlineMaterial = new T.ShaderMaterial({
+    uniforms: { outlineColor: { value: new T.Color(0xffffff) } },
+  });
+  const stencilMaterial = new T.ShaderMaterial({
+    uniforms: { outlineThickness: { value: 0.0012 } },
+  });
+  return { XRInputManager, made, outlineMaterial, stencilMaterial };
 });
 
 import { attachInputModels, describeXrHands, modelLoaded } from '../xr-input-models';
-import { IWSDK_POINTER_KINDS, releaseIwsdkInput, iwsdkInputOf } from '../iwsdk-input';
+import {
+  IWSDK_HAND_OUTLINE,
+  IWSDK_POINTER_KINDS,
+  releaseIwsdkInput,
+  iwsdkInputOf,
+} from '../iwsdk-input';
 import { XR_INPUT_LAYER } from '../xr-inputs-shown';
 import * as shim from '../iwsdk-xr-input';
 
@@ -147,6 +158,20 @@ describe('IWSDK input models (IW-T1)', () => {
     m.visualAdapters.hand.left.visual = hand();
     expect(models.handLoaded()).toBe(true);
     models.dispose();
+  });
+
+  it('the Quest-style hand outline shows on a bright room (cyan, 3 mm)', () => {
+    attachInputModels(
+      fakeGl(),
+      0,
+      {},
+      { scene: new THREE.Scene(), camera: new THREE.PerspectiveCamera() }
+    );
+    const color = shim.outlineMaterial.uniforms.outlineColor!.value as THREE.Color;
+    expect(color.getHexString()).toBe(IWSDK_HAND_OUTLINE.color.slice(1));
+    expect(shim.stencilMaterial.uniforms.outlineThickness!.value).toBe(
+      IWSDK_HAND_OUTLINE.thickness
+    );
   });
 
   it('modelLoaded needs a mesh under the model', () => {

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { XRInputManager } from './iwsdk-xr-input';
+import { outlineMaterial, stencilMaterial, XRInputManager } from './iwsdk-xr-input';
 import { putOnInputLayer } from './xr-inputs-shown';
 
 /**
@@ -41,6 +41,18 @@ export function disableIwsdkPointers(manager: Pick<XRInputManager, 'multiPointer
 }
 
 /**
+ * The Quest-style hand is only an outline (IWSDK default: white, 1.2 mm), lost on the bright
+ * room photo of /village: our hand tint (the stand-in spheres' cyan) and a 3 mm line instead.
+ */
+export const IWSDK_HAND_OUTLINE = { color: '#7dd3fc', thickness: 0.003 } as const;
+
+/** Applies `IWSDK_HAND_OUTLINE` to IWSDK's shared hand materials (idempotent). */
+export function styleIwsdkHands(): void {
+  (outlineMaterial.uniforms.outlineColor!.value as THREE.Color).set(IWSDK_HAND_OUTLINE.color);
+  stencilMaterial.uniforms.outlineThickness!.value = IWSDK_HAND_OUTLINE.thickness;
+}
+
+/**
  * The renderer's IWSDK input, created on first use (null off the browser or when IWSDK cannot
  * start: the fallback models then stay). `parent` receives the rig.
  */
@@ -56,6 +68,7 @@ export function iwsdkInputFor(
     try {
       const manager = new XRInputManager({ scene, camera: camera as THREE.PerspectiveCamera });
       disableIwsdkPointers(manager);
+      styleIwsdkHands();
       rt = { manager, parents: [], lastFrame: null, last: 0, layered: new WeakSet() };
       runtimes.set(gl, rt);
     } catch (err) {

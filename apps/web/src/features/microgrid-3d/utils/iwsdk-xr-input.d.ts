@@ -16,3 +16,7 @@ export class XRInputManager {
   >;
   update(xrManager: THREE.WebXRManager, delta: number, time: number): void;
 }
+
+/** The Quest-style hand's two shared materials (outline colour / thickness uniforms). */
+export const outlineMaterial: THREE.ShaderMaterial;
+export const stencilMaterial: THREE.ShaderMaterial;
