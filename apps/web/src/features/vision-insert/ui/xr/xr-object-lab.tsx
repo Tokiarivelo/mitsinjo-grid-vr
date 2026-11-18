@@ -118,7 +118,11 @@ export const XrObjectLab = memo(function XrObjectLab({
   const [selected, setSelected] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('textured');
   // VS-T51: a realistic library model of the recognised object, when the library has one (credited).
-  const library = useMemo(() => matchLibraryModel(label), [label]);
+  // A prepared model (VS-T52) is already the realistic one: no library swap then.
+  const library = useMemo(
+    () => (shape.modelUrl ? null : matchLibraryModel(label)),
+    [label, shape.modelUrl]
+  );
   const [showLibrary, setShowLibrary] = useState(false);
   const [names, setNames] = useState<string[]>([]);
   /** List scroll (rows): live in a ref while dragged, settled in state (arrows) on release. */
@@ -271,12 +275,15 @@ export const XrObjectLab = memo(function XrObjectLab({
                   {showLibrary && library ? (
                     <LibraryModel3D entry={library} size={LAB_MODEL_SCALE} />
                   ) : shape.modelUrl ? (
-                    // VS-T52: the offline mock's prepared model of this tour object
-                    <GltfModel3D
-                      url={shape.modelUrl}
-                      size={LAB_MODEL_SCALE}
-                      name="xr-prepared-model"
-                    />
+                    // VS-T52: the offline mock's prepared model, standing on the plate
+                    <group position={[0, -LAB_MODEL_SCALE * 0.5, 0]}>
+                      <GltfModel3D
+                        url={shape.modelUrl}
+                        size={LAB_MODEL_SCALE}
+                        stand
+                        name="xr-prepared-model"
+                      />
+                    </group>
                   ) : (
                     <ObjectModel
                       shape={shown}
