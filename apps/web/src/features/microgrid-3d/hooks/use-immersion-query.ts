@@ -36,6 +36,8 @@ export function useImmersionQuery(
   onArrive?: (from: ImmersionQuery) => void
 ): void {
   const arrived = useRef(false);
+  /** `onArrive` ran and the page has not reported the immersion open yet: keep the URL as is. */
+  const opening = useRef(false);
   const arrive = useRef(onArrive);
   useEffect(() => {
     arrive.current = onArrive;
@@ -53,9 +55,16 @@ export function useImmersionQuery(
       arrived.current = true;
       const from = readImmersionQuery(search);
       if (from.immersion && !immersion && arrive.current) {
+        opening.current = true;
         arrive.current(from);
         return;
       }
+    }
+    // Dev StrictMode runs this effect again before the page has opened the immersion: stripping
+    // the param then would lose `?immersion=vr` on every reload.
+    if (opening.current) {
+      if (!immersion) return;
+      opening.current = false;
     }
     const next = withImmersionQuery(search, { immersion, lab });
     if (next === search) return;

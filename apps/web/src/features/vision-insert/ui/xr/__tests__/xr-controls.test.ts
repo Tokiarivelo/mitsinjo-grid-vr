@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import {
+  aimAsStep,
   createControlMemory,
   isWalkStick,
   MICROGESTURE,
@@ -85,16 +86,24 @@ describe('XR controls map (VS-T23)', () => {
     ]);
   });
 
-  it('right stick ↑ steps forward, ↓ steps back; the left stick only walks', () => {
+  it('right stick ↑ held aims a teleport, let go lands it; ↓ steps back; left stick only walks', () => {
     const memory = createControlMemory();
     readControls([pad('right'), pad('left')], memory, 0);
     expect(readControls([pad('right', [], [0, -0.9]), pad('left')], memory, 0.1)).toEqual([
-      { type: 'step', direction: 1 },
+      { type: 'aim', on: true },
+    ]);
+    // Held: aims on, no repeat.
+    expect(readControls([pad('right', [], [0, -0.9]), pad('left')], memory, 1.5)).toEqual([]);
+    expect(readControls([pad('right'), pad('left')], memory, 1.6)).toEqual([
+      { type: 'aim', on: false },
     ]);
     readControls([pad('right'), pad('left')], memory, 0.2);
     expect(
       readControls([pad('right', [], [0, 0.9]), pad('left', [], [0.9, 0.9])], memory, 0.3)
     ).toEqual([{ type: 'step', direction: -1 }]);
+    expect(aimAsStep({ type: 'aim', on: true })).toEqual({ type: 'step', direction: 1 });
+    expect(aimAsStep({ type: 'aim', on: false })).toBeNull();
+    expect(aimAsStep({ type: 'turn', direction: 1 })).toEqual({ type: 'turn', direction: 1 });
     expect(isWalkStick({ handedness: 'left' })).toBe(true);
     expect(isWalkStick({ handedness: 'right' })).toBe(false);
     expect(isWalkStick({ handedness: 'left', hand: {} })).toBe(false);

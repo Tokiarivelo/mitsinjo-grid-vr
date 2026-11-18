@@ -514,6 +514,18 @@ export const VillageXRStudio = memo(function VillageXRStudio({
           camera.getWorldPosition(headRef.current);
           if (snapTurn(gl.xr, headRef.current, action.direction * SNAP_TURN)) playSnapSound();
           return;
+        case 'aim': {
+          // Studio: aim the teleport arc, land on release (IW-T2). The tour has no floor to aim
+          // at: pushing the stick forward is one step, as before.
+          if (studio) {
+            studioWalk.current.aiming = action.on;
+            if (!action.on) studioWalk.current.land = true;
+          } else if (tourMode && action.on) {
+            tour.ground.step += STEP_DISTANCE;
+            playSnapSound();
+          }
+          return;
+        }
         case 'step':
           if (studio) studioWalk.current.step += action.direction * STEP_DISTANCE;
           else if (tourMode) tour.ground.step += action.direction * STEP_DISTANCE;
@@ -567,6 +579,8 @@ export const VillageXRStudio = memo(function VillageXRStudio({
       sources: () => snapshotSources(gl.xr.getSession?.()?.inputSources ?? []),
       /** Real hand model vs joint spheres on each hand (VS-T26). */
       hands: () => describeXrHands(gl),
+      /** Where the viewer stands in the 3D studio (IW-T2 probe). */
+      walk: () => ({ ...studioWalk.current }),
       yaw: () => {
         const d = camera.getWorldDirection(new THREE.Vector3());
         return Math.atan2(d.x, -d.z);

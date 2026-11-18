@@ -24,6 +24,7 @@ import {
   type XrSpot,
 } from '../utils/sim-xr-place';
 import {
+  aimAsStep,
   isWalkStick,
   SNAP_TURN,
   STEP_DISTANCE,
@@ -369,7 +370,10 @@ export function CameraController({
   }, [placeKey, xrActive]);
 
   const onAction = useCallback(
-    (a: XrControlAction) => {
+    (raw: XrControlAction) => {
+      // No teleport arc here (IW-T2 is the studio's): right stick ↑ stays one step.
+      const a = aimAsStep(raw);
+      if (!a) return;
       const rig = xrRig.current;
       if (a.type === 'turn' && rig) {
         camera.getWorldPosition(_head);

@@ -55,12 +55,12 @@ mitsinjo-grid/
             ├── features/
             │   ├── overview/           # ui/ hooks/ utils/ __tests__/ index.ts
             │   ├── simulation/         # controls, run/reset, timeline
-            │   ├── microgrid-3d/       # R3F scene, dynamic(ssr:false) + 2D fallback
+            │   ├── microgrid-3d/       # R3F scene, dynamic(ssr:false) + 2D fallback; WebXR + IWSDK hands/controllers (@iwsdk/xr-input)
             │   ├── strategy-lab/
             │   ├── scenarios/          # cards, assumptions, export summary
             │   ├── copilot/            # chat UI, useCopilot, proposal dialog
             │   ├── hardware-link/      # scale-model bridge link (WebSocket hook + panel), local only
-            │   ├── vision-insert/      # /village editor + chat dialog: photo → appliance detection (PV), calls /api/vision
+            │   ├── vision-insert/      # /village editor + chat dialog: photo → appliance detection (PV), calls /api/vision; VR studio walk on @iwsdk/locomotor
             │   └── design-system/      # /design UI kit catalog
             ├── components/{ui,layout,charts}/
             ├── stores/simulation.store.ts   # single source of UI state

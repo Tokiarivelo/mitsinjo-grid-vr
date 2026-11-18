@@ -5,7 +5,9 @@
  *
  * Controllers (xr-standard: 0 trigger, 1 grip, 3 stick press, 4 A/X, 5 B/Y; axes 2–3 stick):
  * - Trigger: select what the ray points at (both hands). Grip held: turn a miniature.
- * - Left stick: walk (slide, head-relative). Right stick ←/→: snap turn 30°, ↑/↓: one step.
+ * - Left stick: walk (slide, head-relative). Right stick ←/→: snap turn 30°, ↓: one step back,
+ *   ↑ held: aim a teleport arc, released: teleport (IW-T2, Meta's map; one step where nothing
+ *   can be aimed: the 360° tour, /simulation — see `aimAsStep`).
  * - A / X: analyse the current view. B / Y: back (close what is open, else the menu).
  * - Stick click: show / hide the help labels (on release). Stick held 0.8 s: show / hide the
  *   hand and controller models (VS-T30; the lasers stay).
@@ -18,6 +20,8 @@
 export type XrControlAction =
   | { type: 'turn'; direction: -1 | 1 }
   | { type: 'step'; direction: -1 | 1 }
+  /** Right stick pushed forward (`on`), then let go (`!on`): aim and land a teleport. */
+  | { type: 'aim'; on: boolean }
   | { type: 'analyse' }
   | { type: 'back' }
   | { type: 'help' }
@@ -60,6 +64,8 @@ interface SourceMemory {
   armedX: boolean;
   armedY: boolean;
   repeatAt: number;
+  /** Right stick held forward: a teleport is being aimed. */
+  aiming: boolean;
   /** When the stick was pressed (s), and whether that press already fired its hold action. */
   stickAt: number;
   stickHeld: boolean;
@@ -101,6 +107,7 @@ export function readControls(
         armedX: true,
         armedY: true,
         repeatAt: 0,
+        aiming: false,
         stickAt: Number.NaN,
         stickHeld: false,
       };
@@ -137,13 +144,21 @@ export function readControls(
         const held = ax >= STICK_FIRE || ay >= STICK_FIRE;
         if (ax < STICK_REARM) m.armedX = true;
         if (ay < STICK_REARM) m.armedY = true;
+        // Stick up = forward (xr-standard y is negative up). Back under the re-arm line: land.
+        if (m.aiming && y > -STICK_REARM) {
+          out.push({ type: 'aim', on: false });
+          m.aiming = false;
+        }
         if (ax >= STICK_FIRE && (m.armedX || now >= m.repeatAt)) {
           out.push({ type: 'turn', direction: x > 0 ? 1 : -1 });
           m.armedX = false;
           m.repeatAt = now + STICK_REPEAT;
-        } else if (ay >= STICK_FIRE && ax < STICK_REARM && (m.armedY || now >= m.repeatAt)) {
-          // Stick up = forward (xr-standard y is negative up).
-          out.push({ type: 'step', direction: y < 0 ? 1 : -1 });
+        } else if (y <= -STICK_FIRE && ax < STICK_REARM && m.armedY && !m.aiming) {
+          out.push({ type: 'aim', on: true });
+          m.aiming = true;
+          m.armedY = false;
+        } else if (y >= STICK_FIRE && ax < STICK_REARM && (m.armedY || now >= m.repeatAt)) {
+          out.push({ type: 'step', direction: -1 });
           m.armedY = false;
           m.repeatAt = now + STICK_REPEAT;
         } else if (!held) m.repeatAt = 0;
@@ -153,6 +168,15 @@ export function readControls(
   }
   for (const key of [...memory.keys()]) if (!seen.has(key)) memory.delete(key);
   return out;
+}
+
+/**
+ * Where no teleport can be aimed (360° tour, /simulation): pushing the right stick forward is one
+ * step forward, as before IW-T2; letting it go does nothing. Other actions pass through.
+ */
+export function aimAsStep(action: XrControlAction): XrControlAction | null {
+  if (action.type !== 'aim') return action;
+  return action.on ? { type: 'step', direction: 1 } : null;
 }
 
 /** Snapshot of live WebXR input sources (no references kept). */
