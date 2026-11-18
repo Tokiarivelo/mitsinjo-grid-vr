@@ -59,6 +59,7 @@ SHOTS = [
     (DAY, "car-build", "car-3d", 5.0, "c4", "outside"),
     (DAY, "car-lib", "car-lib-done", 6.0, "c5", "outside"),
     ("MOSAIC", None, None, 6.0, "m0", "outside"),
+    ("CARD", None, None, 9.5, "mc", "outside"),
     # Simulation.
     (DAY, "village-table", "village-inserted", 6.0, "v0", "sim"),
     (DAY, "village-inserted", "sim-arrive", 6.0, "v1", "sim"),
@@ -78,9 +79,29 @@ CUES = {
     1: ("i1", 0.6), 2: ("i1", 6.2), 3: ("i2", 5.0), 4: ("i2", 13.0), 5: ("i3", 4.2), 6: ("i4", 1.0),
     7: ("f1", 0.5), 8: ("f3", 0.4), 9: ("f5", 0.4), 10: ("f6", 0.6), 11: ("f7", 0.4),
     12: ("s0", 0.8), 13: ("s5", 0.5), 14: ("s6", 0.6), 15: ("h0", 1.0), 16: ("h3", 0.3), 17: ("c0", 1.0),
-    18: ("c5", 0.5), 19: ("m0", 0.8), 20: ("v0", 0.4), 21: ("v3", 1.0), 22: ("v5", 0.2), 23: ("n1", 0.5),
+    18: ("c5", 0.5), 19: ("m0", 0.8), 27: ("mc", 0.4), 20: ("v0", 0.4), 21: ("v3", 1.0), 22: ("v5", 0.2), 23: ("n1", 0.5),
     24: ("n2", 0.2), 25: ("n3", 0.4), 26: ("o0", 1.0),
 }
+# Which Meta model does this step (docs/vision-to-3d-methodology.md § stages), shown top-left, no box.
+TAGS = {
+    "f2": "Muse Spark 1.3 · labels   SAM 3.1 · outlines",
+    "f4": "Muse Image 1.0 · 2D views",
+    "f5": "Muse Image 1.0 · redraw on request",
+    "f6": "Muse Spark 1.3 + skill cards · 3D kit",
+    "s1": "SAM 3.1 · outline",
+    "h2": "Muse Image 1.0 · facade specialist",
+    "c1": "SAM 3.1 · outline",
+    "c3": "Muse Spark 1.3 + skill cards · critic agent",
+}
+# The models card after the mosaic (no colons: drawtext separators).
+CARD = [
+    ("Built with Meta AI models", 64, "white"),
+    ("Detect — Muse Spark 1.3 names it, SAM 3.1 outlines it", 38, "0x4dd8e8"),
+    ("2D views — Muse Image 1.0, with a facade specialist", 38, "0x4dd8e8"),
+    ("3D — Muse Spark 1.3 guided by skill cards and a critic agent", 38, "0x4dd8e8"),
+    ("geometry computed from the views, never invented", 30, "white@0.8"),
+    ("Demo footage recorded with the app's offline mock answers", 24, "white@0.6"),
+]
 MUSIC = {"intro": "adventure-theme.mp3", "inside": "aurora.mp3", "outside": "feel-alive.mp3", "sim": "machine.mp3", "outro": "adventure-theme.mp3"}
 
 
@@ -104,7 +125,7 @@ def frame_at(spec: str) -> Path:
     return VIDEO / "captures" / "raw" / take / "frames" / f["f"]
 
 
-def capture_clip(out: Path, take: str, a: str, b: str, dur: float, size: str) -> None:
+def capture_clip(out: Path, take: str, a: str, b: str, dur: float, size: str, tag: str = "") -> None:
     tl = timeline(take)
     marks = {m["name"]: m["t"] for m in tl["markers"]}
     t0, t1 = marks[a], marks[b]
@@ -122,6 +143,9 @@ def capture_clip(out: Path, take: str, a: str, b: str, dur: float, size: str) ->
     vf = [f"scale={w}:{h}:flags=lanczos", f"framerate=fps={FPS}:interp_start=0:interp_end=255:scene=100"]
     if speed > 2.5:  # discreet time-lapse mark, no box
         vf.append(f"drawtext=fontfile={FONT}:text='×{round(speed)}':x=w-tw-{int(40 * s)}:y={int(34 * s)}:fontsize={int(26 * s)}:fontcolor=white@0.75:shadowcolor=black@0.6:shadowx=2:shadowy=2")
+    if tag:  # the Meta model behind this step, top-left, fades in
+        vf.append(f"drawtext=fontfile={FONT}:text='{tag}':x={int(40 * s)}:y={int(34 * s)}:fontsize={int(28 * s)}:"
+                  f"fontcolor=0x4dd8e8:alpha='min(1,t/0.5)':borderw={max(2, int(2 * s))}:bordercolor=black@0.7")
     ff("-f", "concat", "-safe", "0", "-i", str(lst), "-vf", ",".join(vf), "-t", f"{dur:.3f}", *enc(size), "-an", str(out))
 
 
@@ -156,6 +180,25 @@ def mosaic_clip(out: Path, dur: float, size: str) -> None:
     ff(*inputs, "-filter_complex", "[0][1]hstack[t];[2][3]hstack[b];[t][b]vstack,format=yuv420p", "-t", f"{dur}", *enc(size), "-an", str(out))
 
 
+def card_clip(out: Path, dur: float, size: str) -> None:
+    """The models card: the four built models, blurred and dimmed, under centred lines that fade in one by one."""
+    w, h = (int(x) for x in size.split("x"))
+    s = h / 1080
+    vf = [f"scale={w}:{h},boxblur=18:2,eq=brightness=-0.32,fps={FPS}"]
+    y = h * 0.26
+    for k, (text, size_px, col) in enumerate(CARD):
+        fs = int(size_px * s)
+        t0 = 0.3 + k * 0.6
+        text = text.replace("'", "’")
+        vf.append(f"drawtext=fontfile={FONT}:text='{text}':x=(w-tw)/2:y={int(y)}:fontsize={fs}:fontcolor={col}:"
+                  f"alpha='min(1,max(0,(t-{t0})/0.5))':borderw={max(2, int(2 * s))}:bordercolor=black@0.5")
+        y += fs * (1.9 if k == 0 else 1.6)
+    bg = WORK / "mc-bg.png"  # the mosaic's last frame: the four built models behind the text
+    ff("-sseof", "-0.2", "-i", str(WORK / "m0.mp4"), "-frames:v", "1", str(bg))
+    ff("-loop", "1", "-t", f"{dur}", "-i", str(bg), "-vf", ",".join(vf),
+       "-t", f"{dur}", *enc(size), "-an", str(out))
+
+
 def xfade_join(parts: list[tuple[Path, float]], out: Path) -> list[float]:
     """Joins shots with a cross-fade; returns each shot's start time on the joined timeline."""
     inputs = sum([["-i", str(p)] for p, _ in parts], [])
@@ -185,7 +228,7 @@ def usable_shots(shots: list) -> list:
     keep = []
     for shot in shots:
         kind, a, b = shot[0], shot[1], shot[2]
-        if kind in ("F", "FF", "MOSAIC"):
+        if kind in ("F", "FF", "MOSAIC", "CARD"):
             keep.append(shot)
             continue
         names = [m["name"] for m in timeline(kind)["markers"]]
@@ -212,7 +255,7 @@ def main() -> None:
 
     parts = []
     for i, (kind, a, b, dur, sid, _sec) in enumerate(SHOTS):
-        out = WORK / f"{i:02d}-{sid}.mp4"
+        out = WORK / f"{sid}.mp4"
         if not out.exists():
             if kind == "F":
                 frames_clip(out, a, b, dur, size)
@@ -220,8 +263,10 @@ def main() -> None:
                 ff_clip(out, a, b, dur, size)
             elif kind == "MOSAIC":
                 mosaic_clip(out, dur, size)
+            elif kind == "CARD":
+                card_clip(out, dur, size)
             else:
-                capture_clip(out, kind, a, b, dur, size)
+                capture_clip(out, kind, a, b, dur, size, TAGS.get(sid, ""))
             print("shot", sid, kind, a, "→", b, dur)
         parts.append((out, dur))
     video = WORK / "joined.mp4"
@@ -242,7 +287,7 @@ def main() -> None:
         start = max(at[ref] + off, t + 0.15)
         c["at"] = start
         t = start + c["dur"]
-        srt.append(f"{c['n']}\n{ts(start)} --> {ts(t + 0.5)}\n{c['text']}\n")
+        srt.append(f"{len(srt) + 1}\n{ts(start)} --> {ts(t + 0.5)}\n{c['text']}\n")
     srt_path = VIDEO / "subtitles" / "vr-v8-en.srt"
     srt_path.write_text("\n".join(srt))
 

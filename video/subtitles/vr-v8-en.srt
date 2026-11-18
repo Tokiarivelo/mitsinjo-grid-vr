@@ -50,46 +50,50 @@ Next, the sofa in the hall.
 00:01:37,000 --> 00:01:40,223
 In the lab, I pick a piece, resize it, and see right through it.
 
-15
+14
 00:01:43,050 --> 00:01:45,028
 On the terrace… even a whole house!
 
-16
+15
 00:01:51,500 --> 00:01:53,281
 From its facade to 3D.
 
-17
+16
 00:01:59,800 --> 00:02:01,454
 And down the street… the car.
 
-19
+17
 00:02:16,850 --> 00:02:18,817
 Any object. One pipeline.
 
-20
-00:02:22,000 --> 00:02:25,341
+18
+00:02:22,000 --> 00:02:31,161
+Under the hood, Meta models: SAM 3.1 outlines it, Muse Image draws it, and Muse Spark, with skill cards and specialist agents, builds it.
+
+19
+00:02:31,050 --> 00:02:34,391
 Now I place the car in the village, without leaving the headset.
 
-21
-00:02:37,250 --> 00:02:40,098
+20
+00:02:46,300 --> 00:02:49,148
 Here's the village. And here's a map, to find my way.
 
-22
-00:02:49,550 --> 00:02:51,240
+21
+00:02:58,600 --> 00:03:00,290
 Fast forward to the evening.
 
-23
-00:02:54,950 --> 00:02:57,720
+22
+00:03:04,000 --> 00:03:06,770
 I cut the power to these houses… the lights fade.
 
-24
-00:03:02,200 --> 00:03:03,398
+23
+00:03:11,250 --> 00:03:12,448
 And back on.
 
-25
-00:03:05,450 --> 00:03:07,021
+24
+00:03:14,500 --> 00:03:16,071
 The clinic? Never cut.
 
-26
-00:03:13,150 --> 00:03:16,878
+25
+00:03:22,200 --> 00:03:25,928
 Mitsinjo Grid VR. Point at the world. Build it. Power it.
