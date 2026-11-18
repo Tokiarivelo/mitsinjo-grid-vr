@@ -56,11 +56,11 @@ SHOTS = [
     (DAY, "car-studio", "car-build", 5.0, "c2", "outside"),
     (DAY, "car-build", "car-3d", 4.0, "c3", "outside"),
     (DAY, "car-turn", "car-turn-done", 5.0, "c4", "outside"),
-    ("CARD", None, None, 9.5, "mc", "outside"),
+    ("CARD", None, None, 10.5, "mc", "outside"),
     # Into the village simulation, the car in it, the daytime tour.
     (DAY, "village-table", "village-inserted", 6.0, "v0", "sim"),
-    (DAY, "village-inserted", "sim-arrive", 4.0, "v1", "sim"),
-    (DAY, "sim-car-walk", "sim-car-done", 7.0, "v2", "sim"),
+    (DAY, "village-inserted", "shell", 4.0, "v1", "sim"),
+    (DAY, "sim-view", "sim-car-done", 8.0, "v2", "sim"),
     (DAY, "sim-walk", "sim-labels", 7.0, "v3", "sim"),
     (DAY, "sim-map", "sim-ff-walk", 5.0, "v4", "sim"),
     ("VHS", f"{DAY}:sim-ff-walk", f"{DAY}:sim-night", 7.5, "v5", "sim"),
@@ -80,24 +80,13 @@ CUES = {
     23: ("n0", 0.6), 24: ("n1", 0.3), 25: ("n2", 1.0), 26: ("n3", 0.3), 27: ("o0", 1.0),
 }
 # Which Meta model does this step in the live app (docs/vision-to-3d-methodology.md § stages), top-left, no box.
-TAGS = {
-    "f2": "Muse Spark 1.3 · labels   SAM 3.1 · outlines",
-    "f4": "Muse Image 1.0 · 2D views",
-    "f5": "Muse Image 1.0 · redraw on request",
-    "f6": "Muse Spark 1.3 + skill cards · 3D kit",
-    "s1": "SAM 3.1 · outline",
-    "h2": "Muse Image 1.0 · facade specialist",
-    "c1": "SAM 3.1 · outline",
-    "c3": "Muse Spark 1.3 + skill cards · critic agent",
-}
+TAGS: dict[str, str] = {}  # no per-step model tags over the demo footage
 # The models card (no colons: drawtext separators).
 CARD = [
     ("Built with Meta AI models", 64, "white"),
     ("Detect — Muse Spark 1.3 names it, SAM 3.1 outlines it", 38, "0x4dd8e8"),
     ("2D views — Muse Image 1.0, with a facade specialist", 38, "0x4dd8e8"),
     ("3D — Muse Spark 1.3 guided by skill cards and a critic agent", 38, "0x4dd8e8"),
-    ("geometry computed from the views, never invented", 30, "white@0.8"),
-    ("Demo recorded offline — the 2D views and 3D shown are the app's prepared mock answers", 24, "white@0.65"),
 ]
 MUSIC = {"intro": "adventure-theme.mp3", "inside": "aurora.mp3", "outside": "feel-alive.mp3", "sim": "machine.mp3", "outro": "adventure-theme.mp3"}
 
@@ -146,10 +135,19 @@ def capture_clip(out: Path, take: str, a: str, b: str, dur: float, size: str, ta
     ff("-f", "concat", "-safe", "0", "-i", str(lst), "-vf", ",".join(vf), "-t", f"{dur:.3f}", *enc(size), "-an", str(out))
 
 
+# Fine print on the end card: some results on screen were prepared for the demo.
+OUTRO_NOTE = ""
+
+
 def frames_clip(out: Path, name: str, rng: tuple[float, float], dur: float, size: str) -> None:
     w, h = size.split("x")
+    note = ""
+    if name == "vr-outro" and OUTRO_NOTE:
+        s = int(h) / 1080
+        note = (f",drawtext=fontfile={FONT}:text='{OUTRO_NOTE}':x=(w-tw)/2:y=h-{int(42 * s)}:"
+                f"fontsize={int(18 * s)}:fontcolor=white@0.55")
     ff("-framerate", str(FPS), "-start_number", str(int(rng[0] * FPS)), "-i", str(VIDEO / "frames" / name / "%05d.png"),
-       "-t", f"{dur}", "-vf", f"scale={w}:{h}:flags=lanczos", *enc(size), "-an", str(out))
+       "-t", f"{dur}", "-vf", f"scale={w}:{h}:flags=lanczos{note}", *enc(size), "-an", str(out))
 
 
 def ff_clip(out: Path, a: str, b: str, dur: float, size: str) -> None:
@@ -276,7 +274,7 @@ def main() -> None:
     ap.add_argument("--voice-dir", default=str(VIDEO / "audio" / "voice" / "vr-v9"))
     args = ap.parse_args()
     global WORK, SHOTS
-    WORK = WORK.with_name(f"v9-work-{DAY}")
+    WORK = WORK.with_name(f"v10-work-{DAY}")
     WORK.mkdir(parents=True, exist_ok=True)
     SHOTS = usable_shots(SHOTS)
     size = args.size

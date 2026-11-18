@@ -681,18 +681,48 @@ try {
     placed = JSON.parse(readFileSync(join(OUT, 'placed.json'), 'utf8'));
   } catch {}
   if (placed && Number.isFinite(placed.x)) {
-    await simLookSlow([placed.x, 0.6, placed.z], 2.0);
-    await sleep(1500);
+    // Arrival with a view: straight to an open spot facing the car (no plant in the face, no railing
+    // between us and the car): the clearest line of sight and the widest free ground around.
     await waitFor(async () => !!(await simFn((s) => s.gridReady())), 30000);
-    const near = await freeSpot([placed.x, 0, placed.z], 4.5, [0, 0]);
-    if (near) {
-      mark('sim-car-walk');
-      await glide(near, 4);
-      await simLookSlow([placed.x, 0.5, placed.z], 2);
-      mark('sim-car');
-      await sleep(4000);
-      mark('sim-car-done');
+    const free = async (x, z) => (await simFn((s, p) => s.blocked(p[0], p[1]), [x, z])) === false;
+    let best = null;
+    for (const r of [6, 7.5, 9])
+      for (let k = 0; k < 24; k++) {
+        const a = (k / 24) * Math.PI * 2;
+        const x = placed.x + Math.cos(a) * r;
+        const z = placed.z + Math.sin(a) * r;
+        if (!(await free(x, z))) continue;
+        let line = 0;
+        for (let i = 1; i <= 10; i++) {
+          const f = (i / 11) * (1 - 1.6 / r);
+          if (await free(x + (placed.x - x) * f, z + (placed.z - z) * f)) line++;
+        }
+        if (line < 10) continue; // something stands between us and the car
+        let open = 0;
+        for (const rr of [1.2, 2.5])
+          for (let j = 0; j < 12; j++) {
+            const b = (j / 12) * Math.PI * 2;
+            if (await free(x + Math.cos(b) * rr, z + Math.sin(b) * rr)) open++;
+          }
+        if (!best || open > best.open) best = { x, z, open };
+      }
+    const spot = best ? await toOrigin([best.x, 0, best.z]) : null;
+    if (spot) {
+      const h = await pos('headset');
+      await rc('set_transform', { device: 'headset', position: { x: spot.x, y: h.y, z: spot.z } });
+      const car = await toOrigin([placed.x, 0.5, placed.z]);
+      if (car) await rc('look_at', { device: 'headset', target: { x: car.x, y: h.y - 0.25, z: car.z } });
     }
+    await sleep(1500);
+    mark('sim-view');
+    // a slow look across the village, then back on the car
+    const h0 = await pos('headset');
+    const pan = await toOrigin([0, 1.2, 0]);
+    if (pan) await look({ x: pan.x, y: h0.y - 0.1, z: pan.z }, 3);
+    await simLookSlow([placed.x, 0.5, placed.z], 2.5);
+    mark('sim-car');
+    await sleep(4000);
+    mark('sim-car-done');
   } else if (PART === 'sim') {
     const c0 = await toOrigin(CONTROLLER_LABEL);
     if (c0) await rc('look_at', { device: 'headset', target: { x: c0.x, y: 1.5, z: c0.z } });

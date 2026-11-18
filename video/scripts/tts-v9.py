@@ -38,8 +38,8 @@ LINES = {
     15: ("Its facade in 2D… and the house in 3D.", 1.06),
     16: ("And down the street, this white car.", 1.06),
     17: ("From its profile… to a full 3D model.", 1.06),
-    18: ("Under the hood: SAM 3.1 outlines it, Muse Image draws it, and Muse Spark, "
-         "with skill cards and specialist agents, builds it.", 1.08),
+    18: ("Under the hood, the app runs Meta models: SAM 3.1 for outlines, Muse Image for the drawings, "
+         "and Muse Spark, with skill cards and specialist agents, for the 3D.", 1.08),
     19: ("But it's not just 3D generation. I can drop it into a village… and walk around it, freely.", 1.06),
     20: ("There's my car, parked in the village!", 1.06),
     21: ("Here's the village. And here's a map, to find my way.", 1.06),
