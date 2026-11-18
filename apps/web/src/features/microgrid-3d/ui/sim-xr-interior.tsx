@@ -2,6 +2,7 @@
 
 import { memo, useMemo } from 'react';
 import type { SectorId } from '@mitsinjo/engine';
+import { useEasedLevels } from '../hooks/use-eased-levels';
 import { TOKEN_HEX } from '../utils/scene-palette';
 import {
   INTERIOR_COLORS,
@@ -37,7 +38,7 @@ export const SimXrInterior = memo(function SimXrInterior({
   onExit: () => void;
 }) {
   const items = useMemo(() => interiorItems(sector), [sector]);
-  const level = lampLevel(coveragePct, servedKw);
+  const level = useEasedLevels({ lamp: lampLevel(coveragePct, servedKw) }).lamp;
   const { width: w, depth: d, height: h } = INTERIOR_SIZE;
   const lit = level > 0;
 
