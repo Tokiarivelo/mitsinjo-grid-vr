@@ -15,6 +15,13 @@ const run = (events: XrExtractEvent[], from: XrExtractState = XR_EXTRACT_IDLE) =
   events.reduce(xrExtractReducer, from);
 
 describe('xrExtractReducer (VS-T19–T22)', () => {
+  it('« Retry the 3D? » → Yes goes from the lab back to the build step only', () => {
+    const lab = { stage: 'lab' as const, id: 'fridge' };
+    expect(xrExtractReducer(lab, { type: 'rebuild' })).toEqual({ stage: 'build', id: 'fridge' });
+    const views = { stage: 'views' as const, id: 'fridge' };
+    expect(xrExtractReducer(views, { type: 'rebuild' })).toBe(views);
+  });
+
   it('walks the whole extraction: confirm → views → build → lab → idle', () => {
     expect(run([{ type: 'ask', id: 'det-1' }])).toEqual({ stage: 'confirm', id: 'det-1' });
     expect(run([{ type: 'ask', id: 'det-1' }, { type: 'confirm' }]).stage).toBe('views');

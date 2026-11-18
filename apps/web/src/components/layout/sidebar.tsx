@@ -1,7 +1,6 @@
 'use client';
 
 import Link from 'next/link';
-import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import {
   Activity,
@@ -97,14 +96,19 @@ export function Sidebar({
           >
             {/* Futuristic Solar Microgrid Mark */}
             <div className="relative flex h-8 w-8 items-center justify-center rounded-control-sm bg-surface-elevated border border-border group-hover:border-solar-amber/50 transition-colors p-1 overflow-hidden">
-              <Image
-                src="/icon.png"
-                alt={tCommon('appName')}
-                width={28}
-                height={28}
-                className="h-full w-full object-contain"
-                priority
-              />
+              {/* Animated mark: the VR headset appears on the sun and vanishes, like magic. Static
+                  (`/icon-192.png`, the public copy: `/icon.png` is the `app/icon.png` route the
+                  image optimizer cannot fetch) when the operator asks for reduced motion. */}
+              <picture>
+                <source srcSet="/icon-192.png" media="(prefers-reduced-motion: reduce)" />
+                <img
+                  src="/logo-vr.gif"
+                  alt={tCommon('appName')}
+                  width={28}
+                  height={28}
+                  className="h-full w-full object-contain"
+                />
+              </picture>
             </div>
             <div className="flex flex-col">
               <span className="font-display text-sm font-semibold text-text-primary tracking-tight">

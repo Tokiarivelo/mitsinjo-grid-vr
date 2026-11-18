@@ -275,10 +275,20 @@ export function useFacade2d(
     setState(IDLE_STATE);
   }, [setState]);
 
+  /**
+   * Stops a drawing in flight, or answers « No » to « Retry? » after a failure: back to the last
+   * drawing (or to nothing), no error shown.
+   */
+  const cancel = useCallback(() => {
+    abortRef.current?.abort();
+    setState((s) => ({ ...s, status: s.facade ? 'ready' : 'idle', error: undefined }));
+  }, [abortRef, setState]);
+
   return {
     ...state,
     generate,
     retry,
+    cancel,
     deleteFacade,
     validate,
     setUserPrompt,

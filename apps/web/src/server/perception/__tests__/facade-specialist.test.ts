@@ -4,10 +4,19 @@ import {
   buildFacadePrompt,
   DRAWING_BACKGROUND,
   generateFacadeImage,
+  museImageRetryable,
 } from '../facade-specialist';
 import type { ShapeTarget } from '@/lib/object-shape';
 
 describe('facade-specialist', () => {
+  it('museImageRetryable: network, 429 / 5xx and an empty answer retry; a 4xx or an abort does not', () => {
+    expect(museImageRetryable(new TypeError('fetch failed'))).toBe(true);
+    expect(museImageRetryable(new Error('Meta Image API error (503): busy'))).toBe(true);
+    expect(museImageRetryable(new Error('Meta Image API did not return image data'))).toBe(true);
+    expect(museImageRetryable(new Error('Meta Image API error (400): bad'))).toBe(false);
+    expect(museImageRetryable(new DOMException('gone', 'AbortError'))).toBe(false);
+  });
+
   describe('buildCleanFrontPrompt (PQ-T23)', () => {
     it('fills the Clean front card with the name and what the kit saw', () => {
       const prompt = buildCleanFrontPrompt('red car', {

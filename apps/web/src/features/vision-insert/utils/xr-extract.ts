@@ -36,6 +36,8 @@ export type XrExtractEvent =
   | { type: 'confirm'; built?: boolean }
   | { type: 'cancel' }
   | { type: 'build' }
+  /** « Retry the 3D? » → Yes in the lab: back to the build step while the model is asked again. */
+  | { type: 'rebuild' }
   | { type: 'enterLab' }
   | { type: 'exitLab' }
   | { type: 'toViews' }
@@ -67,6 +69,8 @@ export function xrExtractReducer(state: XrExtractState, event: XrExtractEvent): 
         : XR_EXTRACT_IDLE;
     case 'build':
       return state.stage === 'views' ? { ...state, stage: 'build' } : state;
+    case 'rebuild':
+      return state.stage === 'lab' ? { ...state, stage: 'build' } : state;
     case 'enterLab':
       return state.stage === 'build' ? { ...state, stage: 'lab' } : state;
     case 'toViews':

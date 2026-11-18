@@ -5,6 +5,7 @@ import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { OBJECT_FACES, VEHICLE_FACES, type FaceName } from '@/lib/object-shape';
 import type { FaceState, FacesState } from '../hooks/use-facade-faces';
+import { CancelGenerationButton, RetryPrompt } from './retry-prompt';
 
 export interface FacadeFacesPanelProps {
   faces: FacesState;
@@ -15,6 +16,8 @@ export interface FacadeFacesPanelProps {
   onDetailsChange: (face: FaceName, details: string) => void;
   onValidate: (face: FaceName, validated?: boolean) => void;
   onValidateAll: () => void;
+  /** Stops the face being drawn, or answers « No » to « Retry? » (no button without it). */
+  onCancel?: (face: FaceName) => void;
   disabled?: boolean;
 }
 
@@ -31,6 +34,7 @@ export function FacadeFacesPanel({
   onDetailsChange,
   onValidate,
   onValidateAll,
+  onCancel,
   disabled = false,
 }: FacadeFacesPanelProps) {
   const t = useTranslations('features.visionInsert');
@@ -93,6 +97,7 @@ export function FacadeFacesPanel({
             onGenerate={onGenerate}
             onDetailsChange={onDetailsChange}
             onValidate={onValidate}
+            {...(onCancel ? { onCancel } : {})}
           />
         ))}
       </ul>
@@ -107,6 +112,7 @@ function FaceCard({
   onGenerate,
   onDetailsChange,
   onValidate,
+  onCancel,
 }: {
   face: FaceName;
   state: FaceState;
@@ -114,6 +120,7 @@ function FaceCard({
   onGenerate: (face: FaceName, details?: string) => void;
   onDetailsChange: (face: FaceName, details: string) => void;
   onValidate: (face: FaceName, validated?: boolean) => void;
+  onCancel?: (face: FaceName) => void;
 }) {
   const t = useTranslations('features.visionInsert');
   const name = t(`faces.${face}`);
@@ -154,11 +161,22 @@ function FaceCard({
         )}
       </div>
 
-      {state.status === 'error' && (
-        <p role="alert" className="text-[11px] text-status-critical">
-          {t('facesError')}
-        </p>
+      {state.status === 'generating' && onCancel && (
+        <CancelGenerationButton onCancel={() => onCancel(face)} />
       )}
+
+      {state.status === 'error' &&
+        (onCancel ? (
+          <RetryPrompt
+            message={t('facesErrorAsk')}
+            onYes={() => onGenerate(face)}
+            onNo={() => onCancel(face)}
+          />
+        ) : (
+          <p role="alert" className="text-[11px] text-status-critical">
+            {t('facesError')}
+          </p>
+        ))}
 
       <label htmlFor={inputId} className="sr-only">
         {t('facesDetailsLabel', { face: name })}

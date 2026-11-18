@@ -163,5 +163,18 @@ export function useFacadeFaces(target: ShapeRequest | null, front?: FacadeData) 
         patch(f, { validated: true }, frontKey);
   }, [patch, frontKey, names]);
 
-  return { faces, names, generate, generateAll, setUserPrompt, validate, validateAll };
+  /**
+   * Stops the face being drawn (and « Generate all »), or answers « No » to « Retry? » after a
+   * failure: the face goes back to its last drawing (or to nothing), no error shown.
+   */
+  const cancel = useCallback(
+    (face: FaceName) => {
+      const cur = (storeRef.current[frontKey] ?? idle())[face];
+      if (cur.status === 'generating') abortRef.current?.abort();
+      patch(face, { status: cur.imageUrl ? 'ready' : 'idle', error: undefined }, frontKey);
+    },
+    [patch, frontKey]
+  );
+
+  return { faces, names, generate, generateAll, cancel, setUserPrompt, validate, validateAll };
 }

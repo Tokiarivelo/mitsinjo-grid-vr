@@ -107,4 +107,32 @@ describe('Facade2dPanel', () => {
 
     expect(screen.getByText(/deleting/i)).toBeInTheDocument();
   });
+
+  it('generating with onCancel shows Cancel; an error asks « Retry? » Yes / No', () => {
+    const onCancel = vi.fn();
+    const onGenerate = vi.fn();
+    const props = {
+      userPrompt: '',
+      onUserPromptChange: vi.fn(),
+      onGenerate,
+      onRetry: vi.fn(),
+      onDelete: vi.fn(),
+      onValidate: vi.fn(),
+      onCancel,
+    };
+    const { rerender } = renderWithI18n(<Facade2dPanel status="generating" {...props} />);
+    fireEvent.click(screen.getByRole('button', { name: /^cancel$/i }));
+    expect(onCancel).toHaveBeenCalledTimes(1);
+
+    rerender(
+      <I18nProvider>
+        <Facade2dPanel status="error" {...props} />
+      </I18nProvider>
+    );
+    expect(screen.getByRole('alert')).toHaveTextContent(/retry\?/i);
+    fireEvent.click(screen.getByRole('button', { name: /yes, retry/i }));
+    expect(onGenerate).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: /^no$/i }));
+    expect(onCancel).toHaveBeenCalledTimes(2);
+  });
 });

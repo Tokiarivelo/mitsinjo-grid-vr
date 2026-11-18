@@ -100,7 +100,7 @@ describe('PerceptionClient transient retry', () => {
     result: {},
   };
 
-  it('a dropped connection (fetch failed) is retried once, then Meta answers', async () => {
+  it('a dropped connection (fetch failed) is retried, then Meta answers', async () => {
     const describeShape = vi
       .fn()
       .mockRejectedValueOnce(new TypeError('fetch failed'))
@@ -116,7 +116,8 @@ describe('PerceptionClient transient retry', () => {
     expect(out.source).toBe('meta');
   });
 
-  it('two network failures in a row → mock, flagged network', async () => {
+  it('network failures: 3 retries (backoff), then mock, flagged network', async () => {
+    vi.useFakeTimers();
     const describeShape = vi.fn().mockRejectedValue(new TypeError('fetch failed'));
     const client = new PerceptionClient(
       fakeMeta({ describeShape }),
@@ -124,8 +125,11 @@ describe('PerceptionClient transient retry', () => {
       new SpendGuard(1),
       's1'
     );
-    const out = await client.describeShape(image, { label: 'House', category: 'other' });
-    expect(describeShape).toHaveBeenCalledTimes(2);
+    const pending = client.describeShape(image, { label: 'House', category: 'other' });
+    await vi.runAllTimersAsync();
+    const out = await pending;
+    vi.useRealTimers();
+    expect(describeShape).toHaveBeenCalledTimes(4);
     expect(out).toMatchObject({ source: 'mock', fallback: 'provider_error', failure: 'network' });
   });
 

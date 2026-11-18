@@ -177,6 +177,7 @@ export function VillageEditorPage() {
     target: shapeRequest,
     shape: objectShape,
     requestShape,
+    retryShape,
     editPieces: objectShape.editPieces,
     select: onSelectObject,
     scope: VILLAGE_SCOPE,

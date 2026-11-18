@@ -158,4 +158,59 @@ describe('useFacadeFaces (PQ-T68)', () => {
     );
     expect(result.current.names).toContain('bottom');
   });
+
+  it('a failed face asks « Retry? »: No (cancel) goes back to idle, Yes draws it again', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ ok: false, status: 500, json: async () => ({}) }))
+    );
+    const { result } = renderHook(() => useFacadeFaces(target, front));
+    await act(async () => {
+      await result.current.generate('side');
+    });
+    expect(result.current.faces.side.status).toBe('error');
+    act(() => result.current.cancel('side'));
+    expect(result.current.faces.side).toMatchObject({ status: 'idle', error: undefined });
+
+    stubFetch();
+    await act(async () => {
+      await result.current.generate('side');
+    });
+    expect(result.current.faces.side.status).toBe('ready');
+  });
+
+  it('cancel stops a face being drawn and keeps its last drawing', async () => {
+    stubFetch();
+    const { result } = renderHook(() => useFacadeFaces(target, front));
+    await act(async () => {
+      await result.current.generate('back');
+    });
+    let aborted = false;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        (_url: string, init?: RequestInit) =>
+          new Promise((_, reject) =>
+            init?.signal?.addEventListener('abort', () => {
+              aborted = true;
+              reject(new DOMException('stop', 'AbortError'));
+            })
+          )
+      )
+    );
+    let pending: Promise<void> = Promise.resolve();
+    act(() => {
+      pending = result.current.generate('back');
+    });
+    expect(result.current.faces.back.status).toBe('generating');
+    await act(async () => {
+      result.current.cancel('back');
+      await pending;
+    });
+    expect(aborted).toBe(true);
+    expect(result.current.faces.back).toMatchObject({
+      status: 'ready',
+      imageUrl: 'https://r2/back.png',
+    });
+  });
 });

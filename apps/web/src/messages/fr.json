@@ -1602,7 +1602,10 @@
         "enterLab": "Entrer dans le labo 3D",
         "later": "Plus tard",
         "leaveStudio": "Quitter le studio",
-        "backToStudio": "Revenir au studio · « {name} »"
+        "backToStudio": "Revenir au studio · « {name} »",
+        "retry3dAsk": "Forme 3D IA échouée (contour affiché). Réessayer la 3D ?",
+        "retryYes": "Oui, réessayer",
+        "retryNo": "Non, garder le contour"
       },
       "vrViews": {
         "title": "Vues 2D à valider",
@@ -1615,7 +1618,11 @@
         "toCheck": "À vérifier",
         "mainValidated": "Vue principale : sert à la 3D",
         "build": "Valider et construire la 3D",
-        "imageError": "Dessinée, mais non affichable en VR"
+        "imageError": "Dessinée, mais non affichable en VR",
+        "errorAsk": "Dessin échoué. Réessayer ?",
+        "stop": "Arrêter",
+        "yes": "Oui, réessayer",
+        "no": "Non"
       },
       "vrChat": {
         "title": "Chat IA · {view}",
@@ -1730,7 +1737,15 @@
       },
       "cancelAnalysis": "Annuler l'analyse",
       "analysisCancelled": "Analyse annulée.",
-      "retryAnalysis": "Réessayer l'analyse"
+      "retryAnalysis": "Réessayer l'analyse",
+      "retryPrompt": {
+        "yes": "Oui, réessayer",
+        "no": "Non",
+        "cancel": "Annuler"
+      },
+      "facesErrorAsk": "Cette face n'a pas pu être dessinée (3 nouvelles tentatives faites). Réessayer ?",
+      "facade2dErrorAsk": "La vue 2D n'a pas pu être dessinée (3 nouvelles tentatives faites). Réessayer ?",
+      "model3dRetryAsk": "La forme 3D IA a échoué : forme contour affichée. Réessayer la 3D ?"
     },
     "dispatch": {
       "modeLabel": "Mode de dispatch",

@@ -5,6 +5,7 @@ import { Check, Image as ImageIcon, Loader2, RefreshCw, Sparkles, Trash2 } from 
 import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import type { FacadeData } from '../hooks/use-facade-2d';
+import { CancelGenerationButton, RetryPrompt } from './retry-prompt';
 
 export interface Facade2dPanelProps {
   status: 'idle' | 'generating' | 'ready' | 'deleting' | 'error';
@@ -15,6 +16,8 @@ export interface Facade2dPanelProps {
   onRetry: (prompt: string) => void;
   onDelete: () => void;
   onValidate: () => void;
+  /** Stops the drawing in flight, or answers « No » to « Retry? » after a failure. */
+  onCancel?: () => void;
   isValidating3D?: boolean;
   /** Gear opening the per-step model modal, beside « Validate & Generate 3D ». */
   modelsGear?: ReactNode;
@@ -33,6 +36,7 @@ export function Facade2dPanel({
   onRetry,
   onDelete,
   onValidate,
+  onCancel,
   isValidating3D = false,
   modelsGear,
   faces,
@@ -86,6 +90,7 @@ export function Facade2dPanel({
             aria-hidden="true"
           />
           <p className="text-xs font-medium text-text-secondary">{v('facade2dGenerating')}</p>
+          {onCancel && <CancelGenerationButton onCancel={onCancel} />}
         </div>
       )}
 
@@ -191,19 +196,22 @@ export function Facade2dPanel({
         </div>
       )}
 
-      {status === 'error' && (
-        <div className="flex flex-col items-center gap-2 py-4 text-center">
-          <p className="text-xs text-status-critical">{t('identifyError')}</p>
-          <button
-            type="button"
-            onClick={onGenerate}
-            className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-md bg-surface px-3 text-xs font-medium text-text-primary border border-border hover:bg-surface-elevated cursor-pointer"
-          >
-            <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
-            {t('facade2dRetry')}
-          </button>
-        </div>
-      )}
+      {status === 'error' &&
+        (onCancel ? (
+          <RetryPrompt message={t('facade2dErrorAsk')} onYes={onGenerate} onNo={onCancel} />
+        ) : (
+          <div className="flex flex-col items-center gap-2 py-4 text-center">
+            <p className="text-xs text-status-critical">{t('identifyError')}</p>
+            <button
+              type="button"
+              onClick={onGenerate}
+              className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-md bg-surface px-3 text-xs font-medium text-text-primary border border-border hover:bg-surface-elevated cursor-pointer"
+            >
+              <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
+              {t('facade2dRetry')}
+            </button>
+          </div>
+        ))}
     </div>
   );
 }

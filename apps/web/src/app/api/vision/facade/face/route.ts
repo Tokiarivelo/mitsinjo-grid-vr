@@ -12,7 +12,7 @@ import { jsonResponse } from '@/server/perception/vision-request';
  * faces already drawn: the new face is drawn from all of them so the four views agree (1 to 3).
  * 400 on a bad body. Regenerating or modifying a face is the same call with `userPrompt`.
  */
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 const viewUrl = z
   .string()

@@ -28,6 +28,8 @@ export const VIEWS_IDS = {
   redraw: 'holo:views-redraw',
   build: 'holo:views-build',
   cancel: 'holo:views-cancel',
+  retryYes: 'holo:views-retry-yes',
+  retryNo: 'holo:views-retry-no',
   slide: (id: string) => `holo:slide-${id}`,
 } as const;
 
@@ -144,6 +146,8 @@ export interface HoloViewsCarouselProps {
   vehicle: boolean;
   canBuild: boolean;
   onRedraw: (id: ViewSlide['id']) => void;
+  /** Stops a view being drawn, or answers « No » to « Retry? » (no Stop / Yes-No without it). */
+  onStop?: (id: ViewSlide['id']) => void;
   onToggleValidated: (id: ViewSlide['id']) => void;
   onBuild: () => void;
   onCancel: () => void;
@@ -169,7 +173,7 @@ export function useSlideText(vehicle: boolean) {
         s.status === 'generating'
           ? t('vrViews.drawing')
           : s.status === 'error'
-            ? t('vrViews.error')
+            ? t('vrViews.errorAsk')
             : s.status === 'idle'
               ? t('vrViews.waiting')
               : s.validated
@@ -194,6 +198,7 @@ export const HoloViewsCarousel = memo(function HoloViewsCarousel({
   vehicle,
   canBuild,
   onRedraw,
+  onStop,
   onToggleValidated,
   onBuild,
   onCancel,
@@ -256,6 +261,9 @@ export const HoloViewsCarousel = memo(function HoloViewsCarousel({
   const y2 = y1 - 0.11;
   const isMain = current?.id === 'main';
   const ready = current?.status === 'ready';
+  /** A failed view asks « Retry? »: the two buttons under it become Yes / No. */
+  const asking = current?.status === 'error' && Boolean(onStop);
+  const stoppable = current?.status === 'generating' && Boolean(onStop);
   const anyDrawing = slides.some((s) => s.status === 'generating');
   const currentId = current?.id;
   const sendChat = useMemo(
@@ -292,36 +300,64 @@ export const HoloViewsCarousel = memo(function HoloViewsCarousel({
         disabled={focused === 0}
         onSelect={() => go(-1)}
       />
-      <HoloButton
-        registry={registry}
-        id={VIEWS_IDS.validate}
-        label={
-          isMain
-            ? t('vrViews.mainValidated')
-            : current?.validated
-              ? t('facesUnvalidate')
-              : t('facesValidate')
-        }
-        width={0.25}
-        height={0.09}
-        position={[-0.12, y1, 0.01]}
-        color={HOLO.green}
-        on={Boolean(current?.validated)}
-        hovered={hoveredId === VIEWS_IDS.validate}
-        disabled={isMain || !ready}
-        onSelect={() => current && onToggleValidated(current.id)}
-      />
-      <HoloButton
-        registry={registry}
-        id={VIEWS_IDS.redraw}
-        label={t('facesRegenerate')}
-        width={0.2}
-        height={0.09}
-        position={[0.12, y1, 0.01]}
-        hovered={hoveredId === VIEWS_IDS.redraw}
-        disabled={!current || current.status === 'generating'}
-        onSelect={() => current && onRedraw(current.id)}
-      />
+      {asking ? (
+        <>
+          <HoloButton
+            registry={registry}
+            id={VIEWS_IDS.retryYes}
+            label={t('vrViews.yes')}
+            width={0.25}
+            height={0.09}
+            position={[-0.12, y1, 0.01]}
+            color={HOLO.green}
+            hovered={hoveredId === VIEWS_IDS.retryYes}
+            onSelect={() => current && onRedraw(current.id)}
+          />
+          <HoloButton
+            registry={registry}
+            id={VIEWS_IDS.retryNo}
+            label={t('vrViews.no')}
+            width={0.2}
+            height={0.09}
+            position={[0.12, y1, 0.01]}
+            hovered={hoveredId === VIEWS_IDS.retryNo}
+            onSelect={() => current && onStop?.(current.id)}
+          />
+        </>
+      ) : (
+        <>
+          <HoloButton
+            registry={registry}
+            id={VIEWS_IDS.validate}
+            label={
+              isMain
+                ? t('vrViews.mainValidated')
+                : current?.validated
+                  ? t('facesUnvalidate')
+                  : t('facesValidate')
+            }
+            width={0.25}
+            height={0.09}
+            position={[-0.12, y1, 0.01]}
+            color={HOLO.green}
+            on={Boolean(current?.validated)}
+            hovered={hoveredId === VIEWS_IDS.validate}
+            disabled={isMain || !ready}
+            onSelect={() => current && onToggleValidated(current.id)}
+          />
+          <HoloButton
+            registry={registry}
+            id={VIEWS_IDS.redraw}
+            label={stoppable ? t('vrViews.stop') : t('facesRegenerate')}
+            width={0.2}
+            height={0.09}
+            position={[0.12, y1, 0.01]}
+            hovered={hoveredId === VIEWS_IDS.redraw}
+            disabled={!current || (current.status === 'generating' && !stoppable)}
+            onSelect={() => current && (stoppable ? onStop?.(current.id) : onRedraw(current.id))}
+          />
+        </>
+      )}
       <HoloButton
         registry={registry}
         id={VIEWS_IDS.next}
