@@ -21,7 +21,7 @@ FPS = 30
 
 # (capture, from marker, to marker, seconds on screen, section label shown at the clip start or None)
 # (capture, from marker, to marker, seconds on screen, section label or None, clip id for CUES)
-CAP = "vr-v4"
+CAP = "vr-v7"
 VILLAGE = [
     (CAP, "village-page", "village-vr-entered", 4.5, "Village · VR immersion", "v0"),
     (CAP, "village-vr-entered", "village-scan", 3.0, None, "v1"),
@@ -32,7 +32,7 @@ VILLAGE = [
     (CAP, "fridge-chat", "fridge-build", 4.5, "AI chat · redraw a view", "v6"),
     (CAP, "fridge-build", "fridge-3d", 6.0, "Validate · build the 3D", "v7"),
     (CAP, "fridge-3d", "walk-hall", 3.0, None, "v8"),
-    (CAP, "walk-hall", "car-scan", 10.0, "Walk outside", "v9"),
+    (CAP, "walk-hall", "car-scan", 9.0, "Walk outside", "v9"),
     (CAP, "car-scan", "car-detected", 4.0, "Scan the street", "v10"),
     (CAP, "car-detected", "car-studio", 5.0, "The car · Extract in 3D", "v11"),
     (CAP, "car-studio", "car-build", 4.0, None, "v12"),
@@ -43,13 +43,16 @@ VILLAGE = [
 # The holo shell is real footage (VS-T49: same VR session), so it opens the simulation part.
 SIM = [
     (CAP, "handoff", "sim-arrive", 4.0, "Same session · to the simulation", "s0"),
-    (CAP, "sim-arrive", "sim-walk", 3.0, None, "s1"),
-    (CAP, "sim-walk", "sim-labels", 6.0, "A walk through the village", "s2"),
-    (CAP, "sim-labels", "sim-panel", 5.0, "Labels · live map", "s3"),
-    (CAP, "sim-panel", "sim-restore", 9.0, "Evening · limit a house", "s4"),
+    (CAP, "sim-arrive", "sim-walk", 2.5, None, "s1"),
+    (CAP, "sim-walk", "sim-labels", 6.5, "Daytime · the village", "s2"),
+    (CAP, "sim-labels", "sim-night", 6.0, "The map · find your way", "s3"),
+    (CAP, "sim-night", "sim-ff", 2.0, None, "s3a"),
+    (CAP, "sim-ff", "sim-night-done", 3.0, "Fast forward · to the evening", "s3b"),
+    (CAP, "sim-night-done", "sim-panel", 2.0, None, "s3c"),
+    (CAP, "sim-panel", "sim-restore", 9.0, "Evening · cut a house", "s4"),
     (CAP, "sim-restore", "sim-enter", 3.0, None, "s5"),
-    (CAP, "sim-enter", "sim-mixer", 5.5, "Step inside", "s6"),
-    (CAP, "sim-mixer", "sim-clinic", 5.0, "Dispatcher · mixing desk", "s7"),
+    (CAP, "sim-enter", "sim-mixer", 5.0, "Step inside", "s6"),
+    (CAP, "sim-mixer", "sim-clinic", 4.5, "Dispatcher · mixing desk", "s7"),
     (CAP, "sim-clinic", "sim-end", 4.0, "Clinic protected", "s8"),
     (CAP, "back-to-lab", "lab-again", 3.0, "Back to the lab", "s9"),
 ]
@@ -66,11 +69,12 @@ CUES = {
 }
 # Short, spoken voice-over (subtitles/vr-short-script.srt): few lines, the demo talks.
 CUES_SHORT = {
-    1: ("intro", 0.6), 2: ("intro", 16.6), 3: ("intro", 32.4),
+    1: ("intro", 0.6), 2: ("intro", 16.6), 3: ("intro", 34.2),
     4: ("v0", 0.4), 5: ("v2", 0.4), 6: ("v4", 0.4), 7: ("v5", 0.8), 8: ("v7", 2.5),
     9: ("v9", 0.8), 10: ("v10", 0.4), 11: ("v11", 0.5), 12: ("v13", 1.5), 13: ("v14", 0.6),
-    14: ("s0", 0.6), 15: ("s1", 0.4), 16: ("s2", 0.8), 17: ("s4", 0.5), 18: ("s4", 4.5),
-    19: ("s5", 0.3), 20: ("s7", 0.4), 21: ("s8", 0.3), 22: ("s9", 0.3), 23: ("outro", 1.0),
+    14: ("s0", 0.6), 15: ("s2", 0.8), 16: ("s3", 1.0), 17: ("s3b", 0.1), 18: ("s4", 0.5),
+    19: ("s4", 4.5), 20: ("s5", 0.3), 21: ("s7", 0.4), 22: ("s8", 0.3), 23: ("s9", 0.3),
+    24: ("outro", 1.0),
 }
 INTRO_S = 38.0
 OUTRO_S = 13.0
