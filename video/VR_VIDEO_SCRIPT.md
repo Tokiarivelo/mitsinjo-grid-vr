@@ -181,7 +181,7 @@ the energy engine recomputes every strategy.
 
 26
 00:01:58,200 --> 00:02:02,600
-Go to the simulation.
+Go to the simulation, without leaving the headset.
 Now I am standing inside the grid.
 
 27
@@ -191,8 +191,8 @@ Walls stop me, the ground follows my feet.
 
 28
 00:02:08,200 --> 00:02:13,800
-Labels, a live map, and every line
-carrying the engine's simulated power.
+Labels, a live map, and my new object,
+drawing real simulated power.
 
 29
 00:02:14,200 --> 00:02:19,000

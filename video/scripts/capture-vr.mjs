@@ -397,8 +397,11 @@ try {
       await press('holo:village-simulation', { from: fromLeft });
     }
     mark('handoff');
-    await waitFor(async () => page.url().includes('/simulation'), 60000);
-    await waitFor(async () => !!(await rc('get_session_status'))?.sessionActive, 120000);
+    // VS-T49: same session, the /village canvas swaps to the simulation village behind a holo shell.
+    const world = () => page.evaluate(() => window.__VR_WORLD__?.state?.() ?? null);
+    await waitFor(async () => (await world())?.world === 'village', 120000);
+    mark('shell');
+    await waitFor(async () => (await world())?.phase === 'idle', 120000);
     save();
   }
   if (PART === 'village') throw new Error('done (village only)');
@@ -459,13 +462,16 @@ try {
       ],
     });
   const CONTROLLER_LABEL = [0, 4.4, 1];
-  // Face the village centre before the first frame we keep (a palm can stand right at the spawn).
-  const centre = await toOrigin(CONTROLLER_LABEL);
-  if (centre)
-    await rc('look_at', { device: 'headset', target: { x: centre.x, y: 1.5, z: centre.z } });
-  await sleep(2500);
+  await sleep(1500);
   mark('sim-arrive');
-  await sleep(2500);
+  // From the lab you arrive facing the object you added; standalone, face the village centre.
+  if (PART === 'sim') {
+    const c0 = await toOrigin(CONTROLLER_LABEL);
+    if (c0) await rc('look_at', { device: 'headset', target: { x: c0.x, y: 1.5, z: c0.z } });
+  }
+  await sleep(4000);
+  const centre = await toOrigin(CONTROLLER_LABEL);
+  if (centre) await look({ x: centre.x, y: 1.5, z: centre.z }, 2.0);
   // Walk towards the dispatcher, then a snap turn.
   mark('sim-walk');
   await stick('controller-left', 0, -0.8);
@@ -520,6 +526,16 @@ try {
   await sleep(4000);
   mark('sim-end');
   await sleep(1500);
+  // « Back to the lab » (VS-T49): the same shell, the lab as it was left.
+  if (PART !== 'sim' && (await simPress('sim-xr-button-back-to-lab'))) {
+    mark('back-to-lab');
+    await waitFor(
+      async () => (await page.evaluate(() => window.__VR_WORLD__?.state?.()))?.world === 'lab',
+      120000
+    );
+    await sleep(4000);
+    mark('lab-again');
+  }
 } catch (e) {
   console.log('CAPTURE ERROR', e.message);
 } finally {

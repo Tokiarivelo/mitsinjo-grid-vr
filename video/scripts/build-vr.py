@@ -21,27 +21,30 @@ FPS = 30
 
 # (capture, from marker, to marker, seconds on screen, section label shown at the clip start or None)
 VILLAGE = [
-    ("vr-village", "village-page", "village-vr-entered", 5.5, "Village · VR immersion"),
-    ("vr-village", "village-vr-entered", "village-scan", 6.0, None),
-    ("vr-village", "village-scan", "village-detected", 4.5, "Scan · AI detection"),
-    ("vr-village", "village-detected", "village-shoot", 4.5, None),
-    ("vr-village", "village-shoot", "studio-enter", 6.5, "Shoot · Extract in 3D"),
-    ("vr-village", "studio-enter", "studio-views", 6.0, "3D studio · 2D views"),
-    ("vr-village", "studio-views", "studio-chat", 5.0, None),
-    ("vr-village", "studio-chat", "studio-chat-sent", 5.5, "AI chat · redraw a view"),
-    ("vr-village", "studio-chat-sent", "studio-chat-done", 4.5, None),
-    ("vr-village", "studio-build", "lab-open", 7.0, "Validate · build the 3D"),
-    ("vr-village", "lab-open", "village-table", 10.0, "3D lab"),
-    ("vr-village", "village-table", "village-inserted", 11.0, "Insert into the simulation"),
-    ("vr-village", "village-inserted", "handoff", 4.0, None),
+    ("vr-all", "village-page", "village-vr-entered", 5.5, "Village · VR immersion"),
+    ("vr-all", "village-vr-entered", "village-scan", 6.0, None),
+    ("vr-all", "village-scan", "village-detected", 4.5, "Scan · AI detection"),
+    ("vr-all", "village-detected", "village-shoot", 4.5, None),
+    ("vr-all", "village-shoot", "studio-enter", 6.5, "Shoot · Extract in 3D"),
+    ("vr-all", "studio-enter", "studio-views", 6.0, "3D studio · 2D views"),
+    ("vr-all", "studio-views", "studio-chat", 5.0, None),
+    ("vr-all", "studio-chat", "studio-chat-sent", 5.5, "AI chat · redraw a view"),
+    ("vr-all", "studio-chat-sent", "studio-chat-done", 4.5, None),
+    ("vr-all", "studio-build", "lab-open", 7.0, "Validate · build the 3D"),
+    ("vr-all", "lab-open", "village-table", 10.0, "3D lab"),
+    ("vr-all", "village-table", "village-inserted", 11.0, "Insert into the simulation"),
+    ("vr-all", "village-inserted", "handoff", 3.0, None),
 ]
+# The holo shell is real footage (VS-T49: same VR session), so it opens the simulation part.
 SIM = [
-    ("vr-sim", "sim-arrive", "sim-labels", 9.0, "Simulation · walk the grid"),
-    ("vr-sim", "sim-labels", "sim-panel", 7.0, "Labels · live map"),
-    ("vr-sim", "sim-panel", "sim-enter", 8.0, "Control a building"),
-    ("vr-sim", "sim-enter", "sim-mixer", 8.0, "Step inside"),
-    ("vr-sim", "sim-mixer", "sim-clinic", 9.0, "Dispatcher · mixing desk"),
-    ("vr-sim", "sim-clinic", "sim-end", 5.0, "Clinic protected"),
+    ("vr-all", "handoff", "sim-arrive", 4.0, "Same session · to the simulation"),
+    ("vr-all", "sim-arrive", "sim-labels", 7.5, "Simulation · walk the grid"),
+    ("vr-all", "sim-labels", "sim-panel", 7.0, "Labels · live map"),
+    ("vr-all", "sim-panel", "sim-enter", 8.0, "Control a building"),
+    ("vr-all", "sim-enter", "sim-mixer", 8.0, "Step inside"),
+    ("vr-all", "sim-mixer", "sim-clinic", 8.0, "Dispatcher · mixing desk"),
+    ("vr-all", "sim-clinic", "sim-end", 4.0, "Clinic protected"),
+    ("vr-all", "back-to-lab", "lab-again", 3.0, "Back to the lab"),
 ]
 INTRO_S = 38.0
 OUTRO_S = 13.0
@@ -233,7 +236,7 @@ def main() -> None:
     )
     v_graph = (
         f"[0:v][1:v]xfade=transition=fade:duration={XF}:offset={o1:.3f}[a];"
-        f"[a][2:v]xfade=transition=circleopen:duration={XF}:offset={o2:.3f}[b];"
+        f"[a][2:v]xfade=transition=fade:duration={XF}:offset={o2:.3f}[b];"
         f"[b][3:v]xfade=transition=fadeblack:duration={XF}:offset={o3:.3f}[c];"
         f"[c]subtitles={srt_path}:fontsdir={FONT.parent}:force_style='{sub_style}'[vout]"
     )
