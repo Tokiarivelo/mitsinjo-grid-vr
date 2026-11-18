@@ -2,7 +2,7 @@ import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import { Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
+export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'vr';
 export type ButtonSize = 'sm' | 'md';
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -31,6 +31,8 @@ const variantStyles = {
     'bg-transparent text-text-secondary hover:text-text-primary hover:bg-surface-hover active:bg-surface-elevated',
   danger:
     'bg-critical-red/15 text-critical-red border border-critical-red/40 hover:bg-critical-red/25 active:bg-critical-red/35',
+  /** VR immersion entry (the showcase): filled cyan with a glow, louder than every other action. */
+  vr: 'bg-energy-cyan text-slate-950 font-semibold shadow-md shadow-energy-cyan/30 ring-1 ring-energy-cyan/60 hover:bg-energy-cyan/90 active:brightness-95',
 };
 
 /** Button classes, for elements that must look like a button but aren't one (e.g. a `<Link>`). */

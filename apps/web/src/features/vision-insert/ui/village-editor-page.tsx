@@ -25,6 +25,7 @@ import { selectActiveResult, selectInput, selectTimeIndex, useSimulationStore } 
 import { readAsDataUrl } from '@/lib/files';
 import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
+import { buttonVariants } from '@/components/ui/button';
 import { isAppliance } from '@/lib/vision';
 import type { ValidatedFacade } from '../hooks/use-facade-2d';
 import { useDetectionLabel } from '../hooks/use-object-name';
@@ -300,12 +301,11 @@ export function VillageEditorPage() {
               aria-pressed={xrActive || vrViewOpen}
               aria-label={xr.error ?? (xrActive || vrViewOpen ? t('vrExit') : t('vrEnter'))}
               title={xr.error ?? (xrActive || vrViewOpen ? t('vrExit') : t('vrEnter'))}
-              className={cn(
-                'inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-all cursor-pointer',
+              className={
                 xrActive || vrViewOpen
-                  ? 'border-energy-cyan bg-energy-cyan/20 text-energy-cyan shadow-xs'
-                  : 'border-border bg-surface text-text-secondary hover:text-text-primary hover:border-energy-cyan/50'
-              )}
+                  ? 'inline-flex min-h-11 items-center justify-center gap-1.5 rounded-control border border-energy-cyan bg-energy-cyan/20 px-4 text-sm font-semibold text-energy-cyan shadow-xs transition-all cursor-pointer'
+                  : buttonVariants({ variant: 'vr', size: 'md', className: 'min-h-11' })
+              }
             >
               <Glasses className="h-4 w-4" aria-hidden="true" />
               <span>{xrActive || vrViewOpen ? t('vrExit') : t('vrEnter')}</span>

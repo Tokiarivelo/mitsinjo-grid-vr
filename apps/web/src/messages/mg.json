@@ -40,7 +40,9 @@
     "strategies": "Paikady fizarana",
     "scenarios": "Tranga",
     "copilot": "Mpanampy AI",
-    "village": "Fanovana ny tanàna"
+    "village": "Fanovana ny tanàna",
+    "vrImmersion": "Hiditra VR",
+    "vrImmersionHint": "Sary → modely 3D, ao anaty casque VR"
   },
   "routes": {
     "overview": {

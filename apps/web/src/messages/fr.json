@@ -40,7 +40,9 @@
     "strategies": "Labo Stratégies",
     "scenarios": "Scénarios",
     "copilot": "Copilote IA",
-    "village": "Éditeur du village"
+    "village": "Éditeur du village",
+    "vrImmersion": "Entrer en VR",
+    "vrImmersionHint": "Photo → modèle 3D, dans le casque"
   },
   "routes": {
     "overview": {

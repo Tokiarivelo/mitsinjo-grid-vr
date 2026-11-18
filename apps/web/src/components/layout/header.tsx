@@ -10,6 +10,7 @@ import { LanguageSwitcher } from '@/components/ui/language-switcher';
 import { ThemeSwitcher } from '@/components/ui/theme-switcher';
 import { DispatchModeToggle } from '@/features/autopilot';
 import { useTranslations } from '@/lib/i18n';
+import { VrQuickLink } from './vr-quick-link';
 
 export interface HeaderProps {
   title: string;
@@ -86,6 +87,9 @@ export function Header({
 
       {/* Right zone: Theme Switcher, Language Switcher, Scenario selector, Status badge, Reset, Copilot Toggle */}
       <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
+        {/* VR immersion, the showcase: first and loudest action of the bar */}
+        <VrQuickLink variant="header" />
+
         {/* Theme switcher */}
         <ThemeSwitcher variant="icon" size="sm" />
 

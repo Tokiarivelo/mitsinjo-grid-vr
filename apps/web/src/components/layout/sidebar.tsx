@@ -21,6 +21,7 @@ import { LanguageSwitcher } from '@/components/ui/language-switcher';
 import { ThemeSwitcher } from '@/components/ui/theme-switcher';
 import { DispatchModeToggle } from '@/features/autopilot';
 import { useTranslations } from '@/lib/i18n';
+import { VrQuickLink } from './vr-quick-link';
 
 export interface NavConfig {
   key: 'overview' | 'simulation' | 'strategies' | 'scenarios' | 'copilot' | 'village';
@@ -144,6 +145,11 @@ export function Sidebar({
               )}
             </button>
           )}
+        </div>
+
+        {/* VR immersion, the showcase: one tap from every page */}
+        <div className={cn('px-3 pt-4', collapsed && 'xl:px-2')}>
+          <VrQuickLink variant="sidebar" collapsed={collapsed} onNavigate={onClose} />
         </div>
 
         {/* Navigation Items */}
