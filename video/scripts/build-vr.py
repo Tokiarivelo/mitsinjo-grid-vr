@@ -20,32 +20,58 @@ FONT = VIDEO / "canvas" / "fonts" / "Inter-Medium.ttf"
 FPS = 30
 
 # (capture, from marker, to marker, seconds on screen, section label shown at the clip start or None)
+# (capture, from marker, to marker, seconds on screen, section label or None, clip id for CUES)
+CAP = "vr-v4"
 VILLAGE = [
-    ("vr-all", "village-page", "village-vr-entered", 5.5, "Village · VR immersion"),
-    ("vr-all", "village-vr-entered", "village-scan", 6.0, None),
-    ("vr-all", "village-scan", "village-detected", 4.5, "Scan · AI detection"),
-    ("vr-all", "village-detected", "village-shoot", 4.5, None),
-    ("vr-all", "village-shoot", "studio-enter", 6.5, "Shoot · Extract in 3D"),
-    ("vr-all", "studio-enter", "studio-views", 6.0, "3D studio · 2D views"),
-    ("vr-all", "studio-views", "studio-chat", 5.0, None),
-    ("vr-all", "studio-chat", "studio-chat-sent", 5.5, "AI chat · redraw a view"),
-    ("vr-all", "studio-chat-sent", "studio-chat-done", 4.5, None),
-    ("vr-all", "studio-build", "lab-open", 7.0, "Validate · build the 3D"),
-    ("vr-all", "lab-open", "village-table", 10.0, "3D lab"),
-    ("vr-all", "village-table", "village-inserted", 11.0, "Insert into the simulation"),
-    ("vr-all", "village-inserted", "handoff", 3.0, None),
+    (CAP, "village-page", "village-vr-entered", 4.5, "Village · VR immersion", "v0"),
+    (CAP, "village-vr-entered", "village-scan", 3.0, None, "v1"),
+    (CAP, "village-scan", "village-detected", 4.0, "Scan · AI detection", "v2"),
+    (CAP, "village-detected", "fridge-shoot", 3.0, None, "v3"),
+    (CAP, "fridge-shoot", "fridge-studio", 5.0, "Shoot · Extract in 3D", "v4"),
+    (CAP, "fridge-studio", "fridge-chat", 5.0, "3D studio · 2D views", "v5"),
+    (CAP, "fridge-chat", "fridge-build", 4.5, "AI chat · redraw a view", "v6"),
+    (CAP, "fridge-build", "fridge-3d", 6.0, "Validate · build the 3D", "v7"),
+    (CAP, "fridge-3d", "walk-hall", 3.0, None, "v8"),
+    (CAP, "walk-hall", "car-scan", 10.0, "Walk outside", "v9"),
+    (CAP, "car-scan", "car-detected", 4.0, "Scan the street", "v10"),
+    (CAP, "car-detected", "car-studio", 5.0, "The car · Extract in 3D", "v11"),
+    (CAP, "car-studio", "car-build", 4.0, None, "v12"),
+    (CAP, "car-build", "car-3d", 5.5, "Car · built in 3D", "v13"),
+    (CAP, "village-table", "village-inserted", 7.0, "Insert into the simulation", "v14"),
+    (CAP, "village-inserted", "handoff", 2.5, None, "v15"),
 ]
 # The holo shell is real footage (VS-T49: same VR session), so it opens the simulation part.
 SIM = [
-    ("vr-all", "handoff", "sim-arrive", 4.0, "Same session · to the simulation"),
-    ("vr-all", "sim-arrive", "sim-labels", 7.5, "Simulation · walk the grid"),
-    ("vr-all", "sim-labels", "sim-panel", 7.0, "Labels · live map"),
-    ("vr-all", "sim-panel", "sim-enter", 8.0, "Control a building"),
-    ("vr-all", "sim-enter", "sim-mixer", 8.0, "Step inside"),
-    ("vr-all", "sim-mixer", "sim-clinic", 8.0, "Dispatcher · mixing desk"),
-    ("vr-all", "sim-clinic", "sim-end", 4.0, "Clinic protected"),
-    ("vr-all", "back-to-lab", "lab-again", 3.0, "Back to the lab"),
+    (CAP, "handoff", "sim-arrive", 4.0, "Same session · to the simulation", "s0"),
+    (CAP, "sim-arrive", "sim-walk", 3.0, None, "s1"),
+    (CAP, "sim-walk", "sim-labels", 6.0, "A walk through the village", "s2"),
+    (CAP, "sim-labels", "sim-panel", 5.0, "Labels · live map", "s3"),
+    (CAP, "sim-panel", "sim-restore", 9.0, "Evening · limit a house", "s4"),
+    (CAP, "sim-restore", "sim-enter", 3.0, None, "s5"),
+    (CAP, "sim-enter", "sim-mixer", 5.5, "Step inside", "s6"),
+    (CAP, "sim-mixer", "sim-clinic", 5.0, "Dispatcher · mixing desk", "s7"),
+    (CAP, "sim-clinic", "sim-end", 4.0, "Clinic protected", "s8"),
+    (CAP, "back-to-lab", "lab-again", 3.0, "Back to the lab", "s9"),
 ]
+# Voice cue n → (clip id or "intro" / "outro", seconds after its start). Pushed later if the line before still speaks.
+CUES = {
+    1: ("intro", 0.4), 2: ("intro", 3.8), 3: ("intro", 7.4), 4: ("intro", 11.8), 5: ("intro", 16.4),
+    6: ("intro", 21.0), 7: ("intro", 25.8), 8: ("intro", 30.4), 9: ("intro", 34.6),
+    10: ("v0", 0.3), 11: ("v1", 1.0), 12: ("v2", 0.6), 13: ("v3", 0.2), 14: ("v4", 0.5),
+    15: ("v5", 0.6), 16: ("v6", 0.4), 17: ("v7", 0.5), 18: ("v8", 0.3), 19: ("v9", 1.5),
+    20: ("v10", 0.5), 21: ("v11", 0.5), 22: ("v13", 0.5), 23: ("v14", 0.5),
+    24: ("s0", 0.3), 25: ("s1", 0.3), 26: ("s2", 0.8), 27: ("s3", 0.6), 28: ("s4", 0.4),
+    29: ("s4", 3.4), 30: ("s5", 0.2), 31: ("s6", 1.0), 32: ("s7", 0.3), 33: ("s8", 0.2),
+    34: ("s9", 0.3), 35: ("outro", 0.6), 36: ("outro", 5.6),
+}
+# Short, spoken voice-over (subtitles/vr-short-script.srt): few lines, the demo talks.
+CUES_SHORT = {
+    1: ("intro", 0.6), 2: ("intro", 16.6), 3: ("intro", 32.4),
+    4: ("v0", 0.4), 5: ("v2", 0.4), 6: ("v4", 0.4), 7: ("v5", 0.8), 8: ("v7", 2.5),
+    9: ("v9", 0.8), 10: ("v10", 0.4), 11: ("v11", 0.5), 12: ("v13", 1.5), 13: ("v14", 0.6),
+    14: ("s0", 0.6), 15: ("s1", 0.4), 16: ("s2", 0.8), 17: ("s4", 0.5), 18: ("s4", 4.5),
+    19: ("s5", 0.3), 20: ("s7", 0.4), 21: ("s8", 0.3), 22: ("s9", 0.3), 23: ("outro", 1.0),
+}
 INTRO_S = 38.0
 OUTRO_S = 13.0
 XF = 0.8  # cross-fade between sections
@@ -68,7 +94,7 @@ def esc(t: str) -> str:
     return t.replace("\\", "\\\\").replace(":", "\\:").replace("'", "\\'").replace(",", "\\,")
 
 
-def clip(i: int, cap: str, a: str, b: str, dur: float, label: str | None, size: str) -> Path:
+def clip(i: int, cap: str, a: str, b: str, dur: float, label: str | None, _id: str, size: str) -> Path:
     """Cuts frames between two markers into a `dur` s clip (frame times kept, sped up), blended to 30 fps."""
     tl = json.loads((VIDEO / "captures" / "raw" / cap / "timeline.json").read_text())
     marks = {m["name"]: m["t"] for m in tl["markers"]}
@@ -140,7 +166,22 @@ def ts(s: float) -> str:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--size", default="2560x1440")
+    ap.add_argument("--voice-dir", default=str(VIDEO / "audio" / "voice" / "vr"))
+    ap.add_argument("--short", action="store_true", help="short spoken voice-over (CUES_SHORT)")
+    ap.add_argument("--name", default="mitsinjo-grid-vr")
     args = ap.parse_args()
+    voice_dir = Path(args.voice_dir)
+    # Skip clips whose markers the take does not have (e.g. a step that failed in the emulator).
+    global VILLAGE, SIM
+    def has(c):
+        names = {m["name"] for m in json.loads((VIDEO / "captures" / "raw" / c[0] / "timeline.json").read_text())["markers"]}
+        ok = c[1] in names and c[2] in names
+        if not ok:
+            print(f"skip clip {c[5]}: marker {c[1]} or {c[2]} missing")
+        return ok
+    VILLAGE = [c for c in VILLAGE if has(c)]
+    SIM = [c for c in SIM if has(c)]
+    cue_map = CUES_SHORT if args.short else CUES
     WORK.mkdir(parents=True, exist_ok=True)
     size = args.size
 
@@ -167,25 +208,26 @@ def main() -> None:
     chapters.append({"t": round(o3, 1), "part": "Outro", "title": "Point at the world. Build it. Power it."})
     (VIDEO / "output" / "vr-chapters.json").write_text(json.dumps(chapters, indent=1))
 
-    # Voice: each cue at its script time, pushed later if the previous one is still speaking.
-    cues = json.loads((VIDEO / "audio" / "voice" / "vr" / "cues.json").read_text())
+    # Voice: each cue at its clip's start + offset (CUES), pushed later if the previous one still speaks.
+    starts = {"intro": 0.0, "outro": o3}
+    for base, clips in ((o1, VILLAGE), (o2, SIM)):
+        at = base
+        for c in clips:
+            starts[c[5]] = at
+            at += c[3]
+    cues = json.loads((voice_dir / "cues.json").read_text())
+    dropped = [c["n"] for c in cues if cue_map[c["n"]][0] not in starts]
+    if dropped:
+        print(f"voice lines dropped (their clip is skipped): {dropped}")
+    cues = [c for c in cues if cue_map[c["n"]][0] in starts]
     t = 0.0
     srt = []
-    # The script times (§ 3) assume sections at 0:38 / 1:58 / 2:44: shift each block to its real start.
-    def shift(n: int) -> float:
-        if n >= 35:
-            return o3 - 164.4
-        if n >= 26:
-            return o2 - 118.2
-        if n >= 10:
-            return o1 - 38.4
-        return 0.0
-
     for c in cues:
-        start = max(c["start"] + shift(c["n"]), t + 0.12)
+        ref, off = cue_map[c["n"]]
+        start = max(starts[ref] + off, t + 0.12)
         c["at"] = start
         t = start + c["dur"]
-        end = max(t + 0.25, min(start + c["end"] - c["start"], start + c["dur"] + 1.2))
+        end = t + 0.6
         text = c["text"]
         words = text.split()
         if len(text) > 42:  # two balanced lines
@@ -193,7 +235,9 @@ def main() -> None:
             k = min(range(1, len(words)), key=lambda n: abs(len(" ".join(words[:n])) - half))
             text = " ".join(words[:k]) + "\n" + " ".join(words[k:])
         srt.append(f"{c['n']}\n{ts(start)} --> {ts(end)}\n{text}\n")
-    srt_path = VIDEO / "subtitles" / "vr-en.srt"
+    if t > total - 0.3:
+        print(f"WARNING: the voice ends at {t:.1f}s, after the video ({total:.1f}s)")
+    srt_path = VIDEO / "subtitles" / ("vr-short-en.srt" if args.short else "vr-en.srt")
     srt_path.write_text("\n".join(srt))
 
     # Audio graph: voice cues, section whooshes, music bed ducked under the voice, end chime.
@@ -201,7 +245,7 @@ def main() -> None:
     a_parts = []
     n = 4
     for c in cues:
-        inputs += ["-i", str(VIDEO / "audio" / "voice" / "vr" / f"cue-{c['n']:02d}.wav")]
+        inputs += ["-i", str(voice_dir / f"cue-{c['n']:02d}.wav")]
         d = int(c["at"] * 1000)
         a_parts.append(f"[{n}:a]aformat=channel_layouts=stereo,adelay={d}|{d},volume=1.6[v{n}]")
         n += 1
@@ -240,7 +284,7 @@ def main() -> None:
         f"[b][3:v]xfade=transition=fadeblack:duration={XF}:offset={o3:.3f}[c];"
         f"[c]subtitles={srt_path}:fontsdir={FONT.parent}:force_style='{sub_style}'[vout]"
     )
-    out = VIDEO / "output" / f"mitsinjo-grid-vr-{h}p.mp4"
+    out = VIDEO / "output" / f"{args.name}-{h}p.mp4"
     ff(*inputs, "-filter_complex", v_graph + ";" + ";".join(a_parts), "-map", "[vout]", "-map", "[aout]",
        "-c:v", "libx264", "-preset", "slow", "-crf", "17", "-profile:v", "high", "-pix_fmt", "yuv420p", "-r", str(FPS),
        "-c:a", "aac", "-b:a", "320k", "-ar", "48000", "-movflags", "+faststart", "-t", f"{total:.2f}", str(out))

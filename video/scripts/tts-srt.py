@@ -24,9 +24,12 @@ def to_s(ts: str) -> float:
     return int(h) * 3600 + int(m) * 60 + int(s) + int(ms) / 1000
 
 
-def read_cues() -> list[dict]:
-    doc = (VIDEO / "VR_VIDEO_SCRIPT.md").read_text()
-    block = doc.split("```srt")[1].split("```")[0]
+def read_cues(srt: str = "") -> list[dict]:
+    if srt:
+        block = Path(srt).read_text()
+    else:
+        doc = (VIDEO / "VR_VIDEO_SCRIPT.md").read_text()
+        block = doc.split("```srt")[1].split("```")[0]
     cues = []
     for chunk in re.split(r"\n\s*\n", block.strip()):
         lines = chunk.strip().splitlines()
@@ -45,11 +48,12 @@ def main() -> None:
     ap.add_argument("--voice", default="am_puck")
     ap.add_argument("--speed", type=float, default=1.0)
     ap.add_argument("--out", default=str(VIDEO / "audio" / "voice" / "vr"))
+    ap.add_argument("--srt", default="", help="read the cues from this .srt instead of VR_VIDEO_SCRIPT.md § 3")
     args = ap.parse_args()
     tts = Kokoro(str(VIDEO / "tts" / "kokoro-v1.0.onnx"), str(VIDEO / "tts" / "voices-v1.0.bin"))
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
-    cues = read_cues()
+    cues = read_cues(args.srt)
     for c in cues:
         text = c["text"].replace("…", ", ").replace("Mitsinjo", "Mitsinn-dzou")
         audio, sr = tts.create(text, voice=args.voice, speed=args.speed, lang="en-us")

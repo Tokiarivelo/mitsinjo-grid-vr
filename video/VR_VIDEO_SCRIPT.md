@@ -54,183 +54,179 @@ Rythme : plans de 1 à 4 s dans les captures, coupe sur le clic ; jamais plus de
 
 ## 3. Voix off + sous-titres (anglais, ≈ 400 mots, ~140 mots/min)
 
+> Les minutages ci-dessous sont indicatifs : `build-vr.py` accroche chaque réplique à un plan du montage
+> (`CUES`) et réécrit `subtitles/vr-en.srt` avec les temps finaux.
+
 Le texte ci-dessous **est** le fichier `video/subtitles/vr-en.srt` (copier tel quel). Chaque bloc = une
 réplique de la voix off. Ton : calme, curieux au début, plus rythmé à partir de 00:38.
 
 ```srt
 1
-00:00:00,400 --> 00:00:03,600
+00:00:00,400 --> 00:00:04,400
 What if everything around you
 could become a 3D model?
 
 2
-00:00:03,800 --> 00:00:07,000
+00:00:05,300 --> 00:00:09,300
 Not in a studio. Right where you stand.
 
 3
-00:00:07,400 --> 00:00:11,600
+00:00:10,200 --> 00:00:14,200
 Put on a headset, and the world
 stops being a picture.
 
 4
-00:00:11,800 --> 00:00:16,000
+00:00:15,100 --> 00:00:19,100
 It becomes something you can point at,
 take, and build with.
 
 5
-00:00:16,400 --> 00:00:20,800
+00:00:20,000 --> 00:00:24,000
 See that car? Point at it.
 
 6
-00:00:21,000 --> 00:00:25,600
+00:00:24,900 --> 00:00:28,900
 The AI sees it, outlines it,
 and rebuilds it in three dimensions.
 
 7
-00:00:25,800 --> 00:00:30,000
+00:00:29,799 --> 00:00:33,800
 Now imagine doing that
 to power a whole village.
 
 8
-00:00:30,400 --> 00:00:34,400
+00:00:34,699 --> 00:00:38,699
 This is Mitsinjo Grid VR:
 a solar village twin for off-grid Madagascar,
 
 9
-00:00:34,600 --> 00:00:38,000
+00:00:39,599 --> 00:00:43,599
 running in the browser
 with Meta's WebXR emulator.
 
 10
-00:00:38,400 --> 00:00:42,800
+00:00:44,499 --> 00:00:48,499
 On the Village page,
-I enter VR immersion and walk around.
+I enter VR immersion and look around.
 
 11
-00:00:43,000 --> 00:00:47,600
-One trigger on the floating button
-analyses the current view.
+00:00:49,399 --> 00:00:53,399
+One button analyses the current view.
 
 12
-00:00:47,800 --> 00:00:52,000
+00:00:54,299 --> 00:00:58,299
 Muse Spark detects every object,
 SAM outlines it.
 
 13
-00:00:52,400 --> 00:00:56,800
+00:00:59,199 --> 00:01:03,199
 Each detection becomes a hologram.
-I aim the laser…
+I aim at the fridge…
 
 14
-00:00:57,000 --> 00:01:01,000
-…and shoot the object I want.
+00:01:04,099 --> 00:01:08,100
+…and shoot. Extract it in 3D? Yes.
 
 15
-00:01:01,200 --> 00:01:05,800
-The app asks: extract it in 3D?
-Yes.
+00:01:09,000 --> 00:01:13,000
+In the 3D studio,
+Muse Image draws its 2D views.
 
 16
-00:01:06,200 --> 00:01:11,000
-I step into the 3D studio.
-Muse Image draws its 2D views:
+00:01:13,900 --> 00:01:17,900
+If a view is wrong, I ask the AI chat,
+and it redraws it.
 
 17
-00:01:11,200 --> 00:01:15,400
-front, sides, back and top.
+00:01:18,800 --> 00:01:22,800
+I validate, and the 3D model
+is built, piece by piece.
 
 18
-00:01:15,600 --> 00:01:20,800
-If one view is wrong, I just ask the AI chat,
-by voice or keyboard, and it redraws it.
+00:01:23,700 --> 00:01:27,700
+Now, let's walk outside.
 
 19
-00:01:21,000 --> 00:01:25,800
-I check every view and validate.
-Nothing is built until a human says yes.
+00:01:28,600 --> 00:01:32,600
+Through the hall, onto the terrace,
+down to the street.
 
 20
-00:01:26,200 --> 00:01:30,800
-From the validated views,
-the 3D model is built, piece by piece.
+00:01:33,500 --> 00:01:37,500
+A car. One scan, and it is outlined.
 
 21
-00:01:31,000 --> 00:01:36,400
-In the 3D lab I turn it,
-shoot a piece to select it, resize it.
+00:01:38,400 --> 00:01:42,400
+Shoot, extract, check its views…
 
 22
-00:01:36,600 --> 00:01:41,800
-Every edit goes live
-to the village and to the page.
+00:01:43,300 --> 00:01:47,300
+…and the car is rebuilt in 3D.
 
 23
-00:01:42,200 --> 00:01:46,800
-Then I aim at the village table
-and place it.
+00:01:48,200 --> 00:01:52,200
+I place it on the village table
+and insert it into the simulation.
 
 24
-00:01:47,000 --> 00:01:52,400
-A pole and a cable connect it
-to its feeder line.
+00:01:53,100 --> 00:01:57,100
+Go to the simulation,
+without leaving the headset.
 
 25
-00:01:52,600 --> 00:01:57,800
-Insert into simulation:
-the energy engine recomputes every strategy.
+00:01:58,000 --> 00:02:02,000
+Here I am, in the evening village.
 
 26
-00:01:58,200 --> 00:02:02,600
-Go to the simulation, without leaving the headset.
-Now I am standing inside the grid.
+00:02:02,900 --> 00:02:06,900
+A short walk through the village,
+at human scale.
 
 27
-00:02:02,800 --> 00:02:08,000
-I walk the village at human scale.
-Walls stop me, the ground follows my feet.
+00:02:07,800 --> 00:02:11,800
+Labels, a live map,
+the clinic, the houses.
 
 28
-00:02:08,200 --> 00:02:13,800
-Labels, a live map, and my new object,
-drawing real simulated power.
+00:02:12,700 --> 00:02:16,700
+It is evening.
+I limit the power to the houses…
 
 29
-00:02:14,200 --> 00:02:19,000
-I aim at a building:
-a hologram panel shows what the engine serves it.
+00:02:17,600 --> 00:02:21,600
+…and their lights fade gradually,
+with the electrons on the cable.
 
 30
-00:02:19,200 --> 00:02:24,000
-Minus half a kilowatt.
-The whole village sees the change.
+00:02:22,500 --> 00:02:26,500
+Restore, and the houses light up again.
 
 31
-00:02:24,200 --> 00:02:30,000
-I walk in: the lights inside
-glow with the power it really gets.
+00:02:27,400 --> 00:02:31,400
+Inside, the lamp glows with the power
+the house really gets.
 
 32
-00:02:30,400 --> 00:02:35,000
-At the dispatcher, a mixing desk.
-Start the battery and dispatch.
+00:02:32,300 --> 00:02:36,300
+At the dispatcher, a mixing desk:
+one fader per sector.
 
 33
-00:02:35,200 --> 00:02:39,800
-One fader per sector.
-Slide, release, and the energy flows change.
-
-34
-00:02:40,000 --> 00:02:44,000
+00:02:37,200 --> 00:02:41,200
 Try to cut the clinic? Refused.
 The village constitution protects it.
 
+34
+00:02:42,100 --> 00:02:46,100
+And back to the lab, in the same session.
+
 35
-00:02:44,400 --> 00:02:49,400
+00:02:47,000 --> 00:02:51,000
 Mitsinjo Grid VR.
 Point at the world. Build it. Power it.
 
 36
-00:02:49,600 --> 00:02:55,000
+00:02:51,900 --> 00:02:55,900
 Every number comes from the engine.
 Every action stays in human hands.
 ```
