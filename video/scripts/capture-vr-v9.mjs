@@ -755,15 +755,31 @@ try {
     };
     mark('sim-houses-cut');
     await desk('sim-xr-button-mixer-cut-households');
-    await sleep(800);
-    await simLookSlow([-9, 0.8, 11], 3);
-    await sleep(4500); // the windows and the feeder's electrons fade out
+    await sleep(1000);
+    // walk to the houses while their lights fade
+    const deskSpot = await pos('headset');
+    const houses = await freeSpot([-9, 0, 11], 7, [0, 0]);
+    if (houses) await glide(houses, 5);
+    await simLookSlow([-9, 0.8, 11], 2.5);
+    await sleep(3500);
     mark('sim-houses-dark');
-    await desk('sim-xr-button-mixer-on-households');
-    await sleep(800);
-    await simLookSlow([-9, 0.8, 11], 3);
-    await sleep(4500); // and come back
+    // back on, from the houses' own panel
+    await simShoot(HOUSEHOLDS_LABEL);
+    await waitFor(async () => (await state())?.panel === 'households', 20000);
+    await sleep(1500);
+    await simPress('sim-xr-button-restore');
+    await sleep(1500);
+    await simLookSlow([-9, 0.8, 11], 2);
+    await sleep(3500);
     mark('sim-houses-on');
+    // back to the controller: try to cut the clinic, facing it
+    await simPress('sim-xr-button-close').catch(() => {});
+    await rc('animate_to', { device: 'headset', position: deskSpot, duration: 5 });
+    await sleep(5500);
+    await simLookSlow([0, 1.2, 1], 1.5);
+    if (!(await state())?.mixer) await simShoot([0, 1.3, 1]);
+    await waitFor(async () => (await state())?.mixer === true, 20000).catch(() => {});
+    await sleep(2000);
     mark('sim-clinic');
     await desk('sim-xr-button-mixer-cut-health');
     await sleep(800);
