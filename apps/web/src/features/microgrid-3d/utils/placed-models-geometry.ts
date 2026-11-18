@@ -23,6 +23,17 @@ export interface PlacedModelItem {
   scale?: number;
   yaw?: number;
   archetype?: KitArchetype;
+  /** Prepared glTF model (VS-T52, offline mock): drawn as itself, outside the merged mesh. */
+  modelUrl?: string;
+}
+
+/** A placed model shown as its prepared glTF (VS-T52): where it stands, how tall, its turn. */
+export interface PlacedGltfModel {
+  id: string;
+  url: string;
+  position: [number, number, number];
+  height: number;
+  yaw: number;
 }
 
 export interface PlacedPlinth {
@@ -39,6 +50,8 @@ export interface PlacedModelsGeometryResult {
   modelBounds: Record<string, { height: number; radius: number }>;
   /** Models that wear their drawings (PQ-T71): drawn one by one, outside the merged mesh. */
   drawn: PlacedDrawnModel[];
+  /** Models with a prepared glTF (VS-T52, high tier): drawn one by one, outside the merged mesh. */
+  gltf: PlacedGltfModel[];
 }
 
 /**
@@ -122,13 +135,14 @@ export function buildPlacedModelsGeometry(
   darkness = 1
 ): PlacedModelsGeometryResult {
   if (items.length === 0) {
-    return { modelsGeometry: null, plinths: [], modelBounds: {}, drawn: [] };
+    return { modelsGeometry: null, plinths: [], modelBounds: {}, drawn: [], gltf: [] };
   }
 
   const plinths: PlacedPlinth[] = [];
   const modelBounds: Record<string, { height: number; radius: number }> = {};
   const geometriesToMerge: THREE.BufferGeometry[] = [];
   const drawn: PlacedDrawnModel[] = [];
+  const gltf: PlacedGltfModel[] = [];
   let lowTriangles = 0;
 
   for (const item of items) {
@@ -221,6 +235,19 @@ export function buildPlacedModelsGeometry(
     // the village's buildings (VS-T35).
     const dim = placedDim((sec?.unserved ?? false) || !item.running, darkness);
 
+    if (item.modelUrl && tier === 'high') {
+      // Its prepared model, as tall as the recipe would stand, on the same ground.
+      gltf.push({
+        id: item.id,
+        url: item.modelUrl,
+        position: [x, restY, z],
+        height: finalHeight,
+        yaw: effYaw,
+      });
+      g.dispose();
+      continue;
+    }
+
     if (faces || house || carMesh || plantPlan || skin) {
       // Wears its drawings: its own mesh and texture, same place, same bounds.
       drawn.push({
@@ -276,6 +303,7 @@ export function buildPlacedModelsGeometry(
     plinths,
     modelBounds,
     drawn,
+    gltf,
   };
 }
 
@@ -296,7 +324,7 @@ export function placedGeometryKey(
     .join(',');
   const parts = items.map(
     (i) =>
-      `${i.id}@${i.position.join(',')}:${i.running ? 1 : 0}:${i.scale ?? ''}:${i.yaw ?? ''}:${i.archetype ?? ''}:${recipeId(i.recipe)}`
+      `${i.id}@${i.position.join(',')}:${i.running ? 1 : 0}:${i.scale ?? ''}:${i.yaw ?? ''}:${i.archetype ?? ''}:${i.modelUrl ?? ''}:${recipeId(i.recipe)}`
   );
   return `${tier}|${Math.round(Math.max(0, Math.min(1, darkness)) * 10)}|${status}|${parts.join(';')}`;
 }

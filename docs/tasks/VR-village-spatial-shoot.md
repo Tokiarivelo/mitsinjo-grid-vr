@@ -541,3 +541,41 @@ les deux sens, et un bouton de retour au labo. Doc Meta (MCP) : pas de navigatio
 - [x] Labo suspendu, pas démonté : son état (cibles, miniatures, objet, place dans la visite) survit à l'aller-retour.
 - [x] `CameraController` rend la caméra en cas de démontage en pleine session.
 - [x] `make vr-world-probe` (IWER, mains) ; casque plus tard.
+
+## VS-T50 — Le studio / labo 3D devient un vrai labo (360°)
+
+Demande (2026-11-18) : remplacer le dôme sombre et la grille par un décor de labo réaliste, d'après une photo
+de référence (labo de fabrication : murs blancs, établi, imprimantes à capot orange, bras d'aspiration,
+panneau perforé, étagères, évier), visible tout autour de l'utilisateur.
+
+- [x] `utils/lab-room.ts` : pièce 8,4 × 8,4 × 3 m construite une fois et fusionnée par matériau (≈ 11 draw
+      calls) ; rien à moins de 2,4 m de l'utilisateur sous 2 m de haut (panneaux du studio libres) ; test.
+- [x] `StudioRoom` (`xr-extract-studio.tsx`) : PBR mat éclairé par l'environnement du studio (part réduite,
+      le modèle reste la vedette), ombres de contact, panneau perforé et enseigne en textures canvas
+      (enseigne traduite : `vrLab.sign`).
+- [ ] Casque : vérifier 72 Hz et le nombre de draw calls (`?perf=1`).
+
+## VS-T51 — Modèle réaliste de bibliothèque dans le labo
+
+Demande (2026-11-18) : montrer des modèles 3D réalistes. Un modèle généré ne peut pas égaler un modèle d'artiste ;
+l'app propose donc, quand l'objet reconnu en a un, un modèle réaliste sous licence, présenté comme tel.
+
+- [x] `lib/model-library.ts` : catalogue (canapé « Glam Velvet Sofa » © Wayfair, voiture « Car Concept »
+      © Darmstadt Graphics Group, CC BY 4.0, Khronos glTF Sample Assets), correspondance EN/FR/MG ; test.
+- [x] Labo VR : bouton « Realistic library model » ↔ « Back to the generated model » sous le socle, crédit et
+      licence affichés avec le modèle (`library-model-3d.tsx`, `vrLab.library*`).
+- [ ] Vues 2D rendues depuis le modèle de bibliothèque ; insertion du modèle de bibliothèque dans le village.
+
+## VS-T52 — Réponses préparées réalistes (mode simulé) pour le canapé, la voiture et la maison
+
+Demande (2026-11-18) : en démo hors ligne, les vues 2D et la 3D du canapé, de la voiture et de la maison doivent
+ressembler aux objets de la photo 360°. Sans modèle Meta, ces trois objets répondent avec des dessins et un
+modèle glTF faits dans Blender d'après la photo (réponses simulées, comme le reste du mode `mock`).
+
+- [x] `video/blender/` (`make prepared-models`) : canapé baroque capitonné, break blanc, maison jaune aux portes
+      bleues ; vues orthographiques sur le fond bleu pâle des dessins + GLB allégé → `public/models/prepared/<id>/`.
+- [x] `tour-mock/prepared.ts` : dessins et `ObjectShape.modelUrl` de `hall-sofa`, `street-car-white`,
+      `terrace-house` (mode simulé seulement, jamais d'une réponse Meta) ; test.
+- [x] Labo VR et village : `GltfModel3D` affiche le modèle préparé (`PlacedModel.modelUrl`, palier haut ;
+      le palier bas garde la recette) ; test.
+- [ ] Outils de pièces du labo (sélection, taille, rayons X) sur un modèle préparé.

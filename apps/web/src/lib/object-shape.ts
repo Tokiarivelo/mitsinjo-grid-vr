@@ -956,6 +956,11 @@ export const ObjectShapeSchema = z.object({
   family: z.enum(REPRESENTATION_FAMILIES).optional(),
   /** The model doubts the family (PQ-T41): the two to choose from, best first. Computed from the kit, not AI text. */
   ask: z.object({ archetypes: z.array(z.string().max(16)).length(2) }).optional(),
+  /**
+   * Prepared glTF model of a 360° tour object (VS-T52, offline mock only): the lab and the village
+   * show it in place of the recipe geometry. Never set by a Meta answer.
+   */
+  modelUrl: z.string().startsWith('/models/prepared/').optional(),
 });
 export type ObjectShape = z.infer<typeof ObjectShapeSchema>;
 

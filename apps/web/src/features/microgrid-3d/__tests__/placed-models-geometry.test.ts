@@ -32,6 +32,37 @@ describe('placed-models-geometry (PI-T2)', () => {
     expect(res.modelBounds).toEqual({});
   });
 
+  it('draws a prepared glTF model by itself, as tall as its recipe, on the high tier only (VS-T52)', () => {
+    const item: PlacedModelItem = {
+      id: 'app-car',
+      sector: 'households',
+      running: true,
+      position: [0, 0, 0],
+      recipe: SAMPLE_RECIPE,
+      scale: 2,
+      yaw: 0.5,
+      modelUrl: '/models/prepared/street-car-white/model.glb',
+    };
+    const high = buildPlacedModelsGeometry([item], undefined, 'high');
+    expect(high.modelsGeometry).toBeNull();
+    expect(high.gltf).toEqual([
+      {
+        id: 'app-car',
+        url: item.modelUrl,
+        position: [0, expect.any(Number), 0],
+        height: high.modelBounds['app-car']!.height,
+        yaw: 0.5,
+      },
+    ]);
+    expect(high.modelBounds['app-car']!.height).toBeGreaterThan(0);
+    const low = buildPlacedModelsGeometry([item], undefined, 'low');
+    expect(low.gltf).toHaveLength(0);
+    expect(low.modelsGeometry).toBeInstanceOf(THREE.BufferGeometry);
+    expect(placedGeometryKey([item], undefined, 'high')).not.toBe(
+      placedGeometryKey([{ ...item, modelUrl: undefined }], undefined, 'high')
+    );
+  });
+
   it('merges 30 placed objects into a single BufferGeometry (draw call budget: ≤ +2)', () => {
     const items: PlacedModelItem[] = Array.from({ length: 30 }, (_, i) => ({
       id: `app-${i}`,

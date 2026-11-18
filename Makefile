@@ -444,6 +444,9 @@ video-canvas-vr: ## Render the VR showcase intro (3D headset → car → laptop)
 video-voice-vr: ## Render the VR showcase voice-over, one clip per caption of VR_VIDEO_SCRIPT.md § 3 (Kokoro, VOICE=am_puck)
 	video/.venv-tts/bin/python video/scripts/tts-srt.py --voice $(or $(VOICE),am_puck) --speed 1.05
 
+prepared-models: ## Rebuild the prepared demo objects (sofa, car, house) in Blender → apps/web/public/models/prepared (ONLY=sofa|car|house; needs video/.venv-blender)
+	video/blender/build.sh
+
 video-build-vr: ## Assemble the VR showcase (intro + captures + outro, voice, captions, music) → video/output/mitsinjo-grid-vr-1440p.mp4 (SIZE=2560x1440, DAY= day take, default vr-v9day)
 	python3 video/scripts/build-vr.py --size $(or $(SIZE),2560x1440)
 

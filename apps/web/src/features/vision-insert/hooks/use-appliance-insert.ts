@@ -18,6 +18,8 @@ export interface ApplianceInsertOptions {
   photo: string;
   /** Optional ready 3D recipe (PI-T1): stored in placed models on insert. */
   recipe?: ObjectRecipe | null;
+  /** Prepared glTF model of the object (VS-T52, offline mock): the village shows it. */
+  modelUrl?: string | null;
 }
 
 /**
@@ -26,7 +28,13 @@ export interface ApplianceInsertOptions {
  * then insert / update (with its 3D model) or remove; the engine re-runs at once. Returns false
  * from `insert` when nothing was inserted (invalid line, simulation full).
  */
-export function useApplianceInsert({ detection, name, photo, recipe }: ApplianceInsertOptions) {
+export function useApplianceInsert({
+  detection,
+  name,
+  photo,
+  recipe,
+  modelUrl,
+}: ApplianceInsertOptions) {
   const { list, upsert, remove } = useSimulationAppliances();
   const id = applianceIdFor(photo, detection.id);
   const existing = list.find((a) => a.id === id);
@@ -51,9 +59,20 @@ export function useApplianceInsert({ detection, name, photo, recipe }: Appliance
       yaw: recipe ? recipe.yaw : storedModel?.yaw,
       archetype,
       connectionMode,
+      ...(modelUrl ? { modelUrl } : {}),
     });
     return true;
-  }, [appliance, upsert, modelRecipe, detection, recipe, storedModel, id, connectionMode]);
+  }, [
+    appliance,
+    upsert,
+    modelRecipe,
+    detection,
+    recipe,
+    storedModel,
+    id,
+    connectionMode,
+    modelUrl,
+  ]);
 
   return {
     id,

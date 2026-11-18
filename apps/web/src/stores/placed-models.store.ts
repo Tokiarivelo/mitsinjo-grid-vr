@@ -25,6 +25,8 @@ export const PlacedModelSchema = z.object({
   scale: z.number().positive().optional(),
   archetype: z.enum(KIT_ARCHETYPES).optional(),
   connectionMode: ConnectionModeSchema.optional(),
+  /** Prepared glTF model shown in the village in place of the recipe (VS-T52, offline mock). */
+  modelUrl: z.string().startsWith('/models/prepared/').optional(),
 });
 export type PlacedModel = z.infer<typeof PlacedModelSchema>;
 

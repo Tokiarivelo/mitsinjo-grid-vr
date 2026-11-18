@@ -25,7 +25,10 @@ import { useHoloPanel, type PanelRegistry } from './holo-panel';
 import { HoloButton, HoloFrame, HoloText } from './holo-ui';
 import { HOLO } from './holo-style';
 import { AnchoredPanel, usePanelAnchor } from './holo-extract-panels';
-import { PEDESTAL_DROP, StudioPedestal } from './xr-extract-studio';
+import { LabStageLights, PEDESTAL_DROP, StudioPedestal } from './xr-extract-studio';
+import { LibraryModel3D } from './library-model-3d';
+import { GltfModel3D } from '../gltf-model-3d';
+import { matchLibraryModel } from '@/lib/model-library';
 import { LAB_TO_VIEWS, type PanelAnchor } from './xr-layout';
 import { HoloVillageTable } from './holo-village-table';
 import { LabDissolve } from './lab-dissolve-3d';
@@ -50,6 +53,7 @@ export const LAB_IDS = {
   pageDown: 'holo:lab-page-down',
   piece: (name: string) => `holo:lab-piece-${name}`,
   view: (mode: ViewMode) => `holo:lab-view-${mode}`,
+  library: 'holo:lab-library',
 } as const;
 
 /** Largest side of the model on the lab pedestal (m): a table-top object, held at arm's length. */
@@ -113,6 +117,13 @@ export const XrObjectLab = memo(function XrObjectLab({
   const { edits, commit } = history;
   const [selected, setSelected] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('textured');
+  // VS-T51: a realistic library model of the recognised object, when the library has one (credited).
+  // A prepared model (VS-T52) is already the realistic one: no library swap then.
+  const library = useMemo(
+    () => (shape.modelUrl ? null : matchLibraryModel(label)),
+    [label, shape.modelUrl]
+  );
+  const [showLibrary, setShowLibrary] = useState(false);
   const [names, setNames] = useState<string[]>([]);
   /** List scroll (rows): live in a ref while dragged, settled in state (arrows) on release. */
   const [scroll, setScroll] = useState(0);
@@ -144,11 +155,13 @@ export const XrObjectLab = memo(function XrObjectLab({
       selected,
       hidden: names.filter((n) => edits[n]?.hidden),
       viewMode,
+      library: library?.id ?? null,
+      showLibrary,
     };
     return () => {
       delete w.__VR_LAB__;
     };
-  }, [names, selected, edits, viewMode]);
+  }, [names, selected, edits, viewMode, library, showLibrary]);
 
   const shown = useMemo(
     () => (shape.recipe ? { ...shape, recipe: { ...shape.recipe, pieces: edits } } : shape),
@@ -253,19 +266,34 @@ export const XrObjectLab = memo(function XrObjectLab({
 
         {/* Pedestal + model */}
         <group position={[0, -PEDESTAL_DROP, 0]}>
+          <LabStageLights />
           <StudioPedestal />
           <group ref={turn}>
             <group ref={modelRef} position={[0, LAB_MODEL_SCALE * 0.5, 0]}>
               <group ref={modelRoot}>
                 <Suspense fallback={null}>
-                  <ObjectModel
-                    shape={shown}
-                    detection={detection}
-                    imageUrl={imageUrl}
-                    scale={LAB_MODEL_SCALE}
-                    studio={studio}
-                    xr
-                  />
+                  {showLibrary && library ? (
+                    <LibraryModel3D entry={library} size={LAB_MODEL_SCALE} />
+                  ) : shape.modelUrl ? (
+                    // VS-T52: the offline mock's prepared model, standing on the plate
+                    <group position={[0, -LAB_MODEL_SCALE * 0.5, 0]}>
+                      <GltfModel3D
+                        url={shape.modelUrl}
+                        size={LAB_MODEL_SCALE}
+                        stand
+                        name="xr-prepared-model"
+                      />
+                    </group>
+                  ) : (
+                    <ObjectModel
+                      shape={shown}
+                      detection={detection}
+                      imageUrl={imageUrl}
+                      scale={LAB_MODEL_SCALE}
+                      studio={studio}
+                      xr
+                    />
+                  )}
                 </Suspense>
               </group>
             </group>
@@ -278,6 +306,40 @@ export const XrObjectLab = memo(function XrObjectLab({
             />
           </group>
         </group>
+
+        {/* VS-T51: generated ↔ realistic library model, with its credit (never shown as generated) */}
+        {library && (
+          <group position={[0, -PEDESTAL_DROP - 0.12, 0.32]}>
+            <HoloButton
+              {...btn(LAB_IDS.library)}
+              label={showLibrary ? t('vrLab.libraryHide') : t('vrLab.libraryShow')}
+              width={0.42}
+              height={0.065}
+              position={[0, 0, 0]}
+              on={showLibrary}
+              onSelect={() => setShowLibrary((v) => !v)}
+            />
+            {showLibrary && (
+              <HoloText
+                spec={{
+                  glass: false,
+                  lines: [
+                    {
+                      text: t('vrLab.libraryCredit', {
+                        credit: library.credit,
+                        license: library.license,
+                      }),
+                      size: 38,
+                    },
+                  ],
+                }}
+                width={0.62}
+                height={0.05}
+                position={[0, -0.07, 0]}
+              />
+            )}
+          </group>
+        )}
 
         {/* Pieces list (left, turned toward the viewer) */}
         <group position={[-0.62, 0, 0.2]} rotation={[0, 0.5, 0]}>
@@ -472,6 +534,7 @@ export const XrObjectLab = memo(function XrObjectLab({
             name={label}
             photo={photo}
             recipe={shown.mode === 'recipe' ? (shown.recipe ?? null) : null}
+            modelUrl={shape.modelUrl ?? null}
             {...(aim ? { aim } : {})}
           />
         )}
