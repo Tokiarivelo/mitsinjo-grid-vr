@@ -9,16 +9,18 @@ time-lapse shows a small « ×N » in the corner. Music changes by place: intro 
 """
 
 import argparse
+import os
 import json
 import subprocess
 from pathlib import Path
 
 VIDEO = Path(__file__).resolve().parent.parent
-WORK = VIDEO / "output" / "v8-work"
+WORK = VIDEO / "output" / "v8-work"  # per day take, see main()
 FONT = VIDEO / "canvas" / "fonts" / "Inter-Medium.ttf"
 FPS = 30
 XF = 0.45  # cross-fade between consecutive shots
-DAY, SIMDAY, NIGHT = "vr-v9day", "vr-v8simday", "vr-v8simnight"
+DAY = os.environ.get("V8_DAY", "vr-v9day")
+SIMDAY, NIGHT = "vr-v8simday", "vr-v8simnight"
 
 # (kind, a, b, seconds, id, section)  kind: frames dir range "F", capture take name, or "FF" / "MOSAIC"
 SHOTS = [
@@ -133,7 +135,7 @@ def ff_clip(out: Path, a: str, b: str, dur: float, size: str) -> None:
     w, h = size.split("x")
     s = int(h) / 1080
     clock = (
-        f"drawtext=fontfile={FONT}:text='%{{eif\\\\:12+min(7\\\\,floor(t*7/{dur * 0.85:.2f}))\\\\:d}}\\\\:00':"
+        f"drawtext=fontfile={FONT}:text='%{{eif\\:12+min(7\\,floor(t*7/{dur * 0.85:.2f}))\\:d}}\\:00':"
         f"x=(w-tw)/2:y=h*0.42:fontsize={int(150 * s)}:fontcolor=white:shadowcolor=black@0.6:shadowx=4:shadowy=4"
     )
     ff("-loop", "1", "-t", f"{dur}", "-i", str(frame_at(a)), "-loop", "1", "-t", f"{dur}", "-i", str(frame_at(b)),
@@ -178,13 +180,34 @@ def ts(s: float) -> str:
     return f"{ms // 3600000:02d}:{ms // 60000 % 60:02d}:{ms // 1000 % 60:02d},{ms % 1000:03d}"
 
 
+def usable_shots(shots: list) -> list:
+    """Drop capture shots whose start marker this take lacks; a missing end marker falls back to the next one."""
+    keep = []
+    for shot in shots:
+        kind, a, b = shot[0], shot[1], shot[2]
+        if kind in ("F", "FF", "MOSAIC"):
+            keep.append(shot)
+            continue
+        names = [m["name"] for m in timeline(kind)["markers"]]
+        if a not in names:
+            print("skip", shot[4], "(no", a, "in", kind + ")")
+            continue
+        if b not in names:
+            b = names[min(names.index(a) + 1, len(names) - 1)]
+        keep.append((kind, a, b, *shot[3:]))
+    return keep
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--size", default="2560x1440")
     ap.add_argument("--name", default="mitsinjo-grid-vr-v8")
     ap.add_argument("--voice-dir", default=str(VIDEO / "audio" / "voice" / "vr-v8"))
     args = ap.parse_args()
+    global WORK, SHOTS
+    WORK = WORK.with_name(f"v8-work-{DAY}")
     WORK.mkdir(parents=True, exist_ok=True)
+    SHOTS = usable_shots(SHOTS)
     size = args.size
 
     parts = []
@@ -214,6 +237,8 @@ def main() -> None:
     srt = []
     for c in cues:
         ref, off = CUES[c["n"]]
+        if ref not in at:  # its shot is missing from this take (e.g. no library toggle): skip the line
+            continue
         start = max(at[ref] + off, t + 0.15)
         c["at"] = start
         t = start + c["dur"]
@@ -232,6 +257,7 @@ def main() -> None:
     inputs = ["-i", str(video)]
     graph = []
     n = 1
+    cues = [c for c in cues if "at" in c]
     for c in cues:
         inputs += ["-i", str(vdir / f"cue-{c['n']:02d}.wav")]
         d = int(c["at"] * 1000)
