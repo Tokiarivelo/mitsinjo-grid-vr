@@ -298,7 +298,10 @@ def main() -> None:
             else:
                 capture_clip(out, kind, a, b, dur, size, TAGS.get(sid, ""))
             print("shot", sid, kind, a, "→", b, dur)
-        parts.append((out, dur))
+        # the real length: a sparse capture can end a few frames short of its nominal duration
+        real = float(subprocess.check_output(["ffprobe", "-v", "error", "-show_entries", "format=duration",
+                                              "-of", "csv=p=0", str(out)]))
+        parts.append((out, min(dur, real)))
     video = WORK / "joined.mp4"
     starts = xfade_join(parts, video)
     total = starts[-1]
