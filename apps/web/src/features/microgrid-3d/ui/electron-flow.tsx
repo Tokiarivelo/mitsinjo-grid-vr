@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import type { LineFlowSceneModel } from '../types';
 import { useAmbientFrame } from '../hooks/use-ambient-frame';
 import { routeCable } from '../utils/cable-route';
+import { easeToward } from '../utils/ease-toward';
 import { NO_LOAD_KW } from '../utils/feeder-tone';
 import { flowFactor } from '../utils/scene-palette';
 import {
@@ -36,6 +37,10 @@ interface Track {
   period: number;
   reverse: boolean;
   firstInstance: number;
+  /** Line colour before the kW glow (the glow eases toward `glow`). */
+  base: THREE.Color;
+  /** Target emissive multiplier ∝ kW: faint glow in survival (1.3), full bloom at high power (3.2). */
+  glow: number;
 }
 
 /**
@@ -47,9 +52,8 @@ export function ElectronFlow({ lines, animate = true }: ElectronFlowProps) {
   const invalidate = useThree((s) => s.invalidate);
   const requestFrame = useAmbientFrame();
 
-  const { tracks, total, colors } = useMemo(() => {
+  const { tracks, total } = useMemo(() => {
     const list: Track[] = [];
-    const cols: THREE.Color[] = [];
     let n = 0;
     for (const line of lines) {
       // Cut or idle cable: no particles (PL-T11)
@@ -72,17 +76,34 @@ export function ElectronFlow({ lines, animate = true }: ElectronFlowProps) {
         period,
         reverse: line.direction === 'backward',
         firstInstance: n,
+        base: new THREE.Color(line.color).lerp(new THREE.Color('#ffffff'), 0.35),
+        glow: 1.3 + 1.9 * kwFactor,
       });
-
-      // Emissive ∝ kW: faint glow in survival (1.3), full bloom at high power (3.2)
-      const c = new THREE.Color(line.color).lerp(new THREE.Color('#ffffff'), 0.35);
-      const emissiveMultiplier = 1.3 + 1.9 * kwFactor;
-      c.multiplyScalar(emissiveMultiplier);
-      for (let i = 0; i < count; i++) cols.push(c);
       n += count;
     }
-    return { tracks: list, total: n, colors: cols };
+    return { tracks: list, total: n };
   }, [lines]);
+
+  // Shown glow per line, eased toward its target: a capped feeder fades over ~1 s (no jump).
+  const glowRef = useRef<Record<string, number>>({});
+  const scratchColor = useMemo(() => new THREE.Color(), []);
+  /** Writes each line's shown glow; `dt` > 0 eases it, `force` repaints all (a new mesh). */
+  const paint = (dt: number, force: boolean) => {
+    const mesh = meshRef.current;
+    if (!mesh) return false;
+    let moving = false;
+    for (const tr of tracks) {
+      const was = animate ? (glowRef.current[tr.key] ?? tr.glow) : tr.glow;
+      const now = dt > 0 ? easeToward(was, tr.glow, dt) : was;
+      if (now !== tr.glow) moving = true;
+      if (!force && now === glowRef.current[tr.key]) continue;
+      glowRef.current[tr.key] = now;
+      scratchColor.copy(tr.base).multiplyScalar(now);
+      for (let i = 0; i < tr.count; i++) mesh.setColorAt(tr.firstInstance + i, scratchColor);
+    }
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    return moving;
+  };
 
   // Persistent continuous phase per line so dots never jump when speed changes or scrub happens.
   const phasesRef = useRef<Record<string, number>>({});
@@ -109,13 +130,13 @@ export function ElectronFlow({ lines, animate = true }: ElectronFlowProps) {
   useLayoutEffect(() => {
     const mesh = meshRef.current;
     if (!mesh) return;
-    colors.forEach((c, i) => mesh.setColorAt(i, c));
-    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    // Repaint from the shown glow (kept per line across remounts); the frame loop eases it on.
+    if (paint(0, true)) requestFrame();
     place();
     invalidate();
-    // place() only reads tracks/scratch/phasesRef, both covered by `colors`/`tracks` identity.
+    // place()/paint() only read tracks/scratch/refs, covered by the `tracks` identity.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tracks, colors, invalidate]);
+  }, [tracks, invalidate, requestFrame]);
 
   const isFlowing = animate && total > 0;
   useEffect(() => {
@@ -123,8 +144,9 @@ export function ElectronFlow({ lines, animate = true }: ElectronFlowProps) {
   }, [isFlowing, invalidate]);
 
   useFrame((_, delta) => {
-    if (!isFlowing) return;
     const dt = Math.min(delta, 0.1);
+    if (animate && total > 0 && paint(dt, false)) requestFrame();
+    if (!isFlowing) return;
     for (const tr of tracks) {
       const current = phasesRef.current[tr.key] ?? 0;
       const advance = tr.period > 0 && isFinite(tr.period) ? dt / tr.period : 0;
