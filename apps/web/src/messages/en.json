@@ -360,7 +360,7 @@
         "legendTitleHand": "Hands",
         "legendTrigger": "Trigger: select (label, building, button)",
         "legendStickWalk": "Stick: walk (walls stop you)",
-        "legendStickTurn": "Stick ←/→: turn · ↑/↓: one step",
+        "legendStickTurn": "Stick ←/→: turn · ↑: go forward (studio: hold to aim, release to teleport) · ↓: step back",
         "legendX": "X: show / hide labels",
         "legendY": "Y: back (close panel, leave room)",
         "legendA": "A: show / hide labels",

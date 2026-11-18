@@ -360,7 +360,7 @@
         "legendTitleHand": "Mains",
         "legendTrigger": "Gâchette : sélectionner (étiquette, bâtiment, bouton)",
         "legendStickWalk": "Stick : marcher (les murs vous arrêtent)",
-        "legendStickTurn": "Stick ←/→ : pivoter · ↑/↓ : un pas",
+        "legendStickTurn": "Stick ←/→ : pivoter · ↑ : avancer (studio : maintenir pour viser, relâcher pour se téléporter) · ↓ : reculer d'un pas",
         "legendX": "X : afficher / masquer les étiquettes",
         "legendY": "Y : retour (fermer le panneau, sortir)",
         "legendA": "A : afficher / masquer les étiquettes",

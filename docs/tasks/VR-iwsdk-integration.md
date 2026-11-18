@@ -33,21 +33,28 @@ et casse tout le typage → import via le shim `microgrid-3d/utils/iwsdk-xr-inpu
 
 ## IW-T2 — Locomotion IWSDK (`@iwsdk/locomotor`)
 
-- [ ] `Locomotor` (worker off d'abord : `useWorker: false`) sur le sol du studio / de la visite :
-      `addEnvironment(sol)`, stick gauche → `slide(dir)`, `update(delta)` dans `useFrame`, position du
-      joueur → offset de l'espace de référence (comme `xr-rig.ts` `snapTurn`).
-- [ ] Téléportation en arc (`requestHitTest` + `sampleParabolicCurve` pour l'arc visuel), stick droit ↑.
-- [ ] Remplacer `studio-walk.tsx` (pas de 80 cm bornés) et `tour.ground.step` ; garder le pas de 80 cm
-      (micro-gestes main) ; confort Meta (pas de mouvement forcé, vignette si besoin).
-- [ ] Tests (pur : direction tête → slide ; bornes du studio) + `make vr-probe`.
+- [x] `studio-locomotion.ts` : `Locomotor` synchrone sur un disque de sol (rayon + 8 m, coupole 7 m),
+      stick gauche → `slide`, rayon 2,4 m tenu, pas de 80 cm → `teleport` ; repli sur notre calcul tant
+      que le moteur n'est pas prêt. Tests avec le vrai moteur (`studio-locomotion.test.ts`).
+- [x] Arc : stick droit ↑ maintenu = viser (`aim on`), relâché = se téléporter ; IWSDK prend l'axe +Z de
+      la manette (parabole à rebours) → direction inversée dans `aim()`. Visite 360° et /simulation :
+      ↑ reste un pas (`aimAsStep`). Légende `visionInsert.vrControls.legendStickTurn` mise à jour.
+- [x] `make vr-probe` : vérifs téléportation après l'ouverture du studio (le studio tourne à ~1 image/s
+      sous SwiftShader : la capture `3c` expire, même sans IWSDK — préexistant).
+- Visite 360° : pas de géométrie (photo) → garde sa marche et ses pas (`tour.ground.step`), décidé
+  le 2026-11-18. Studio : vignette de confort non ajoutée (téléportation instantanée, glissement à
+  1,4 m/s comme avant).
 
-## IW-T3 — Pointeurs IWSDK (à évaluer, risqué)
+## IW-T3 — Pointeurs IWSDK (à évaluer, risqué) — non fait (2026-11-18)
+
+Laissé de côté : nos lasers (`XRBlasterController`) restent la seule entrée sur /village ; brancher
+`MultiPointer` risquerait une double sélection, sans gain mesuré.
 
 - [ ] Étudier si `MultiPointer` (`@pmndrs/pointer-events`) peut remplacer le laser de `XRBlasterController`
       sans double sélection (règle /village : une seule source d'entrée). Ne pas faire sans mesure.
 
 ## Fin
 
-- [ ] `.claude/skills/vr-immersion/SKILL.md` : la règle « pas de migration IWSDK » devient « paquets IWSDK
+- [x] `.claude/skills/vr-immersion/SKILL.md` : la règle « pas de migration IWSDK » devient « paquets IWSDK
       autonomes autorisés (xr-input, locomotor), pas de `World` » ; `docs/architecture.md` (deps XR).
 - [ ] Scénarios `test-scenarios/06-village.md` (mains/manettes, déplacement) ; PR, merge.

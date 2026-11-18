@@ -23,10 +23,12 @@ Ask the tools before touching code; cite what they returned in your plan.
   in-app IWER devui (`make dev-mock`).
 - **Meta VR skills** when relevant: `meta-vr:hz-quest-verify-first` (any Quest-specific claim),
   `meta-vr:hz-immersive-designer` (comfort, layout, interaction), `meta-vr:hz-iwsdk-webxr`
-  (concepts only — this repo uses R3F, not IWSDK), `meta-vr:hz-vr-debug`, `meta-vr:hz-perfetto-debug`.
+  (this repo uses R3F with standalone IWSDK packages, not the IWSDK `World`), `meta-vr:hz-vr-debug`, `meta-vr:hz-perfetto-debug`.
 - Web search only to fill gaps the MCP doesn't cover (three.js/R3F specifics); Meta docs win on conflict.
 - Stack stays: R3F + Three + raw WebXR (`microgrid-3d/utils/xr-session.ts`) + `iwer`/`@iwer/devui` 2.8.0.
-  No `@react-three/xr` / IWSDK migration — adapt the idea instead.
+  Standalone IWSDK packages are allowed (VR-iwsdk-integration): `@iwsdk/xr-input` draws hands/controllers
+  (`microgrid-3d/utils/iwsdk-input.ts`, its pointers off), `@iwsdk/locomotor` walks the 3D studio
+  (`vision-insert/ui/xr/studio-locomotion.ts`). No IWSDK `World` (own renderer) and no `@react-three/xr`.
 
 ## 2. Docs before implementing (always, even for small fixes)
 

@@ -279,6 +279,42 @@ try {
       return x?.stage === 'views' && x.slides.length === 5 && x.canBuild;
     }, 240000)
   );
+  // IW-T2: right stick held forward aims IWSDK's teleport arc, released lands at its end.
+  // Long holds: headless SwiftShader draws the studio at about 1 frame/s.
+  {
+    const walkNow = () => page.evaluate(() => window.__VR_CONTROLS__?.walk?.());
+    const stick = (y) =>
+      rc('set_gamepad_state', { device: 'controller-right', axes: [{ index: 1, value: y }] }); // IWER axis 1 = stick y (xr-standard axis 3)
+    await rc('set_input_mode', { mode: 'controller' });
+    await rc('set_transform', {
+      device: 'controller-right',
+      position: { x: 0.2, y: 1.3, z: -0.3 },
+    });
+    await rc('look_at', { device: 'controller-right', target: { x: 0.2, y: 0, z: -1.8 } });
+    await sleep(300);
+    const before = await walkNow();
+    await stick(-1);
+    await sleep(4000); // the studio renders ~1 frame/s under SwiftShader
+    check(
+      'studio: right stick held forward shows the teleport arc and its target',
+      (await page.evaluate(() => window.__VR_CONTROLS__?.shown('xr-teleport-arc'))) === 1 &&
+        (await page.evaluate(() => window.__VR_CONTROLS__?.shown('xr-teleport-target'))) === 1
+    );
+    await stick(0);
+    await sleep(4000); // the studio renders ~1 frame/s under SwiftShader
+    const after = await walkNow();
+    check(
+      'studio: releasing the stick teleports forward (arc end, inside the walk radius)',
+      !!before &&
+        !!after &&
+        after.offset[1] < before.offset[1] - 0.5 &&
+        Math.hypot(...after.offset) <= 2.41
+    );
+    check(
+      'studio: arc hidden once landed',
+      (await page.evaluate(() => window.__VR_CONTROLS__?.shown('xr-teleport-arc'))) === 0
+    );
+  }
   await shot('3c-views-carousel');
   await press('holo:views-next');
   await sleep(800);
