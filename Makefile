@@ -444,8 +444,29 @@ video-canvas-vr: ## Render the VR showcase intro (3D headset → car → laptop)
 video-voice-vr: ## Render the VR showcase voice-over, one clip per caption of VR_VIDEO_SCRIPT.md § 3 (Kokoro, VOICE=am_puck)
 	video/.venv-tts/bin/python video/scripts/tts-srt.py --voice $(or $(VOICE),am_puck) --speed 1.05
 
-video-build-vr: ## Assemble the VR showcase (intro + captures + outro, voice, captions, music) → video/output/mitsinjo-grid-vr-1440p.mp4 (SIZE=2560x1440)
+video-build-vr: ## Assemble the VR showcase (intro + captures + outro, voice, captions, music) → video/output/mitsinjo-grid-vr-1440p.mp4 (SIZE=2560x1440, DAY= day take, default vr-v9day)
 	python3 video/scripts/build-vr.py --size $(or $(SIZE),2560x1440)
+
+video-capture-vr-v8: ## Record the v8 takes (4 objects day take + /simulation day and night) headless; quality high (dev-mock must run; URL=, CHROMIUM_PATH=)
+	PART=all node video/scripts/capture-vr-v8.mjs $(or $(URL),http://localhost:$(shell node apps/web/scripts/port.mjs)) video/captures/raw/vr-v9day
+	PART=simday HOUR=12 node video/scripts/capture-vr-v8.mjs $(or $(URL),http://localhost:$(shell node apps/web/scripts/port.mjs)) video/captures/raw/vr-v8simday
+	PART=simnight HOUR=19 node video/scripts/capture-vr-v8.mjs $(or $(URL),http://localhost:$(shell node apps/web/scripts/port.mjs)) video/captures/raw/vr-v8simnight
+
+video-canvas-intro3d: ## Render the 3D intro segments (headset, Ferrari, laptop) to video/frames/intro3d-* (MODELS= dir with ferrari.glb, STREET= photo; CHROMIUM_PATH=)
+	for seg in headset car laptop; do node video/scripts/render-canvas.cjs "video/canvas/vr-intro3d.html?seg=$$seg&models=$(MODELS)&street=$(STREET)" video/frames/intro3d-$$seg; done
+
+video-build-vr-v8: ## Assemble the ~4:00 v8 cut (4 objects → simulation, music per section) → video/output/mitsinjo-grid-vr-v8-1440p.mp4 (SIZE=2560x1440, DAY= day take, default vr-v9day)
+	$(if $(DAY),V8_DAY=$(DAY)) python3 video/scripts/build-v8.py --size $(or $(SIZE),2560x1440) --name mitsinjo-grid-vr-v8
+
+video-capture-vr-v9: ## Record the v9 takes: full day take (4 objects, car in the village, walk) then the evening at the dispatch controller (dev-mock must run; URL=, CHROMIUM_PATH=)
+	PART=all node video/scripts/capture-vr-v9.mjs $(or $(URL),http://localhost:$(shell node apps/web/scripts/port.mjs)) video/captures/raw/vr-v13day
+	STORAGE=video/captures/raw/vr-v13day/storage.json PART=simnight HOUR=19 node video/scripts/capture-vr-v9.mjs $(or $(URL),http://localhost:$(shell node apps/web/scripts/port.mjs)) video/captures/raw/vr-v12night
+
+video-voice-vr-v9: ## Render the v9 narration (Kokoro am_puck, phrase by phrase) → video/audio/voice/vr-v9
+	video/.venv-tts/bin/python video/scripts/tts-v9.py
+
+video-build-vr-v9: ## Assemble the v9 cut (VHS fast forward, dispatch controller) → video/output/mitsinjo-grid-vr-v9-1440p.mp4 (SIZE=2560x1440)
+	python3 video/scripts/build-v9.py --size $(or $(SIZE),2560x1440)
 
 video-canvas: ## Render the splash and outro canvas pages to PNG frames
 	node video/scripts/render-canvas.cjs video/canvas/00-splash.html video/frames/00-splash

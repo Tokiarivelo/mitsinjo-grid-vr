@@ -1,0 +1,107 @@
+1
+00:00:00,600 --> 00:00:03,354
+What if everything around you could become 3D?
+
+2
+00:00:06,200 --> 00:00:08,371
+Put on the headset… and look!
+
+3
+00:00:15,550 --> 00:00:18,908
+A car. I point at it, and the AI outlines it…
+
+4
+00:00:23,550 --> 00:00:25,299
+…draws it from every side…
+
+5
+00:00:32,900 --> 00:00:34,590
+…and here it is, in 3D!
+
+6
+00:00:38,250 --> 00:00:40,272
+This is Mitsinjo Grid VR.
+
+7
+00:00:50,850 --> 00:00:53,535
+Let's start in the kitchen. I scan the room…
+
+8
+00:00:56,850 --> 00:00:58,770
+Let's take the fridge, for example.
+
+9
+00:00:59,600 --> 00:01:02,784
+First, the AI draws it in 2D, from every side.
+
+10
+00:01:03,150 --> 00:01:05,920
+One view is off? I just ask for a change.
+
+11
+00:01:07,200 --> 00:01:11,161
+Now I validate… and the 3D model is built, piece by piece.
+
+12
+00:01:18,117 --> 00:01:21,851
+Next, the sofa in the hall. Same thing: the 2D views…
+
+13
+00:01:28,233 --> 00:01:31,169
+…then the 3D. Look at that tufted velvet!
+
+14
+00:01:36,800 --> 00:01:39,281
+Out on the terrace… why not the whole house?
+
+15
+00:01:42,200 --> 00:01:45,228
+Its facade in 2D… and the house in 3D.
+
+16
+00:01:55,150 --> 00:01:57,055
+And down the street, this white car.
+
+17
+00:02:00,550 --> 00:02:03,204
+From its profile… to a full 3D model.
+
+18
+00:02:13,000 --> 00:02:23,266
+Under the hood, the app runs Meta models: SAM 3.1 for outlines, Muse Image for the drawings, and Muse Spark, with skill cards and specialist agents, for the 3D.
+
+19
+00:02:22,950 --> 00:02:28,199
+But it's not just 3D generation. I can drop it into a village… and walk around it, freely.
+
+20
+00:02:33,250 --> 00:02:35,373
+There's my car, parked in the village!
+
+21
+00:02:39,800 --> 00:02:42,917
+Here's the village. And here's a map, to find my way.
+
+22
+00:02:50,500 --> 00:02:56,315
+Now, let's fast-forward a little, to seven p.m. Meanwhile, we stroll through the village… in fast motion!
+
+23
+00:02:58,050 --> 00:03:00,209
+Here we are, at the dispatch controller.
+
+24
+00:03:02,233 --> 00:03:06,914
+Let's control the power of the village homes. I cut it… and look, the lights fade.
+
+25
+00:03:10,483 --> 00:03:11,672
+And back on!
+
+26
+00:03:14,333 --> 00:03:19,713
+Now the health center. I try to cut it… refused! The clinic always keeps its power.
+
+27
+00:03:22,583 --> 00:03:27,344
+Mitsinjo Grid VR. Point at the world. Build it. Power it.

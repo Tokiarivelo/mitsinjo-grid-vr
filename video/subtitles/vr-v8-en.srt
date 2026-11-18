@@ -1,0 +1,99 @@
+1
+00:00:00,600 --> 00:00:03,276
+What if everything around you could become 3D?
+
+2
+00:00:06,200 --> 00:00:07,895
+Put on the headset… and look!
+
+3
+00:00:15,550 --> 00:00:18,492
+A car. I point at it, and the AI outlines it…
+
+4
+00:00:23,550 --> 00:00:25,325
+…draws it from every side…
+
+5
+00:00:32,900 --> 00:00:34,766
+…and here it is, in 3D!
+
+6
+00:00:38,250 --> 00:00:40,514
+This is Mitsinjo Grid VR.
+
+7
+00:00:50,850 --> 00:00:53,354
+Let's start in the kitchen. I scan the room.
+
+8
+00:00:56,850 --> 00:00:58,800
+Let's take the fridge, for example.
+
+9
+00:01:03,450 --> 00:01:05,884
+First, the AI draws its 2D views.
+
+10
+00:01:07,700 --> 00:01:10,287
+One view is wrong? I just ask for a change.
+
+11
+00:01:11,050 --> 00:01:14,891
+Now I validate, and the 3D model is built, piece by piece.
+
+12
+00:01:19,550 --> 00:01:21,228
+Next, the sofa in the hall.
+
+13
+00:01:37,000 --> 00:01:40,223
+In the lab, I pick a piece, resize it, and see right through it.
+
+14
+00:01:43,050 --> 00:01:45,028
+On the terrace… even a whole house!
+
+15
+00:01:51,500 --> 00:01:53,281
+From its facade to 3D.
+
+16
+00:01:59,800 --> 00:02:01,454
+And down the street… the car.
+
+17
+00:02:16,850 --> 00:02:18,817
+Any object. One pipeline.
+
+18
+00:02:22,000 --> 00:02:31,161
+Under the hood, Meta models: SAM 3.1 outlines it, Muse Image draws it, and Muse Spark, with skill cards and specialist agents, builds it.
+
+19
+00:02:31,050 --> 00:02:34,391
+Now I place the car in the village, without leaving the headset.
+
+20
+00:02:46,300 --> 00:02:49,148
+Here's the village. And here's a map, to find my way.
+
+21
+00:02:58,600 --> 00:03:00,290
+Fast forward to the evening.
+
+22
+00:03:04,000 --> 00:03:06,770
+I cut the power to these houses… the lights fade.
+
+23
+00:03:11,250 --> 00:03:12,448
+And back on.
+
+24
+00:03:14,500 --> 00:03:16,071
+The clinic? Never cut.
+
+25
+00:03:22,200 --> 00:03:25,928
+Mitsinjo Grid VR. Point at the world. Build it. Power it.
