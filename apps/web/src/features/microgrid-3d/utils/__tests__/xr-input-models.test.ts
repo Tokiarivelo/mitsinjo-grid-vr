@@ -42,9 +42,14 @@ import * as shim from '../iwsdk-xr-input';
 
 const made = (shim as unknown as { made: unknown[] }).made;
 
-const fakeGl = (frame: object | null = null, sources: Partial<XRInputSource>[] = []) =>
+const fakeGl = (
+  frame: object | null = null,
+  sources: Partial<XRInputSource>[] = [],
+  spaces = [new THREE.Group(), new THREE.Group()]
+) =>
   ({
     xr: {
+      getController: (i: number) => spaces[i],
       isPresenting: !!frame,
       getFrame: () => frame,
       getSession: () => ({ inputSources: sources }),
@@ -118,6 +123,30 @@ describe('IWSDK input models (IW-T1)', () => {
     expect(controller.children[0]!.layers.isEnabled(XR_INPUT_LAYER)).toBe(true);
     expect(models.handLoaded()).toBe(false);
     expect(describeXrHands(gl)[0]).toMatchObject({ real: false });
+  });
+
+  it("reads the side from three's connected event, not inputSources[index] (IWE extension)", () => {
+    // The IWE extension keeps both controllers listed in hand mode: slot 0 is the right hand.
+    const spaces = [new THREE.Group(), new THREE.Group()];
+    const gl = fakeGl({}, [{ handedness: 'left' }, { handedness: 'right' }], spaces);
+    const scene = new THREE.Scene();
+    const models = attachInputModels(gl, 0, {}, { scene, camera: new THREE.PerspectiveCamera() });
+    const m = iwsdkInputOf(gl)!.manager as unknown as FakeManager;
+    const hand = () => {
+      const g = new THREE.Group();
+      g.add(new THREE.Mesh());
+      return { model: g };
+    };
+    m.visualAdapters.hand.right.visual = hand();
+    expect(models.handLoaded()).toBe(false); // inputSources[0] says left
+    spaces[0]!.dispatchEvent({ type: 'connected', data: { handedness: 'right' } } as never);
+    expect(models.handLoaded()).toBe(true);
+    spaces[0]!.dispatchEvent({ type: 'disconnected' } as never);
+    expect(models.handLoaded()).toBe(false);
+    // Both real hands loaded: stand-ins hidden whatever the slot order.
+    m.visualAdapters.hand.left.visual = hand();
+    expect(models.handLoaded()).toBe(true);
+    models.dispose();
   });
 
   it('modelLoaded needs a mesh under the model', () => {

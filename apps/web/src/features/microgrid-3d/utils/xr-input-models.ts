@@ -7,6 +7,7 @@ import {
   sideOf,
   tickIwsdkInput,
   type IwsdkInput,
+  type Side,
 } from './iwsdk-input';
 
 /**
@@ -61,17 +62,35 @@ export function attachInputModels(
   const rt: IwsdkInput | null = iwsdkInputFor(gl, where.scene, where.camera, parent);
   if (!rt) return NO_INPUT_MODELS;
   let released = false;
+  // three's input `index` is its own slot, not always `session.inputSources[index]` (the IWE
+  // extension keeps the controllers listed in hand mode): read the side from three's `connected`.
+  let connectedSide: Side | null = null;
+  const space = gl.xr.getController?.(index);
+  const onConnected = (e: { data?: { handedness?: string } }) => {
+    const h = e.data?.handedness;
+    connectedSide = h === 'right' || h === 'left' ? h : null;
+  };
+  const onDisconnected = () => {
+    connectedSide = null;
+  };
+  space?.addEventListener('connected', onConnected as never);
+  space?.addEventListener('disconnected', onDisconnected as never);
+  const side = () => connectedSide ?? sideOf(gl, index);
+  const loaded = (kind: 'hand' | 'controller', s: Side) => modelLoaded(iwsdkVisual(rt, kind, s));
   return {
     tick: () => tickIwsdkInput(gl, rt),
-    handLoaded: () => modelLoaded(iwsdkVisual(rt, 'hand', sideOf(gl, index))),
+    // Both real hands loaded: the stand-ins go whatever the slot order.
+    handLoaded: () => loaded('hand', side()) || (loaded('hand', 'left') && loaded('hand', 'right')),
     gripLoaded: () => {
-      const ready = modelLoaded(iwsdkVisual(rt, 'controller', sideOf(gl, index)));
+      const ready = loaded('controller', side());
       if (slots.gripFallback) slots.gripFallback.visible = !ready;
       return ready;
     },
     dispose: () => {
       if (released) return;
       released = true;
+      space?.removeEventListener('connected', onConnected as never);
+      space?.removeEventListener('disconnected', onDisconnected as never);
       releaseIwsdkInput(rt, parent);
     },
   };
@@ -87,7 +106,11 @@ export function describeXrHands(gl: THREE.WebGLRenderer) {
     const h = gl.xr.getHand(i) as THREE.Object3D & { joints?: Record<string, unknown> };
     return {
       joints: Object.keys(h.joints ?? {}).length,
-      real: rt ? modelLoaded(iwsdkVisual(rt, 'hand', sideOf(gl, i))) : false,
+      real: rt
+        ? modelLoaded(iwsdkVisual(rt, 'hand', sideOf(gl, i))) ||
+          (modelLoaded(iwsdkVisual(rt, 'hand', 'left')) &&
+            modelLoaded(iwsdkVisual(rt, 'hand', 'right')))
+        : false,
       spheres: h.children.some((c) => c.name === 'hand-joints-mesh' && c.visible),
     };
   });

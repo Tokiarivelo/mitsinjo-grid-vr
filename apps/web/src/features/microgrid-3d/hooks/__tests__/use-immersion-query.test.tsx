@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { renderHook } from '@testing-library/react';
+import { StrictMode } from 'react';
 import { leaveImmersionFor, useImmersionQuery } from '../use-immersion-query';
 
 const go = (url: string) => window.history.replaceState(null, '', url);
@@ -36,6 +37,21 @@ describe('useImmersionQuery', () => {
     renderHook(() => useImmersionQuery({ immersion: false }, onArrive));
     expect(onArrive).toHaveBeenCalledWith({ immersion: true, lab: '2d' });
     expect(window.location.search).toBe('?immersion=vr&lab=2d');
+  });
+
+  it('keeps ?immersion=vr while the page opens it, effects run twice (dev StrictMode regression)', () => {
+    go('/village?immersion=vr');
+    const onArrive = vi.fn();
+    const { rerender } = renderHook(({ on }) => useImmersionQuery({ immersion: on }, onArrive), {
+      initialProps: { on: false },
+      wrapper: StrictMode,
+    });
+    expect(onArrive).toHaveBeenCalledTimes(1);
+    expect(window.location.search).toBe('?immersion=vr');
+    rerender({ on: true });
+    expect(window.location.search).toBe('?immersion=vr');
+    rerender({ on: false });
+    expect(window.location.search).toBe('');
   });
 
   it('the page left for another immersion keeps its hands off the URL (VS-T36 regression)', () => {

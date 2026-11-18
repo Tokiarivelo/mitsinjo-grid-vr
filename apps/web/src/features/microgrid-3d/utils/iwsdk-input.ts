@@ -11,7 +11,7 @@ import { putOnInputLayer } from './xr-inputs-shown';
  * (`xrOrigin`) hangs under the latest attached parent (scene, or the scaled camera rig, VS-T33).
  */
 
-type Side = 'left' | 'right';
+export type Side = 'left' | 'right';
 const SIDES: readonly Side[] = ['left', 'right'];
 /** IWSDK sub-pointers, all turned off (our blaster owns selection). */
 export const IWSDK_POINTER_KINDS = ['ray', 'grab', 'touch'] as const;
