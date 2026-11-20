@@ -318,3 +318,176 @@ npx @gltf-transform/cli optimize in.glb out.glb \
 - **Transparence** : indiquer dans l'interface la route de chaque objet (généré, reconstruit, bibliothèque) et
   son score.
 - **Personnes** : la reconstruction 3D de personnes réelles demande leur consentement.
+
+---
+
+## 12. Chiffrage : comment lire les prix
+
+> **Prix indicatifs** (ordre de grandeur 2025–2026, hors taxes, en dollars US pour le cloud, en euros pour le
+> matériel). Ils changent souvent : vérifier les pages de prix au moment de choisir. Les formules ci-dessous
+> permettent de recalculer avec les vrais tarifs.
+
+**Coût d'un objet 3D** (génération à la demande) :
+
+$$C_{\text{objet}} = \sum_{\text{appels}} p_{\text{API}} + t_{\text{GPU}} \times p_{\text{GPU/s}} + C_{\text{stockage}}$$
+
+**Coût d'un monde** de $N$ objets avec $k$ essais en moyenne par objet (boucle qualité) :
+
+$$C_{\text{monde}} = C_{\text{décor}} + N \cdot k \cdot C_{\text{objet}}$$
+
+**Coût mensuel en production** pour $U$ utilisateurs qui créent chacun $m$ mondes par mois :
+
+$$C_{\text{mois}} = C_{\text{fixe}} + U \cdot m \cdot C_{\text{monde}} + C_{\text{diffusion}}$$
+
+**Exemple** : un monde de 30 objets, 2 essais par objet.
+
+| Poste                       | Hypothèse                                        | Coût          |
+| --------------------------- | ------------------------------------------------ | ------------- |
+| Détection + masques         | 1 appel VLM + 30 masques (≈ 2,5 $ / 1000 images) | ≈ 0,10 $      |
+| Vues 2D                     | 4 vues × 30 objets × 2 essais (≈ 0,01 $ / image) | ≈ 2,40 $      |
+| Image → 3D sur GPU louée    | 30 s × 60 essais, GPU ≈ 0,0006 $/s               | ≈ 1,10 $      |
+| Décor (profondeur / splats) | 2 à 10 min de GPU                                | 0,05 à 0,40 $ |
+| **Total par monde**         |                                                  | **≈ 2 à 5 $** |
+
+Avec des **réponses en cache** (même photo, même objet), le coût d'un monde déjà généré tombe à presque zéro.
+
+---
+
+## 13. Budget de développement (du moins cher au plus cher)
+
+| Niveau                  | Pour qui                                         | Matériel                                                                                                  | Calcul lourd                                                                                             | Coût                                                 |
+| ----------------------- | ------------------------------------------------ | --------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| **0 — Gratuit**         | prototype, apprentissage                         | PC actuel, même sans GPU ; pas de casque (émulateur Meta IWER)                                            | Google Colab gratuit, Kaggle (≈ 30 h de GPU / semaine), Hugging Face Spaces, essais gratuits des API     | **0 €**                                              |
+| **1 — Économique**      | solo, quelques heures de GPU par semaine         | PC actuel + **Meta Quest 3S** (≈ 330 €)                                                                   | GPU louée à l'heure (RunPod, Vast.ai : RTX 4090 ≈ 0,35–0,70 $/h), Colab Pro (≈ 10 €/mois), API à l'usage | **≈ 330 € une fois + 20 à 60 €/mois**                |
+| **2 — Confortable**     | développement régulier                           | **Meta Quest 3 512 Go** (≈ 550 €), PC correct (32 Go de RAM)                                              | GPU L40S / A100 à la demande (≈ 1–2 $/h, ≈ 100 h/mois), stockage objet, base de données                  | **≈ 550 € une fois + 150 à 400 €/mois**              |
+| **3 — Station locale**  | génération et rendu sur place, sans coût horaire | **PC avec RTX 4090 / 5090** (24–32 Go de VRAM), 64 Go de RAM, SSD NVMe 2 To : ≈ 3 000 à 5 000 € ; Quest 3 | local ; cloud seulement pour les pics                                                                    | **≈ 3 500 à 5 500 € une fois + électricité**         |
+| **4 — Équipe / studio** | plusieurs développeurs, gros jeux de test        | Stations par développeur, plusieurs casques (Quest 3, Quest Pro), caméra 360°, kit de capture             | serveurs GPU H100 (≈ 2–4 $/h) ou réservés, ferme de rendu                                                | **plusieurs milliers à dizaines de milliers €/mois** |
+
+**Conseil** : commencer au niveau 0 ou 1. Ne passer au niveau 3 que si on loue plus de **≈ 150 h de GPU par mois** :
+c'est à peu près là qu'une RTX 4090 achetée devient moins chère que la location.
+
+$$h_{\text{rentabilité}} \approx \frac{\text{prix de la station}}{p_{\text{location}}/\text{h} \times 12\ \text{mois}} \approx \frac{3\,500}{0{,}5 \times 12} \approx 580\ \text{h/an}$$
+
+---
+
+## 14. Développer en local avec un PC qui ne supporte pas les gros rendus
+
+Principe : **le PC ne fait que l'app et l'interface ; tout ce qui est lourd tourne ailleurs, ou est simulé.**
+
+1. **Séparer les deux mondes.**
+   - En local : l'app web (Next.js / three.js), légère, et l'**émulateur Meta IWER** dans le navigateur.
+   - À distance : génération 3D, reconstruction, rendus Blender, sur une GPU louée ou un service d'API.
+2. **Mode simulé (mock) systématique.** Des réponses enregistrées et déterministes pour chaque étape (comme
+   `LLM_PROVIDER=mock` dans Mitsinjo). On développe l'interface et la VR sans aucun calcul lourd.
+3. **Cache des résultats.** Chaque génération faite une fois en cloud est enregistrée (GLB, vues, scores) et
+   rejouée en local.
+4. **Le casque fait le rendu.** Ouvrir l'app directement dans le **navigateur du Quest** sur le réseau local
+   (`https://<ip-du-pc>:3000`) : c'est le casque qui affiche la 3D, pas le PC.
+   - Débogage depuis le PC avec `chrome://inspect`, casque relié en USB.
+5. **GPU à distance à la demande.**
+   - Une GPU louée (RunPod, Vast.ai, Lambda) avec Jupyter ou SSH. On l'allume pour une session et on l'éteint
+     après.
+   - Colab ou Kaggle pour les essais gratuits.
+   - Un petit service (FastAPI) sur la GPU, appelé par l'app locale comme une API.
+6. **Rendu Blender sans GPU.**
+   - Basse résolution et peu d'échantillons en local (512 px, 16 échantillons, débruitage).
+   - Rendu final sur la GPU louée, ou ferme de rendu gratuite (SheepIt) pour les gros lots.
+   - Préférer **EEVEE** (rapide) aux aperçus Cycles.
+7. **Paliers de qualité dans l'app** (comme `useSceneQuality`) : « basse » pour le PC de développement, « haute »
+   pour le casque et la démo.
+8. **Environnement de développement dans le cloud** si le PC est vraiment limité : GitHub Codespaces ou une VM
+   cloud, avec le navigateur local comme seul affichage.
+
+**Configuration minimale pour développer** : 8 Go de RAM (16 recommandés), n'importe quel processeur récent,
+pas de GPU dédié, une bonne connexion internet, et un Quest relié au même Wi-Fi.
+
+---
+
+## 15. Budget de déploiement (du moins cher au plus cher)
+
+| Niveau                | Usage                                        | Hébergement de l'app                                                                   | Calcul 3D                                                                                                                | Stockage / diffusion                                    | Coût mensuel                                    |
+| --------------------- | -------------------------------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------- | ----------------------------------------------- |
+| **0 — Démo gratuite** | jury, démo, quelques testeurs                | Vercel Hobby, Netlify ou Cloudflare Pages (gratuits, usage non commercial chez Vercel) | **aucun en direct** : mondes pré-générés + mode simulé                                                                   | Cloudflare R2 gratuit (10 Go), Neon / Supabase gratuits | **0 $**                                         |
+| **1 — Bêta**          | 10 à 100 utilisateurs                        | Vercel Pro (≈ 20 $/mois par membre) ou VPS (Hetzner ≈ 5–20 €/mois)                     | **GPU sans serveur à la seconde** (Modal, Replicate, RunPod Serverless) + API à l'usage : payé seulement quand on génère | R2 (≈ 0,015 $/Go/mois, sortie gratuite), CDN            | **≈ 30 à 200 $** + ≈ 2–5 $ par monde généré     |
+| **2 — Lancement**     | 1 000 utilisateurs actifs                    | Vercel Pro / Render / Fly.io, base Postgres managée                                    | GPU sans serveur avec plafond + 1 GPU réservée (L4 / L40S ≈ 0,5–1,5 $/h, soit ≈ 400–1 100 $/mois)                        | R2 / S3 + CDN, sauvegardes                              | **≈ 600 à 2 000 $**                             |
+| **3 — Production**    | 10 000+ utilisateurs, disponibilité garantie | Conteneurs (Kubernetes / ECS / Cloud Run), plusieurs régions                           | Flotte de GPU (A100 / H100) à mise à l'échelle automatique, file de tâches, priorités                                    | Stockage multi-régions, CDN mondial, supervision        | **≈ 3 000 à 15 000 $ et plus**                  |
+| **4 — Store**         | publication sur le Meta Horizon Store        | l'app empaquetée (PWA avec Bubblewrap, ou native Unity / Unreal)                       | comme les niveaux 2 ou 3                                                                                                 | comme les niveaux 2 ou 3                                | niveau 2/3 + commission du store sur les ventes |
+
+**Garder les coûts bas en production** :
+
+- **Plafond par utilisateur** : nombre de générations par jour, et coût maximum par monde. Mitsinjo le fait déjà
+  avec `spend-guard`.
+- **Cache** par empreinte d'image : une même photo n'est jamais générée deux fois.
+- **Bibliothèque d'abord** (route A) : un modèle existant coûte presque zéro.
+- **Pré-générer** les mondes de démonstration.
+- **GPU sans serveur** tant que le trafic est faible ; GPU réservées seulement quand l'usage est régulier.
+- **Compression** (meshopt, KTX2) : des fichiers 5 à 10 fois plus petits, donc moins de bande passante et de
+  stockage.
+
+---
+
+## 16. Matériel et outils pour une optimisation complète
+
+### 16.1 Matériel
+
+| Matériel                                   | Rôle                                                                | Prix indicatif  |
+| ------------------------------------------ | ------------------------------------------------------------------- | --------------- |
+| **Meta Quest 3** (512 Go)                  | casque de référence, tests de performance réels                     | ≈ 550 €         |
+| Meta Quest 3S                              | casque de test économique                                           | ≈ 330 €         |
+| Câble USB-C 3 (5 m) / Link                 | débogage, inspection à distance, enregistrement                     | ≈ 20–80 €       |
+| **Caméra 360°** (Insta360 X4, Ricoh Theta) | captures 360° nettes et bien exposées (HDR)                         | ≈ 300–550 €     |
+| Trépied + perche                           | captures stables, à hauteur d'yeux                                  | ≈ 30–80 €       |
+| Smartphone récent                          | photos multi-vues, vidéo pour la reconstruction, LiDAR (iPhone Pro) | déjà possédé    |
+| Charte de couleurs (ColorChecker)          | couleurs justes pour les matériaux                                  | ≈ 60–100 €      |
+| PC de développement                        | 16–32 Go de RAM, SSD ; GPU facultatif (§ 14)                        | existant        |
+| Station GPU (facultatif)                   | RTX 4090 / 5090, 64 Go de RAM, NVMe 2 To                            | ≈ 3 000–5 000 € |
+| Routeur Wi-Fi 6 / 6E                       | tests sans fil fluides avec le casque                               | ≈ 100–200 €     |
+
+### 16.2 Outils de création 3D
+
+| Outil                            | Usage                                                                     | Prix           |
+| -------------------------------- | ------------------------------------------------------------------------- | -------------- |
+| **Blender** (+ `bpy` en Python)  | modélisation par code, retouche, cuisson de textures, rendus              | gratuit        |
+| **gltf-transform**               | optimiser les glTF : simplification, meshopt, KTX2, fusion, déduplication | gratuit        |
+| **meshoptimizer**                | simplification et compression de maillages                                | gratuit        |
+| **KTX-Software** (`toktx`)       | textures compressées KTX2 / Basis pour le GPU du Quest                    | gratuit        |
+| Instant Meshes / QuadriFlow      | remaillage propre après une génération                                    | gratuit        |
+| xatlas                           | dépliage UV automatique avant la cuisson                                  | gratuit        |
+| COLMAP, Nerfstudio, gsplat       | reconstruction multi-vues, Gaussian Splatting                             | gratuit        |
+| OpenCV, Pillow, NumPy            | mesures sur les photos : masques, couleurs, contours                      | gratuit        |
+| Simplygon / InstaLOD             | niveaux de détail automatiques de qualité studio                          | payant         |
+| Substance 3D (Painter / Sampler) | matériaux PBR depuis des photos                                           | ≈ 20–50 $/mois |
+
+### 16.3 Outils de performance VR
+
+| Outil                                 | Ce qu'il mesure                                                                  |
+| ------------------------------------- | -------------------------------------------------------------------------------- |
+| **Meta Quest Developer Hub**          | installer, enregistrer, logs, réglages du casque                                 |
+| **OVR Metrics Tool**                  | images par seconde, charge GPU/CPU, température, en surimpression dans le casque |
+| **Chrome `chrome://inspect`**         | profilage de la page WebXR qui tourne dans le casque                             |
+| **Meta Immersive Web Emulator**       | développer et tester sans casque, scripts automatisés                            |
+| stats-gl / r3f-perf / `renderer.info` | appels de dessin, triangles, mémoire, temps GPU dans l'app                       |
+| Spector.js, RenderDoc                 | analyse d'une image : chaque appel de dessin, chaque texture                     |
+| Lighthouse, WebPageTest               | temps de chargement, poids des fichiers                                          |
+| Playwright                            | tests automatiques du parcours (dont la VR avec l'émulateur)                     |
+
+### 16.4 Outils de production
+
+| Outil                                   | Rôle                                                                 |
+| --------------------------------------- | -------------------------------------------------------------------- |
+| Docker                                  | même environnement en local, sur la GPU louée et en production       |
+| File de tâches (BullMQ / Redis, Celery) | générations longues, reprises, priorités                             |
+| Stockage objet (R2 / S3) + CDN          | GLB, textures, vues 2D                                               |
+| Postgres (Neon / Supabase)              | métadonnées : objets, scores, licences, coûts                        |
+| Sentry, Grafana / Prometheus            | erreurs, temps de génération, coût par monde                         |
+| GitHub Actions                          | tests, vérification des budgets de performance à chaque modification |
+
+### 16.5 Réglages d'optimisation à viser (récapitulatif)
+
+- **Géométrie** : objet seul 10–60 k triangles, 3 niveaux de détail, fusion par matériau, instanciation des répétés.
+- **Textures** : KTX2 / Basis, 1024–2048 px, atlas par objet, mipmaps.
+- **Fichiers** : glTF + meshopt, chargement progressif, cache navigateur et CDN.
+- **Rendu** : une lumière dynamique, ombres cuites, pas de post-traitement lourd sur Quest, _foveation_ activée
+  si disponible.
+- **Mesure continue** : un jeu de test fixe (scènes et objets) rejoué à chaque version, avec seuils bloquants :
+  ≥ 72 i/s sur Quest 3, < 200 appels de dessin, score qualité ≥ seuil (§ 7).
